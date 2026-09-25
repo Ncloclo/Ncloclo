@@ -1,0 +1,13 @@
+# Secrets
+.env
+# Données d'exécution
+*.db
+*.db-wal
+*.db-shm
+*.log
+*.log.*
+*.lock
+# Python
+__pycache__/
+.pytest_cache/
+*.pyc
