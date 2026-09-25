@@ -272,3 +272,31 @@ def test_tg_env_doc_complete():
         r'(?:os\.environ\.get|_env_[a-z]+)\(\s*"([A-Z0-9_]+)"', src))
     assert used - set(tg.TG_ENV_DOC) == set()
     assert set(tg.TG_ENV_DOC) - used == set()
+
+
+def test_replay_matches_backtest(tmp_path):
+    """Le rejeu paper (vrai bot, jour par jour) = backtest de recherche."""
+    close, volume = synthetic_market()
+    for a in close.columns:
+        pd.DataFrame({"time": close.index.strftime("%Y-%m-%d"),
+                      "PriceUSD": close[a].values,
+                      "volume_reported_spot_usd_1d": volume[a].values}
+                     ).to_csv(tmp_path / f"{a}.csv", index=False)
+    start = str(close.index[SIM_FROM].date())
+    import io
+    res = tg.replay(str(tmp_path), start, capital=10_000.0, out=io.StringIO())
+    c2, v2 = ts.load_coinmetrics(str(tmp_path), ts.DEFAULT_UNIVERSE)
+    bt = ts.backtest(c2, v2, ts.TrendParams(), start, str(close.index[-1].date()))
+    assert [round(t["pnl"], 6) for t in res["trades"]] == \
+        [round(t["pnl"], 6) for t in bt.trades]
+    assert res["equity"].iloc[-1] == pytest.approx(bt.equity.iloc[-1], rel=1e-9)
+
+
+def test_boot_without_network_fails_cleanly(logger):
+    close, _ = synthetic_market()
+    bot, fb = make_bot("paper", close, logger)
+
+    def down():
+        raise v29.ccxt.NetworkError("binance GET exchangeInfo")
+    fb.load_markets = down
+    assert bot.boot() is False

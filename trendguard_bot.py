@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import logging
+import math
 import os
 import signal
 import sys
@@ -215,7 +216,12 @@ class TrendGuardBot:
             lock_file=g.lock_file, heartbeat_log_file=os.devnull)
 
     def boot(self) -> bool:
-        self.exchange.load_markets()
+        try:
+            self.exchange.load_markets()
+        except Exception as e:
+            self.logger.error(f"[BOOT] marchés indisponibles ({type(e).__name__}): "
+                              f"{str(e)[:160]}")
+            return False
         for base in self.g.universe:
             sym = f"{base}/{self.g.quote}"
             if sym not in self.exchange.markets:
@@ -372,7 +378,9 @@ class TrendGuardBot:
         proceeds = h["qty"] * px * (1 - self.p.fee - self.p.slippage)
         book["cash"] += proceeds
         pnl = proceeds - h["cost"]
+        opened = v29._parse_iso(h["entry_date"]) or self._now
         self._record_trade({"asset": a, "date": self._now.isoformat(),
+                            "days": (self._now - opened).days,
                             "entry_date": h["entry_date"], "entry": h["entry"],
                             "exit": px, "pnl": pnl,
                             "r": pnl / h["risk_quote"], "reason": reason})
@@ -609,6 +617,138 @@ def _sleep(seconds: float) -> None:
 
 
 # ══════════════════════════════════════════════════════════════════════
+# REJEU PAPER SUR HISTORIQUE RÉEL
+# ══════════════════════════════════════════════════════════════════════
+
+class HistoricalExchange:
+    """Exchange de rejeu pour le mode paper : sert des bougies journalières
+    reconstruites à partir des clôtures historiques, en ne révélant JAMAIS
+    une bougie non clôturée à l'instant simulé."""
+
+    ORDER_TYPES = ["LIMIT", "LIMIT_MAKER", "MARKET", "STOP_LOSS",
+                   "STOP_LOSS_LIMIT"]
+
+    def __init__(self, close: pd.DataFrame, volume: pd.DataFrame,
+                 quote: str = "USDT"):
+        self.close = close
+        self.volume = volume
+        self.quote = quote
+        self.symbols = {f"{a.upper()}/{quote}": a for a in close.columns}
+        self.markets: Dict[str, Any] = {}
+        self.now_ms = 0
+        # Conversion indépendante de la résolution de l'index (ns/us/s) :
+        # une erreur d'unité révélerait des prix futurs.
+        self._ms = close.index.as_unit("ms").asi8.astype("int64")
+
+    def set_now(self, now: datetime) -> None:
+        self.now_ms = int(now.timestamp() * 1000)
+
+    def load_markets(self):
+        self.markets = {s: self.market(s) for s in self.symbols}
+        return self.markets
+
+    def market(self, symbol: str) -> Dict[str, Any]:
+        return {"id": symbol.replace("/", ""), "symbol": symbol, "spot": True,
+                "active": True,
+                "limits": {"amount": {"min": 0.0}, "cost": {"min": 5.0}},
+                "info": {"filters": [], "orderTypes": self.ORDER_TYPES,
+                         "ocoAllowed": True}}
+
+    def amount_to_precision(self, symbol: str, amount: float) -> str:
+        return f"{math.floor(float(amount) * 1e8) / 1e8:.8f}"
+
+    def price_to_precision(self, symbol: str, price: float) -> str:
+        return f"{float(price):.10g}"
+
+    def _visible(self, symbol: str) -> pd.Series:
+        a = self.symbols[symbol]
+        mask = self._ms + DAY_MS <= self.now_ms
+        return self.close[a][mask].dropna()
+
+    def fetch_ohlcv(self, symbol: str, timeframe: str = "1d",
+                    since: Optional[int] = None, limit: int = 1000):
+        c = self._visible(symbol)
+        v = self.volume[self.symbols[symbol]].reindex(c.index) \
+            if self.symbols[symbol] in self.volume else None
+        rows = []
+        for d, px in c.iloc[-limit:].items():
+            vol_usd = float(v.loc[d]) if v is not None and pd.notna(v.loc[d]) \
+                else float("nan")
+            rows.append([int(d.timestamp() * 1000), px, px, px, px,
+                         vol_usd / px if px > 0 else 0.0])
+        return rows
+
+    def fetch_ticker(self, symbol: str) -> Dict[str, float]:
+        c = self._visible(symbol)
+        if c.empty:
+            raise ccxt.BadSymbol(f"pas de cotation pour {symbol}")
+        px = float(c.iloc[-1])
+        return {"last": px, "bid": px, "ask": px}
+
+
+def replay(data_dir: str, start: str, end: Optional[str] = None,
+           capital: float = 10_000.0, verbose: bool = True,
+           out=None) -> Dict[str, Any]:
+    """Fait tourner le VRAI bot en mode paper, jour après jour, sur les
+    clôtures historiques réelles (Coin Metrics)."""
+    out = out or sys.stdout
+    close, volume = ts.load_coinmetrics(data_dir, ts.DEFAULT_UNIVERSE)
+    days = close.loc[start:end].index if end else close.loc[start:].index
+    days = days[close["btc"].reindex(days).notna().values]
+    if len(days) == 0:
+        raise ValueError("Aucune donnée sur la période demandée.")
+    hx = HistoricalExchange(close, volume)
+    g = GuardConfig(run_mode="paper",
+                    universe=tuple(a.upper() for a in close.columns),
+                    paper_capital=capital, db_file=":memory:",
+                    log_file=os.devnull, lock_file=os.devnull)
+    lg = logging.getLogger("trendguard.replay")
+    lg.handlers.clear()
+    lg.addHandler(logging.NullHandler())
+    lg.propagate = False
+    store = v29.Store(":memory:", lg)
+    bot = TrendGuardBot(g, lg, hx, store, v29.Notifier("", "", logger=lg))
+    bot.sleep = lambda s: None
+    hx.set_now(days[0].to_pydatetime() + timedelta(days=1, minutes=5))
+    if not bot.boot():
+        raise RuntimeError("Démarrage du bot impossible")
+    curve = []
+    last_month = None
+    for d in days:
+        now = d.to_pydatetime() + timedelta(days=1, minutes=5)
+        hx.set_now(now)
+        book = bot.state["paper"]
+        before_h = set(book["holdings"])
+        n_tr = len(bot.state["trades"])
+        bot.run_cycle(now=now)
+        px = close.loc[d]
+        for t in bot.state["trades"][n_tr:]:
+            if verbose:
+                print(f"{d.date()}  ↘ VENTE  {t['asset'].upper():<5} "
+                      f"{t['reason']:<13} PnL {t['pnl']:+9.2f} USDT "
+                      f"({t['r']:+.2f} R)", file=out)
+        for a in set(book["holdings"]) - before_h:
+            h = book["holdings"][a]
+            if verbose:
+                print(f"{d.date()}  ↗ ACHAT  {a.upper():<5} @ {h['entry']:.6g} "
+                      f"stop {h['stop']:.6g}  risque {h['risk_quote']:.2f} USDT",
+                      file=out)
+        eq = book["cash"] + sum(h["qty"] * float(px[a])
+                                for a, h in book["holdings"].items())
+        curve.append(eq)
+        month = d.strftime("%Y-%m")
+        if verbose and month != last_month and last_month is not None:
+            print(f"── {last_month} clôturé : equity {curve[-2]:,.2f} USDT", file=out)
+        last_month = month
+    equity = pd.Series(curve, index=days)
+    metrics = ts.compute_metrics(equity, bot.state["trades"])
+    return {"equity": equity, "trades": bot.state["trades"],
+            "holdings": bot.state["paper"]["holdings"], "metrics": metrics,
+            "regime_bull": bot.state.get("last_regime_bull"),
+            "last_day": str(days[-1].date()), "prices": close.loc[days[-1]]}
+
+
+# ══════════════════════════════════════════════════════════════════════
 # CLI
 # ══════════════════════════════════════════════════════════════════════
 
@@ -631,8 +771,37 @@ def _build(gcfg: GuardConfig) -> TrendGuardBot:
 
 def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(description="TrendGuard Bot (Binance Spot)")
-    ap.add_argument("cmd", choices=["run", "once", "status", "resume", "docs"])
+    ap.add_argument("cmd", choices=["run", "once", "status", "resume", "docs",
+                                    "replay"])
+    ap.add_argument("--data", default="data", help="(replay) dossier Coin Metrics")
+    ap.add_argument("--start", default="2025-06-01", help="(replay) début")
+    ap.add_argument("--end", default=None, help="(replay) fin")
+    ap.add_argument("--capital", type=float, default=10_000.0,
+                    help="(replay) capital initial USDT")
     args = ap.parse_args(argv)
+    if args.cmd == "replay":
+        res = replay(args.data, args.start, args.end, args.capital)
+        m = res["metrics"]
+        print("\n" + "═" * 64)
+        print(f"REJEU PAPER {args.start} → {res['last_day']} (prix réels)")
+        print("═" * 64)
+        print(f"Capital : {args.capital:,.2f} → {res['equity'].iloc[-1]:,.2f} USDT "
+              f"({m['total_return_pct']:+.1f} %)")
+        print(f"Max drawdown : {m['max_dd_pct']:.1f} %  |  Sharpe : {m['sharpe']:.2f}")
+        print(f"Trades clos : {m['trades']}  |  gagnants : {m['win_rate_pct']:.0f} %"
+              f"  |  gain moy. {m['avg_win_r']:+.2f} R  |  perte moy. "
+              f"{m['avg_loss_r']:+.2f} R")
+        print(f"Régime BTC au dernier jour : "
+              f"{'HAUSSIER' if res['regime_bull'] else 'BAISSIER (aucune entrée)'}")
+        if res["holdings"]:
+            print("Positions ouvertes :")
+            for a, h in res["holdings"].items():
+                px = float(res["prices"][a])
+                print(f"  {a.upper():<5} entrée {h['entry']:.6g} → {px:.6g} "
+                      f"({(px / h['entry'] - 1) * 100:+.1f} %)  stop {h['stop']:.6g}")
+        else:
+            print("Positions ouvertes : aucune (100 % USDT)")
+        return 0
     if args.cmd == "docs":
         for k, v in sorted(TG_ENV_DOC.items()):
             print(f"  {k:<28} {v}")
@@ -673,14 +842,26 @@ def main(argv: Optional[List[str]] = None) -> int:
                         f"{' TESTNET' if gcfg.binance_testnet else ''} — "
                         f"{len(gcfg.universe)} actifs, risque "
                         f"{gcfg.params.risk_pct*100:.2f} %/trade")
-        if not bot.boot():
-            return 1
-        if args.cmd == "once":
-            bot.run_cycle()
-            return 0
         signal.signal(signal.SIGINT, _stop)
         signal.signal(signal.SIGTERM, _stop)
-        bot.run_forever()
+        if args.cmd == "once":
+            if not bot.boot():
+                print("❌ Démarrage impossible (réseau / exchange) : voir le log.",
+                      file=sys.stderr)
+                return 1
+            try:
+                bot.run_cycle()
+            except Exception as e:
+                bot.logger.error(f"[ONCE] cycle KO: {e}")
+                return 1
+            return 0
+        delay = 30
+        while _running and not bot.boot():
+            bot.logger.warning(f"[BOOT] nouvelle tentative dans {delay} s")
+            _sleep(delay)
+            delay = min(delay * 2, 600)
+        if _running:
+            bot.run_forever()
         return 0
     finally:
         bot.store.close()

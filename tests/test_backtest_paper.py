@@ -177,8 +177,10 @@ def test_paper_partial_r_is_additive(paper_env):
 
 
 def _feed(fb, n=1100, tf_ms=3_600_000, price=0.1):
-    now_ms = int(time.time() * 1000) // tf_ms * tf_ms
-    df = synthetic_ohlcv(n=n, tf_ms=tf_ms, start_ms=now_ms - (n - 1) * tf_ms,
+    # La dernière bougie fermée a clôturé il y a 1 minute (indépendant de
+    # l'heure d'exécution : pas de signal « périmé » selon la minute).
+    last_open = int(time.time() * 1000) - 60_000
+    df = synthetic_ohlcv(n=n, tf_ms=tf_ms, start_ms=last_open - (n - 1) * tf_ms,
                          drift=0.0, vol=0.002)
     scale = price / float(df["close"].iloc[-1])
     for col in ("open", "high", "low", "close"):

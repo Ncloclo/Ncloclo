@@ -52,6 +52,7 @@ python trend_strategy.py download --data data        # historique Coin Metrics
 python trend_strategy.py research --data data         # régénère le rapport
 python trendguard_bot.py docs                         # variables d'environnement
 RUN_MODE=paper python trendguard_bot.py run           # paper, prix réels Binance
+python trendguard_bot.py replay --data data --start 2025-06-01   # paper rejoué sur l'historique réel
 python trendguard_bot.py status                       # état du portefeuille
 ```
 
@@ -94,7 +95,7 @@ walkforward | status | resume` (voir `python v29.py docs`).
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 101 tests, simulateurs Binance Spot mono et multi-paires
+python -m pytest tests -q      # 103 tests, simulateurs Binance Spot mono et multi-paires
 ```
 
 ## Limites connues

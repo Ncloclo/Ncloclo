@@ -401,7 +401,8 @@ def compute_metrics(equity: pd.Series, trades: List[Dict[str, Any]]
         "profit_factor": float(gp / gl) if gl > 0 else float("inf"),
         "payoff": (float(wins.mean()) / abs(float(losses.mean())))
         if len(wins) and len(losses) and losses.mean() != 0 else 0.0,
-        "avg_days": float(np.mean([t["days"] for t in trades])) if trades else 0.0,
+        "avg_days": float(np.mean([t["days"] for t in trades if "days" in t]))
+        if any("days" in t for t in trades) else 0.0,
     }
 
 
