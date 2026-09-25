@@ -441,3 +441,112 @@ class FakeBinance:
     def open_protection_orders(self):
         return [o for o in self.orders.values()
                 if o["side"] == "sell" and o["status"] in ("NEW", "PARTIALLY_FILLED")]
+
+
+class FakeBinanceMulti:
+    """Plusieurs paires /USDT partageant UN compte (soldes communs), avec
+    routage des appels ccxt par symbole. Identifiants d'ordres et de listes
+    uniques par paire (comme Binance)."""
+
+    def __init__(self, prices: Dict[str, float], quote_balance: float = 10_000.0,
+                 **kw):
+        self.free: Dict[str, float] = {"USDT": quote_balance, "BNB": 10.0}
+        self.locked: Dict[str, float] = {"USDT": 0.0, "BNB": 0.0}
+        self.fakes: Dict[str, FakeBinance] = {}
+        self.ohlcv: Dict[Any, List[List[float]]] = {}
+        self.markets: Dict[str, Any] = {}
+        self.fail_balance = False
+        for k, (sym, px) in enumerate(prices.items()):
+            fb = FakeBinance(symbol=sym, price=px, quote_balance=0.0, **kw)
+            base = sym.split("/")[0]
+            self.free.setdefault(base, 0.0)
+            self.locked.setdefault(base, 0.0)
+            fb.free = self.free
+            fb.locked = self.locked
+            fb._ids = itertools.count(5_000_000_000 + k * 10_000_000)
+            fb._list_ids = itertools.count(1 + k * 100_000)
+            self.fakes[sym] = fb
+
+    # ---------- routage ----------
+    def _f(self, symbol):
+        return self.fakes[symbol]
+
+    def _by_market_id(self, mid):
+        for fb in self.fakes.values():
+            if fb.market_id == mid:
+                return fb
+        raise ccxt.BadSymbol(f"symbole inconnu {mid}")
+
+    def load_markets(self):
+        self.markets = {s: fb.market(s) for s, fb in self.fakes.items()}
+        return self.markets
+
+    def market(self, symbol):
+        return self._f(symbol).market(symbol)
+
+    def amount_to_precision(self, symbol, amount):
+        return self._f(symbol).amount_to_precision(symbol, amount)
+
+    def price_to_precision(self, symbol, price):
+        return self._f(symbol).price_to_precision(symbol, price)
+
+    def set_sandbox_mode(self, flag):
+        pass
+
+    def set_price(self, symbol, px):
+        self._f(symbol).set_price(px)
+
+    def fetch_ticker(self, symbol):
+        return self._f(symbol).fetch_ticker(symbol)
+
+    def fetch_ohlcv(self, symbol, timeframe="1d", since=None, limit=500):
+        bars = self.ohlcv.get((symbol, timeframe), [])
+        if since is not None:
+            bars = [b for b in bars if b[0] >= since]
+            return [list(b) for b in bars[:limit]]
+        return [list(b) for b in bars[-limit:]]
+
+    def fetch_balance(self):
+        if self.fail_balance:
+            raise ccxt.NetworkError("balance timeout")
+        return next(iter(self.fakes.values())).fetch_balance()
+
+    def create_order(self, symbol, type, side, amount, price=None, params=None):
+        return self._f(symbol).create_order(symbol, type, side, amount, price, params)
+
+    def fetch_order(self, id, symbol=None, params=None):
+        return self._f(symbol).fetch_order(id, symbol, params)
+
+    def cancel_order(self, id, symbol=None, params=None):
+        return self._f(symbol).cancel_order(id, symbol, params)
+
+    def fetch_open_orders(self, symbol=None, since=None, limit=None, params=None):
+        if symbol:
+            return self._f(symbol).fetch_open_orders(symbol)
+        return [o for fb in self.fakes.values() for o in fb.fetch_open_orders()]
+
+    def fetch_my_trades(self, symbol=None, since=None, limit=None, params=None):
+        return self._f(symbol).fetch_my_trades(symbol, since, limit)
+
+    def privatePostOrderListOco(self, params):
+        return self._by_market_id(params["symbol"]).privatePostOrderListOco(params)
+
+    def privateGetOrderList(self, params):
+        if "symbol" in params:
+            raise ccxt.BadRequest("-1104 Not all sent parameters were read")
+        for fb in self.fakes.values():
+            try:
+                return fb.privateGetOrderList(params)
+            except ccxt.OrderNotFound:
+                continue
+        raise ccxt.OrderNotFound("-2011 Order list does not exist.")
+
+    def privateDeleteOrderList(self, params):
+        return self._by_market_id(params["symbol"]).privateDeleteOrderList(params)
+
+    def privatePostOrderTest(self, params):
+        return self._by_market_id(params["symbol"]).privatePostOrderTest(params)
+
+    def open_orders(self):
+        return [o for fb in self.fakes.values() for o in fb.orders.values()
+                if o["status"] in ("NEW", "PARTIALLY_FILLED")]

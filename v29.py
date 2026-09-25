@@ -571,6 +571,9 @@ class Config:
     flash_cooldown_min: int = 30
     # ── Exécution / protection ──
     use_oco: bool = True
+    stop_only_protection: bool = False   # stratégies sans TP (TrendGuard)
+    break_even_enabled: bool = True
+    time_exit_enabled: bool = True
     stop_limit_offset_pct: float = 0.01
     software_stop_enabled: bool = True
     recovery_require_verified_entry: bool = True
@@ -699,7 +702,7 @@ class Config:
             if self.live_confirmation != self.live_confirmation_required:
                 raise ValueError(
                     "LIVE refusé: LIVE_TRADING_CONFIRMATION requis.")
-            if not self.use_oco:
+            if not self.use_oco and not self.stop_only_protection:
                 raise ValueError("LIVE refusé: use_oco=true requis.")
         if self.blockchain_enabled:
             if not WEB3_AVAILABLE:
@@ -969,6 +972,8 @@ class Position:
     time_exit_last_attempt_ts: float = 0.0
     time_exit_cooldown_until: Optional[str] = None
     realized_pnl: float = 0.0
+    soft_stop: float = 0.0            # stop évalué à la clôture (TrendGuard)
+    highest_close: float = 0.0
     partial_exit_count: int = 0
     eff_risk_pct: Optional[float] = None
     entry_equity: float = 0.0
@@ -1713,7 +1718,7 @@ class Store:
         self.path = path
         self.logger = logger
         self.conn: Optional[sqlite3.Connection] = None
-        self._digest: Optional[str] = None
+        self._digests: Dict[str, str] = {}
         self._closed = False
         self.healthy = True
         self._open()
@@ -1854,13 +1859,13 @@ class Store:
         ):
             c.execute(idx)
 
-    def load_context(self) -> Optional[BotContext]:
+    def load_context(self, key: str = "context") -> Optional[BotContext]:
         """Retourne None si aucun contexte. Lève si le contexte existe mais
         est illisible (fail-closed : on ne repart pas d'un état vierge
         alors qu'une position peut être ouverte)."""
         self._ensure_open()
         row = self.conn.execute(
-            "SELECT value FROM kv WHERE key='context'").fetchone()
+            "SELECT value FROM kv WHERE key=?", (key,)).fetchone()
         if not row:
             return None
         try:
@@ -1870,7 +1875,7 @@ class Store:
             raise RuntimeError(f"Contexte DB illisible: {e}") from e
 
     def save_context(self, ctx: BotContext, mode: str,
-                     force: bool = False) -> bool:
+                     force: bool = False, key: str = "context") -> bool:
         try:
             payload = json.dumps(ctx.to_dict(), sort_keys=True,
                                  separators=(",", ":"), default=str)
@@ -1879,20 +1884,39 @@ class Store:
             self.healthy = False
             return False
         digest = hashlib.sha256(payload.encode()).hexdigest()
-        if not force and digest == self._digest:
+        if not force and digest == self._digests.get(key):
             return True
         try:
             with self.transaction(immediate=True):
                 self.conn.execute(
                     "INSERT OR REPLACE INTO kv(key,value) VALUES(?,?)",
-                    ("context", payload))
-            self._digest = digest
+                    (key, payload))
+            self._digests[key] = digest
             if not self.healthy:
                 self.logger.warning("[DB] save_context rétabli")
             self.healthy = True
             return True
         except Exception as e:
             self.logger.critical(f"[DB] save_context KO: {e}")
+            self.healthy = False
+            return False
+
+    def get_kv(self, key: str) -> Optional[Dict[str, Any]]:
+        self._ensure_open()
+        row = self.conn.execute("SELECT value FROM kv WHERE key=?",
+                                (key,)).fetchone()
+        return json.loads(row[0]) if row else None
+
+    def set_kv(self, key: str, value: Dict[str, Any]) -> bool:
+        try:
+            payload = json.dumps(value, sort_keys=True, default=str)
+            with self.transaction(immediate=True):
+                self.conn.execute(
+                    "INSERT OR REPLACE INTO kv(key,value) VALUES(?,?)",
+                    (key, payload))
+            return True
+        except Exception as e:
+            self.logger.critical(f"[DB] set_kv({key}) KO: {e}")
             self.healthy = False
             return False
 
@@ -4295,6 +4319,7 @@ class ExecutionEngine:
         self.store = store
         self.notifier = notifier
         self.risk = risk
+        self.context_key = "context"
 
     # ---------- Utilitaires ----------
 
@@ -4304,7 +4329,8 @@ class ExecutionEngine:
 
     def _persist(self, ctx: BotContext) -> None:
         if self.store is not None:
-            self.store.save_context(ctx, self.cfg.run_mode, force=True)
+            self.store.save_context(ctx, self.cfg.run_mode, force=True,
+                                    key=self.context_key)
 
     def _event(self, name: str, severity: str,
                payload: Dict[str, Any]) -> None:
@@ -4453,6 +4479,60 @@ class ExecutionEngine:
         opened = self._open_from_fill(ctx, intent, results)
         return EntryResult.OPENED if opened else EntryResult.ORDER_SENT
 
+    def enter_planned(self, ctx: BotContext, amount: float, ref_price: float,
+                      sl_abs: float, tp_abs: float, meta: Dict[str, Any],
+                      candle_ts: int) -> EntryResult:
+        """Entrée dont la taille et les stops sont décidés par une stratégie
+        externe (TrendGuard), exécutée avec les mêmes garanties que enter() :
+        intention persistée, frais en base, protection immédiate."""
+        if ctx.position.in_position or ctx.pending_order:
+            return EntryResult.SKIPPED
+        amount = self.ex.round_amount(amount)
+        if amount <= 0 or amount * ref_price < self.ex.min_notional() * 1.05:
+            self.logger.info(f"[ENTRY] {self.cfg.symbol}: taille sous le minimum")
+            return EntryResult.SKIPPED
+        intent = {"kind": "entry", "cids": [], "ts": _utcnow_iso(),
+                  "ts_epoch": time.time(), "amount": amount,
+                  "sl_abs": sl_abs, "tp_abs": tp_abs,
+                  "candle_ts": int(candle_ts), "ref_price": ref_price,
+                  "module": meta.get("module", "planned"),
+                  "regime": meta.get("regime", ""), "tier": meta.get("tier", ""),
+                  "score": int(meta.get("score", 0)),
+                  "soft_stop": meta.get("soft_stop"),
+                  "risk_per_unit": meta.get("risk_per_unit"),
+                  "equity": meta.get("equity"),
+                  "eff_risk_pct": meta.get("eff_risk_pct")}
+        if not self.live:
+            res = self._paper_buy(ctx, amount, ref_price)
+            return (EntryResult.OPENED if self._open_from_fill(ctx, intent, [res])
+                    else EntryResult.ORDER_SENT)
+        ctx.pending_order = intent
+        ctx.state = BotState.OPENING.value
+        cid = self.ex.new_client_id(CID_ENTRY_MARKET)
+        intent["cids"].append(cid)
+        self._persist(ctx)
+        try:
+            results = [self.ex.market_buy(amount, cid)]
+        except AmbiguousOrder as e:
+            self._halt(ctx, "AMBIGUOUS_BUY",
+                       payload={"error": str(e), "cid": e.client_id})
+            return EntryResult.ORDER_SENT
+        except ValueError as e:
+            self.logger.info(f"[ENTRY] ordre non envoyé: {e}")
+            ctx.pending_order = None
+            ctx.state = BotState.FLAT.value
+            self._persist(ctx)
+            return EntryResult.SKIPPED
+        except (ccxt.InsufficientFunds, ccxt.InvalidOrder,
+                ccxt.BadRequest) as e:
+            self.logger.warning(f"[ENTRY] ordre rejeté: {e}")
+            ctx.pending_order = None
+            ctx.state = BotState.FLAT.value
+            self._persist(ctx)
+            return EntryResult.ORDER_SENT
+        opened = self._open_from_fill(ctx, intent, results)
+        return EntryResult.OPENED if opened else EntryResult.ORDER_SENT
+
     def _smart_buy(self, ctx: BotContext, intent: Dict[str, Any],
                    amount: float) -> List[OrderResult]:
         """Chaser limit : chaque ordre est annulé puis relu une seule fois
@@ -4543,14 +4623,25 @@ class ExecutionEngine:
         cost_basis = (cost + fee_quote + extra_fee) / amount_held
         sl_dist = float(intent.get("sl_dist") or avg * 0.02)
         rr = float(intent.get("rr") or 2.0)
-        sl = self.ex.round_price(avg - sl_dist, "down")
-        tp = self.ex.round_price(avg + sl_dist * rr, "up")
+        if intent.get("sl_abs"):
+            sl = self.ex.round_price(float(intent["sl_abs"]), "down")
+            sl_dist = avg - sl
+        else:
+            sl = self.ex.round_price(avg - sl_dist, "down")
+        if intent.get("tp_abs"):
+            tp = self.ex.round_price(float(intent["tp_abs"]), "up")
+        else:
+            tp = self.ex.round_price(avg + sl_dist * rr, "up")
         if not (0 < sl < avg < tp):
             self.logger.critical(
                 f"[ENTRY] géométrie SL/TP invalide ({sl}/{avg}/{tp}) → défaut")
             sl = self.ex.round_price(avg * (1 - cfg.max_sl_dist_pct), "down")
             tp = self.ex.round_price(avg * (1 + cfg.max_sl_dist_pct * rr), "up")
         risk_quote = amount_held * (cost_basis - sl * (1 - cfg.fee_rate))
+        if intent.get("risk_per_unit"):
+            # Risque planifié par la stratégie (stop de clôture) : c'est lui
+            # qui définit le R, pas le stop de protection exchange.
+            risk_quote = amount_held * float(intent["risk_per_unit"])
         if risk_quote <= 0:
             risk_quote = amount_held * max(avg - sl, avg * 0.001)
         candle_ts = int(intent.get("candle_ts") or int(time.time() * 1000))
@@ -4570,7 +4661,9 @@ class ExecutionEngine:
             entry_candle_ts=candle_ts, sl_update_candle_ts=candle_ts,
             low_since_sl_update=avg, high_since_entry=avg,
             eff_risk_pct=intent.get("eff_risk_pct"),
-            entry_equity=float(intent.get("equity") or 0.0))
+            entry_equity=float(intent.get("equity") or 0.0),
+            soft_stop=float(intent.get("soft_stop") or 0.0),
+            highest_close=float(intent.get("ref_price") or avg))
         ctx.pending_order = None
         ctx.state = BotState.OPEN.value
         self._persist(ctx)
@@ -4920,8 +5013,11 @@ class ExecutionEngine:
                                           self.ex.new_client_id(CID_STOP))
             p.standalone_stop_order_id = res.order_id
             p.protection_mode = ProtectionMode.STOP_ONLY.value
-            self.logger.warning("[PROT] fallback STOP seul (TP géré en logiciel)")
-            self.notifier("⚠️ Protection en STOP seul", dedup_key="stop_only")
+            if self.cfg.use_oco:
+                self.logger.warning("[PROT] fallback STOP seul (TP géré en logiciel)")
+                self.notifier("⚠️ Protection en STOP seul", dedup_key="stop_only")
+            else:
+                self.logger.info(f"[PROT] STOP qty={qty} sl={p.sl_price}")
             return True
         except AmbiguousOrder as e:
             self.logger.error(f"[PROT] STOP ambigu: {e}")
@@ -5267,26 +5363,7 @@ class ExecutionEngine:
             return
         update_extremes(ctx.position, df, live_price)
         if self.live:
-            status = self.sync_protection(ctx)
-            if not ctx.position.in_position:
-                return
-            if status == "FAILED":
-                self.logger.critical("[PROT] position sans protection → liquidation")
-                self.panic_flatten(ctx, "protection impossible")
-                return
-            p = ctx.position
-            if self.cfg.software_stop_enabled:
-                if status == "UNCERTAIN" and live_price <= p.sl_price:
-                    self.panic_flatten(ctx, "stop logiciel (protection incertaine)")
-                    return
-                if live_price <= p.sl_price * (1 - self.cfg.stop_limit_offset_pct):
-                    # Stop déclenché mais non exécuté (ex. STOP_LOSS_LIMIT
-                    # dépassé par un gap) : sortie marché de dernier recours.
-                    self.panic_flatten(ctx, "stop logiciel (stop exchange non exécuté)")
-                    return
-            if (p.protection_mode == ProtectionMode.STOP_ONLY.value
-                    and live_price >= p.tp_price and not is_frozen(ctx)):
-                self.close_position(ctx, "BARRIER_TP", live_price)
+            if not self.maintain_protection(ctx, live_price):
                 return
         else:
             if self._paper_barriers(ctx, df, live_price):
@@ -5304,6 +5381,36 @@ class ExecutionEngine:
         if not ctx.position.in_position:
             return
         self.apply_trailing(ctx, closed, live_price, current_candle_ts)
+
+    def maintain_protection(self, ctx: BotContext, live_price: float) -> bool:
+        """Live : synchronise la protection exchange, applique le stop
+        logiciel de dernier recours. Retourne False si la position a été
+        clôturée ou liquidée (rien d'autre à faire ce cycle)."""
+        if not ctx.position.in_position:
+            return False
+        status = self.sync_protection(ctx)
+        if not ctx.position.in_position:
+            return False
+        if status == "FAILED":
+            self.logger.critical("[PROT] position sans protection → liquidation")
+            self.panic_flatten(ctx, "protection impossible")
+            return False
+        p = ctx.position
+        if self.cfg.software_stop_enabled:
+            if status == "UNCERTAIN" and live_price <= p.sl_price:
+                self.panic_flatten(ctx, "stop logiciel (protection incertaine)")
+                return False
+            if live_price <= p.sl_price * (1 - self.cfg.stop_limit_offset_pct):
+                # Stop déclenché mais non exécuté (ex. STOP_LOSS_LIMIT
+                # dépassé par un gap) : sortie marché de dernier recours.
+                self.panic_flatten(ctx, "stop logiciel (stop exchange non exécuté)")
+                return False
+        if (self.cfg.use_oco
+                and p.protection_mode == ProtectionMode.STOP_ONLY.value
+                and live_price >= p.tp_price and not is_frozen(ctx)):
+            self.close_position(ctx, "BARRIER_TP", live_price)
+            return False
+        return True
 
     def _paper_barriers(self, ctx: BotContext, df: pd.DataFrame,
                         live_price: float) -> bool:
@@ -5366,7 +5473,7 @@ class ExecutionEngine:
     def apply_break_even(self, ctx: BotContext, live_price: float,
                          current_candle_ts: int) -> bool:
         p = ctx.position
-        if p.break_even_done:
+        if p.break_even_done or not self.cfg.break_even_enabled:
             return False
         if float(p.high_since_entry or 0) < p.buy_price * (
                 1 + self.cfg.break_even_trigger):
@@ -5452,6 +5559,8 @@ class ExecutionEngine:
 
     def should_time_exit(self, ctx: BotContext, live_price: float) -> bool:
         p = ctx.position
+        if not self.cfg.time_exit_enabled:
+            return False
         cd = _parse_iso(p.time_exit_cooldown_until)
         if cd is not None and _utcnow() < cd:
             return False
