@@ -400,3 +400,47 @@ def test_capital_cap_kill_switch_uses_bot_equity(logger):
     bot.state["realized_pnl_total"] = -500.0      # le bot a perdu 50 % de SON capital
     run_days(bot, fb, close, volume, SIM_FROM, SIM_FROM + 1)
     assert bot.state["halted"]                    # alors que le compte ne perd que 5 %
+
+
+def _verify(bot, fb, close, volume, day_idx=SIM_FROM + 60, **kw):
+    import io
+    feed(fb, close, volume)
+    d = close.index[day_idx]
+    for a in close.columns:
+        fb.set_price(f"{a.upper()}/USDT", float(close[a].loc[d]))
+    out = io.StringIO()
+    rc = tg.cmd_verify(bot.g, exchange=fb, out=out,
+                       now=d.to_pydatetime() + DAY + timedelta(minutes=5), **kw)
+    return rc, out.getvalue()
+
+
+def test_verify_places_no_order_and_reports_plan(logger):
+    close, volume = synthetic_market()
+    bot, fb = make_bot("paper", close, logger)
+    rc, text = _verify(bot, fb, close, volume)
+    assert rc == 0, text
+    assert "✅ Prêt pour le mode réel." in text
+    assert "Retrait autorisé      : non ✓" in text
+    assert "Valeur totale estimée : 10,000.00 USDT" in text
+    assert not fb.open_orders() and all(not f.orders for f in fb.fakes.values())
+    assert fb.free["USDT"] == pytest.approx(10_000.0)
+
+
+def test_verify_fails_when_withdrawals_enabled(logger):
+    close, volume = synthetic_market()
+    bot, fb = make_bot("paper", close, logger)
+    fb.restrictions["enableWithdrawals"] = True
+    rc, text = _verify(bot, fb, close, volume)
+    assert rc == 1 and "OUI ❌ à désactiver" in text
+
+
+def test_verify_reports_rejected_key(logger):
+    close, volume = synthetic_market()
+    bot, fb = make_bot("paper", close, logger)
+
+    def refused(params=None):
+        raise v29.ccxt.AuthenticationError(
+            'binance {"code":-2015,"msg":"Invalid API-key, IP, or permissions for action."}')
+    fb.sapi_get_account_apirestrictions = refused
+    rc, text = _verify(bot, fb, close, volume)
+    assert rc == 1 and "adresse IP non autorisée" in text

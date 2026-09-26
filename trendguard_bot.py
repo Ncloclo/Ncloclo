@@ -891,6 +891,130 @@ def cmd_set_secret(env_path: str = ".env") -> int:
     return 0
 
 
+_ORDER_METHODS = ("create_order", "cancel_order", "privatePostOrderListOco",
+                  "private_post_orderlist_oco", "privateDeleteOrderList",
+                  "private_delete_orderlist")
+
+
+def _forbid_orders(exchange: Any) -> None:
+    """Garde-fou de `verify` : toute tentative d'ordre lève une erreur."""
+    def forbidden(name):
+        def _raise(*a, **k):
+            raise RuntimeError(f"ordre interdit pendant la vérification ({name})")
+        return _raise
+    for name in _ORDER_METHODS:
+        setattr(exchange, name, forbidden(name))
+
+
+def cmd_verify(gcfg: GuardConfig, exchange: Any = None,
+               now: Optional[datetime] = None, out=None) -> int:
+    """Vérifications SANS AUCUN ORDRE avant le passage en réel : droits de
+    la clé, soldes, validation des types d'ordres (order/test) et
+    simulation de la décision du jour. Retourne 0 si tout est prêt."""
+    out = out or sys.stdout
+    say = lambda msg="": print(msg, file=out)       # noqa: E731
+    ok = True
+    if exchange is None:
+        key = os.environ.get("BINANCE_API_KEY", "").strip()
+        secret = os.environ.get("BINANCE_API_SECRET", "").strip()
+        if not key or not secret:
+            say("❌ BINANCE_API_KEY ou BINANCE_API_SECRET absent de .env "
+                "(secret : python trendguard_bot.py set-secret)")
+            return 1
+        exchange = ccxt.binance({"apiKey": key, "secret": secret,
+                                 "enableRateLimit": True,
+                                 "options": {"defaultType": "spot",
+                                             "adjustForTimeDifference": True}})
+        if gcfg.binance_testnet:
+            exchange.set_sandbox_mode(True)
+    _forbid_orders(exchange)
+    say(f"Vérification {'TESTNET' if gcfg.binance_testnet else 'BINANCE RÉEL'} "
+        f"— aucun ordre ne sera passé")
+
+    say("\n── 1. Droits de la clé API")
+    try:
+        r = exchange.sapi_get_account_apirestrictions()
+    except ccxt.AuthenticationError as e:
+        msg = str(e)
+        hint = (" → adresse IP non autorisée, clé supprimée ou droits manquants"
+                if "-2015" in msg else " → secret incorrect" if "-1022" in msg else "")
+        say(f"  ❌ Clé refusée par Binance{hint} ({msg[:120]})")
+        return 1
+    except Exception as e:
+        r = None
+        say(f"  (lecture des droits impossible : {type(e).__name__})")
+    if r is not None:
+        withdraw = bool(r.get("enableWithdrawals"))
+        trading = bool(r.get("enableSpotAndMarginTrading"))
+        say(f"  Retrait autorisé      : {'OUI ❌ à désactiver sur Binance' if withdraw else 'non ✓'}")
+        say(f"  Trading Spot autorisé : {'oui ✓' if trading else 'NON ❌ à activer sur Binance'}")
+        say(f"  Restriction IP        : {'oui ✓' if r.get('ipRestrict') else 'non (conseillé)'}")
+        ok = ok and not withdraw and trading
+
+    say("\n── 2. Soldes")
+    bal = exchange.fetch_balance()
+    total = {a: float(q or 0) for a, q in (bal.get("total") or {}).items()
+             if float(q or 0) > 0}
+    value = 0.0
+    for asset, qty in sorted(total.items()):
+        px = 1.0 if asset in ("USDT", "USDC", "FDUSD") else 0.0
+        if not px:
+            try:
+                px = float(exchange.fetch_ticker(f"{asset}/USDT")["last"] or 0)
+            except Exception:
+                px = 0.0
+        value += qty * px
+        say(f"  {asset:<8} {qty:>18.8f}  ≈ {qty * px:>12,.2f} USDT")
+    say(f"  Valeur totale estimée : {value:,.2f} USDT")
+
+    say("\n── 3. Validation des ordres + 4. décision du jour (simulation)")
+    live = dataclasses.replace(gcfg, run_mode="live", enable_live_trading=True,
+                               live_confirmation="I_UNDERSTAND_RISK",
+                               db_file=":memory:", log_file=os.devnull,
+                               lock_file=os.devnull)
+    quiet = logging.getLogger("trendguard.verify")
+    quiet.handlers[:] = [logging.NullHandler()]
+    quiet.propagate = False
+    store = v29.Store(":memory:", quiet)
+    bot = TrendGuardBot(live, quiet, exchange, store,
+                        v29.Notifier("", "", logger=quiet))
+    try:
+        if not bot.boot():
+            say("  ❌ Démarrage impossible (validation des ordres ou reconciliation)")
+            return 1
+        say("  Validation des types d'ordres (order/test) : OK ✓")
+        now = now or v29._utcnow()
+        day = last_closed_day(now, live.decision_delay_sec)
+        snap, bull, prices = bot._market_snapshot(now, day)
+        equity, cash = bot._equity_and_cash(prices)
+        orphans = [b for b, sl in bot.slots.items() if sl.ctx.orphan_balance]
+        eligible = {a: x for a, x in snap.items() if bot._can_enter(a)}
+        plans = ts.plan_entries(bot._holdings(), eligible, bull, equity, cash,
+                                live.params)
+    finally:
+        store.close()
+    say(f"  Bougie du {day} | régime BTC : "
+        f"{'HAUSSIER' if bull else 'BAISSIER (aucun achat)'}")
+    say(f"  Capital géré : {equity:,.2f} USDT | USDT disponible : {cash:,.2f}")
+    if orphans:
+        say(f"  ⚠️  Cryptos détenues hors bot (achats bloqués sur ces paires) : "
+            f"{', '.join(orphans)}")
+    spent = 0.0
+    for p in plans:
+        spent += p["cost"]
+        say(f"  ↗ achat prévu {p['asset'].upper():<5} {p['qty']:.6g} ≈ "
+            f"{p['cost']:,.2f} USDT | stop {p['stop']:.6g} | "
+            f"risque {p['risk_quote']:.2f} USDT")
+    if plans:
+        say(f"  Total : {spent:,.2f} USDT ({spent / max(equity, 1e-9) * 100:.0f} % "
+            f"du capital géré)")
+    else:
+        say("  Aucun achat prévu aujourd'hui.")
+    say("\n" + ("✅ Prêt pour le mode réel." if ok else
+                "❌ À corriger avant le mode réel (voir ci-dessus)."))
+    return 0 if ok else 1
+
+
 def health_check(gcfg: GuardConfig, max_age_sec: int) -> int:
     """0 si le dernier cycle réussi date de moins de `max_age_sec` et que le
     kill-switch n'est pas déclenché ; 1 sinon (contrôle de santé Docker)."""
@@ -922,7 +1046,8 @@ def health_check(gcfg: GuardConfig, max_age_sec: int) -> int:
 def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(description="TrendGuard Bot (Binance Spot)")
     ap.add_argument("cmd", choices=["run", "once", "status", "resume", "docs",
-                                    "health", "replay", "set-secret"])
+                                    "health", "replay", "set-secret",
+                                    "verify"])
     ap.add_argument("--data", default="data", help="(replay) dossier Coin Metrics")
     ap.add_argument("--start", default="2025-06-01", help="(replay) début")
     ap.add_argument("--end", default=None, help="(replay) fin")
@@ -963,6 +1088,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 2
     if args.cmd == "set-secret":
         return cmd_set_secret()
+    if args.cmd == "verify":
+        return cmd_verify(gcfg)
     if args.cmd == "health":
         return health_check(gcfg, v29._env_i("TG_HEALTH_MAX_AGE_SEC", 600))
     if args.cmd in ("status", "resume"):

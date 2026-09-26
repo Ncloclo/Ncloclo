@@ -84,7 +84,10 @@ Compte réel :
    par saisie masquée : `python trendguard_bot.py set-secret`. Dans VS Code,
    c'est la tâche « Binance — enregistrer la clé secrète ». Le secret ne passe
    ni par l'écran ni par l'historique du terminal.
-3. Fixez `TG_MAX_CAPITAL`, le capital en USDT confié au bot. Le bot gère alors
+3. Lancez `python trendguard_bot.py verify` : droits de la clé (retrait
+   interdit, trading autorisé), soldes, validation des ordres par Binance et
+   simulation des achats du jour. **Aucun ordre n'est passé.**
+4. Fixez `TG_MAX_CAPITAL`, le capital en USDT confié au bot. Le bot gère alors
    un sous-compte virtuel (ce plafond, plus ses propres gains et pertes), quel
    que soit le solde réel du compte. Le kill-switch s'applique à ce capital.
 
@@ -146,7 +149,7 @@ walkforward | status | resume` (voir `python v29.py docs`).
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 149 tests, simulateurs Binance Spot mono et multi-paires
+python -m pytest tests -q      # 152 tests, simulateurs Binance Spot mono et multi-paires
 ```
 
 ## Limites connues

@@ -650,6 +650,10 @@ class FakeBinanceMulti:
         self.ohlcv: Dict[Any, List[List[float]]] = {}
         self.markets: Dict[str, Any] = {}
         self.fail_balance = False
+        # GET /sapi/v1/account/apiRestrictions (droits de la clé API)
+        self.restrictions: Dict[str, Any] = {
+            "ipRestrict": True, "enableReading": True,
+            "enableWithdrawals": False, "enableSpotAndMarginTrading": True}
         for k, (sym, px) in enumerate(prices.items()):
             fb = FakeBinance(symbol=sym, price=px, quote_balance=0.0, **kw)
             base = sym.split("/")[0]
@@ -742,6 +746,9 @@ class FakeBinanceMulti:
 
     def privatePostOrderTest(self, params):
         return self._by_market_id(params["symbol"]).privatePostOrderTest(params)
+
+    def sapi_get_account_apirestrictions(self, params=None):
+        return dict(self.restrictions)
 
     def open_orders(self):
         return [o for fb in self.fakes.values() for o in fb.orders.values()
