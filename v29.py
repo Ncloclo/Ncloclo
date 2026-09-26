@@ -74,6 +74,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import enum
+import errno
 import hashlib
 import itertools
 import json
@@ -83,6 +84,7 @@ import os
 import queue
 import re
 import signal
+import socket
 import sqlite3
 import statistics
 import sys
@@ -131,6 +133,10 @@ except ImportError:
 # ══════════════════════════════════════════════════════════════════════
 
 VERSION_MODULE = "V29.6"
+# Les fichiers d'état par défaut sont placés à côté du programme (et non
+# dans le dossier courant) : un lancement depuis un autre dossier retrouve
+# la même base et le même verrou.
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
 SCHEMA_VERSION = 11
 
 _ENV_BOOL = ("1", "true", "yes", "on")
@@ -181,6 +187,7 @@ ENV_DOC: Dict[str, str] = {
     "USE_SMART_BUY": "true : chaser limit au lieu de market",
     "SELF_TEST_CONDITIONAL_ORDERS": "true : valide les ordres au boot via order/test",
     "RECOVERY_REQUIRE_VERIFIED_ENTRY": "true : refuse une recovery sans achat vérifié",
+    "RECOVERY_ADOPT_ORDERS": "true : adopter les ordres du bot inconnus de la base (base perdue)",
     "INTRABAR_PARTIAL_MODE": "Backtest : ohlc | optimistic | conservative",
     "ADAPTIVE_ENABLED": "true : active l'AdaptiveEngine",
     "HEARTBEAT_EVERY_CYCLES": "Intervalle heartbeat (cycles)",
@@ -577,6 +584,7 @@ class Config:
     stop_limit_offset_pct: float = 0.01
     software_stop_enabled: bool = True
     recovery_require_verified_entry: bool = True
+    recovery_adopt_orders: bool = False
     protection_unknown_max: int = 6
     protection_unknown_max_sec: int = 120
     pending_order_timeout_sec: int = 300
@@ -731,16 +739,16 @@ class Config:
                         "BLOCKCHAIN_SWEEP_TARGET absent de BLOCKCHAIN_WHITELIST.")
         if not self.db_file:
             object.__setattr__(self, "db_file",
-                               f"v29_{self.base}_{self.quote}_{self.run_mode}.db")
+                               os.path.join(APP_DIR, f"v29_{self.base}_{self.quote}_{self.run_mode}.db"))
         if not self.log_file:
             object.__setattr__(self, "log_file",
-                               f"v29_{self.base}_{self.quote}_{self.run_mode}.log")
+                               os.path.join(APP_DIR, f"v29_{self.base}_{self.quote}_{self.run_mode}.log"))
         if not self.lock_file:
             object.__setattr__(self, "lock_file",
-                               f"v29_{self.base}_{self.quote}_{self.run_mode}.lock")
+                               os.path.join(APP_DIR, f"v29_{self.base}_{self.quote}_{self.run_mode}.lock"))
         if not self.heartbeat_log_file:
             object.__setattr__(self, "heartbeat_log_file",
-                               f"v29_{self.base}_{self.quote}_heartbeat.log")
+                               os.path.join(APP_DIR, f"v29_{self.base}_{self.quote}_heartbeat.log"))
 
     @property
     def tier_mult_map(self) -> Dict[str, float]:
@@ -792,6 +800,7 @@ def load_config_from_env() -> Config:
             "SELF_TEST_CONDITIONAL_ORDERS", True),
         recovery_require_verified_entry=_env_b(
             "RECOVERY_REQUIRE_VERIFIED_ENTRY", True),
+        recovery_adopt_orders=_env_b("RECOVERY_ADOPT_ORDERS", False),
         intrabar_partial_mode=_env_s("INTRABAR_PARTIAL_MODE", "ohlc").lower(),
         adaptive_enabled=_env_b("ADAPTIVE_ENABLED", True),
         heartbeat_every_cycles=_env_i("HEARTBEAT_EVERY_CYCLES", 10),
@@ -1466,53 +1475,119 @@ class Notifier:
 
 
 class ProcessLock:
-    def __init__(self, path: str):
-        self.path = path
-        self.handle = None
-        self.fd = None
-        self._mode = None
+    """Verrou d'instance unique posé par le système d'exploitation (flock
+    sous Unix, msvcrt.locking sous Windows) : il est libéré automatiquement
+    si le process meurt, même brutalement. Aucun verrou « périmé » possible."""
 
-    def acquire(self) -> None:
+    _HELD_ERRNOS = {errno.EAGAIN, errno.EWOULDBLOCK, errno.EACCES,
+                    getattr(errno, "EDEADLK", -1), getattr(errno, "EDEADLOCK", -1)}
+
+    def __init__(self, path: str):
+        self.path = os.path.abspath(path)
+        self.handle = None
+        self._mode: Optional[str] = None
+
+    def holder(self) -> str:
+        """Identité du détenteur écrite dans le fichier (pid, machine, date)."""
+        try:
+            with open(self.path, encoding="utf-8") as fh:
+                return fh.read().strip() or "détenteur inconnu"
+        except OSError:
+            return "détenteur inconnu"
+
+    def _lock(self, handle) -> None:
         try:
             import fcntl
         except ImportError:
             fcntl = None
         if fcntl is not None:
-            handle = open(self.path, "a+")
-            try:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except (BlockingIOError, OSError):
-                handle.close()
-                raise SystemExit("Lock déjà pris par un autre process.")
-            handle.seek(0)
-            handle.truncate()
-            handle.write(f"pid={os.getpid()} ts={_utcnow_iso()}\n")
-            handle.flush()
-            self.handle = handle
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             self._mode = "fcntl"
             return
         try:
-            self.fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            os.write(self.fd, f"pid={os.getpid()}\n".encode())
-            self._mode = "exclusive"
-        except FileExistsError:
-            raise SystemExit("Lock déjà pris.")
+            import msvcrt
+        except ImportError:
+            raise SystemExit("Aucun mécanisme de verrouillage disponible sur ce "
+                             "système : démarrage refusé.")
+        handle.seek(0)
+        msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        self._mode = "msvcrt"
+
+    def acquire(self) -> None:
+        try:
+            handle = open(self.path, "a+", encoding="utf-8")
+        except OSError as e:
+            raise SystemExit(f"Verrou impossible à créer ({self.path}) : "
+                             f"{e.strerror or e}")
+        try:
+            self._lock(handle)
+        except OSError as e:
+            handle.close()
+            if e.errno in self._HELD_ERRNOS:
+                raise SystemExit(f"Une autre instance du bot tourne déjà "
+                                 f"({self.holder()}) — verrou {self.path}")
+            raise SystemExit(f"Verrouillage impossible sur {self.path} "
+                             f"({e.strerror or e}) : ce système de fichiers ne "
+                             f"gère pas les verrous (partage réseau ?). Placez "
+                             f"les fichiers d'état sur un disque local.")
+        except BaseException:
+            handle.close()
+            raise
+        if self._mode == "fcntl":
+            handle.seek(0)
+            handle.truncate()
+            handle.write(f"pid={os.getpid()} machine={socket.gethostname()} "
+                         f"depuis={_utcnow_iso()}\n")
+            handle.flush()
+        self.handle = handle
 
     def release(self) -> None:
+        handle, self.handle = self.handle, None
+        if handle is None:
+            return
         try:
-            if self._mode == "fcntl" and self.handle:
+            if self._mode == "fcntl":
                 import fcntl
-                fcntl.flock(self.handle.fileno(), fcntl.LOCK_UN)
-                self.handle.close()
-            elif self._mode == "exclusive" and self.fd is not None:
-                os.close(self.fd)
-                if os.path.exists(self.path):
-                    os.unlink(self.path)
-        except Exception:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            elif self._mode == "msvcrt":
+                import msvcrt
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        except OSError:
             pass
-        self.handle = None
-        self.fd = None
-        self._mode = None
+        finally:
+            handle.close()
+            self._mode = None
+
+
+def acquire_instance_locks(lock_file: str, db_file: str) -> List[ProcessLock]:
+    """Verrou configuré + verrou attaché à la base de données (chemin
+    absolu) : deux instances ne peuvent jamais partager la même base, même
+    avec des LOCK_FILE différents ou lancées depuis des dossiers différents."""
+    paths: List[str] = []
+    candidates = [lock_file]
+    if db_file and db_file != ":memory:":
+        candidates.append(db_file + ".lock")
+    for p in candidates:
+        if p and p != os.devnull:
+            ap = os.path.abspath(p)
+            if ap not in paths:
+                paths.append(ap)
+    locks: List[ProcessLock] = []
+    try:
+        for p in paths:
+            lk = ProcessLock(p)
+            lk.acquire()
+            locks.append(lk)
+    except BaseException:
+        release_locks(locks)
+        raise
+    return locks
+
+
+def release_locks(locks: List[ProcessLock]) -> None:
+    for lk in reversed(locks):
+        lk.release()
 
 
 class Console:
@@ -5709,6 +5784,17 @@ def reconcile(ctx: BotContext, cfg: Config, ex: ExchangeAdapter,
         if r.side == "sell" and r.client_id.startswith(PROTECTION_CID_PREFIXES):
             ours.append(r)
     if ours:
+        if not cfg.recovery_adopt_orders:
+            # Des ordres du bot existent mais cette base ne les connaît pas :
+            # soit la base a été perdue, soit UNE AUTRE INSTANCE gère ce
+            # compte. Les adopter ferait gérer la même position par deux bots.
+            ids = ", ".join(o.client_id for o in ours[:4])
+            logger.critical(
+                f"[RECON] {len(ours)} ordre(s) du bot inconnu(s) de cette base "
+                f"({ids}) : une autre instance gère peut-être ce compte → HALT. "
+                f"Base perdue ? Relancer une fois avec RECOVERY_ADOPT_ORDERS=true.")
+            halt_ctx(ctx, "UNKNOWN_BOT_ORDERS", HaltKind.MANUAL)
+            return ctx
         _recover_position(ctx, cfg, ex, logger, exec_engine, ours)
         return ctx
     last = ex.get_ticker()["last"]
@@ -6837,8 +6923,7 @@ def run_bot():
                         os.environ.get("TELEGRAM_CHAT_ID", ""), logger=logger)
     logger.info(dump_config_summary(cfg))
     install_signal_handlers()
-    lock = ProcessLock(cfg.lock_file)
-    lock.acquire()
+    locks = acquire_instance_locks(cfg.lock_file, cfg.db_file)
     store: Optional[Store] = None
     runner: Optional[BotRunner] = None
     try:
@@ -6866,7 +6951,7 @@ def run_bot():
             store.checkpoint(mode="TRUNCATE")
             store.close()
         notifier.close()
-        lock.release()
+        release_locks(locks)
         logger.info("[BOOT] arrêt propre.")
 
 
@@ -7104,8 +7189,7 @@ def cmd_status(args):
 def cmd_resume(args):
     """Lève les blocages après audit manuel. Le bot doit être arrêté."""
     cfg = load_config_from_env()
-    lock = ProcessLock(cfg.lock_file)
-    lock.acquire()
+    locks = acquire_instance_locks(cfg.lock_file, cfg.db_file)
     try:
         _cfg, store, ctx = _load_ctx_for_cli()
         try:
@@ -7142,7 +7226,7 @@ def cmd_resume(args):
         finally:
             store.close()
     finally:
-        lock.release()
+        release_locks(locks)
 
 
 def cmd_test(args):

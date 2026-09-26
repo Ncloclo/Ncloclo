@@ -67,6 +67,7 @@ TG_ENV_DOC: Dict[str, str] = {
     "TG_KILL_DRAWDOWN": "Drawdown depuis le pic qui bloque les entrées (0.40)",
     "TG_HEARTBEAT_MIN": "Intervalle du battement de cœur dans le journal (min, 0 = off)",
     "TG_MAX_CAPITAL": "Capital max géré par le bot en USDT (0 = tout le compte)",
+    "TG_ALLOW_RECOVERY": "true : adopter les ordres du bot inconnus de la base (base perdue)",
     "TG_PAPER_CAPITAL": "Capital initial du mode paper (USDT)",
     "TG_DB_FILE": "Base SQLite du bot",
     "TG_LOG_FILE": "Fichier de log",
@@ -95,6 +96,7 @@ class GuardConfig:
     kill_drawdown: float = 0.40
     heartbeat_min: int = 15
     max_capital: float = 0.0            # 0 = tout le compte
+    allow_recovery: bool = False        # adopter les ordres du bot inconnus
     paper_capital: float = 10_000.0
     enable_live_trading: bool = False
     live_confirmation: str = ""
@@ -120,9 +122,10 @@ class GuardConfig:
         if self.catastrophe_atr <= 0:
             raise ValueError("catastrophe_atr > 0 requis.")
         self.params.validate()
-        for name, default in (("db_file", f"trendguard_{self.run_mode}.db"),
-                              ("log_file", f"trendguard_{self.run_mode}.log"),
-                              ("lock_file", f"trendguard_{self.run_mode}.lock")):
+        for name, default in (
+                ("db_file", os.path.join(v29.APP_DIR, f"trendguard_{self.run_mode}.db")),
+                ("log_file", os.path.join(v29.APP_DIR, f"trendguard_{self.run_mode}.log")),
+                ("lock_file", os.path.join(v29.APP_DIR, f"trendguard_{self.run_mode}.lock"))):
             if not getattr(self, name):
                 object.__setattr__(self, name, default)
 
@@ -142,6 +145,7 @@ def load_guard_config_from_env() -> GuardConfig:
         kill_drawdown=v29._env_f("TG_KILL_DRAWDOWN", 0.40),
         heartbeat_min=v29._env_i("TG_HEARTBEAT_MIN", 15),
         max_capital=v29._env_f("TG_MAX_CAPITAL", 0.0),
+        allow_recovery=v29._env_b("TG_ALLOW_RECOVERY", False),
         paper_capital=v29._env_f("TG_PAPER_CAPITAL", 10_000.0),
         enable_live_trading=v29._env_b("ENABLE_LIVE_TRADING", False),
         live_confirmation=v29._env_s("LIVE_TRADING_CONFIRMATION", ""),
@@ -219,6 +223,7 @@ class TrendGuardBot:
             live_confirmation=g.live_confirmation,
             binance_testnet=g.binance_testnet,
             use_oco=False, stop_only_protection=True,
+            recovery_adopt_orders=g.allow_recovery,
             partial_exit_enabled=False, trailing_enabled=False,
             break_even_enabled=False, time_exit_enabled=False,
             htf_bias_enabled=False, btc_bias_enabled=False,
@@ -267,13 +272,25 @@ class TrendGuardBot:
             if not btc.ex.self_test_conditional_orders():
                 self.logger.critical("[BOOT] self-test ordres KO → arrêt")
                 return False
+            foreign = []
             for s in self.slots.values():
                 try:
                     v29.reconcile(s.ctx, s.cfg, s.ex, self.logger, s.eng)
                 except Exception as e:
                     self.logger.critical(f"[BOOT] reconcile {s.symbol} KO: {e}")
                     return False
+                if s.ctx.risk.halt_reason == "UNKNOWN_BOT_ORDERS":
+                    foreign.append(s.symbol)
+                    continue                    # base inchangée : rien d'adopté
                 self._save_slot(s)
+            if foreign:
+                msg = (f"Ordres du bot inconnus de cette base sur "
+                       f"{', '.join(foreign)} : une autre instance de TrendGuard "
+                       f"gère peut-être ce compte. Démarrage refusé. Base perdue ? "
+                       f"Relancer une fois avec TG_ALLOW_RECOVERY=true.")
+                self.logger.critical(f"[BOOT] {msg}")
+                self.notifier(f"🛑 {msg}", critical=True, dedup_key="tg-foreign")
+                return False
         self._save_state()
         n_pos = len(self._holdings())
         self.logger.info(f"[BOOT] TrendGuard {self.g.run_mode.upper()} — "
@@ -891,6 +908,8 @@ def cmd_set_secret(env_path: str = ".env") -> int:
     return 0
 
 
+MIN_LIVE_CAPITAL = 100.0     # USDT : en dessous, la plupart des ordres < minimum
+
 _ORDER_METHODS = ("create_order", "cancel_order", "privatePostOrderListOco",
                   "private_post_orderlist_oco", "privateDeleteOrderList",
                   "private_delete_orderlist")
@@ -973,14 +992,22 @@ def cmd_verify(gcfg: GuardConfig, exchange: Any = None,
                                db_file=":memory:", log_file=os.devnull,
                                lock_file=os.devnull)
     quiet = logging.getLogger("trendguard.verify")
-    quiet.handlers[:] = [logging.NullHandler()]
+    reasons = logging.StreamHandler(out)             # affiche les causes d'échec
+    reasons.setLevel(logging.WARNING)
+    reasons.setFormatter(logging.Formatter("  ⚠️  %(message)s"))
+    quiet.handlers[:] = [reasons]
+    quiet.setLevel(logging.WARNING)
     quiet.propagate = False
     store = v29.Store(":memory:", quiet)
     bot = TrendGuardBot(live, quiet, exchange, store,
                         v29.Notifier("", "", logger=quiet))
     try:
         if not bot.boot():
-            say("  ❌ Démarrage impossible (validation des ordres ou reconciliation)")
+            say("  ❌ Démarrage impossible (causes ci-dessus).")
+            if r is not None and not r.get("enableSpotAndMarginTrading"):
+                say("     → la clé n'a pas le droit de trader : Binance ▸ Gestion "
+                    "des API ▸ Modifier ▸ cocher « Activer le trading Spot et sur "
+                    "marge ».")
             return 1
         say("  Validation des types d'ordres (order/test) : OK ✓")
         now = now or v29._utcnow()
@@ -996,6 +1023,12 @@ def cmd_verify(gcfg: GuardConfig, exchange: Any = None,
     say(f"  Bougie du {day} | régime BTC : "
         f"{'HAUSSIER' if bull else 'BAISSIER (aucun achat)'}")
     say(f"  Capital géré : {equity:,.2f} USDT | USDT disponible : {cash:,.2f}")
+    if equity < MIN_LIVE_CAPITAL:
+        ok = False
+        say(f"  ❌ Capital insuffisant : Binance impose ~5 USDT minimum par ordre ; "
+            f"avec 1 % de risque par trade, il faut au moins "
+            f"{MIN_LIVE_CAPITAL:.0f} USDT pour que les positions dépassent ce "
+            f"minimum.")
     if orphans:
         say(f"  ⚠️  Cryptos détenues hors bot (achats bloqués sur ces paires) : "
             f"{', '.join(orphans)}")
@@ -1092,6 +1125,17 @@ def main(argv: Optional[List[str]] = None) -> int:
         return cmd_verify(gcfg)
     if args.cmd == "health":
         return health_check(gcfg, v29._env_i("TG_HEALTH_MAX_AGE_SEC", 600))
+    locks: List[v29.ProcessLock] = []
+    if args.cmd == "resume":
+        # resume modifie l'état : interdit pendant que le bot tourne (il
+        # réécrirait son propre état au cycle suivant).
+        try:
+            locks = v29.acquire_instance_locks(gcfg.lock_file, gcfg.db_file)
+        except SystemExit as e:
+            print(f"❌ {e}\nArrêtez d'abord le bot, puis relancez resume "
+                  f"(Docker : docker compose stop && docker compose run --rm "
+                  f"trendguard resume && docker compose start).")
+            return 1
     if args.cmd in ("status", "resume"):
         store = v29.Store(gcfg.db_file, logging.getLogger("trendguard.cli"))
         state = store.get_kv(TrendGuardBot.STATE_KEY) or {}
@@ -1114,9 +1158,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"Paper cash        : {state['paper']['cash']:.2f} | positions : "
                   f"{', '.join(a.upper() for a in state['paper']['holdings']) or '-'}")
         store.close()
+        v29.release_locks(locks)
         return 0
-    lock = v29.ProcessLock(gcfg.lock_file)
-    lock.acquire()
+    locks = v29.acquire_instance_locks(gcfg.lock_file, gcfg.db_file)
     bot = _build(gcfg)
     try:
         bot.logger.info(f"TrendGuard — {gcfg.run_mode.upper()}"
@@ -1147,7 +1191,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     finally:
         bot.store.close()
         bot.notifier.close()
-        lock.release()
+        v29.release_locks(locks)
 
 
 if __name__ == "__main__":

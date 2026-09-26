@@ -102,7 +102,17 @@ Chaque position est protégée à deux niveaux :
   bas, remonté avec le trailing. Il protège d'un krach entre deux clôtures.
 
 Au-delà de 40 % de drawdown, un kill-switch bloque les entrées
-(`TG_KILL_DRAWDOWN`, levée via `python trendguard_bot.py resume`).
+(`TG_KILL_DRAWDOWN`). Pour le lever, arrêtez le bot puis lancez
+`python trendguard_bot.py resume` : la commande est refusée tant que le bot
+tourne, car il réécrirait son état au cycle suivant.
+
+**Une seule instance par compte Binance.** Un verrou empêche deux bots de
+partager la même base sur une même machine. Il ne peut rien contre deux
+machines ou deux copies du projet. En mode réel, le bot refuse donc de
+démarrer s'il trouve sur le compte des ordres à son nom qu'il ne connaît pas :
+une autre instance tourne peut-être. Si c'est votre base qui a été perdue,
+relancez une seule fois avec `TG_ALLOW_RECOVERY=true` pour reprendre ces
+positions.
 
 ## Déploiement (Docker)
 
@@ -120,6 +130,7 @@ docker compose up -d --build      # construit l'image (tests inclus) et démarre
 | Santé (`healthy` / `unhealthy`) | `docker compose ps` |
 | Mettre à jour | `git pull && docker compose up -d --build` |
 | Arrêter (état conservé) | `docker compose down` |
+| Lever le kill-switch | `docker compose stop && docker compose run --rm trendguard resume && docker compose start` |
 | Repartir de zéro (efface le portefeuille paper) | `docker compose down -v` |
 
 - L'image ne se construit que si toute la suite de tests passe.
@@ -149,7 +160,7 @@ walkforward | status | resume` (voir `python v29.py docs`).
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 152 tests, simulateurs Binance Spot mono et multi-paires
+python -m pytest tests -q      # 164 tests, simulateurs Binance Spot mono et multi-paires
 ```
 
 ## Limites connues

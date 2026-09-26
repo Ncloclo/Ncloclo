@@ -218,10 +218,12 @@ def test_reconcile_records_oco_fill_while_down(live_env):
 
 
 def test_reconcile_recovers_lost_context(live_env):
+    """Base perdue : l'adoption des ordres existants exige un opt-in explicite."""
     env = live_env
     open_live_position(env)
     p = env.ctx.position
-    fresh = build_env("live", fb=env.fb, logger=env.logger)
+    fresh = build_env("live", fb=env.fb, logger=env.logger,
+                      recovery_adopt_orders=True)
     v29.reconcile(fresh.ctx, fresh.cfg, fresh.ex, fresh.logger, fresh.eng)
     q = fresh.ctx.position
     assert q.in_position and q.module == "recovered"
@@ -614,3 +616,17 @@ def test_many_stop_moves_never_exceed_algo_order_limit(live_env):
                 if o["status"] in ("NEW", "PARTIALLY_FILLED") and o["type"] == "STOP_LOSS"]
         assert len(algo) == 1
     _assert_fully_protected(env)
+
+
+def test_second_instance_does_not_adopt_foreign_position(live_env):
+    """Deux instances sur le même compte : la seconde (autre base) ne doit
+    pas adopter la position de la première, mais s'arrêter."""
+    env = live_env
+    open_live_position(env)
+    before = sorted(o["id"] for o in _prot_orders(env.fb))
+    other = build_env("live", fb=env.fb, logger=env.logger)
+    v29.reconcile(other.ctx, other.cfg, other.ex, other.logger, other.eng)
+    assert not other.ctx.position.in_position
+    assert other.ctx.risk.halt_reason == "UNKNOWN_BOT_ORDERS"
+    assert other.ctx.risk.halt_kind == v29.HaltKind.MANUAL
+    assert sorted(o["id"] for o in _prot_orders(env.fb)) == before   # rien touché

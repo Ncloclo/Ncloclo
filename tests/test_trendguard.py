@@ -444,3 +444,66 @@ def test_verify_reports_rejected_key(logger):
     fb.sapi_get_account_apirestrictions = refused
     rc, text = _verify(bot, fb, close, volume)
     assert rc == 1 and "adresse IP non autorisée" in text
+
+
+def test_resume_refused_while_bot_runs(tmp_path, monkeypatch, capsys):
+    db, lock = str(tmp_path / "tg.db"), str(tmp_path / "tg.lock")
+    monkeypatch.setenv("RUN_MODE", "paper")
+    monkeypatch.setenv("TG_DB_FILE", db)
+    monkeypatch.setenv("TG_LOCK_FILE", lock)
+    store = v29.Store(db, logging.getLogger("t"))
+    store.set_kv(tg.TrendGuardBot.STATE_KEY, {"halted": True, "halt_reason": "DD"})
+    store.close()
+    running = v29.acquire_instance_locks(lock, db)          # le bot tourne
+    try:
+        assert tg.main(["resume"]) == 1
+        assert "Arrêtez d'abord le bot" in capsys.readouterr().out
+    finally:
+        v29.release_locks(running)
+    assert tg.main(["resume"]) == 0                          # bot arrêté → OK
+    st = v29.Store(db, logging.getLogger("t"))
+    assert st.get_kv(tg.TrendGuardBot.STATE_KEY)["halted"] is False
+    st.close()
+
+
+def test_live_boot_refuses_foreign_bot_orders(logger):
+    close, _ = synthetic_market()
+    bot, fb = make_bot("live", close, logger)
+    feed(fb, close, _)
+    sym = "ETH/USDT"
+    fb.free["ETH"] = 5.0
+    fb.fakes[sym].create_order(sym, "STOP_LOSS", "sell", 5.0, None,
+                               {"stopPrice": float(close["eth"].iloc[0]) * 0.5,
+                                "newClientOrderId": "QB0000000001deadbeef"})
+    assert bot.boot() is False
+    assert fb.fakes[sym].open_protection_orders()          # ordre intact
+
+
+def test_live_boot_adopts_with_explicit_recovery(logger):
+    close, _ = synthetic_market()
+    bot, fb = make_bot("live", close, logger, allow_recovery=True)
+    feed(fb, close, _)
+    assert bot.boot() is True
+
+
+def test_verify_explains_missing_trading_permission(logger):
+    close, volume = synthetic_market()
+    bot, fb = make_bot("paper", close, logger)
+    fb.restrictions["enableSpotAndMarginTrading"] = False
+
+    def refused(params):
+        raise v29.ccxt.AuthenticationError(
+            'binance {"code":-2015,"msg":"Invalid API-key, IP, or permissions for action."}')
+    for f in fb.fakes.values():
+        f.privatePostOrderTest = refused
+    rc, text = _verify(bot, fb, close, volume)
+    assert rc == 1
+    assert "order/test refusé" in text and "Activer le trading Spot" in text
+
+
+def test_verify_flags_insufficient_capital(logger):
+    close, volume = synthetic_market()
+    bot, fb = make_bot("paper", close, logger)
+    fb.free["USDT"] = 15.0
+    rc, text = _verify(bot, fb, close, volume)
+    assert rc == 1 and "Capital insuffisant" in text
