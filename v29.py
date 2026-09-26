@@ -277,7 +277,7 @@ def _env_b(name: str, default: bool) -> bool:
 
 def _env_s(name: str, default: str) -> str:
     raw = os.environ.get(name)
-    if raw is None:
+    if raw is None or raw.strip() == "":
         return default
     return raw.strip()
 

@@ -65,6 +65,8 @@ def test_env_helpers(monkeypatch):
     assert v29._env_f("T_F", 1.5) == 1.5
     assert v29._env_i("T_I", 7) == 7
     assert v29._env_b("T_B", True) is True        # vide → défaut
+    monkeypatch.setenv("T_S", "  ")
+    assert v29._env_s("T_S", "paper") == "paper"  # vide → défaut
 
 
 def test_env_doc_complete_and_no_orphan():

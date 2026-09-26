@@ -1,0 +1,40 @@
+{
+  // Terminal ▸ Exécuter la tâche…
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Installer les dépendances",
+      "type": "shell",
+      "command": "python -m pip install -r requirements.txt",
+      "problemMatcher": []
+    },
+    {
+      "label": "Télécharger les données de recherche",
+      "type": "shell",
+      "command": "python trend_strategy.py download --data data",
+      "problemMatcher": []
+    },
+    {
+      "label": "Tests",
+      "type": "shell",
+      "command": "python -m pytest tests -q",
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "TrendGuard — paper (prix réels)",
+      "type": "shell",
+      "command": "python trendguard_bot.py run",
+      "options": { "env": { "RUN_MODE": "paper" } },
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "TrendGuard — statut",
+      "type": "shell",
+      "command": "python trendguard_bot.py status",
+      "options": { "env": { "RUN_MODE": "paper" } },
+      "problemMatcher": []
+    }
+  ]
+}

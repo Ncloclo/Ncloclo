@@ -56,6 +56,18 @@ python trendguard_bot.py replay --data data --start 2025-06-01   # paper rejoué
 python trendguard_bot.py status                       # état du portefeuille
 ```
 
+### Dans VS Code
+
+1. Ouvrez le dossier du projet, puis installez l'extension **Python** (proposée automatiquement).
+2. Lancez `Terminal ▸ Exécuter la tâche… ▸ Installer les dépendances`.
+3. Copiez `.env.example` en `.env`. Les réglages par défaut conviennent pour le mode paper.
+4. Ouvrez `Exécuter et déboguer`, choisissez une configuration, puis appuyez sur **F5** :
+   - **TrendGuard — paper (prix réels Binance)** : le bot en continu ;
+   - **TrendGuard — un seul cycle** : une décision, puis arrêt ;
+   - **TrendGuard — rejeu paper 12 mois** : télécharge l'historique et le rejoue ;
+   - **TrendGuard — statut du portefeuille** ;
+   - **Tests (pytest)**.
+
 Live, testnet d'abord :
 
 ```bash

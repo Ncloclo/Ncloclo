@@ -1,0 +1,69 @@
+{
+  // Lancer avec F5 (ou Exécuter et déboguer ▸ choisir une configuration).
+  // Les variables de .env sont chargées automatiquement (copier .env.example).
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "TrendGuard — paper (prix réels Binance)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/trendguard_bot.py",
+      "args": ["run"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "envFile": "${workspaceFolder}/.env",
+      "env": { "RUN_MODE": "paper" }
+    },
+    {
+      "name": "TrendGuard — un seul cycle (paper)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/trendguard_bot.py",
+      "args": ["once"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "envFile": "${workspaceFolder}/.env",
+      "env": { "RUN_MODE": "paper" }
+    },
+    {
+      "name": "TrendGuard — rejeu paper 12 mois (historique réel)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/trendguard_bot.py",
+      "args": ["replay", "--data", "data", "--start", "2025-06-01"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "preLaunchTask": "Télécharger les données de recherche"
+    },
+    {
+      "name": "TrendGuard — statut du portefeuille",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/trendguard_bot.py",
+      "args": ["status"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "envFile": "${workspaceFolder}/.env",
+      "env": { "RUN_MODE": "paper" }
+    },
+    {
+      "name": "Recherche — régénérer le rapport",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/trend_strategy.py",
+      "args": ["research", "--data", "data", "--out", "docs/TRENDGUARD_REPORT.md"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "preLaunchTask": "Télécharger les données de recherche"
+    },
+    {
+      "name": "Tests (pytest)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["tests", "-q"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    }
+  ]
+}
