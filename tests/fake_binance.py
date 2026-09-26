@@ -7,7 +7,17 @@ pour la gestion du risque :
 - OCO natif (orderList) : une jambe exécutée → l'autre expire ;
   annuler une jambe annule la liste ;
 - GET /api/v3/orderList refuse le paramètre `symbol` (-1104) ;
-- injection de pannes réseau avant/après placement d'un ordre.
+- filtres LOT_SIZE / PRICE_FILTER sur l'endpoint brut OCO (-1013) et
+  paramètres obligatoires (-1102), client-id en double refusé (-2010) ;
+- exécutions partielles (partial_fill) : dès qu'une jambe d'OCO est
+  exécutée, même partiellement, l'autre expire ;
+- injection de pannes avant/après placement (create_faults) :
+  "before"/"after" (timeout), "internal_after" (-1001, statut inconnu),
+  "unavailable_after" (HTTP 503), "ratelimit" (429, ordre non transmis).
+
+Limites connues : liquidité infinie, exécutions déclenchées seulement par
+set_price() (pas entre deux appels API), PERCENT_PRICE / MAX_NUM_ALGO_ORDERS
+non simulés.
 """
 
 from __future__ import annotations
@@ -24,6 +34,11 @@ SPOT_TYPES = ["LIMIT", "LIMIT_MAKER", "MARKET", "STOP_LOSS", "STOP_LOSS_LIMIT",
 
 _CCXT_STATUS = {"NEW": "open", "PARTIALLY_FILLED": "open", "FILLED": "closed",
                 "CANCELED": "canceled", "EXPIRED": "expired"}
+
+
+def _on_grid(value: str, step: float) -> bool:
+    """True si `value` (chaîne envoyée à l'API) est un multiple exact de step."""
+    return (Decimal(str(value)) / Decimal(str(step))) % 1 == 0
 
 
 def _floor(x: float, step: float) -> float:
@@ -160,7 +175,7 @@ class FakeBinance:
         if o["side"] == "buy":
             cost = qty * px
             if o["lock_asset"] == self.quote:
-                release = min(o["locked"], o["amount"] * (o["price"] or px))
+                release = min(o["locked"], qty * (o["price"] or px))
                 self.locked[self.quote] -= release
                 self.free[self.quote] += release
                 o["locked"] -= release
@@ -185,9 +200,15 @@ class FakeBinance:
                     raise ccxt.InsufficientFunds("-2010 insufficient base")
                 self.free[self.base] -= qty
             proceeds = qty * px
-            fee = proceeds * self.fee_rate
-            self.free[self.quote] += proceeds - fee
-            o["fees"].append({"currency": self.quote, "cost": fee})
+            if self.fee_mode == "base":
+                fee = proceeds * self.fee_rate
+                self.free[self.quote] += proceeds - fee
+                o["fees"].append({"currency": self.quote, "cost": fee})
+            else:
+                fee = proceeds * self.fee_rate * 0.75 / 300.0
+                self.free["BNB"] -= fee
+                self.free[self.quote] += proceeds
+                o["fees"].append({"currency": "BNB", "cost": fee})
         o["filled"] += qty
         o["cost"] += qty * px
         o["status"] = "FILLED" if o["filled"] >= o["amount"] - 1e-12 \
@@ -203,11 +224,6 @@ class FakeBinance:
             s = self.orders[sid]
             if sid != o["id"] and s["status"] in ("NEW", "PARTIALLY_FILLED"):
                 s["status"] = "EXPIRED"
-        # La base encore bloquée par la liste est libérée.
-        if lst["locked"] > 1e-12:
-            self._unlock(self.base, lst["locked"])
-        lst["locked"] = 0.0
-        lst["status"] = "ALL_DONE"
 
     def _process_triggers(self):
         for o in list(self.orders.values()):
@@ -228,19 +244,61 @@ class FakeBinance:
                 self._fill(o, o["amount"] - o["filled"], o["price"], maker=True)
 
     def _fill_list_leg(self, o, qty, px):
+        """Binance : dès qu'une jambe d'OCO est exécutée, même partiellement,
+        l'autre jambe expire. La jambe exécutée garde son reliquat ouvert."""
         if o.get("list_id"):
             lst = self.lists[o["list_id"]]
-            lst["locked"] -= qty                       # quitte la liste…
-            o["lock_asset"], o["locked"] = self.base, qty  # …portée par la jambe
+            if lst["locked"] > 0:                  # 1re exécution de la liste
+                o["lock_asset"], o["locked"] = self.base, lst["locked"]
+                lst["locked"] = 0.0
+                self._expire_list_siblings(o)
             self._fill(o, qty, px)
-            self._expire_list_siblings(o)
+            if o["status"] == "FILLED":
+                lst["status"] = "ALL_DONE"
         else:
             self._fill(o, qty, px)
+
+    def partial_fill(self, order_id, qty, price=None):
+        """Exécution partielle forcée d'un ordre ouvert (liquidité réduite)."""
+        o = self.orders[str(order_id)]
+        if o["status"] not in ("NEW", "PARTIALLY_FILLED"):
+            raise ValueError(f"ordre {order_id} non ouvert")
+        qty = min(float(qty), o["amount"] - o["filled"])
+        px = price if price is not None else (
+            o["price"] if o["price"] else (self.bid if o["side"] == "sell" else self.ask))
+        if o["side"] == "sell":
+            self._fill_list_leg(o, qty, px)
+        else:
+            self._fill(o, qty, px, maker=True)
 
     def _maybe_fault(self):
         if self.create_faults:
             return self.create_faults.pop(0)
         return None
+
+    @staticmethod
+    def _raise_pre(fault, what):
+        if fault == "before":
+            raise ccxt.RequestTimeout(f"timeout ({what} non transmis)")
+        if fault == "ratelimit":
+            raise ccxt.RateLimitExceeded('binance {"code":-1003,"msg":"Too many requests"}')
+
+    @staticmethod
+    def _raise_post(fault, what):
+        if fault == "after":
+            raise ccxt.RequestTimeout(f"timeout ({what} transmis)")
+        if fault == "internal_after":
+            raise ccxt.OperationFailed(
+                'binance {"code":-1001,"msg":"Internal error; unable to process '
+                'your request. Please try again."}')
+        if fault == "unavailable_after":
+            raise ccxt.ExchangeNotAvailable("binance 503 Service Unavailable")
+
+    def _check_cid(self, *cids):
+        for cid in cids:
+            if cid and any(o["cid"] == cid and o["status"] in ("NEW", "PARTIALLY_FILLED")
+                           for o in self.orders.values()):
+                raise ccxt.InvalidOrder('binance {"code":-2010,"msg":"Duplicate order sent."}')
 
     def create_order(self, symbol, type, side, amount, price=None, params=None):
         params = dict(params or {})
@@ -250,12 +308,21 @@ class FakeBinance:
             raise ccxt.InvalidOrder(
                 f"binance {type} is not a valid order type for the {symbol} market")
         fault = self._maybe_fault()
-        if fault == "before":
-            raise ccxt.RequestTimeout("timeout (ordre non transmis)")
+        self._raise_pre(fault, "ordre")
+        if otype in ("LIMIT", "STOP_LOSS_LIMIT", "TAKE_PROFIT_LIMIT", "LIMIT_MAKER") \
+                and price is None:
+            raise ccxt.BadRequest('binance {"code":-1102,"msg":"Mandatory parameter '
+                                  "'price' was not sent\"}")
+        if otype in ("STOP_LOSS", "STOP_LOSS_LIMIT") and params.get("stopPrice") is None:
+            raise ccxt.BadRequest('binance {"code":-1102,"msg":"Mandatory parameter '
+                                  "'stopPrice' was not sent\"}")
+        # Comme ccxt : quantité tronquée au pas, prix arrondis au tick.
         amount = _floor(float(amount), self.step)
         cid = params.get("newClientOrderId")
-        stop = float(params["stopPrice"]) if params.get("stopPrice") is not None else None
-        px = float(price) if price is not None else None
+        self._check_cid(cid)
+        stop = (float(self.price_to_precision(symbol, params["stopPrice"]))
+                if params.get("stopPrice") is not None else None)
+        px = float(self.price_to_precision(symbol, price)) if price is not None else None
         ref = self.ask if side == "buy" else self.bid
         if amount * (px or ref) < self.min_notional_value:
             raise ccxt.InvalidOrder("-1013 Filter failure: NOTIONAL")
@@ -279,8 +346,7 @@ class FakeBinance:
         except Exception:
             del self.orders[o["id"]]
             raise
-        if fault == "after":
-            raise ccxt.RequestTimeout("timeout (ordre transmis)")
+        self._raise_post(fault, "ordre")
         return self._ccxt(o, include_fees=True)
 
     def _ccxt(self, o, include_fees=False):
@@ -346,6 +412,9 @@ class FakeBinance:
             s = self.orders[sid]
             if s["status"] in ("NEW", "PARTIALLY_FILLED"):
                 s["status"] = "CANCELED"
+                if s["lock_asset"] and s["locked"] > 0:
+                    self._unlock(s["lock_asset"], s["locked"])
+                    s["locked"] = 0.0
         if lst["locked"] > 0:
             self._unlock(self.base, lst["locked"])
             lst["locked"] = 0.0
@@ -356,21 +425,33 @@ class FakeBinance:
                 if o["status"] in ("NEW", "PARTIALLY_FILLED")]
 
     def fetch_my_trades(self, symbol=None, since=None, limit=None, params=None):
-        out = [dict(t) for t in self.trades
-               if since is None or t["timestamp"] >= since]
-        return out[-(limit or len(out)):] if out else []
+        limit = min(int(limit or 500), 1000)
+        if since is not None:     # Binance : trades >= startTime, ordre croissant
+            return [dict(t) for t in self.trades if t["timestamp"] >= since][:limit]
+        return [dict(t) for t in self.trades][-limit:]
 
     # ---------- endpoints bruts OCO ----------
 
     def privatePostOrderListOco(self, params):
         self.calls.append("oco")
         fault = self._maybe_fault()
-        if fault == "before":
-            raise ccxt.RequestTimeout("timeout (OCO non transmis)")
-        qty = _floor(float(params["quantity"]), self.step)
+        self._raise_pre(fault, "OCO")
+        below_type = params["belowType"]
+        for key in ("quantity", "abovePrice", "belowStopPrice") + (
+                ("belowPrice", "belowTimeInForce") if below_type == "STOP_LOSS_LIMIT" else ()):
+            if params.get(key) in (None, ""):
+                raise ccxt.BadRequest(f'binance {{"code":-1102,"msg":"Mandatory '
+                                      f"parameter '{key}' was not sent\"}}")
+        # Endpoint brut : ccxt n'arrondit rien, Binance rejette hors grille.
+        if not _on_grid(params["quantity"], self.step):
+            raise ccxt.BadRequest('binance {"code":-1013,"msg":"Filter failure: LOT_SIZE"}')
+        for key in ("abovePrice", "belowStopPrice", "belowPrice"):
+            if params.get(key) and not _on_grid(params[key], self.tick):
+                raise ccxt.BadRequest('binance {"code":-1013,"msg":"Filter failure: PRICE_FILTER"}')
+        self._check_cid(params.get("aboveClientOrderId"), params.get("belowClientOrderId"))
+        qty = float(params["quantity"])
         above = float(params["abovePrice"])
         below_stop = float(params["belowStopPrice"])
-        below_type = params["belowType"]
         if params.get("aboveType") != "LIMIT_MAKER":
             raise ccxt.InvalidOrder("aboveType non simulé")
         if below_type not in self.order_types:
@@ -389,8 +470,7 @@ class FakeBinance:
         self.lists[lid] = {"id": lid, "cid": params.get("listClientOrderId"),
                            "orders": [tp["id"], sl["id"]], "status": "EXECUTING",
                            "locked": qty}
-        if fault == "after":
-            raise ccxt.RequestTimeout("timeout (OCO transmis)")
+        self._raise_post(fault, "OCO")
         return self._list_resp(lid, reports=True)
 
     def _list_resp(self, lid, reports=False):

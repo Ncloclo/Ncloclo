@@ -2472,10 +2472,13 @@ class ExchangeAdapter:
         except ccxt.InvalidNonce as e:
             self.invalidate_balances()
             raise ccxt.InvalidOrder(f"Ordre rejeté (horodatage): {e}") from e
-        except ccxt.NetworkError as e:
+        except ccxt.OperationFailed as e:
+            # Réseau, 5xx, -1007 et -1001 : Binance documente ces réponses
+            # comme « statut d'exécution INCONNU » (l'ordre a pu passer).
+            # ccxt classe -1001 en OperationFailed, hors NetworkError.
             self.invalidate_balances()
             self.logger.warning(
-                f"[ORD] {otype} {side} réseau KO ({type(e).__name__}) "
+                f"[ORD] {otype} {side} statut inconnu ({type(e).__name__}) "
                 f"→ recherche {cid}")
             found = self._lookup_by_cid(cid)
             if found is None:
@@ -2617,7 +2620,7 @@ class ExchangeAdapter:
                 params["stopLimitTimeInForce"] = "GTC"
         try:
             resp = fn(params)
-        except ccxt.NetworkError as e:
+        except ccxt.OperationFailed as e:        # statut inconnu (voir _submit)
             self.invalidate_balances()
             resp = self._lookup_list_by_cid(list_cid)
             if resp is None:
@@ -4851,14 +4854,21 @@ class ExecutionEngine:
         p = ctx.position
         if not p.has_protection_ids():
             return CancelResult(True, [])
-        hydrated = self._hydrate_oco_legs(p)
+        # Jamais d'annulation à l'aveugle : si l'état de la protection est
+        # illisible, on ne pourrait pas confirmer l'annulation ni reposer un
+        # stop → une panne de lecture deviendrait une position sans stop.
+        pre = self.protection_snapshot(ctx)
+        if pre.state == ProtectionState.UNKNOWN:
+            self.logger.error("[PROT] protection illisible → annulation "
+                              "reportée, ordres conservés")
+            return CancelResult(False, pre.fills)
         if p.oco_order_id:
             self.ex.cancel_order_list(p.oco_order_id)
         for _kind, oid in self._leg_list(p):
             self.ex.cancel_order(order_id=oid)
-        if not hydrated:
-            return CancelResult(False, [])
         snap = self.protection_snapshot(ctx)
+        if pre.fills:
+            snap.fills = pre.fills + snap.fills
         if snap.state == ProtectionState.UNKNOWN or snap.open_ids:
             for oid in snap.open_ids:
                 self.ex.cancel_order(order_id=oid)
@@ -4922,20 +4932,20 @@ class ExecutionEngine:
                 p.oco_uncertain_since = _utcnow_iso()
             since = _parse_iso(p.oco_uncertain_since) or _utcnow()
             elapsed = (_utcnow() - since).total_seconds()
-            if (p.oco_misses < self.cfg.protection_unknown_max
-                    and elapsed < self.cfg.protection_unknown_max_sec):
-                return "UNCERTAIN"
-            self.logger.critical(
-                f"[PROT] protection illisible (misses={p.oco_misses}, "
-                f"{elapsed:.0f}s) → purge + re-protection")
-            res = self.cancel_protection(ctx)
-            self._apply_fills(ctx, res.fills)
-            if not ctx.position.in_position:
-                self._persist(ctx)
-                return "CLOSED"
-            if not res.all_terminal:
-                return "UNCERTAIN"
-            return self._place_or_status(ctx)
+            # Les ordres de protection sont CONSERVÉS : les annuler sans pouvoir
+            # lire leur état laisserait la position sans stop pendant la panne.
+            # Le stop logiciel reste armé (statut UNCERTAIN).
+            if (p.oco_misses == self.cfg.protection_unknown_max
+                    or (p.oco_misses > self.cfg.protection_unknown_max
+                        and p.oco_misses % 60 == 0)):
+                self.logger.critical(
+                    f"[PROT] protection illisible depuis {elapsed:.0f} s "
+                    f"({p.oco_misses} lectures KO) : ordres conservés, stop "
+                    f"logiciel armé")
+                self.notifier("⚠️ Protection illisible (API Binance) : ordres "
+                              "conservés, surveillance renforcée",
+                              critical=True, dedup_key="prot_unknown")
+            return "UNCERTAIN"
         if snap.open_ids:
             # Jambe TP seule restante (SL annulé hors bot) → on repart à neuf.
             res = self.cancel_protection(ctx)

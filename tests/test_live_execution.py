@@ -1,6 +1,7 @@
 """Scénarios live de bout en bout contre le simulateur Binance Spot.
 Chaque test verrouille la correction d'un défaut du diagnostic V29.5."""
 
+import logging
 import time
 
 import ccxt
@@ -364,3 +365,141 @@ def test_small_residue_absorbed_as_dust_then_swept(live_env):
     env.eng.sweep_dust(env.ctx, env.fb.last)
     assert env.fb.free["TRX"] < 1.0
     assert env.ctx.portfolio.dust_base < 1.0
+
+
+# ---------- Exécutions partielles (Binance : l'autre jambe de l'OCO expire) ----------
+
+def _leg(fb, otype):
+    return next(o for o in fb.orders.values()
+                if o["type"] == otype and o["status"] in ("NEW", "PARTIALLY_FILLED"))
+
+
+def _assert_fully_protected(env):
+    p = env.ctx.position
+    legs = _prot_orders(env.fb)
+    assert any(o["type"] == "STOP_LOSS" for o in legs)
+    for o in legs:
+        assert abs((o["amount"] - o["filled"]) - p.amount_held) < 1e-9
+    assert env.fb.free["TRX"] + env.fb.locked["TRX"] == pytest.approx(p.amount_held, abs=0.2)
+    assert not env.ctx.risk.halted
+
+
+@pytest.mark.parametrize("leg,frac", [("LIMIT_MAKER", 0.4), ("STOP_LOSS", 0.5)])
+def test_oco_partial_fill_is_booked_and_remainder_reprotected(live_env, leg, frac):
+    env = live_env
+    open_live_position(env)
+    p = env.ctx.position
+    initial = p.amount_held
+    px = p.tp_price if leg == "LIMIT_MAKER" else p.sl_price * 0.999
+    env.fb.partial_fill(_leg(env.fb, leg)["id"], round(initial * frac, 1), price=px)
+    # Juste après : l'autre jambe a expiré → le reliquat n'a plus de stop.
+    assert not any(o["type"] == "STOP_LOSS" for o in _prot_orders(env.fb)) \
+        or leg == "STOP_LOSS"
+    assert env.eng.sync_protection(env.ctx) == "ACTIVE"
+    p = env.ctx.position
+    assert p.in_position
+    assert p.amount_held == pytest.approx(initial - round(initial * frac, 1))
+    assert (p.realized_pnl > 0) is (leg == "LIMIT_MAKER")
+    _assert_fully_protected(env)
+
+
+def test_stop_only_partial_fill_reprotected(logger):
+    env = build_env("live", logger=logger, use_oco=False, stop_only_protection=True)
+    open_live_position(env)
+    p = env.ctx.position
+    initial = p.amount_held
+    env.fb.partial_fill(_leg(env.fb, "STOP_LOSS")["id"], round(initial * 0.3, 1),
+                        price=p.sl_price * 0.999)
+    assert env.eng.sync_protection(env.ctx) == "ACTIVE"
+    assert env.ctx.position.amount_held == pytest.approx(initial - round(initial * 0.3, 1))
+    _assert_fully_protected(env)
+
+
+def test_smart_buy_partial_fill_opens_on_filled_quantity(logger):
+    env = build_env("live", logger=logger, use_smart_buy=True)
+
+    def half_fill(_seconds):
+        for o in list(env.fb.orders.values()):
+            if o["side"] == "buy" and o["status"] == "NEW":
+                env.fb.partial_fill(o["id"], round(o["amount"] * 0.5, 1))
+    env.ex.sleep = half_fill
+    assert open_live_position(env) == v29.EntryResult.OPENED
+    assert env.fb.locked["USDT"] == pytest.approx(0)       # reliquat annulé
+    _assert_fully_protected(env)
+
+
+# ---------- Statuts inconnus Binance (-1001, 503) ----------
+
+def test_internal_error_after_buy_is_resolved_immediately(live_env):
+    """-1001 : ccxt lève OperationFailed (hors NetworkError). L'ordre a pu
+    passer : le bot doit le rechercher, pas laisser la base sans stop."""
+    env = live_env
+    env.fb.create_faults = ["internal_after"]
+    assert open_live_position(env) == v29.EntryResult.OPENED
+    assert env.ctx.pending_order is None
+    _assert_fully_protected(env)
+
+
+def test_unavailable_after_oco_is_found_by_list_client_id(live_env):
+    env = live_env
+    env.fb.create_faults = ["none", "unavailable_after"]    # achat OK, OCO 503
+    assert open_live_position(env) == v29.EntryResult.OPENED
+    assert len(env.fb.lists) == 1                           # pas de doublon
+    assert env.ctx.position.oco_order_id == next(iter(env.fb.lists))
+    _assert_fully_protected(env)
+
+
+def test_ambiguous_oco_adopts_existing_orders(live_env, monkeypatch):
+    env = live_env
+    env.fb.create_faults = ["none", "after"]
+    monkeypatch.setattr(env.ex, "_lookup_list_by_cid", lambda cid, attempts=3: None)
+    assert open_live_position(env) == v29.EntryResult.OPENED
+    assert len(env.fb.lists) == 1 and len(_prot_orders(env.fb)) == 2
+    p = env.ctx.position
+    assert p.oco_order_id and p.oco_sl_order_id and not p.standalone_stop_order_id
+    _assert_fully_protected(env)
+
+
+def test_rate_limited_buy_is_not_counted(live_env):
+    env = live_env
+    env.fb.create_faults = ["ratelimit"]
+    env.ex._lookup_by_cid = lambda cid, attempts=3: None
+    assert open_live_position(env) == v29.EntryResult.ORDER_SENT
+    env.ctx.pending_order["ts_epoch"] -= env.cfg.pending_order_timeout_sec + 1
+    del env.ex._lookup_by_cid
+    env.eng.resolve_pending(env.ctx)
+    assert not env.ctx.position.in_position and not env.ctx.risk.halted
+    assert not env.fb.orders
+
+
+# ---------- Panne de lecture : ne jamais annuler une protection illisible ----------
+
+def test_read_outage_never_cancels_protection(live_env, caplog):
+    """Si seules les lectures d'ordres échouent, les stops existants doivent
+    rester en place (V29.6 initiale : purge au 6e échec → position nue)."""
+    env = live_env
+    open_live_position(env)
+    env.fb.fail_fetch_order_n = 10_000
+    with caplog.at_level(logging.CRITICAL):
+        for _ in range(20):
+            assert env.eng.sync_protection(env.ctx) == "UNCERTAIN"
+            assert len(_prot_orders(env.fb)) == 2
+    alerts = [r for r in caplog.records if "protection illisible depuis" in r.getMessage()]
+    assert len(alerts) == 1
+    env.fb.fail_fetch_order_n = 0
+    assert env.eng.sync_protection(env.ctx) == "ACTIVE"
+    assert env.ctx.position.oco_misses == 0
+    _assert_fully_protected(env)
+
+
+def test_stop_move_during_read_outage_keeps_old_stop(live_env):
+    env = live_env
+    open_live_position(env)
+    p = env.ctx.position
+    old_sl = p.sl_price
+    env.fb.fail_fetch_order_n = 10_000
+    assert env.eng._modify_stop(env.ctx, p.buy_price, int(time.time() * 1000), "BE") is False
+    assert env.ctx.position.sl_price == old_sl
+    assert len(_prot_orders(env.fb)) == 2
+    env.fb.fail_fetch_order_n = 0
+    _assert_fully_protected(env)
