@@ -503,3 +503,114 @@ def test_stop_move_during_read_outage_keeps_old_stop(live_env):
     assert len(_prot_orders(env.fb)) == 2
     env.fb.fail_fetch_order_n = 0
     _assert_fully_protected(env)
+
+
+# ---------- Courses : exécution ENTRE deux appels API du bot ----------
+
+def _once(fb, method, action):
+    state = {"done": False}
+
+    def hook(name):
+        if name == method and not state["done"]:
+            state["done"] = True
+            action()
+    fb.on_call = hook
+    return state
+
+
+def test_stop_fills_between_snapshot_and_cancel_no_double_sell(live_env):
+    """Time-exit : le SL s'exécute juste avant l'annulation. Le bot doit
+    comptabiliser le SL, sans vendre au marché une base qui n'existe plus."""
+    env = live_env
+    open_live_position(env)
+    p = env.ctx.position
+    st = _once(env.fb, "privateDeleteOrderList",
+               lambda: env.fb.set_price(p.sl_price * 0.998))
+    env.eng.close_position(env.ctx, "BARRIER_TIME", env.fb.last)
+    assert st["done"] and not env.ctx.position.in_position
+    assert env.ctx.portfolio.last_trades[-1]["reason"] == "BARRIER_SL"
+    assert not [o for o in env.fb.orders.values()
+                if o["side"] == "sell" and o["type"] == "MARKET"]
+    assert not env.ctx.risk.halted
+
+
+def test_tp_fills_during_stop_move_no_new_protection(live_env):
+    env = live_env
+    open_live_position(env)
+    p = env.ctx.position
+    _once(env.fb, "privateDeleteOrderList",
+          lambda: env.fb.set_price(p.tp_price * 1.001))
+    assert env.eng._modify_stop(env.ctx, p.buy_price * 1.004,
+                                int(time.time() * 1000), "BE") is False
+    assert not env.ctx.position.in_position
+    assert env.ctx.portfolio.last_trades[-1]["reason"] == "BARRIER_TP"
+    assert _prot_orders(env.fb) == []
+
+
+def test_price_crosses_stop_while_protection_is_placed(live_env):
+    """Le prix passe sous le stop entre la lecture du prix et la pose de
+    l'OCO : Binance refuse (le stop déclencherait tout de suite). Le bot ne
+    doit pas rester sans stop : il liquide."""
+    env = live_env
+    open_live_position(env)
+    p = env.ctx.position
+    env.eng.cancel_protection(env.ctx)
+    _once(env.fb, "privatePostOrderListOco",
+          lambda: env.fb.set_price(p.sl_price * 0.995))
+    assert env.eng.maintain_protection(env.ctx, env.fb.last) is False
+    assert not env.ctx.position.in_position
+    assert env.fb.free["TRX"] * env.fb.last < env.fb.min_notional_value
+
+
+# ---------- Carnet peu profond ----------
+
+def test_thin_book_entry_uses_real_average_price(logger):
+    fb = FakeBinance(book_depth=1000, book_levels=5, level_step=0.002)
+    env = build_env("live", fb=fb, logger=logger)
+    assert open_live_position(env) == v29.EntryResult.OPENED
+    p = env.ctx.position
+    buy = next(o for o in fb.orders.values() if o["side"] == "buy")
+    assert buy["filled"] > 1000                          # plusieurs niveaux
+    assert p.buy_price == pytest.approx(buy["cost"] / buy["filled"])
+    assert p.buy_price > fb.ask                          # slippage réel
+    _assert_fully_protected(env)
+
+
+def test_thin_book_entry_partially_expired_is_protected(logger):
+    fb = FakeBinance(book_depth=500, book_levels=2)
+    env = build_env("live", fb=fb, logger=logger)
+    assert open_live_position(env) == v29.EntryResult.OPENED
+    buy = next(o for o in fb.orders.values() if o["side"] == "buy")
+    assert buy["status"] == "EXPIRED" and buy["filled"] == pytest.approx(1000)
+    _assert_fully_protected(env)
+
+
+def test_thin_book_tp_fills_over_several_cycles(logger):
+    fb = FakeBinance(book_depth=800)
+    env = build_env("live", fb=fb, logger=logger)
+    open_live_position(env)
+    p = env.ctx.position
+    for k in range(6):
+        fb.set_price(p.tp_price * (1.0005 + k * 0.0001))
+        env.eng.sync_protection(env.ctx)
+        if not env.ctx.position.in_position:
+            break
+        _assert_fully_protected(env)
+    assert not env.ctx.position.in_position
+    t = env.ctx.portfolio.last_trades[-1]
+    assert t["pnl"] > 0 and t["legs"] >= 2
+    assert fb.free["TRX"] + fb.locked["TRX"] < 1.0
+
+
+def test_many_stop_moves_never_exceed_algo_order_limit(live_env):
+    env = live_env
+    open_live_position(env)
+    p = env.ctx.position
+    for k in range(1, 12):
+        env.fb.set_price(p.buy_price * (1 + 0.002 * k))
+        env.eng._modify_stop(env.ctx, p.sl_price * 1.001,
+                             int(time.time() * 1000), "TRAIL")
+        algo = [o for o in env.fb.orders.values()
+                if o["status"] in ("NEW", "PARTIALLY_FILLED") and o["type"] == "STOP_LOSS"]
+        assert len(algo) == 1
+    _assert_fully_protected(env)

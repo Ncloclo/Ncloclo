@@ -134,15 +134,17 @@ walkforward | status | resume` (voir `python v29.py docs`).
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 131 tests, simulateurs Binance Spot mono et multi-paires
+python -m pytest tests -q      # 144 tests, simulateurs Binance Spot mono et multi-paires
 ```
 
 ## Limites connues
 
-- Les simulateurs reproduisent fidèlement les mécanismes de risque :
-  soldes bloqués, frais en base, OCO, erreurs réseau. Ils ne remplacent pas le
-  **testnet**, car l'API Binance n'était pas accessible depuis l'environnement
-  de développement.
+- Les simulateurs reproduisent les mécanismes de risque de Binance Spot :
+  soldes bloqués, frais en base, OCO (l'autre jambe expire dès une exécution
+  partielle), carnet à profondeur finie, filtres de prix, de quantité et de
+  nombre d'ordres, erreurs à statut inconnu (-1001, 503) et courses entre deux
+  appels API. Ils ne remplacent pas le **testnet**, seul moyen de valider les
+  vraies réponses de l'API avec des clés.
 - La recherche utilise les clôtures USD de Coin Metrics, alors que le bot live
   utilise les clôtures USDT de Binance. Les deux séries sont très proches, sans
   être identiques.

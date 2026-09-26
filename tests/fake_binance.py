@@ -15,9 +15,17 @@ pour la gestion du risque :
   "before"/"after" (timeout), "internal_after" (-1001, statut inconnu),
   "unavailable_after" (HTTP 503), "ratelimit" (429, ordre non transmis).
 
-Limites connues : liquidité infinie, exécutions déclenchées seulement par
-set_price() (pas entre deux appels API), PERCENT_PRICE / MAX_NUM_ALGO_ORDERS
-non simulés.
+- carnet à profondeur finie (book_depth) : les ordres au marché parcourent
+  les niveaux (slippage) et le reliquat non exécutable EXPIRE ; les ordres
+  au repos s'exécutent par tranches (exécutions partielles naturelles) ;
+- filtres PERCENT_PRICE_BY_SIDE, MAX_NUM_ALGO_ORDERS (5 stops par paire)
+  et MAX_NUM_ORDERS ;
+- on_call(nom) : rappel au début de chaque appel API, pour provoquer une
+  exécution ENTRE deux appels du bot (courses) ;
+- identifiants d'ordres numérotés par paire (FakeBinanceMulti), comme sur
+  Binance : deux paires peuvent avoir le même orderId.
+
+Par défaut (book_depth=None) la liquidité est infinie.
 """
 
 from __future__ import annotations
@@ -25,12 +33,14 @@ from __future__ import annotations
 import itertools
 import time
 from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import ccxt
 
 SPOT_TYPES = ["LIMIT", "LIMIT_MAKER", "MARKET", "STOP_LOSS", "STOP_LOSS_LIMIT",
               "TAKE_PROFIT", "TAKE_PROFIT_LIMIT"]
+ALGO_TYPES = ("STOP_LOSS", "STOP_LOSS_LIMIT", "TAKE_PROFIT", "TAKE_PROFIT_LIMIT")
+LIMIT_PRICED = ("LIMIT", "LIMIT_MAKER", "STOP_LOSS_LIMIT", "TAKE_PROFIT_LIMIT")
 
 _CCXT_STATUS = {"NEW": "open", "PARTIALLY_FILLED": "open", "FILLED": "closed",
                 "CANCELED": "canceled", "EXPIRED": "expired"}
@@ -53,7 +63,11 @@ class FakeBinance:
                  step: float = 0.1, tick: float = 0.00001,
                  min_notional: float = 5.0,
                  order_types: Optional[List[str]] = None,
-                 spread: float = 0.0002):
+                 spread: float = 0.0002,
+                 book_depth: Optional[float] = None, book_levels: int = 10,
+                 level_step: float = 0.001,
+                 percent_price: Tuple[float, float] = (0.2, 5.0),
+                 max_algo_orders: int = 5, max_orders: int = 200):
         self.symbol = symbol
         self.base, self.quote = symbol.split("/")
         self.market_id = self.base + self.quote
@@ -64,6 +78,14 @@ class FakeBinance:
         self.min_notional_value = min_notional
         self.order_types = list(order_types or SPOT_TYPES)
         self.spread = spread
+        self.book_depth = book_depth          # base par niveau ; None = infini
+        self.book_levels = book_levels
+        self.level_step = level_step          # écart de prix entre niveaux
+        self.percent_price = percent_price    # (multiplicateur bas, haut)
+        self.max_algo_orders = max_algo_orders
+        self.max_orders = max_orders
+        self.on_call: Optional[Callable[[str], None]] = None
+        self._in_hook = False
         self.free: Dict[str, float] = {self.quote: quote_balance,
                                        self.base: base_balance, "BNB": 10.0}
         self.locked: Dict[str, float] = {self.quote: 0.0, self.base: 0.0,
@@ -102,7 +124,17 @@ class FakeBinance:
                           "minQty": str(self.step)},
                          {"filterType": "PRICE_FILTER", "tickSize": str(self.tick)},
                          {"filterType": "NOTIONAL",
-                          "minNotional": str(self.min_notional_value)}]}}
+                          "minNotional": str(self.min_notional_value)},
+                         {"filterType": "PERCENT_PRICE_BY_SIDE",
+                          "bidMultiplierUp": str(self.percent_price[1]),
+                          "bidMultiplierDown": str(self.percent_price[0]),
+                          "askMultiplierUp": str(self.percent_price[1]),
+                          "askMultiplierDown": str(self.percent_price[0]),
+                          "avgPriceMins": 5},
+                         {"filterType": "MAX_NUM_ALGO_ORDERS",
+                          "maxNumAlgoOrders": self.max_algo_orders},
+                         {"filterType": "MAX_NUM_ORDERS",
+                          "maxNumOrders": self.max_orders}]}}
 
     def amount_to_precision(self, symbol, amount):
         return format(Decimal(str(_floor(float(amount), self.step))).normalize(), "f")
@@ -117,6 +149,16 @@ class FakeBinance:
 
     # ---------- prix & déclenchements ----------
 
+    def _hook(self, name: str) -> None:
+        """Rappel on_call(nom) au début de chaque appel API (non réentrant)."""
+        cb = self.on_call
+        if cb is not None and not self._in_hook:
+            self._in_hook = True
+            try:
+                cb(name)
+            finally:
+                self._in_hook = False
+
     def set_price(self, last: float) -> None:
         self.last = float(last)
         self.bid = self.last * (1 - self.spread / 2)
@@ -124,6 +166,7 @@ class FakeBinance:
         self._process_triggers()
 
     def fetch_ticker(self, symbol):
+        self._hook("fetch_ticker")
         return {"last": self.last, "bid": self.bid, "ask": self.ask}
 
     def fetch_ohlcv(self, symbol, timeframe="1h", since=None, limit=500):
@@ -140,6 +183,7 @@ class FakeBinance:
 
     def fetch_balance(self):
         self.calls.append("fetch_balance")
+        self._hook("fetch_balance")
         if self.fail_balance:
             raise ccxt.NetworkError("balance timeout")
         total = {k: self.free.get(k, 0.0) + self.locked.get(k, 0.0)
@@ -225,23 +269,59 @@ class FakeBinance:
             if sid != o["id"] and s["status"] in ("NEW", "PARTIALLY_FILLED"):
                 s["status"] = "EXPIRED"
 
+    def _avail(self, remaining: float) -> float:
+        """Quantité exécutable en une fois pour un ordre au repos."""
+        return remaining if self.book_depth is None else min(remaining, self.book_depth)
+
+    def _book_fill(self, o, qty):
+        """Exécution au marché : parcourt le carnet niveau par niveau
+        (slippage) ; le reliquat non exécutable expire, comme sur Binance."""
+        buy = o["side"] == "buy"
+        best = self.ask if buy else self.bid
+        left = float(qty)
+        levels = 1 if self.book_depth is None else self.book_levels
+        for i in range(levels):
+            if left <= 1e-12:
+                break
+            px = best * (1 + i * self.level_step) if buy \
+                else best * (1 - i * self.level_step)
+            q = left if self.book_depth is None else min(left, self.book_depth)
+            if buy and self.free[self.quote] < q * px:     # fonds épuisés
+                q = self.free[self.quote] / px
+                left = q
+            if q <= 1e-12:
+                break
+            if buy:
+                self._fill(o, q, px)
+            else:
+                self._fill_list_leg(o, q, px)
+            left -= q
+        if o["status"] in ("NEW", "PARTIALLY_FILLED") and o["type"] in ("MARKET", "STOP_LOSS"):
+            o["status"] = "EXPIRED"                        # carnet épuisé
+            if o["lock_asset"] and o["locked"] > 1e-12:
+                self._unlock(o["lock_asset"], o["locked"])
+                o["locked"] = 0.0
+            if o.get("list_id"):
+                self.lists[o["list_id"]]["status"] = "ALL_DONE"
+
     def _process_triggers(self):
         for o in list(self.orders.values()):
             if o["status"] not in ("NEW", "PARTIALLY_FILLED"):
                 continue
             t = o["type"]
+            rem = o["amount"] - o["filled"]
             if o["side"] == "sell" and t == "LIMIT_MAKER" and self.bid >= o["price"]:
-                self._fill_list_leg(o, o["amount"] - o["filled"], o["price"])
+                self._fill_list_leg(o, self._avail(rem), o["price"])
             elif o["side"] == "sell" and t in ("STOP_LOSS", "STOP_LOSS_LIMIT"):
                 if not o["triggered"] and self.last <= o["stop"]:
                     o["triggered"] = True
                 if o["triggered"]:
-                    if t == "STOP_LOSS":
-                        self._fill_list_leg(o, o["amount"] - o["filled"], self.bid)
+                    if t == "STOP_LOSS":                  # devient un ordre au marché
+                        self._book_fill(o, rem)
                     elif self.bid >= o["price"]:
-                        self._fill_list_leg(o, o["amount"] - o["filled"], self.bid)
+                        self._fill_list_leg(o, self._avail(rem), self.bid)
             elif o["side"] == "buy" and t == "LIMIT" and self.ask <= o["price"]:
-                self._fill(o, o["amount"] - o["filled"], o["price"], maker=True)
+                self._fill(o, self._avail(rem), o["price"], maker=True)
 
     def _fill_list_leg(self, o, qty, px):
         """Binance : dès qu'une jambe d'OCO est exécutée, même partiellement,
@@ -294,6 +374,23 @@ class FakeBinance:
         if fault == "unavailable_after":
             raise ccxt.ExchangeNotAvailable("binance 503 Service Unavailable")
 
+    def _check_filters(self, new_types, priced):
+        """MAX_NUM_ORDERS, MAX_NUM_ALGO_ORDERS et PERCENT_PRICE_BY_SIDE."""
+        opened = [o for o in self.orders.values()
+                  if o["status"] in ("NEW", "PARTIALLY_FILLED")]
+        if len(opened) + len(new_types) > self.max_orders:
+            raise ccxt.BadRequest('binance {"code":-1013,"msg":"Filter failure: MAX_NUM_ORDERS"}')
+        algo = sum(o["type"] in ALGO_TYPES for o in opened) \
+            + sum(t in ALGO_TYPES for t in new_types)
+        if algo > self.max_algo_orders:
+            raise ccxt.BadRequest(
+                'binance {"code":-1013,"msg":"Filter failure: MAX_NUM_ALGO_ORDERS"}')
+        lo, hi = self.percent_price
+        for px in priced:
+            if px is not None and not (self.last * lo <= px <= self.last * hi):
+                raise ccxt.BadRequest(
+                    'binance {"code":-1013,"msg":"Filter failure: PERCENT_PRICE_BY_SIDE"}')
+
     def _check_cid(self, *cids):
         for cid in cids:
             if cid and any(o["cid"] == cid and o["status"] in ("NEW", "PARTIALLY_FILLED")
@@ -301,6 +398,7 @@ class FakeBinance:
                 raise ccxt.InvalidOrder('binance {"code":-2010,"msg":"Duplicate order sent."}')
 
     def create_order(self, symbol, type, side, amount, price=None, params=None):
+        self._hook("create_order")
         params = dict(params or {})
         self.calls.append(f"create_order:{type}:{side}")
         otype = str(type).upper()
@@ -326,16 +424,22 @@ class FakeBinance:
         ref = self.ask if side == "buy" else self.bid
         if amount * (px or ref) < self.min_notional_value:
             raise ccxt.InvalidOrder("-1013 Filter failure: NOTIONAL")
+        self._check_filters([otype], [px] if otype in LIMIT_PRICED else [])
+        if otype == "MARKET":
+            need = (amount * self.ask) if side == "buy" else amount
+            asset = self.quote if side == "buy" else self.base
+            if self.free.get(asset, 0.0) + 1e-9 < need:
+                raise ccxt.InsufficientFunds(
+                    "binance -2010 Account has insufficient balance for requested action.")
         o = self._new_order(otype, side, amount, px, stop, cid)
         try:
             if otype == "MARKET":
-                self._fill(o, amount, self.ask if side == "buy" else self.bid)
+                self._book_fill(o, amount)
             elif otype == "LIMIT" and side == "buy":
-                if px >= self.ask:
-                    self._fill(o, amount, self.ask)
-                else:
-                    self._lock(self.quote, amount * px)
-                    o["lock_asset"], o["locked"] = self.quote, amount * px
+                self._lock(self.quote, amount * px)
+                o["lock_asset"], o["locked"] = self.quote, amount * px
+                if px >= self.ask:                          # preneur
+                    self._fill(o, self._avail(amount), self.ask)
             elif otype in ("STOP_LOSS", "STOP_LOSS_LIMIT") and side == "sell":
                 if stop is None or stop >= self.last:
                     raise ccxt.InvalidOrder("-2010 Stop price would trigger immediately.")
@@ -381,6 +485,7 @@ class FakeBinance:
 
     def fetch_order(self, id, symbol=None, params=None):
         self.calls.append("fetch_order")
+        self._hook("fetch_order")
         if self.fail_fetch_order_n > 0:
             self.fail_fetch_order_n -= 1
             raise ccxt.NetworkError("fetch_order timeout")
@@ -389,6 +494,7 @@ class FakeBinance:
 
     def cancel_order(self, id, symbol=None, params=None):
         self.calls.append("cancel_order")
+        self._hook("cancel_order")
         o = self._find(id, params)
         if o["status"] not in ("NEW", "PARTIALLY_FILLED"):
             raise ccxt.OrderNotFound("-2011 Unknown order sent.")
@@ -421,10 +527,12 @@ class FakeBinance:
         lst["status"] = "ALL_DONE"
 
     def fetch_open_orders(self, symbol=None, since=None, limit=None, params=None):
+        self._hook("fetch_open_orders")
         return [self._ccxt(o) for o in self.orders.values()
                 if o["status"] in ("NEW", "PARTIALLY_FILLED")]
 
     def fetch_my_trades(self, symbol=None, since=None, limit=None, params=None):
+        self._hook("fetch_my_trades")
         limit = min(int(limit or 500), 1000)
         if since is not None:     # Binance : trades >= startTime, ordre croissant
             return [dict(t) for t in self.trades if t["timestamp"] >= since][:limit]
@@ -433,6 +541,7 @@ class FakeBinance:
     # ---------- endpoints bruts OCO ----------
 
     def privatePostOrderListOco(self, params):
+        self._hook("privatePostOrderListOco")
         self.calls.append("oco")
         fault = self._maybe_fault()
         self._raise_pre(fault, "OCO")
@@ -449,6 +558,9 @@ class FakeBinance:
             if params.get(key) and not _on_grid(params[key], self.tick):
                 raise ccxt.BadRequest('binance {"code":-1013,"msg":"Filter failure: PRICE_FILTER"}')
         self._check_cid(params.get("aboveClientOrderId"), params.get("belowClientOrderId"))
+        self._check_filters(["LIMIT_MAKER", below_type],
+                            [float(params["abovePrice"])]
+                            + ([float(params["belowPrice"])] if params.get("belowPrice") else []))
         qty = float(params["quantity"])
         above = float(params["abovePrice"])
         below_stop = float(params["belowStopPrice"])
@@ -488,6 +600,7 @@ class FakeBinance:
         return resp
 
     def privateGetOrderList(self, params):
+        self._hook("privateGetOrderList")
         if "symbol" in params:
             raise ccxt.BadRequest(
                 "-1104 Not all sent parameters were read; read '1' parameter(s) "
@@ -504,6 +617,7 @@ class FakeBinance:
         raise ccxt.OrderNotFound("-2011 Order list does not exist.")
 
     def privateDeleteOrderList(self, params):
+        self._hook("privateDeleteOrderList")
         lid = str(params["orderListId"])
         if lid not in self.lists:
             raise ccxt.OrderNotFound("-2011 Unknown order list sent.")
@@ -543,7 +657,9 @@ class FakeBinanceMulti:
             self.locked.setdefault(base, 0.0)
             fb.free = self.free
             fb.locked = self.locked
-            fb._ids = itertools.count(5_000_000_000 + k * 10_000_000)
+            # Comme Binance : orderId numéroté PAR PAIRE (collisions possibles
+            # entre paires) ; orderListId unique (GET orderList sans symbol).
+            fb._ids = itertools.count(5_000_000_000)
             fb._list_ids = itertools.count(1 + k * 100_000)
             self.fakes[sym] = fb
 

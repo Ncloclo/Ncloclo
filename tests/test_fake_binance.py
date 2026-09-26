@@ -119,3 +119,64 @@ def test_fault_injection(fault, exc, placed):
         fb.create_order("TRX/USDT", "market", "buy", 100, None,
                         {"newClientOrderId": "C1"})
     assert bool(fb.orders) is placed
+
+
+# ---------- Liquidité, filtres, rappels, identifiants ----------
+
+def test_market_order_walks_thin_book_and_expires_remainder():
+    fb = FakeBinance(quote_balance=10_000, book_depth=1000, book_levels=3,
+                     level_step=0.01)
+    o = fb.create_order("TRX/USDT", "market", "buy", 5000, None, {})
+    assert o["filled"] == pytest.approx(3000)            # 3 niveaux × 1000
+    assert o["status"] == "expired"
+    assert o["average"] == pytest.approx(fb.ask * 1.01)   # niveaux +0 / +1 / +2 %
+    assert fb.free["TRX"] == pytest.approx(3000 * 0.999)
+
+
+def test_resting_orders_fill_in_slices():
+    fb = FakeBinance(base_balance=1000, book_depth=300)
+    r = fb.privatePostOrderListOco(oco_params(quantity="1000"))
+    tp_id = str(r["orders"][0]["orderId"])
+    fb.set_price(0.111)
+    assert fb.orders[tp_id]["filled"] == pytest.approx(300)
+    fb.set_price(0.112)
+    assert fb.orders[tp_id]["filled"] == pytest.approx(600)
+    assert total(fb, "TRX") == pytest.approx(400)
+
+
+def test_stop_in_thin_book_slips_below_stop():
+    fb = FakeBinance(base_balance=1000, book_depth=200, level_step=0.005)
+    o = fb.create_order("TRX/USDT", "STOP_LOSS", "sell", 1000, None, {"stopPrice": 0.09})
+    fb.set_price(0.0899)
+    done = fb.orders[o["id"]]
+    assert done["status"] == "FILLED"
+    assert done["cost"] / done["filled"] < 0.0899 * 0.99      # glissement ≈ 1 %
+
+
+def test_percent_price_and_algo_order_limits():
+    fb = FakeBinance(base_balance=10_000)
+    with pytest.raises(ccxt.BadRequest, match="PERCENT_PRICE"):
+        fb.privatePostOrderListOco(oco_params(abovePrice="0.6"))   # TP à +500 %
+    for i in range(5):
+        fb.create_order("TRX/USDT", "STOP_LOSS", "sell", 100, None, {"stopPrice": 0.09})
+    with pytest.raises(ccxt.BadRequest, match="MAX_NUM_ALGO_ORDERS"):
+        fb.create_order("TRX/USDT", "STOP_LOSS", "sell", 100, None, {"stopPrice": 0.09})
+
+
+def test_on_call_hook_runs_before_each_api_call():
+    fb = FakeBinance(base_balance=1000)
+    seen = []
+    fb.on_call = seen.append
+    fb.fetch_ticker("TRX/USDT")
+    fb.fetch_balance()
+    fb.create_order("TRX/USDT", "STOP_LOSS", "sell", 100, None, {"stopPrice": 0.09})
+    assert seen == ["fetch_ticker", "fetch_balance", "create_order"]
+
+
+def test_multi_order_ids_collide_across_symbols_like_binance():
+    from fake_binance import FakeBinanceMulti
+    fm = FakeBinanceMulti({"TRX/USDT": 0.1, "ADA/USDT": 0.5})
+    a = fm.create_order("TRX/USDT", "market", "buy", 100, None, {})
+    b = fm.create_order("ADA/USDT", "market", "buy", 100, None, {})
+    assert a["id"] == b["id"]
+    assert fm.fetch_order(a["id"], "ADA/USDT")["amount"] == pytest.approx(100)
