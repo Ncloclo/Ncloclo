@@ -300,3 +300,31 @@ def test_boot_without_network_fails_cleanly(logger):
         raise v29.ccxt.NetworkError("binance GET exchangeInfo")
     fb.load_markets = down
     assert bot.boot() is False
+
+
+def test_health_check(tmp_path, logger, monkeypatch):
+    close, volume = synthetic_market()
+    db = str(tmp_path / "tg.db")
+    g = tg.GuardConfig(run_mode="paper", db_file=db, log_file="/dev/null",
+                       lock_file="/dev/null")
+    assert tg.health_check(g, 600) == 1            # aucun cycle encore
+    store = v29.Store(db, logger)
+    state = {"last_cycle_ts": v29.time.time(), "halted": False,
+             "last_decision_day": "2026-09-25"}
+    store.set_kv(tg.TrendGuardBot.STATE_KEY, state)
+    assert tg.health_check(g, 600) == 0
+    state["last_cycle_ts"] -= 3600                 # bot bloqué depuis 1 h
+    store.set_kv(tg.TrendGuardBot.STATE_KEY, state)
+    assert tg.health_check(g, 600) == 1
+    state.update(last_cycle_ts=v29.time.time(), halted=True, halt_reason="DD")
+    store.set_kv(tg.TrendGuardBot.STATE_KEY, state)
+    assert tg.health_check(g, 600) == 1
+    store.close()
+
+
+def test_cycle_records_heartbeat(logger):
+    close, volume = synthetic_market()
+    bot, fb = make_bot("paper", close, logger)
+    assert bot.boot()
+    run_days(bot, fb, close, volume, SIM_FROM, SIM_FROM + 1)
+    assert abs(bot.state["last_cycle_ts"] - v29.time.time()) < 60

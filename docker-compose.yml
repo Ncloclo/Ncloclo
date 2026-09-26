@@ -1,0 +1,25 @@
+services:
+  trendguard:
+    build: .
+    image: trendguard:latest
+    container_name: trendguard
+    restart: unless-stopped
+    # Réseau Docker par défaut : reprend les DNS de l'hôte. Le réseau dédié
+    # de Compose (DNS interne 127.0.0.11) échoue sur certains hôtes dont le
+    # résolveur est local (systemd-resolved), et le bot n'a besoin d'aucun
+    # réseau entre conteneurs.
+    network_mode: bridge
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - trendguard-data:/data      # base SQLite + logs : survit aux redémarrages
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  trendguard-data:

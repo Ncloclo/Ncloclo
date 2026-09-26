@@ -89,6 +89,33 @@ Chaque position est protégée à deux niveaux :
 Au-delà de 40 % de drawdown, un kill-switch bloque les entrées
 (`TG_KILL_DRAWDOWN`, levée via `python trendguard_bot.py resume`).
 
+## Déploiement (Docker)
+
+```bash
+git clone https://github.com/Ncloclo/Ncloclo.git && cd Ncloclo
+git checkout claude/v29-5-hybrid-bot-fz9gvm
+cp .env.example .env              # paper par défaut ; éditer pour le live
+docker compose up -d --build      # construit l'image (tests inclus) et démarre
+```
+
+| Action | Commande |
+|---|---|
+| Suivre le bot | `docker compose logs -f` |
+| État du portefeuille | `docker compose exec trendguard python trendguard_bot.py status` |
+| Santé (`healthy` / `unhealthy`) | `docker compose ps` |
+| Mettre à jour | `git pull && docker compose up -d --build` |
+| Arrêter (état conservé) | `docker compose down` |
+| Repartir de zéro (efface le portefeuille paper) | `docker compose down -v` |
+
+- L'image ne se construit que si toute la suite de tests passe.
+- Le conteneur redémarre tout seul après un crash ou un redémarrage du serveur.
+  L'état (base SQLite, logs) est conservé dans le volume `trendguard-data`.
+- Docker considère le bot en mauvaise santé (`unhealthy`) si aucun cycle n'a
+  réussi depuis 10 minutes, ou si le kill-switch est déclenché.
+- Serveur conseillé : un petit VPS allumé en permanence (1 vCPU, 1 Go de RAM ;
+  le bot utilise environ 230 Mo), situé dans un pays où Binance n'est pas
+  restreint. Binance refuse notamment les adresses IP des États-Unis.
+
 ## Moteur d'exécution (commun, `v29.py`)
 
 - Une position live n'est jamais laissée sans protection exchange : la
@@ -107,7 +134,7 @@ walkforward | status | resume` (voir `python v29.py docs`).
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 103 tests, simulateurs Binance Spot mono et multi-paires
+python -m pytest tests -q      # 105 tests, simulateurs Binance Spot mono et multi-paires
 ```
 
 ## Limites connues

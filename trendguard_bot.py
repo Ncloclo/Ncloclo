@@ -68,6 +68,7 @@ TG_ENV_DOC: Dict[str, str] = {
     "TG_DB_FILE": "Base SQLite du bot",
     "TG_LOG_FILE": "Fichier de log",
     "TG_LOCK_FILE": "Fichier de verrou (une seule instance)",
+    "TG_HEALTH_MAX_AGE_SEC": "Âge max du dernier cycle réussi pour `health` (s)",
     "TELEGRAM_TOKEN": "Token bot Telegram",
     "TELEGRAM_CHAT_ID": "Chat ID destination",
 }
@@ -346,6 +347,9 @@ class TrendGuardBot:
         day = last_closed_day(now, self.g.decision_delay_sec)
         if self.state.get("last_decision_day") != day:
             self.daily_decision(now, day)
+        # Horloge réelle (et non `now`, simulé en rejeu) : sert au contrôle
+        # de santé du conteneur.
+        self.state["last_cycle_ts"] = time.time()
         self._save_state()
 
     def _maintain_live(self) -> None:
@@ -769,9 +773,38 @@ def _build(gcfg: GuardConfig) -> TrendGuardBot:
     return TrendGuardBot(gcfg, logger, exchange, store, notifier)
 
 
+def health_check(gcfg: GuardConfig, max_age_sec: int) -> int:
+    """0 si le dernier cycle réussi date de moins de `max_age_sec` et que le
+    kill-switch n'est pas déclenché ; 1 sinon (contrôle de santé Docker)."""
+    try:
+        store = v29.Store(gcfg.db_file, logging.getLogger("trendguard.health"))
+        try:
+            state = store.get_kv(TrendGuardBot.STATE_KEY) or {}
+        finally:
+            store.close()
+    except Exception as e:
+        print(f"KO : base illisible ({e})")
+        return 1
+    last = state.get("last_cycle_ts")
+    if not last:
+        print("KO : aucun cycle réussi")
+        return 1
+    age = time.time() - float(last)
+    if age > max_age_sec:
+        print(f"KO : dernier cycle il y a {age:.0f} s (> {max_age_sec} s)")
+        return 1
+    if state.get("halted"):
+        print(f"KO : kill-switch — {state.get('halt_reason')}")
+        return 1
+    print(f"OK : dernier cycle il y a {age:.0f} s, décision du "
+          f"{state.get('last_decision_day')}")
+    return 0
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(description="TrendGuard Bot (Binance Spot)")
     ap.add_argument("cmd", choices=["run", "once", "status", "resume", "docs",
+                                    "health",
                                     "replay"])
     ap.add_argument("--data", default="data", help="(replay) dossier Coin Metrics")
     ap.add_argument("--start", default="2025-06-01", help="(replay) début")
@@ -811,6 +844,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     except ValueError as e:
         print(f"Configuration invalide : {e}", file=sys.stderr)
         return 2
+    if args.cmd == "health":
+        return health_check(gcfg, v29._env_i("TG_HEALTH_MAX_AGE_SEC", 600))
     if args.cmd in ("status", "resume"):
         store = v29.Store(gcfg.db_file, logging.getLogger("trendguard.cli"))
         state = store.get_kv(TrendGuardBot.STATE_KEY) or {}
