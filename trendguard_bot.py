@@ -30,6 +30,7 @@ import dataclasses
 import logging
 import math
 import os
+import re
 import signal
 import sys
 import time
@@ -65,6 +66,7 @@ TG_ENV_DOC: Dict[str, str] = {
     "TG_MAX_TOTAL_RISK": "Risque initial cumulé maximum (0.06 = 6 %)",
     "TG_KILL_DRAWDOWN": "Drawdown depuis le pic qui bloque les entrées (0.40)",
     "TG_HEARTBEAT_MIN": "Intervalle du battement de cœur dans le journal (min, 0 = off)",
+    "TG_MAX_CAPITAL": "Capital max géré par le bot en USDT (0 = tout le compte)",
     "TG_PAPER_CAPITAL": "Capital initial du mode paper (USDT)",
     "TG_DB_FILE": "Base SQLite du bot",
     "TG_LOG_FILE": "Fichier de log",
@@ -92,6 +94,7 @@ class GuardConfig:
     ohlcv_limit: int = 1000
     kill_drawdown: float = 0.40
     heartbeat_min: int = 15
+    max_capital: float = 0.0            # 0 = tout le compte
     paper_capital: float = 10_000.0
     enable_live_trading: bool = False
     live_confirmation: str = ""
@@ -110,6 +113,8 @@ class GuardConfig:
                 raise ValueError("LIVE refusé: LIVE_TRADING_CONFIRMATION requis.")
         if "BTC" not in self.universe:
             raise ValueError("BTC doit faire partie de l'univers (régime).")
+        if self.max_capital < 0:
+            raise ValueError("TG_MAX_CAPITAL doit être >= 0.")
         if not (0 < self.kill_drawdown < 1):
             raise ValueError("TG_KILL_DRAWDOWN doit être dans ]0, 1[.")
         if self.catastrophe_atr <= 0:
@@ -136,6 +141,7 @@ def load_guard_config_from_env() -> GuardConfig:
         universe=uni, params=params,
         kill_drawdown=v29._env_f("TG_KILL_DRAWDOWN", 0.40),
         heartbeat_min=v29._env_i("TG_HEARTBEAT_MIN", 15),
+        max_capital=v29._env_f("TG_MAX_CAPITAL", 0.0),
         paper_capital=v29._env_f("TG_PAPER_CAPITAL", 10_000.0),
         enable_live_trading=v29._env_b("ENABLE_LIVE_TRADING", False),
         live_confirmation=v29._env_s("LIVE_TRADING_CONFIRMATION", ""),
@@ -322,6 +328,8 @@ class TrendGuardBot:
 
     def _record_trade(self, trade: Dict[str, Any]) -> None:
         self.state.setdefault("trades", []).append(trade)
+        self.state["realized_pnl_total"] = (
+            float(self.state.get("realized_pnl_total", 0.0)) + float(trade["pnl"]))
         self.logger.info(
             f"[TRADE] {trade['asset'].upper()} {trade['reason']} "
             f"pnl={trade['pnl']:+.2f} {self.g.quote} R={trade['r']:+.2f}")
@@ -484,7 +492,7 @@ class TrendGuardBot:
             book = self.state["paper"]
             mtm = sum(h["qty"] * prices.get(a, h["entry"])
                       for a, h in book["holdings"].items())
-            return book["cash"] + mtm, book["cash"]
+            return self._apply_capital_cap(book["cash"] + mtm, book["cash"], prices)
         bal = self.exchange.fetch_balance()
         total = bal.get("total") or {}
         free = bal.get("free") or {}
@@ -494,7 +502,24 @@ class TrendGuardBot:
             px = prices.get(base.lower())
             if qty > 0 and px:
                 eq += qty * px
-        return eq, float(free.get(self.g.quote, 0.0) or 0.0)
+        return self._apply_capital_cap(
+            eq, float(free.get(self.g.quote, 0.0) or 0.0), prices)
+
+    def _apply_capital_cap(self, equity: float, cash: float,
+                           prices: Dict[str, float]) -> Tuple[float, float]:
+        """Plafond de capital (TG_MAX_CAPITAL) : le bot gère un « sous-compte
+        virtuel » = plafond + ses gains et pertes, quel que soit le solde du
+        compte. Le kill-switch porte alors sur ce capital, pas sur le compte."""
+        cap = self.g.max_capital
+        if cap <= 0:
+            return equity, cash
+        holdings = self._holdings()
+        invested = sum(h.qty * prices.get(a, h.entry) for a, h in holdings.items())
+        cost = sum(h.cost for h in holdings.values())
+        bot_equity = (cap + float(self.state.get("realized_pnl_total", 0.0))
+                      + invested - cost)
+        return (max(0.0, min(equity, bot_equity)),
+                max(0.0, min(cash, bot_equity - invested)))
 
     def daily_decision(self, now: datetime, day: str) -> None:
         p = self.p
@@ -814,6 +839,58 @@ def _build(gcfg: GuardConfig) -> TrendGuardBot:
     return TrendGuardBot(gcfg, logger, exchange, store, notifier)
 
 
+def set_env_var(path: str, name: str, value: str) -> None:
+    """Écrit NAME=value dans le fichier .env (remplace la ligne active
+    existante, sinon ajoute) ; fichier lisible par son seul propriétaire."""
+    lines = []
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+    out, done = [], False
+    for line in lines:
+        if line.split("=", 1)[0].strip() == name and not line.lstrip().startswith("#"):
+            if not done:
+                out.append(f"{name}={value}")
+                done = True
+            continue
+        out.append(line)
+    if not done:
+        out.append(f"{name}={value}")
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(out) + "\n")
+    os.chmod(path, 0o600)
+
+
+def clean_api_secret(raw: str) -> str:
+    """Nettoie un secret collé (espaces, guillemets) et vérifie son format :
+    Binance délivre des secrets HMAC de 64 caractères alphanumériques."""
+    s = raw.strip().strip("\"'").strip()
+    if not re.fullmatch(r"[A-Za-z0-9]{64}", s):
+        raise ValueError(f"format inattendu ({len(s)} caractères ; attendu : "
+                         f"64 lettres et chiffres)")
+    return s
+
+
+def cmd_set_secret(env_path: str = ".env") -> int:
+    """Saisie MASQUÉE du secret API (rien ne s'affiche à l'écran ni dans
+    l'historique du terminal), puis écriture dans .env."""
+    import getpass
+    print("Collez votre clé SECRÈTE Binance puis appuyez sur Entrée.")
+    print("(Rien ne s'affiche pendant la saisie : c'est normal.)")
+    try:
+        secret = clean_api_secret(getpass.getpass("Secret : "))
+    except ValueError as e:
+        print(f"❌ Secret refusé : {e}. Rien n'a été modifié.")
+        return 1
+    except (EOFError, KeyboardInterrupt):
+        print("\nAnnulé. Rien n'a été modifié.")
+        return 1
+    set_env_var(env_path, "BINANCE_API_SECRET", secret)
+    print(f"✅ Secret enregistré dans {env_path} (fichier privé, jamais commité).")
+    return 0
+
+
 def health_check(gcfg: GuardConfig, max_age_sec: int) -> int:
     """0 si le dernier cycle réussi date de moins de `max_age_sec` et que le
     kill-switch n'est pas déclenché ; 1 sinon (contrôle de santé Docker)."""
@@ -845,8 +922,7 @@ def health_check(gcfg: GuardConfig, max_age_sec: int) -> int:
 def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(description="TrendGuard Bot (Binance Spot)")
     ap.add_argument("cmd", choices=["run", "once", "status", "resume", "docs",
-                                    "health",
-                                    "replay"])
+                                    "health", "replay", "set-secret"])
     ap.add_argument("--data", default="data", help="(replay) dossier Coin Metrics")
     ap.add_argument("--start", default="2025-06-01", help="(replay) début")
     ap.add_argument("--end", default=None, help="(replay) fin")
@@ -885,6 +961,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     except ValueError as e:
         print(f"Configuration invalide : {e}", file=sys.stderr)
         return 2
+    if args.cmd == "set-secret":
+        return cmd_set_secret()
     if args.cmd == "health":
         return health_check(gcfg, v29._env_i("TG_HEALTH_MAX_AGE_SEC", 600))
     if args.cmd in ("status", "resume"):

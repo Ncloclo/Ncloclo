@@ -37,6 +37,13 @@
       "problemMatcher": []
     },
     {
+      "label": "Binance — enregistrer la clé secrète (saisie masquée)",
+      "type": "shell",
+      "command": "python trendguard_bot.py set-secret",
+      "presentation": { "focus": true, "panel": "dedicated" },
+      "problemMatcher": []
+    },
+    {
       "label": "Docker — démarrer le bot",
       "type": "shell",
       "command": "docker compose up -d --build && docker compose logs -f",

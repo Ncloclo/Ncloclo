@@ -76,6 +76,18 @@ LIVE_TRADING_CONFIRMATION=I_UNDERSTAND_RISK \
 BINANCE_API_KEY=… BINANCE_API_SECRET=… python trendguard_bot.py run
 ```
 
+Compte réel :
+
+1. Créez la clé API sur Binance **sans droit de retrait**, limitée à l'adresse
+   IP du serveur.
+2. Mettez la clé dans `.env` (`BINANCE_API_KEY=`), puis enregistrez le secret
+   par saisie masquée : `python trendguard_bot.py set-secret`. Dans VS Code,
+   c'est la tâche « Binance — enregistrer la clé secrète ». Le secret ne passe
+   ni par l'écran ni par l'historique du terminal.
+3. Fixez `TG_MAX_CAPITAL`, le capital en USDT confié au bot. Le bot gère alors
+   un sous-compte virtuel (ce plafond, plus ses propres gains et pertes), quel
+   que soit le solde réel du compte. Le kill-switch s'applique à ce capital.
+
 Le bot prend ses décisions une fois par jour, juste après la clôture de 00:00
 UTC. Il appelle **exactement les mêmes fonctions** que le backtest. Un test
 vérifie la parité exacte : mêmes trades, même PnL, même equity.
@@ -134,7 +146,7 @@ walkforward | status | resume` (voir `python v29.py docs`).
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 144 tests, simulateurs Binance Spot mono et multi-paires
+python -m pytest tests -q      # 149 tests, simulateurs Binance Spot mono et multi-paires
 ```
 
 ## Limites connues

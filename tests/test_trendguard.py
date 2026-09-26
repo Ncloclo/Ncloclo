@@ -340,3 +340,63 @@ def test_heartbeat_logged_once_per_interval(caplog):
     beats = [r.getMessage() for r in caplog.records if "[HEARTBEAT]" in r.getMessage()]
     assert len(beats) == 1                          # 15 min pas encore écoulées
     assert "equity" in beats[0] and "prochaine décision dans" in beats[0]
+
+
+def test_set_env_var_replaces_and_keeps_file_private(tmp_path):
+    import os, stat
+    env = tmp_path / ".env"
+    env.write_text("# BINANCE_API_SECRET=exemple\nRUN_MODE=paper\nBINANCE_API_SECRET=\n")
+    tg.set_env_var(str(env), "BINANCE_API_SECRET", "S" * 64)
+    lines = env.read_text().splitlines()
+    assert lines == ["# BINANCE_API_SECRET=exemple", "RUN_MODE=paper",
+                     "BINANCE_API_SECRET=" + "S" * 64]
+    assert stat.S_IMODE(os.stat(env).st_mode) == 0o600
+    tg.set_env_var(str(env), "TG_RISK_PCT", "0.005")            # absente → ajoutée
+    assert env.read_text().splitlines()[-1] == "TG_RISK_PCT=0.005"
+
+
+def test_clean_api_secret():
+    good = "aB3" * 21 + "x"
+    assert tg.clean_api_secret(f'  "{good}"\n') == good
+    for bad in ("", "abc", good + "!", good[:-1], "é" * 64):
+        with pytest.raises(ValueError):
+            tg.clean_api_secret(bad)
+
+
+def test_set_secret_command_masks_input(tmp_path, monkeypatch, capsys):
+    import getpass
+    env = tmp_path / ".env"
+    env.write_text("BINANCE_API_SECRET=\n")
+    secret = "Z9" * 32
+    monkeypatch.setattr(getpass, "getpass", lambda prompt="": secret)
+    assert tg.cmd_set_secret(str(env)) == 0
+    assert f"BINANCE_API_SECRET={secret}" in env.read_text()
+    assert secret not in capsys.readouterr().out                 # jamais affiché
+    monkeypatch.setattr(getpass, "getpass", lambda prompt="": "trop-court")
+    assert tg.cmd_set_secret(str(env)) == 1
+    assert f"BINANCE_API_SECRET={secret}" in env.read_text()      # inchangé
+
+
+def test_capital_cap_sizes_on_capped_capital(logger):
+    close, volume = synthetic_market()
+    bot, fb = make_bot("paper", close, logger, max_capital=1_000.0)
+    assert bot.boot()
+    run_days(bot, fb, close, volume, SIM_FROM, N_DAYS)
+    book = bot.state["paper"]
+    trades = bot.state["trades"]
+    assert trades
+    # Le risque par trade est ~1 % de ~1 000, pas de 10 000.
+    losers = [t["pnl"] for t in trades if t["reason"] == "STOP" and t["pnl"] < 0]
+    assert losers and max(abs(x) for x in losers) < 40
+    # Le bot n'a jamais investi plus que son capital (plafond + gains).
+    assert 10_000 - book["cash"] <= 1_000 + max(0.0, bot.state["realized_pnl_total"]) + 1e-6
+
+
+def test_capital_cap_kill_switch_uses_bot_equity(logger):
+    close, volume = synthetic_market()
+    bot, fb = make_bot("paper", close, logger, max_capital=1_000.0)
+    bot.boot()
+    bot.state["peak_equity"] = 1_000.0
+    bot.state["realized_pnl_total"] = -500.0      # le bot a perdu 50 % de SON capital
+    run_days(bot, fb, close, volume, SIM_FROM, SIM_FROM + 1)
+    assert bot.state["halted"]                    # alors que le compte ne perd que 5 %
