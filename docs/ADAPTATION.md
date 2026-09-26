@@ -98,6 +98,10 @@ La décision reste humaine : réduire le risque, activer le profil prudent ou
 arrêter. Un bot qui change seul ses paramètres après une mauvaise série fait,
 d'après le tableau ci-dessus, en moyenne moins bien.
 
+Suite de l'étude : [`STRATEGIES.md`](STRATEGIES.md) teste l'autre forme
+d'« apprentissage », changer de stratégie selon les résultats récents (tournoi
+de sept stratégies et chef d'orchestre), avec la même conclusion.
+
 ## 5. Premier diagnostic réel (26 septembre 2026, Windows)
 
 - Stratégie saine : espérance des 76 trades des 24 derniers mois

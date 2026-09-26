@@ -67,6 +67,15 @@
       "preLaunchTask": "Télécharger les données de recherche"
     },
     {
+      "name": "Laboratoire — tournoi des stratégies (données Binance)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/strategy_lab.py",
+      "args": ["--cache", "data_binance", "--out", "docs/STRATEGIES.md"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    },
+    {
       "name": "Tests (pytest)",
       "type": "debugpy",
       "request": "launch",

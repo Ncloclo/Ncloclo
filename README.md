@@ -53,7 +53,10 @@ puis **gelés** et testés une seule fois sur 2023→mai 2026 :
 - **les signaux du jour** ;
 - **le portefeuille** : risque engagé, corrélations, scénarios de krach ;
 - **la santé de la stratégie** : l'avantage statistique existe-t-il encore ?
-- **les résultats réels du bot comparés à l'historique**, par un test statistique.
+  Avec la probabilité historique de finir en gain sur 12, 24 et 36 mois ;
+- **les résultats réels du bot comparés à l'historique**, par un test statistique ;
+- **les alternatives** : un tournoi de sept stratégies sur les 24 derniers mois
+  indique si TrendGuard reste compétitive.
 
 Le bot relance ce diagnostic tous les 7 jours (`TG_AUTO_DIAGNOSE_DAYS`) et notifie en cas d'alerte.
 
@@ -62,6 +65,23 @@ résultats récents » font moins bien hors échantillon. Seul un **profil prude
 optionnel est proposé (`TG_DD_THROTTLE=0.10:0.5` : risque divisé par 2 au-delà de 10 %
 de baisse). Il réduit la pire baisse de −33,6 % à −24,2 % sur 2023-2026, pour
 +32 % par an au lieu de +37 %.
+
+### Laboratoire de stratégies ([`docs/STRATEGIES.md`](docs/STRATEGIES.md))
+
+`python strategy_lab.py --cache data_binance` répond, sur les données Binance, à
+la question « le bot peut-il apprendre et adopter la meilleure stratégie ? » :
+
+- **Tournoi de 7 stratégies** définies à l'avance : trois horizons de suivi de
+  tendance, deux filtres de régime, une rotation de momentum et un retour à la
+  moyenne. Toutes risquent 1 % par trade, avec les mêmes frais et plafonds.
+  Aucune ne bat TrendGuard à la fois sur 2018-2022 et sur 2023-2026.
+- **Taux de réussite élevé ≠ rentabilité** : le retour à la moyenne gagne 61 à
+  69 % de ses trades pour une espérance quasi nulle.
+- **Chef d'orchestre** : confier le capital, tous les 6 mois, à la meilleure
+  stratégie des 24 derniers mois a fait moins bien que TrendGuard seule sur les
+  deux périodes.
+- **Le succès se mesure sur la durée** : 80 % des fenêtres de 12 mois finissent
+  en gain et 92 % des fenêtres de 24 mois (2019-2026, sans garantie pour l'avenir).
 
 ### Utilisation
 
@@ -74,6 +94,7 @@ RUN_MODE=paper python trendguard_bot.py run           # paper, prix réels Binan
 python trendguard_bot.py replay --data data --start 2025-06-01   # paper rejoué sur l'historique réel
 python trendguard_bot.py status                       # état du portefeuille
 python trendguard_bot.py diagnose                     # auto-diagnostic complet (lecture seule)
+python strategy_lab.py --cache data_binance           # tournoi des stratégies + méta-apprentissage
 ```
 
 ### Dans VS Code
@@ -180,7 +201,7 @@ walkforward | status | resume` (voir `python v29.py docs`).
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 164 tests, simulateurs Binance Spot mono et multi-paires
+python -m pytest tests -q      # 199 tests, simulateurs Binance Spot mono et multi-paires
 ```
 
 ## Limites connues

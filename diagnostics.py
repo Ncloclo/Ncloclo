@@ -1,7 +1,7 @@
 """
 Auto-diagnostic TrendGuard — LECTURE SEULE, aucun ordre.
 
-Sept analyses, chacune produisant des constats notés OK / INFO / ATTENTION /
+Huit analyses, chacune produisant des constats notés OK / INFO / ATTENTION /
 ALERTE avec une recommandation :
 
   1. Système       horloge vs Binance, latence, bot actif, base, disque
@@ -14,6 +14,9 @@ ALERTE avec une recommandation :
                    de confiance) — c'est la partie « apprentissage »
   7. Réel vs attendu  les trades du bot sont-ils compatibles avec la
                    distribution historique ? (test statistique)
+  8. Alternatives  tournoi des sept stratégies du laboratoire sur les
+                   24 derniers mois (strategy_lab.py) : TrendGuard reste-t-elle
+                   compétitive ?
 
 Le diagnostic ALERTE mais ne modifie jamais la stratégie de lui-même :
 adapter automatiquement des règles à des résultats récents est la source
@@ -35,6 +38,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
+import strategy_lab as sl
 import trend_strategy as ts
 
 DAY_MS = 86_400_000
@@ -414,6 +418,16 @@ def strategy_health(close: pd.DataFrame, volume: pd.DataFrame,
                            f"{(r12 < 0).mean() * 100:.0f} % des fenêtres négatives)",
                            "" if lvl == "OK" else "Année parmi les 10 % les plus faibles : "
                            "surveiller, sans conclure seul (ces années existent)."))
+    hs = sl.horizon_success(eq, months=(12, 24, 36), n_boot=4000)
+    hs = hs[hs["windows"] > 0]
+    if len(hs):
+        parts = [f"{int(r.months)} mois : {r.hist_gain_pct:.0f} % des fenêtres en gain"
+                 + (f" (bootstrap {r.boot_gain_pct:.0f} %)" if "boot_gain_pct" in hs
+                    and not pd.isna(r.boot_gain_pct) else "")
+                 for r in hs.itertuples()]
+        out.append(Finding(S, "INFO", "Probabilité historique de finir en gain selon "
+                           "la durée — " + " ; ".join(parts) + " (indication, pas une "
+                           "garantie ; trade par trade : 35-50 % de gagnants)"))
     dd_now = float((eq.iloc[-1] / eq.cummax().iloc[-1] - 1) * 100)
     lvl = "OK" if dd_now > -15 else "ATTENTION" if dd_now > -30 else "ALERTE"
     out.append(Finding(S, lvl, f"Baisse actuelle de la stratégie depuis son pic : {dd_now:.1f} %"))
@@ -436,6 +450,35 @@ def strategy_health(close: pd.DataFrame, volume: pd.DataFrame,
         out.append(Finding(S, "INFO", f"Seulement {len(recent)} trades sur 24 mois : "
                            f"espérance récente non mesurable"))
     return out, res
+
+
+def check_alternatives(close: pd.DataFrame, volume: pd.DataFrame,
+                       p: ts.TrendParams, days: int = 730) -> List[Finding]:
+    """Tournoi des stratégies du laboratoire sur les `days` derniers jours.
+    Information seulement : suivre le meilleur récent a fait moins bien que
+    la stratégie fixe (docs/STRATEGIES.md)."""
+    S = "Alternatives"
+    board = sl.tournament_recent(sl.Lab(close, volume, p), days=days)
+    ref = board[board["name"] == sl.REF].iloc[0]
+    rank = int(board.index[board["name"] == sl.REF][0]) + 1
+    lines = [f"{k + 1}. {r.name} : Sharpe {r.sharpe:.2f}, {r.total_pct:+.0f} %, "
+             f"{r.trades} trades, {r.win_rate_pct:.0f} % gagnants"
+             for k, r in enumerate(board.itertuples())]
+    out = [Finding(S, "INFO", f"Tournoi des {len(board)} stratégies sur "
+                   f"{days // 365} ans (1 % de risque par trade) — TrendGuard "
+                   f"rang {rank}/{len(board)}\n      " + "\n      ".join(lines))]
+    strong = int((board["sharpe"] > 0.5).sum())
+    if ref.sharpe < 0 and strong >= len(board) // 2 + 1:
+        out.append(Finding(S, "ATTENTION", f"TrendGuard négative sur {days // 365} ans "
+                           f"alors que {strong} alternatives sont nettement positives",
+                           "Relancer l'étude complète (python strategy_lab.py) avant "
+                           "toute décision : changer de stratégie sur ce seul classement "
+                           "a fait moins bien historiquement (docs/STRATEGIES.md)."))
+    else:
+        out.append(Finding(S, "OK", "Aucune alternative ne justifie de revoir la "
+                           "stratégie (classement indicatif, jamais appliqué "
+                           "automatiquement)"))
+    return out
 
 
 def live_vs_expected(bot_trades: List[Dict[str, Any]],
@@ -490,7 +533,7 @@ def run_diagnosis(exchange: Any, p: ts.TrendParams, bases: List[str],
                   db_file: str = "", running: Optional[bool] = None,
                   quote: str = "USDT", sections: Tuple[str, ...] = (
                       "system", "data", "market", "signals", "portfolio",
-                      "strategy", "live")) -> List[Finding]:
+                      "strategy", "live", "alternatives")) -> List[Finding]:
     findings: List[Finding] = []
     if "system" in sections:
         findings += check_system(exchange, state, expected_day, db_file, running, now)
@@ -518,6 +561,12 @@ def run_diagnosis(exchange: Any, p: ts.TrendParams, bases: List[str],
             findings += health
     if "live" in sections and res is not None:
         findings += live_vs_expected(state.get("trades", []), res.trades)
+    if "alternatives" in sections:
+        try:
+            findings += check_alternatives(close, volume, p)
+        except Exception as e:
+            findings.append(Finding("Alternatives", "INFO",
+                                    f"Tournoi indisponible : {type(e).__name__}: {e}"))
     return findings
 
 
@@ -546,7 +595,8 @@ def render(findings: List[Finding], title: str = "") -> str:
     lines.append("")
     lines.append("Rappel : aucune stratégie ne garantit 99 % de réussite. Celle-ci "
                  "vise ~1 % de perte par trade et des gains de plusieurs R, avec "
-                 "35-50 % de trades gagnants.")
+                 "35-50 % de trades gagnants ; le succès se mesure sur la durée "
+                 "(docs/STRATEGIES.md).")
     return "\n".join(lines)
 
 
