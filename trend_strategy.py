@@ -280,6 +280,37 @@ def plan_entries(holdings: Dict[str, Holding],
     return plans
 
 
+def reprice_entry(plan: Dict[str, Any], price: float, equity: float,
+                  cash: float, p: TrendParams,
+                  min_stop_gap_vol: float = 0.5) -> Optional[Dict[str, Any]]:
+    """Redimensionne une entrée planifiée sur la clôture au prix réellement
+    disponible au moment de l'exécution (décision tardive, redémarrage en
+    cours de journée). Le stop ne bouge pas et le risque ne dépasse jamais
+    celui prévu. None si le prix est retombé près du stop : la cassure est
+    invalidée. Au prix de clôture, le plan est inchangé."""
+    if not _finite(price) or price <= 0:
+        return None
+    stop, vol = plan["stop"], plan["vol"]
+    if price <= stop + min_stop_gap_vol * vol:
+        return None
+    entry = price * (1 + p.slippage)
+    unit_risk = entry * (1 + p.fee) - stop * (1 - p.fee - p.slippage)
+    if unit_risk <= 0:
+        return None
+    qty = min(plan["risk_quote"] / unit_risk,
+              p.max_position_pct * equity / entry)
+    cost = qty * entry * (1 + p.fee)
+    if cost > cash:
+        qty = cash / (entry * (1 + p.fee))
+        cost = qty * entry * (1 + p.fee)
+    if qty * entry < 10:
+        return None
+    out = dict(plan)
+    out.update({"qty": qty, "entry": entry, "exec_price": price, "cost": cost,
+                "risk_quote": qty * unit_risk, "unit_risk": unit_risk})
+    return out
+
+
 # ══════════════════════════════════════════════════════════════════════
 # BACKTEST DE PORTEFEUILLE
 # ══════════════════════════════════════════════════════════════════════
@@ -674,6 +705,12 @@ def research_report(data_dir: str, out_path: str,
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    for stream in (sys.stdout, sys.stderr):      # Windows : sortie redirigée
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
     ap = argparse.ArgumentParser(description="TrendGuard — recherche")
     sub = ap.add_subparsers(dest="cmd", required=True)
     d = sub.add_parser("download", help="Télécharge les données Coin Metrics")

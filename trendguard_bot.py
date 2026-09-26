@@ -564,9 +564,10 @@ class TrendGuardBot:
         entries: List[Dict[str, Any]] = []
         if not self.state.get("halted"):
             eligible = {a: s for a, s in snap.items() if self._can_enter(a)}
-            entries = ts.plan_entries(holdings, eligible, bull, equity, cash, p)
-            for plan in entries:
-                self._execute_entry(plan, equity, now)
+            for plan in ts.plan_entries(holdings, eligible, bull, equity, cash, p):
+                done = self._execute_entry(plan, equity, now)
+                if done is not None:
+                    entries.append(done)
         self.state["last_decision_day"] = day
         self._summary(day, bull, equity, exits, entries, prices)
 
@@ -583,8 +584,15 @@ class TrendGuardBot:
     def _execute_exit(self, a: str, reason: str, close_px: Optional[float]) -> None:
         s = self.slots.get(a.upper())
         if not self.live:
-            px = close_px if close_px else (
-                s.ex.get_ticker()["last"] if s else None)
+            # Prix réellement disponible (≈ clôture à 00:02 UTC ; différent
+            # si la décision est tardive), clôture en repli.
+            px = None
+            if s is not None:
+                try:
+                    px = float(s.ex.get_ticker()["last"])
+                except Exception:
+                    px = None
+            px = px or close_px
             if px:
                 self._paper_exit(a, px, reason)
             return
@@ -617,8 +625,39 @@ class TrendGuardBot:
             self._save_slot(s)
 
     def _execute_entry(self, plan: Dict[str, Any], equity: float,
-                       now: datetime) -> None:
+                       now: datetime) -> Optional[Dict[str, Any]]:
+        """Exécute une entrée planifiée au prix réellement disponible :
+        taille recalculée pour ne jamais risquer plus que prévu (décision
+        tardive), entrée annulée si le prix est retombé près du stop.
+        Retourne le plan exécuté, ou None."""
         a = plan["asset"]
+        s = self.slots.get(a.upper())
+        if s is None:
+            return None
+        try:
+            t = s.ex.get_ticker()
+            px_now = float(t["ask"] if self.live else t["last"])
+        except Exception as e:
+            self.logger.warning(f"[ENTRY] {a.upper()} : prix indisponible ({e}) "
+                                f"→ entrée reportée")
+            return None
+        cash = (self.state["paper"]["cash"] if not self.live
+                else self.exchange.fetch_balance().get("free", {}).get(
+                    self.g.quote, 0.0) or 0.0)
+        adj = ts.reprice_entry(plan, px_now, equity, float(cash), self.p)
+        drift = px_now / plan["ref_price"] - 1
+        if adj is None:
+            self.logger.warning(
+                f"[ENTRY] {a.upper()} annulée : prix {px_now:.6g} "
+                f"({drift * 100:+.1f} % vs clôture) trop proche du stop "
+                f"{plan['stop']:.6g} ou taille sous le minimum")
+            return None
+        if abs(drift) > 0.01:
+            self.logger.info(
+                f"[ENTRY] {a.upper()} : prix {px_now:.6g} ({drift * 100:+.1f} % "
+                f"vs clôture) → quantité {plan['qty']:.6g} → {adj['qty']:.6g} "
+                f"(risque {adj['risk_quote']:.2f} {self.g.quote})")
+        plan = adj
         disaster = plan["stop"] - self.g.catastrophe_atr * plan["vol"]
         if disaster <= 0:
             disaster = plan["stop"] * 0.5
@@ -634,10 +673,9 @@ class TrendGuardBot:
                 f"[ENTRY] {a.upper()} qty={plan['qty']:.6f} @ "
                 f"{plan['entry']:.6f} stop={plan['stop']:.6f} "
                 f"risque={plan['risk_quote']:.2f} {self.g.quote}")
-            return
-        s = self.slots[a.upper()]
+            return plan
         res = s.eng.enter_planned(
-            s.ctx, plan["qty"], plan["ref_price"], sl_abs=disaster,
+            s.ctx, plan["qty"], plan["exec_price"], sl_abs=disaster,
             tp_abs=plan["ref_price"] * 100,
             meta={"module": "trendguard", "soft_stop": plan["stop"],
                   "risk_per_unit": plan["risk_quote"] / plan["qty"],
@@ -648,6 +686,7 @@ class TrendGuardBot:
             s.ctx.position.highest_close = plan["ref_price"]
             s.ctx.position.soft_stop = plan["stop"]
         self._save_slot(s)
+        return plan if res == v29.EntryResult.OPENED else None
 
     def _summary(self, day: str, bull: bool, equity: float,
                  exits: List[Tuple[str, str]], entries: List[Dict[str, Any]],
@@ -1077,6 +1116,7 @@ def health_check(gcfg: GuardConfig, max_age_sec: int) -> int:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    v29.ensure_utf8_stdio()
     ap = argparse.ArgumentParser(description="TrendGuard Bot (Binance Spot)")
     ap.add_argument("cmd", choices=["run", "once", "status", "resume", "docs",
                                     "health", "replay", "set-secret",

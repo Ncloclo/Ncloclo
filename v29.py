@@ -230,6 +230,19 @@ ENV_DOC: Dict[str, str] = {
 #   quote : USDT  | base : TRX | ratio : R | price : quote/base
 #   eq/pnl : quote | amount_held : base
 
+def ensure_utf8_stdio() -> None:
+    """Sortie console en UTF-8 : sous Windows, une sortie redirigée (fichier,
+    tâche planifiée) est en cp1252 et les symboles des journaux (↗ ↘ 🛑 …)
+    feraient échouer l'affichage."""
+    for stream in (sys.stdout, sys.stderr):
+        enc = (getattr(stream, "encoding", "") or "").lower().replace("-", "")
+        if enc != "utf8" and hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
+
+
 _env_logger: Optional[logging.Logger] = None
 
 
@@ -1481,6 +1494,10 @@ class ProcessLock:
 
     _HELD_ERRNOS = {errno.EAGAIN, errno.EWOULDBLOCK, errno.EACCES,
                     getattr(errno, "EDEADLK", -1), getattr(errno, "EDEADLOCK", -1)}
+    # Windows : les octets verrouillés sont illisibles par les autres
+    # process. On verrouille un octet loin du texte d'identité (au-delà de
+    # la fin du fichier, ce que Windows autorise) pour qu'il reste lisible.
+    _MSVCRT_OFFSET = 1 << 20
 
     def __init__(self, path: str):
         self.path = os.path.abspath(path)
@@ -1509,7 +1526,7 @@ class ProcessLock:
         except ImportError:
             raise SystemExit("Aucun mécanisme de verrouillage disponible sur ce "
                              "système : démarrage refusé.")
-        handle.seek(0)
+        handle.seek(self._MSVCRT_OFFSET)
         msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
         self._mode = "msvcrt"
 
@@ -1533,12 +1550,11 @@ class ProcessLock:
         except BaseException:
             handle.close()
             raise
-        if self._mode == "fcntl":
-            handle.seek(0)
-            handle.truncate()
-            handle.write(f"pid={os.getpid()} machine={socket.gethostname()} "
-                         f"depuis={_utcnow_iso()}\n")
-            handle.flush()
+        handle.seek(0)
+        handle.truncate()
+        handle.write(f"pid={os.getpid()} machine={socket.gethostname()} "
+                     f"depuis={_utcnow_iso()}\n")
+        handle.flush()
         self.handle = handle
 
     def release(self) -> None:
@@ -1551,7 +1567,7 @@ class ProcessLock:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
             elif self._mode == "msvcrt":
                 import msvcrt
-                handle.seek(0)
+                handle.seek(self._MSVCRT_OFFSET)
                 msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
         except OSError:
             pass
@@ -7259,6 +7275,7 @@ def _add_data_args(p: argparse.ArgumentParser, start: str, end: str) -> None:
 
 
 def main():
+    ensure_utf8_stdio()
     parser = argparse.ArgumentParser(description=f"V29-QUANT {VERSION_MODULE}")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("bot", help="Lance le bot")

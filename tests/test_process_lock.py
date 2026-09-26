@@ -50,13 +50,35 @@ def test_relative_path_is_absolute_and_cwd_independent(tmp_path, monkeypatch):
 
 
 def test_unsupported_filesystem_is_not_reported_as_running_instance(tmp_path, monkeypatch):
-    import fcntl
-
-    def nolock(fd, op):
+    def nolock(self, handle):
         raise OSError(errno.ENOLCK, "No locks available")
-    monkeypatch.setattr(fcntl, "flock", nolock)
+    # Portable (Unix et Windows) : on simule l'échec du mécanisme de l'OS.
+    monkeypatch.setattr(v29.ProcessLock, "_lock", nolock)
     with pytest.raises(SystemExit, match="ne gère pas les verrous"):
         v29.ProcessLock(str(tmp_path / "x.lock")).acquire()
+
+
+def test_holder_identity_readable_while_locked_real_os(tmp_path):
+    """Avec le mécanisme réel de l'OS (flock ou msvcrt), l'identité du
+    détenteur reste lisible par un autre process pendant le verrouillage."""
+    path = tmp_path / "bot.lock"
+    code = textwrap.dedent(f"""
+        import sys; sys.path.insert(0, {os.path.dirname(os.path.dirname(os.path.abspath(v29.__file__)))!r})
+        sys.path.insert(0, {os.path.dirname(os.path.abspath(v29.__file__))!r})
+        import v29
+        try:
+            v29.ProcessLock({str(path)!r}).acquire()
+        except SystemExit as e:
+            print(e)
+    """)
+    lk = v29.ProcessLock(str(path))
+    lk.acquire()
+    try:
+        out = subprocess.run([sys.executable, "-c", code], capture_output=True,
+                             text=True, timeout=60).stdout
+        assert "déjà" in out and f"pid={os.getpid()}" in out
+    finally:
+        lk.release()
 
 
 def test_windows_msvcrt_path(tmp_path, monkeypatch):

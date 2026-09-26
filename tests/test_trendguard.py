@@ -350,7 +350,8 @@ def test_set_env_var_replaces_and_keeps_file_private(tmp_path):
     lines = env.read_text().splitlines()
     assert lines == ["# BINANCE_API_SECRET=exemple", "RUN_MODE=paper",
                      "BINANCE_API_SECRET=" + "S" * 64]
-    assert stat.S_IMODE(os.stat(env).st_mode) == 0o600
+    if os.name == "posix":   # Windows ignore les droits Unix (ACL du profil)
+        assert stat.S_IMODE(os.stat(env).st_mode) == 0o600
     tg.set_env_var(str(env), "TG_RISK_PCT", "0.005")            # absente → ajoutée
     assert env.read_text().splitlines()[-1] == "TG_RISK_PCT=0.005"
 
@@ -507,3 +508,49 @@ def test_verify_flags_insufficient_capital(logger):
     fb.free["USDT"] = 15.0
     rc, text = _verify(bot, fb, close, volume)
     assert rc == 1 and "Capital insuffisant" in text
+
+
+# ---------- Décision tardive (prix d'exécution ≠ clôture) ----------
+
+def test_reprice_entry_keeps_plan_at_close_price():
+    p = ts.TrendParams()
+    snap = {"eth": {"close": 100.0, "prior_high": 95.0, "vol": 2.0, "mom": 1.0,
+                    "age": 400, "vol30": 1e9}}
+    plan = ts.plan_entries({}, snap, True, 10_000.0, 10_000.0, p)[0]
+    same = ts.reprice_entry(plan, 100.0, 10_000.0, 10_000.0, p)
+    assert same["qty"] == pytest.approx(plan["qty"], rel=1e-12)
+    assert same["risk_quote"] == pytest.approx(plan["risk_quote"], rel=1e-12)
+
+
+def test_reprice_entry_never_risks_more_than_planned():
+    p = ts.TrendParams()
+    snap = {"eth": {"close": 100.0, "prior_high": 95.0, "vol": 2.0, "mom": 1.0,
+                    "age": 400, "vol30": 1e9}}
+    plan = ts.plan_entries({}, snap, True, 10_000.0, 10_000.0, p)[0]
+    up = ts.reprice_entry(plan, 110.0, 10_000.0, 10_000.0, p)
+    assert up["qty"] < plan["qty"]
+    loss_at_stop = up["qty"] * (up["entry"] * (1 + p.fee)
+                                - plan["stop"] * (1 - p.fee - p.slippage))
+    assert loss_at_stop == pytest.approx(plan["risk_quote"], rel=1e-9)
+    # Retombé près du stop : cassure invalidée, pas d'entrée.
+    assert ts.reprice_entry(plan, plan["stop"] + 0.4 * plan["vol"],
+                            10_000.0, 10_000.0, p) is None
+
+
+def test_late_paper_decision_buys_at_current_price(logger):
+    close, volume = synthetic_market()
+    bot, fb = make_bot("paper", close, logger)
+    feed(fb, close, volume)
+    assert bot.boot()
+    for d in close.index[SIM_FROM:N_DAYS]:
+        for a in close.columns:
+            fb.set_price(f"{a.upper()}/USDT", float(close[a].loc[d]) * 1.05)
+        bot.run_cycle(now=d.to_pydatetime() + DAY + timedelta(hours=18))
+        if bot.state["paper"]["holdings"]:
+            break
+    a, h = next(iter(bot.state["paper"]["holdings"].items()))
+    c = float(close[a].loc[d])
+    p = ts.TrendParams()
+    assert h["entry"] == pytest.approx(c * 1.05 * (1 + p.slippage), rel=1e-9)
+    loss = h["qty"] * (h["entry"] * (1 + p.fee) - h["stop"] * (1 - p.fee - p.slippage))
+    assert loss <= p.risk_pct * 10_000 * 1.0001
