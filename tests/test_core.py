@@ -428,3 +428,39 @@ def test_heartbeat_tick(paper_env):
     out = hb.tick(ctx, "TREND_UP", 1023.4, 0.101, ctx.adaptive, 1000.0,
                   subsystems=v29._compute_subsystems(ctx, None))
     assert "LONG trend/A" in out and "PROT=NONE" in out
+
+
+def test_fnum_values():
+    import numpy as np
+    from decimal import Decimal
+    cases = [(None, 0.0), ("", 0.0), ("  ", 0.0), ("abc", 0.0), ("0.00100000", 0.001),
+             (" 42 ", 42.0), ("-1.5e-3", -0.0015), (".5", 0.5), ("inf", 0.0),
+             ("nan", 0.0), (float("nan"), 0.0), (float("inf"), 0.0), (3, 3.0),
+             (Decimal("2.5"), 2.5), (np.float64(1.25), 1.25), (np.int64(7), 7.0),
+             (10 ** 400, 0.0), ([1], 0.0), ({}, 0.0)]
+    for raw, expected in cases:
+        assert v29._fnum(raw) == expected, raw
+
+
+def test_fnum_raises_no_internal_exception():
+    """Les valeurs absentes courantes (None, chaîne vide) ne doivent lever
+    aucune exception, même rattrapée : sinon le débogueur VS Code s'arrête
+    sur la ligne float(x)."""
+    import sys
+    events = []
+
+    def tracer(frame, event, arg):
+        if frame.f_code is v29._fnum.__code__:
+            if event == "exception":
+                events.append(arg[0].__name__)
+            return tracer
+        return None
+
+    old = sys.gettrace()
+    sys.settrace(tracer)
+    try:
+        for raw in (None, "", "abc", "0.1", 3, {}, [1]):
+            v29._fnum(raw)
+    finally:
+        sys.settrace(old)
+    assert events == []

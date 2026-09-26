@@ -2084,12 +2084,26 @@ _ORDER_STATUS_MAP = {
 }
 
 
+_NUMERIC_STR = re.compile(r"[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?")
+
+
 def _fnum(x: Any) -> float:
+    """Valeur d'API (nombre, chaîne, None…) → float fini, 0.0 si absente ou
+    invalide. Les valeurs absentes sont filtrées AVANT float() : aucune
+    exception n'est levée (le débogueur ne s'arrête plus ici)."""
+    if x is None:
+        return 0.0
+    if isinstance(x, str):
+        x = x.strip()
+        if not _NUMERIC_STR.fullmatch(x):
+            return 0.0
+    elif not isinstance(x, (int, float, Decimal, np.number)):
+        return 0.0
     try:
         v = float(x)
-        return v if math.isfinite(v) else 0.0
-    except (TypeError, ValueError):
+    except OverflowError:          # entier trop grand pour un float
         return 0.0
+    return v if math.isfinite(v) else 0.0
 
 
 class ExchangeAdapter:
