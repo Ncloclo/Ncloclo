@@ -100,7 +100,7 @@ docker compose up -d --build      # construit l'image (tests inclus) et démarre
 
 | Action | Commande |
 |---|---|
-| Suivre le bot | `docker compose logs -f` |
+| Suivre le bot (une ligne `[HEARTBEAT]` toutes les 15 min) | `docker compose logs -f` |
 | État du portefeuille | `docker compose exec trendguard python trendguard_bot.py status` |
 | Santé (`healthy` / `unhealthy`) | `docker compose ps` |
 | Mettre à jour | `git pull && docker compose up -d --build` |
@@ -134,7 +134,7 @@ walkforward | status | resume` (voir `python v29.py docs`).
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 105 tests, simulateurs Binance Spot mono et multi-paires
+python -m pytest tests -q      # 106 tests, simulateurs Binance Spot mono et multi-paires
 ```
 
 ## Limites connues

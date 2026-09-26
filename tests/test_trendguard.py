@@ -328,3 +328,15 @@ def test_cycle_records_heartbeat(logger):
     assert bot.boot()
     run_days(bot, fb, close, volume, SIM_FROM, SIM_FROM + 1)
     assert abs(bot.state["last_cycle_ts"] - v29.time.time()) < 60
+
+
+def test_heartbeat_logged_once_per_interval(caplog):
+    close, volume = synthetic_market()
+    lg = logging.getLogger("test.tg.hb")
+    bot, fb = make_bot("paper", close, lg)
+    assert bot.boot()
+    with caplog.at_level(logging.INFO, logger="test.tg.hb"):
+        run_days(bot, fb, close, volume, SIM_FROM, SIM_FROM + 3)
+    beats = [r.getMessage() for r in caplog.records if "[HEARTBEAT]" in r.getMessage()]
+    assert len(beats) == 1                          # 15 min pas encore écoulées
+    assert "equity" in beats[0] and "prochaine décision dans" in beats[0]

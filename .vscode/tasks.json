@@ -35,6 +35,26 @@
       "command": "python trendguard_bot.py status",
       "options": { "env": { "RUN_MODE": "paper" } },
       "problemMatcher": []
+    },
+    {
+      "label": "Docker — démarrer le bot",
+      "type": "shell",
+      "command": "docker compose up -d --build && docker compose logs -f",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Docker — journal du bot en direct",
+      "type": "shell",
+      "command": "docker compose logs -f --tail 50",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Docker — statut du portefeuille",
+      "type": "shell",
+      "command": "docker compose exec trendguard python trendguard_bot.py status",
+      "problemMatcher": []
     }
   ]
 }

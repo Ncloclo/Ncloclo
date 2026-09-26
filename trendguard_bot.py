@@ -64,6 +64,7 @@ TG_ENV_DOC: Dict[str, str] = {
     "TG_MAX_POSITIONS": "Nombre maximum de positions simultanées",
     "TG_MAX_TOTAL_RISK": "Risque initial cumulé maximum (0.06 = 6 %)",
     "TG_KILL_DRAWDOWN": "Drawdown depuis le pic qui bloque les entrées (0.40)",
+    "TG_HEARTBEAT_MIN": "Intervalle du battement de cœur dans le journal (min, 0 = off)",
     "TG_PAPER_CAPITAL": "Capital initial du mode paper (USDT)",
     "TG_DB_FILE": "Base SQLite du bot",
     "TG_LOG_FILE": "Fichier de log",
@@ -90,6 +91,7 @@ class GuardConfig:
     loop_interval_sec: int = 60
     ohlcv_limit: int = 1000
     kill_drawdown: float = 0.40
+    heartbeat_min: int = 15
     paper_capital: float = 10_000.0
     enable_live_trading: bool = False
     live_confirmation: str = ""
@@ -133,6 +135,7 @@ def load_guard_config_from_env() -> GuardConfig:
         run_mode=v29._env_s("RUN_MODE", "paper").lower(),
         universe=uni, params=params,
         kill_drawdown=v29._env_f("TG_KILL_DRAWDOWN", 0.40),
+        heartbeat_min=v29._env_i("TG_HEARTBEAT_MIN", 15),
         paper_capital=v29._env_f("TG_PAPER_CAPITAL", 10_000.0),
         enable_live_trading=v29._env_b("ENABLE_LIVE_TRADING", False),
         live_confirmation=v29._env_s("LIVE_TRADING_CONFIRMATION", ""),
@@ -194,6 +197,7 @@ class TrendGuardBot:
         self.state: Dict[str, Any] = {}
         self.sleep = time.sleep
         self._now: datetime = v29._utcnow()
+        self._last_heartbeat = 0.0
 
     @property
     def live(self) -> bool:
@@ -251,6 +255,7 @@ class TrendGuardBot:
         if not self.live:
             self.state.setdefault("paper", {"cash": self.g.paper_capital,
                                             "holdings": {}})
+            self.state.setdefault("start_equity", self.g.paper_capital)
         else:
             btc = self.slots["BTC"]
             if not btc.ex.self_test_conditional_orders():
@@ -351,6 +356,41 @@ class TrendGuardBot:
         # de santé du conteneur.
         self.state["last_cycle_ts"] = time.time()
         self._save_state()
+        self._heartbeat(now)
+
+    def _heartbeat(self, now: datetime) -> None:
+        """Une ligne de journal toutes les `heartbeat_min` minutes : le bot
+        est visiblement vivant entre deux décisions quotidiennes."""
+        every = self.g.heartbeat_min * 60
+        if every <= 0 or time.time() - self._last_heartbeat < every:
+            return
+        self._last_heartbeat = time.time()
+        try:
+            holdings = self._holdings()
+            prices: Dict[str, float] = {}
+            for a in holdings:
+                s = self.slots.get(a.upper())
+                if s is not None:
+                    prices[a] = s.ex.get_ticker()["last"]
+            equity, _cash = self._equity_and_cash(prices)
+            start = self.state.get("start_equity") or equity
+            parts = [f"{a.upper()} {(prices.get(a, h.entry) / h.entry - 1) * 100:+.1f} %"
+                     for a, h in sorted(holdings.items())]
+            nxt = (datetime.combine(now.date() + timedelta(days=1),
+                                    datetime.min.time(), tzinfo=now.tzinfo)
+                   + timedelta(seconds=self.g.decision_delay_sec)) - now
+            h_left, rem = divmod(int(nxt.total_seconds()), 3600)
+            bull = self.state.get("last_regime_bull")
+            regime = "?" if bull is None else ("HAUSSIER" if bull else "BAISSIER")
+            self.logger.info(
+                f"[HEARTBEAT] equity {equity:,.2f} {self.g.quote} "
+                f"({(equity / start - 1) * 100:+.2f} %) | régime BTC {regime} | "
+                f"{len(holdings)} position(s)"
+                + (f" : {', '.join(parts)}" if parts else "")
+                + f" | prochaine décision dans {h_left} h {rem // 60:02d}"
+                + (" | 🛑 KILL-SWITCH" if self.state.get("halted") else ""))
+        except Exception as e:
+            self.logger.warning(f"[HEARTBEAT] indisponible : {e}")
 
     def _maintain_live(self) -> None:
         for s in self.slots.values():
@@ -468,6 +508,7 @@ class TrendGuardBot:
         if self.live:
             self._raise_exchange_stops(holdings, snap, now)
         equity, cash = self._equity_and_cash(prices)
+        self.state.setdefault("start_equity", equity)
         peak = max(float(self.state.get("peak_equity") or 0.0), equity)
         self.state["peak_equity"] = peak
         self.state["last_equity"] = equity
