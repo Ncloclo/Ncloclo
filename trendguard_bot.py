@@ -42,6 +42,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import ccxt
 import pandas as pd
 
+import diagnostics as dg
 import trend_strategy as ts
 import v29
 
@@ -67,6 +68,8 @@ TG_ENV_DOC: Dict[str, str] = {
     "TG_KILL_DRAWDOWN": "Drawdown depuis le pic qui bloque les entrées (0.40)",
     "TG_HEARTBEAT_MIN": "Intervalle du battement de cœur dans le journal (min, 0 = off)",
     "TG_MAX_CAPITAL": "Capital max géré par le bot en USDT (0 = tout le compte)",
+    "TG_DD_THROTTLE": "Profil prudent : baisse:multiplicateur (ex. 0.10:0.5) ; vide = off",
+    "TG_AUTO_DIAGNOSE_DAYS": "Auto-diagnostic tous les N jours (0 = désactivé)",
     "TG_ALLOW_RECOVERY": "true : adopter les ordres du bot inconnus de la base (base perdue)",
     "TG_PAPER_CAPITAL": "Capital initial du mode paper (USDT)",
     "TG_DB_FILE": "Base SQLite du bot",
@@ -95,6 +98,7 @@ class GuardConfig:
     ohlcv_limit: int = 1000
     kill_drawdown: float = 0.40
     heartbeat_min: int = 15
+    auto_diagnose_days: int = 7         # 0 = désactivé
     max_capital: float = 0.0            # 0 = tout le compte
     allow_recovery: bool = False        # adopter les ordres du bot inconnus
     paper_capital: float = 10_000.0
@@ -130,6 +134,22 @@ class GuardConfig:
                 object.__setattr__(self, name, default)
 
 
+def parse_dd_throttle(raw: str) -> Tuple[Tuple[float, float], ...]:
+    """'0.10:0.5,0.20:0.25' → ((0.10, 0.5), (0.20, 0.25)) ; vide → ()."""
+    out = []
+    for part in (raw or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            thr, mult = part.split(":")
+            out.append((float(thr), float(mult)))
+        except ValueError:
+            raise ValueError(f"TG_DD_THROTTLE invalide : {part!r} "
+                             f"(format baisse:multiplicateur, ex. 0.10:0.5)")
+    return tuple(sorted(out))
+
+
 def load_guard_config_from_env() -> GuardConfig:
     uni = tuple(a.strip().upper() for a in
                 v29._env_s("TG_UNIVERSE", ",".join(LIVE_UNIVERSE_DEFAULT)).split(",")
@@ -138,12 +158,14 @@ def load_guard_config_from_env() -> GuardConfig:
         ts.TrendParams(),
         risk_pct=v29._env_f("TG_RISK_PCT", 0.01),
         max_positions=v29._env_i("TG_MAX_POSITIONS", 8),
-        max_total_risk=v29._env_f("TG_MAX_TOTAL_RISK", 0.06))
+        max_total_risk=v29._env_f("TG_MAX_TOTAL_RISK", 0.06),
+        dd_throttle=parse_dd_throttle(v29._env_s("TG_DD_THROTTLE", "")))
     return GuardConfig(
         run_mode=v29._env_s("RUN_MODE", "paper").lower(),
         universe=uni, params=params,
         kill_drawdown=v29._env_f("TG_KILL_DRAWDOWN", 0.40),
         heartbeat_min=v29._env_i("TG_HEARTBEAT_MIN", 15),
+        auto_diagnose_days=v29._env_i("TG_AUTO_DIAGNOSE_DAYS", 7),
         max_capital=v29._env_f("TG_MAX_CAPITAL", 0.0),
         allow_recovery=v29._env_b("TG_ALLOW_RECOVERY", False),
         paper_capital=v29._env_f("TG_PAPER_CAPITAL", 10_000.0),
@@ -382,6 +404,43 @@ class TrendGuardBot:
         self.state["last_cycle_ts"] = time.time()
         self._save_state()
         self._heartbeat(now)
+        self._auto_diagnose(now, day)
+
+    def holdings_for_diagnosis(self) -> List[Dict[str, Any]]:
+        return [{"asset": a, "qty": h.qty, "entry": h.entry, "stop": h.stop,
+                 "risk_quote": h.risk_quote} for a, h in self._holdings().items()]
+
+    def _auto_diagnose(self, now: datetime, day: str) -> None:
+        """Auto-diagnostic périodique (lecture seule) : données, marché,
+        portefeuille, santé de la stratégie, réel vs attendu. Il alerte
+        (journal + notification) mais ne modifie jamais la stratégie. Un
+        échec du diagnostic n'affecte jamais le trading."""
+        every = self.g.auto_diagnose_days
+        last = self.state.get("last_auto_diag_day")
+        if every <= 0 or (last and (pd.Timestamp(day) - pd.Timestamp(last)).days < every):
+            return
+        self.state["last_auto_diag_day"] = day
+        self._save_state()
+        try:
+            findings = dg.run_diagnosis(
+                self.exchange, self.p, [s.base for s in self.slots.values()],
+                self.state, self.holdings_for_diagnosis(),
+                float(self.state.get("last_equity") or 0.0), day, now,
+                quote=self.g.quote,
+                sections=("data", "market", "portfolio", "strategy", "live"))
+        except Exception as e:
+            self.logger.warning(f"[DIAG] auto-diagnostic impossible : {e}")
+            return
+        v = dg.verdict(findings)
+        self.state["last_auto_diag_verdict"] = v
+        self._save_state()
+        self.logger.info("[DIAG]\n" + dg.render(findings, f"(auto, {day})"))
+        if v in ("ATTENTION", "ALERTE"):
+            points = [f"• {f.message}" for f in findings
+                      if f.level in ("ATTENTION", "ALERTE")]
+            self.notifier(f"{dg.ICONS[v]} TrendGuard auto-diagnostic {day} : {v}\n"
+                          + "\n".join(points[:6]),
+                          dedup_key=f"tg-diag-{day}", critical=(v == "ALERTE"))
 
     def _heartbeat(self, now: datetime) -> None:
         """Une ligne de journal toutes les `heartbeat_min` minutes : le bot
@@ -562,12 +621,21 @@ class TrendGuardBot:
             self.logger.critical(f"[KILL] {self.state['halt_reason']} → entrées bloquées")
             self.notifier(f"🛑 TrendGuard : {self.state['halt_reason']}", critical=True)
         entries: List[Dict[str, Any]] = []
+        mult = ts.risk_multiplier(equity, peak, p)
+        self.state["risk_mult"] = mult
+        if mult < 1.0:
+            self.logger.warning(
+                f"[PRUDENT] baisse de {(1 - equity / peak) * 100:.1f} % depuis le "
+                f"pic → risque par trade × {mult:g}")
         if not self.state.get("halted"):
             eligible = {a: s for a, s in snap.items() if self._can_enter(a)}
-            for plan in ts.plan_entries(holdings, eligible, bull, equity, cash, p):
-                done = self._execute_entry(plan, equity, now)
+            cash_left = cash
+            for plan in ts.plan_entries(holdings, eligible, bull, equity, cash,
+                                        p, mult):
+                done = self._execute_entry(plan, equity, now, cash_left)
                 if done is not None:
                     entries.append(done)
+                    cash_left -= done["cost"]
         self.state["last_decision_day"] = day
         self._summary(day, bull, equity, exits, entries, prices)
 
@@ -625,7 +693,8 @@ class TrendGuardBot:
             self._save_slot(s)
 
     def _execute_entry(self, plan: Dict[str, Any], equity: float,
-                       now: datetime) -> Optional[Dict[str, Any]]:
+                       now: datetime, cash_left: float
+                       ) -> Optional[Dict[str, Any]]:
         """Exécute une entrée planifiée au prix réellement disponible :
         taille recalculée pour ne jamais risquer plus que prévu (décision
         tardive), entrée annulée si le prix est retombé près du stop.
@@ -641,10 +710,12 @@ class TrendGuardBot:
             self.logger.warning(f"[ENTRY] {a.upper()} : prix indisponible ({e}) "
                                 f"→ entrée reportée")
             return None
-        cash = (self.state["paper"]["cash"] if not self.live
-                else self.exchange.fetch_balance().get("free", {}).get(
-                    self.g.quote, 0.0) or 0.0)
-        adj = ts.reprice_entry(plan, px_now, equity, float(cash), self.p)
+        # Cash disponible pour le bot : plafonné (TG_MAX_CAPITAL) et diminué
+        # des achats déjà faits dans cette décision.
+        cash = float(cash_left)
+        if not self.live:
+            cash = min(cash, float(self.state["paper"]["cash"]))
+        adj = ts.reprice_entry(plan, px_now, equity, max(cash, 0.0), self.p)
         drift = px_now / plan["ref_price"] - 1
         if adj is None:
             self.logger.warning(
@@ -827,7 +898,8 @@ def replay(data_dir: str, start: str, end: Optional[str] = None,
     g = GuardConfig(run_mode="paper",
                     universe=tuple(a.upper() for a in close.columns),
                     paper_capital=capital, db_file=":memory:",
-                    log_file=os.devnull, lock_file=os.devnull)
+                    log_file=os.devnull, lock_file=os.devnull,
+                    auto_diagnose_days=0)
     lg = logging.getLogger("trendguard.replay")
     lg.handlers.clear()
     lg.addHandler(logging.NullHandler())
@@ -1115,12 +1187,73 @@ def health_check(gcfg: GuardConfig, max_age_sec: int) -> int:
     return 0
 
 
+def cmd_diagnose(gcfg: GuardConfig, out_path: Optional[str] = None,
+                 exchange: Any = None, now: Optional[datetime] = None) -> int:
+    """Diagnostic complet en lecture seule (aucun ordre, bot arrêté ou non)."""
+    now = now or v29._utcnow()
+    if exchange is None:
+        exchange = ccxt.binance({"enableRateLimit": True,
+                                 "options": {"defaultType": "spot",
+                                             "adjustForTimeDifference": True}})
+        if gcfg.binance_testnet:
+            exchange.set_sandbox_mode(True)
+    _forbid_orders(exchange)
+    quiet = logging.getLogger("trendguard.diagnose")
+    quiet.handlers[:] = [logging.NullHandler()]
+    quiet.propagate = False
+    state: Dict[str, Any] = {}
+    holdings: List[Dict[str, Any]] = []
+    if gcfg.db_file != ":memory:" and os.path.exists(gcfg.db_file):
+        store = v29.Store(gcfg.db_file, quiet)
+        try:
+            state = store.get_kv(TrendGuardBot.STATE_KEY) or {}
+            if gcfg.run_mode == "live":
+                for base in gcfg.universe:
+                    ctx = store.load_context(key=f"ctx:{base}/{gcfg.quote}")
+                    if ctx and ctx.position.in_position:
+                        p = ctx.position
+                        holdings.append({"asset": base.lower(), "qty": p.amount_held,
+                                         "entry": p.buy_price,
+                                         "stop": p.soft_stop or p.sl_price,
+                                         "risk_quote": p.risk_quote_initial})
+        finally:
+            store.close()
+    if gcfg.run_mode == "paper" and "paper" in state:
+        holdings = [{"asset": a, "qty": h["qty"], "entry": h["entry"],
+                     "stop": h["stop"], "risk_quote": h["risk_quote"]}
+                    for a, h in state["paper"]["holdings"].items()]
+    running: Optional[bool] = None
+    probe = v29.ProcessLock(gcfg.lock_file)
+    try:
+        probe.acquire()
+        probe.release()
+        running = False
+    except SystemExit as e:
+        running = "déjà" in str(e)
+    equity = float(state.get("last_equity") or (
+        gcfg.paper_capital if gcfg.run_mode == "paper" else 0.0))
+    day = last_closed_day(now, gcfg.decision_delay_sec)
+    print(f"Analyse en cours ({len(gcfg.universe)} paires, historique Binance "
+          f"depuis 2018)…", flush=True)
+    findings = dg.run_diagnosis(exchange, gcfg.params, list(gcfg.universe), state,
+                                holdings, equity, day, now, db_file=gcfg.db_file,
+                                running=running, quote=gcfg.quote)
+    text = dg.render(findings, f"({gcfg.run_mode.upper()}, {day})")
+    print(text)
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as fh:
+            fh.write(text + "\n")
+        print(f"\nRapport enregistré : {out_path}")
+    return 1 if dg.verdict(findings) == "ALERTE" else 0
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     v29.ensure_utf8_stdio()
     ap = argparse.ArgumentParser(description="TrendGuard Bot (Binance Spot)")
     ap.add_argument("cmd", choices=["run", "once", "status", "resume", "docs",
                                     "health", "replay", "set-secret",
-                                    "verify"])
+                                    "verify", "diagnose"])
+    ap.add_argument("--out", default=None, help="(diagnose) fichier du rapport")
     ap.add_argument("--data", default="data", help="(replay) dossier Coin Metrics")
     ap.add_argument("--start", default="2025-06-01", help="(replay) début")
     ap.add_argument("--end", default=None, help="(replay) fin")
@@ -1163,6 +1296,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         return cmd_set_secret()
     if args.cmd == "verify":
         return cmd_verify(gcfg)
+    if args.cmd == "diagnose":
+        return cmd_diagnose(gcfg, args.out)
     if args.cmd == "health":
         return health_check(gcfg, v29._env_i("TG_HEALTH_MAX_AGE_SEC", 600))
     locks: List[v29.ProcessLock] = []

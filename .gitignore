@@ -14,3 +14,5 @@ __pycache__/
 # Données de recherche (téléchargées)
 data/
 runtime/
+diagnostic.txt
+data_binance/

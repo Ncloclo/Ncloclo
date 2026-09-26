@@ -69,13 +69,13 @@ def test_holder_identity_readable_while_locked_real_os(tmp_path):
         try:
             v29.ProcessLock({str(path)!r}).acquire()
         except SystemExit as e:
-            print(e)
+            sys.stdout.buffer.write(str(e).encode("utf-8"))
     """)
     lk = v29.ProcessLock(str(path))
     lk.acquire()
     try:
         out = subprocess.run([sys.executable, "-c", code], capture_output=True,
-                             text=True, timeout=60).stdout
+                             timeout=60).stdout.decode("utf-8")
         assert "déjà" in out and f"pid={os.getpid()}" in out
     finally:
         lk.release()

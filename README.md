@@ -44,6 +44,25 @@ puis **gelés** et testés une seule fois sur 2023→mai 2026 :
 - Il faut accepter des séries de 7 à 12 pertes consécutives et des drawdowns de 25 à 35 %.
 - Pour plus de stabilité, `TG_RISK_PCT=0.005` donne −18 % de drawdown pour +28 % par an.
 
+### Auto-diagnostic et adaptation ([`docs/ADAPTATION.md`](docs/ADAPTATION.md))
+
+`python trendguard_bot.py diagnose` analyse, sans passer d'ordre :
+- **le système** : horloge et latence vers Binance, bot actif, disque ;
+- **les données** : retards, trous, prix aberrants, liquidité ;
+- **le marché** : régime BTC, hésitation, volatilité ;
+- **les signaux du jour** ;
+- **le portefeuille** : risque engagé, corrélations, scénarios de krach ;
+- **la santé de la stratégie** : l'avantage statistique existe-t-il encore ?
+- **les résultats réels du bot comparés à l'historique**, par un test statistique.
+
+Le bot relance ce diagnostic tous les 7 jours (`TG_AUTO_DIAGNOSE_DAYS`) et notifie en cas d'alerte.
+
+Aucune règle ne s'auto-modifie : sur données réelles, les adaptations « apprises des
+résultats récents » font moins bien hors échantillon. Seul un **profil prudent**
+optionnel est proposé (`TG_DD_THROTTLE=0.10:0.5` : risque divisé par 2 au-delà de 10 %
+de baisse). Il réduit la pire baisse de −33,6 % à −24,2 % sur 2023-2026, pour
++32 % par an au lieu de +37 %.
+
 ### Utilisation
 
 ```bash
@@ -54,6 +73,7 @@ python trendguard_bot.py docs                         # variables d'environnemen
 RUN_MODE=paper python trendguard_bot.py run           # paper, prix réels Binance
 python trendguard_bot.py replay --data data --start 2025-06-01   # paper rejoué sur l'historique réel
 python trendguard_bot.py status                       # état du portefeuille
+python trendguard_bot.py diagnose                     # auto-diagnostic complet (lecture seule)
 ```
 
 ### Dans VS Code

@@ -67,6 +67,11 @@ class TrendParams:
     min_volume_usd: float = 5e6     # volume spot moyen 30 j minimum
     fee: float = 0.001              # par côté
     slippage: float = 0.001         # par côté
+    # Profil prudent (désactivé par défaut) : paliers (drawdown, multiplicateur
+    # du risque), ex. ((0.10, 0.5),) = risque divisé par 2 au-delà de 10 % de
+    # baisse depuis le pic. Réduit le drawdown au prix du rendement ; voir
+    # docs/ADAPTATION.md pour la validation.
+    dd_throttle: Tuple[Tuple[float, float], ...] = ()
 
     def validate(self) -> "TrendParams":
         if not (0 < self.risk_pct <= 0.02):
@@ -77,6 +82,10 @@ class TrendParams:
             raise ValueError("max_total_risk < risk_pct.")
         if self.max_positions < 1:
             raise ValueError("max_positions >= 1 requis.")
+        for thr, mult in self.dd_throttle:
+            if not (0 < thr < 1 and 0 < mult <= 1):
+                raise ValueError("dd_throttle : paliers (0 < baisse < 1, "
+                                 "0 < multiplicateur <= 1) attendus.")
         return self
 
     @property
@@ -235,14 +244,28 @@ def update_positions(holdings: Dict[str, Holding],
     return exits
 
 
+def risk_multiplier(equity: float, peak: float, p: TrendParams) -> float:
+    """Multiplicateur du risque du profil prudent (1.0 si désactivé) selon
+    la baisse de l'equity depuis son plus haut."""
+    if not p.dd_throttle or peak <= 0:
+        return 1.0
+    dd = 1.0 - equity / peak
+    mult = 1.0
+    for thr, m in p.dd_throttle:
+        if dd >= thr:
+            mult = min(mult, m)
+    return mult
+
+
 def plan_entries(holdings: Dict[str, Holding],
                  snap: Dict[str, Dict[str, float]], bull: bool,
-                 equity: float, cash: float, p: TrendParams
-                 ) -> List[Dict[str, Any]]:
+                 equity: float, cash: float, p: TrendParams,
+                 risk_mult: float = 1.0) -> List[Dict[str, Any]]:
     """Entrées du jour, classées par momentum, dimensionnées pour risquer
-    risk_pct de l'equity entre le prix d'entrée et le stop initial (frais
-    et slippage compris), sous plafonds de portefeuille."""
-    if not bull or len(holdings) >= p.max_positions or equity <= 0:
+    risk_pct × risk_mult de l'equity entre le prix d'entrée et le stop
+    initial (frais et slippage compris), sous plafonds de portefeuille."""
+    if (not bull or len(holdings) >= p.max_positions or equity <= 0
+            or risk_mult <= 0):
         return []
     open_risk = sum(h.risk_quote for h in holdings.values())
     cands = [(s["mom"], a, s) for a, s in snap.items()
@@ -252,8 +275,8 @@ def plan_entries(holdings: Dict[str, Holding],
     for _m, a, s in cands:
         if len(holdings) + len(plans) >= p.max_positions:
             break
-        risk_quote = p.risk_pct * equity
-        if open_risk + risk_quote > p.max_total_risk * equity + 1e-9:
+        risk_quote = p.risk_pct * equity * risk_mult
+        if open_risk + risk_quote > p.max_total_risk * equity * risk_mult + 1e-9:
             break
         entry = s["close"] * (1 + p.slippage)
         stop = initial_stop(s["close"], s["vol"], p)
@@ -352,7 +375,7 @@ def backtest(close: pd.DataFrame, volume: pd.DataFrame, p: TrendParams,
     lo = index.searchsorted(pd.Timestamp(start, tz="UTC"))
     hi = index.searchsorted(pd.Timestamp(end, tz="UTC"), side="right")
     cost_out = p.fee + p.slippage
-    cash = capital
+    cash = peak = capital
     holdings: Dict[str, Holding] = {}
     last_px: Dict[str, float] = {}
     trades: List[Dict[str, Any]] = []
@@ -378,7 +401,9 @@ def backtest(close: pd.DataFrame, volume: pd.DataFrame, p: TrendParams,
             last_px[a] = snap[a]["close"]
         mtm = sum(h.qty * snap[a]["close"] for a, h in holdings.items())
         equity = cash + mtm
-        for plan in plan_entries(holdings, snap, bull, equity, cash, p):
+        peak = max(peak, equity)
+        for plan in plan_entries(holdings, snap, bull, equity, cash, p,
+                                 risk_multiplier(equity, peak, p)):
             a = plan["asset"]
             cash -= plan["cost"]
             holdings[a] = Holding(a, plan["qty"], plan["entry"], plan["stop"],

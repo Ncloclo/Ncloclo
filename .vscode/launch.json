@@ -36,6 +36,16 @@
       "preLaunchTask": "Télécharger les données de recherche"
     },
     {
+      "name": "TrendGuard — diagnostic complet (lecture seule)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/trendguard_bot.py",
+      "args": ["diagnose", "--out", "diagnostic.txt"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "envFile": "${workspaceFolder}/.env"
+    },
+    {
       "name": "TrendGuard — statut du portefeuille",
       "type": "debugpy",
       "request": "launch",

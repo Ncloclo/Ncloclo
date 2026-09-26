@@ -56,6 +56,7 @@ def make_bot(run_mode, close, logger, **kw):
     fb = FakeBinanceMulti(prices, quote_balance=10_000.0, step=0.00001,
                           tick=0.000001, min_notional=5.0)
     extra = {}
+    kw.setdefault("auto_diagnose_days", 0)
     if run_mode == "live":
         extra = dict(enable_live_trading=True,
                      live_confirmation="I_UNDERSTAND_RISK")
