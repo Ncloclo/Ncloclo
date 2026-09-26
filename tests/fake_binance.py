@@ -23,7 +23,10 @@ pour la gestion du risque :
 - on_call(nom) : rappel au début de chaque appel API, pour provoquer une
   exécution ENTRE deux appels du bot (courses) ;
 - identifiants d'ordres numérotés par paire (FakeBinanceMulti), comme sur
-  Binance : deux paires peuvent avoir le même orderId.
+  Binance : deux paires peuvent avoir le même orderId ;
+- horloge décalée (clock_skewed) : tout ordre signé est refusé (-1021)
+  jusqu'au recalage load_time_difference() ; fetch_time() ;
+- create_order_request : prépare une requête sans l'envoyer (comme ccxt).
 
 Par défaut (book_depth=None) la liquidité est infinie.
 """
@@ -103,7 +106,19 @@ class FakeBinance:
         self.fetch_includes_fees = False
         self.calls: List[str] = []
         self.markets: Dict[str, Any] = {}
+        self.clock_skewed = False
+        self.clock_syncs = 0
         self.set_price(price)
+
+    # ---------- horloge ----------
+
+    def fetch_time(self):
+        return int(time.time() * 1000)
+
+    def load_time_difference(self):
+        self.clock_syncs += 1
+        self.clock_skewed = False
+        return 0
 
     # ---------- marché ----------
 
@@ -397,10 +412,36 @@ class FakeBinance:
                            for o in self.orders.values()):
                 raise ccxt.InvalidOrder('binance {"code":-2010,"msg":"Duplicate order sent."}')
 
+    def create_order_request(self, symbol, type, side, amount, price=None,
+                             params=None):
+        """Comme ccxt : requête préparée SANS envoi (type d'ordre du marché,
+        prix et stopPrice obligatoires, quantité au pas)."""
+        otype = str(type).upper()
+        params = dict(params or {})
+        if otype not in self.order_types:
+            raise ccxt.InvalidOrder(
+                f"binance {type} is not a valid order type for the {symbol} market")
+        if otype in ("LIMIT", "STOP_LOSS_LIMIT", "TAKE_PROFIT_LIMIT", "LIMIT_MAKER") \
+                and price is None:
+            raise ccxt.ArgumentsRequired(f"binance {type} requires a price")
+        if otype in ("STOP_LOSS", "STOP_LOSS_LIMIT") and params.get("stopPrice") is None:
+            raise ccxt.InvalidOrder(f"binance {type} requires a stopPrice")
+        req = {"symbol": self.market_id, "side": side.upper(), "type": otype,
+               "quantity": self.amount_to_precision(symbol, amount)}
+        if price is not None:
+            req["price"] = self.price_to_precision(symbol, price)
+        if params.get("stopPrice") is not None:
+            req["stopPrice"] = self.price_to_precision(symbol, params.pop("stopPrice"))
+        req.update(params)
+        return req
+
     def create_order(self, symbol, type, side, amount, price=None, params=None):
         self._hook("create_order")
         params = dict(params or {})
         self.calls.append(f"create_order:{type}:{side}")
+        if self.clock_skewed:
+            raise ccxt.InvalidNonce('binance {"code":-1021,"msg":"Timestamp for '
+                                    'this request is outside of the recvWindow."}')
         otype = str(type).upper()
         if otype not in self.order_types:
             raise ccxt.InvalidOrder(
@@ -713,6 +754,23 @@ class FakeBinanceMulti:
 
     def create_order(self, symbol, type, side, amount, price=None, params=None):
         return self._f(symbol).create_order(symbol, type, side, amount, price, params)
+
+    def create_order_request(self, symbol, type, side, amount, price=None,
+                             params=None):
+        return self._f(symbol).create_order_request(symbol, type, side, amount,
+                                                    price, params)
+
+    def fetch_time(self):
+        return int(time.time() * 1000)
+
+    def load_time_difference(self):
+        for fb in self.fakes.values():
+            fb.load_time_difference()
+        return 0
+
+    def skew_clock(self):
+        for fb in self.fakes.values():
+            fb.clock_skewed = True
 
     def fetch_order(self, id, symbol=None, params=None):
         return self._f(symbol).fetch_order(id, symbol, params)

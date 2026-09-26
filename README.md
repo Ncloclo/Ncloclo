@@ -94,6 +94,7 @@ RUN_MODE=paper python trendguard_bot.py run           # paper, prix réels Binan
 python trendguard_bot.py replay --data data --start 2025-06-01   # paper rejoué sur l'historique réel
 python trendguard_bot.py status                       # état du portefeuille
 python trendguard_bot.py diagnose                     # auto-diagnostic complet (lecture seule)
+python trendguard_bot.py verify                       # sans clé : test réel des ordres du jour, sans envoi
 python strategy_lab.py --cache data_binance           # tournoi des stratégies + méta-apprentissage
 ```
 
@@ -127,7 +128,10 @@ Compte réel :
    ni par l'écran ni par l'historique du terminal.
 3. Lancez `python trendguard_bot.py verify` : droits de la clé (retrait
    interdit, trading autorisé), soldes, validation des ordres par Binance et
-   simulation des achats du jour. **Aucun ordre n'est passé.**
+   simulation des achats du jour. **Aucun ordre n'est passé.** Sans clé, la
+   commande fait déjà un test réel en lecture seule : connexion, règles
+   Binance des 21 paires, et ordres du jour construits aux pas de quantité et
+   de prix réels (capital simulé : `TG_MAX_CAPITAL` ou `TG_PAPER_CAPITAL`).
 4. Fixez `TG_MAX_CAPITAL`, le capital en USDT confié au bot. Le bot gère alors
    un sous-compte virtuel (ce plafond, plus ses propres gains et pertes), quel
    que soit le solde réel du compte. Le kill-switch s'applique à ce capital.
@@ -154,6 +158,34 @@ démarrer s'il trouve sur le compte des ordres à son nom qu'il ne connaît pas 
 une autre instance tourne peut-être. Si c'est votre base qui a été perdue,
 relancez une seule fois avec `TG_ALLOW_RECOVERY=true` pour reprendre ces
 positions.
+
+### Windows : synchroniser l'horloge
+
+Binance refuse les ordres signés dont l'horodatage s'écarte de plus de 10 s.
+Le bot recale ses requêtes sur l'horloge de Binance au démarrage et toutes les
+heures ; un ordre refusé pour horodatage (-1021) est renvoyé une fois après
+recalage. Un écart de quelques secondes est donc sans effet. Si le service de temps Windows est arrêté, l'horloge
+dérive pourtant jour après jour. Pour le réactiver, dans un PowerShell
+**administrateur** :
+
+```powershell
+sc.exe config w32time start= auto
+net start w32time
+w32tm /config /manualpeerlist:"time.windows.com,0x9" /syncfromflags:manual /update
+w32tm /resync /force
+```
+
+`python trendguard_bot.py diagnose` affiche l'écart mesuré.
+
+### Pannes réseau
+
+- Chaque bougie journalière est demandée trois fois avant d'être déclarée
+  indisponible.
+- Si les données d'une crypto **détenue** manquent, la décision du jour est
+  reportée au cycle suivant, au lieu de vendre la position comme si elle avait
+  été retirée de la cote. Le stop catastrophe posé sur Binance reste actif. Une
+  notification part si le blocage dure plus d'une heure.
+- Une paire injoignable ne bloque pas la surveillance des autres positions.
 
 ## Déploiement (Docker)
 
@@ -201,7 +233,7 @@ walkforward | status | resume` (voir `python v29.py docs`).
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 199 tests, simulateurs Binance Spot mono et multi-paires
+python -m pytest tests -q      # 217 tests, simulateurs Binance Spot mono et multi-paires
 ```
 
 ## Limites connues

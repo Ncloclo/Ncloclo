@@ -468,6 +468,44 @@ def _client_id(prefix: str = "V29") -> str:
 _cancel_client_id = _client_id
 
 
+BINANCE_TIMEOUT_MS = 30_000
+
+
+def make_binance(api_key: str = "", secret: str = "",
+                 testnet: bool = False) -> Any:
+    """Client ccxt Binance Spot partagé par tous les outils :
+    - marchés Spot uniquement : trois fois moins de données au démarrage que
+      le chargement par défaut (Spot + deux marchés à terme) ;
+    - délai de 30 s au lieu de 10 s : une connexion lente ne fait plus
+      échouer le chargement des marchés ;
+    - horodatage des requêtes signées corrigé de l'écart d'horloge avec
+      Binance (voir aussi resync_clock)."""
+    opts: Dict[str, Any] = {
+        "enableRateLimit": True, "timeout": BINANCE_TIMEOUT_MS,
+        "options": {"defaultType": "spot", "adjustForTimeDifference": True,
+                    "fetchMarkets": {"types": ["spot"]}}}
+    if api_key and secret:
+        opts.update({"apiKey": api_key, "secret": secret})
+    ex = ccxt.binance(opts)
+    if testnet:
+        ex.set_sandbox_mode(True)
+    return ex
+
+
+def resync_clock(exchange: Any) -> Optional[int]:
+    """Recalcule l'écart (ms) entre l'horloge locale et celle de Binance,
+    utilisé par ccxt pour horodater les requêtes signées. Une horloge qui
+    dérive au-delà de la fenêtre de réception (10 s) ferait refuser tous
+    les ordres (-1021). None si la mesure est impossible."""
+    fn = getattr(exchange, "load_time_difference", None)
+    if not callable(fn):
+        return None
+    try:
+        return int(fn())
+    except Exception:
+        return None
+
+
 # ══════════════════════════════════════════════════════════════════════
 # SECTION 2 — CONFIG
 # ══════════════════════════════════════════════════════════════════════
@@ -2205,16 +2243,10 @@ class ExchangeAdapter:
         if exchange is not None:
             self.exchange = exchange
         else:
-            opts = {"enableRateLimit": True,
-                    "options": {"defaultType": "spot",
-                                "adjustForTimeDifference": True}}
-            api_key = os.environ.get("BINANCE_API_KEY", "").strip()
-            api_secret = os.environ.get("BINANCE_API_SECRET", "").strip()
-            if api_key and api_secret:
-                opts.update({"apiKey": api_key, "secret": api_secret})
-            self.exchange = ccxt.binance(opts)
-            if cfg.binance_testnet:
-                self.exchange.set_sandbox_mode(True)
+            self.exchange = make_binance(
+                os.environ.get("BINANCE_API_KEY", "").strip(),
+                os.environ.get("BINANCE_API_SECRET", "").strip(),
+                cfg.binance_testnet)
         self.sleep: Callable[[float], None] = time.sleep
         self.rules = MarketRules()
         self._market_id = ""
@@ -2558,8 +2590,20 @@ class ExchangeAdapter:
         params = {"newClientOrderId": cid, "newOrderRespType": "FULL"}
         params.update(extra or {})
         try:
-            o = self.exchange.create_order(self.cfg.symbol, otype, side,
-                                           amount, price, params)
+            try:
+                o = self.exchange.create_order(self.cfg.symbol, otype, side,
+                                               amount, price, dict(params))
+            except ccxt.InvalidNonce as e:
+                # -1021 : horodatage hors de la fenêtre de réception. Binance
+                # rejette la requête AVANT tout traitement : on resynchronise
+                # l'horloge et on renvoie une fois le même ordre (même
+                # client-id, donc jamais de doublon).
+                offset = resync_clock(self.exchange)
+                self.logger.warning(f"[ORD] horodatage refusé ({e}) → "
+                                    f"horloge resynchronisée ({offset} ms), "
+                                    f"nouvel envoi de {cid}")
+                o = self.exchange.create_order(self.cfg.symbol, otype, side,
+                                               amount, price, dict(params))
         except ccxt.InvalidNonce as e:
             self.invalidate_balances()
             raise ccxt.InvalidOrder(f"Ordre rejeté (horodatage): {e}") from e
@@ -6982,7 +7026,7 @@ def _parse_utc_date(s: str) -> datetime:
 
 def fetch_historical(symbol: str, timeframe: str, start: str, end: str,
                      exchange: Any = None) -> pd.DataFrame:
-    ex = exchange or ccxt.binance({"enableRateLimit": True})
+    ex = exchange or make_binance()
     since = int(_parse_utc_date(start).timestamp() * 1000)
     end_ms = int(_parse_utc_date(end).timestamp() * 1000)
     all_bars: List[List[Any]] = []

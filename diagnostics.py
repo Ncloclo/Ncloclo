@@ -155,14 +155,20 @@ def check_system(exchange: Any, state: Dict[str, Any], expected_day: str,
             latency, offset = min(samples)          # mesure la plus rapide
             uncertainty = latency / 2
             excess = abs(offset) - uncertainty
-            lvl = ("OK" if excess < 1000 else
-                   "ATTENTION" if excess < 4000 else "ALERTE")
+            # Le bot recale l'horodatage des ordres sur Binance au démarrage
+            # et toutes les heures : un écart de quelques secondes est sans
+            # effet. Au-delà, l'heure de la décision quotidienne se décale.
+            lvl = ("OK" if excess < 1000 else "INFO" if excess < 30_000 else
+                   "ATTENTION" if excess < 120_000 else "ALERTE")
+            note = ("" if lvl == "OK" else " — compensé par le bot (recalage "
+                    "horaire) ; synchroniser quand même l'horloge du PC "
+                    "(README, section Windows)")
             out.append(Finding(
-                S, lvl, f"Horloge : écart {offset:+.0f} ms avec Binance "
-                f"(± {uncertainty:.0f} ms)",
-                "" if lvl == "OK" else "Synchroniser l'horloge Windows "
-                "(Paramètres ▸ Heure et langue ▸ Synchroniser maintenant) : "
-                "Binance refuse les ordres signés au-delà de 5 s d'écart."))
+                S, lvl, f"Horloge : écart {offset / 1000:+.1f} s avec Binance "
+                f"(± {uncertainty / 1000:.1f} s){note}",
+                "" if lvl in ("OK", "INFO") else "Synchroniser l'horloge du PC "
+                "(README, section Windows) : un écart de plusieurs minutes "
+                "décale la décision quotidienne du bot."))
             lvl = "OK" if latency < 1000 else "ATTENTION" if latency < 3000 else "ALERTE"
             out.append(Finding(
                 S, lvl, f"Latence réseau vers Binance : {latency:.0f} ms "
@@ -340,7 +346,12 @@ def check_signals(close: pd.DataFrame, volume: pd.DataFrame,
 # ══════════════════════════════════════════════════════════════════════
 
 def check_portfolio(holdings: List[Dict[str, Any]], close: pd.DataFrame,
-                    prices: Dict[str, float], equity: float) -> List[Finding]:
+                    prices: Dict[str, float], equity: float,
+                    max_total_risk: float = 0.06,
+                    kill_drawdown: float = 0.40) -> List[Finding]:
+    """Un portefeuille rempli jusqu'aux plafonds de la stratégie est
+    l'état NORMAL : seuls les dépassements nets sont signalés, sinon
+    l'auto-diagnostic alerterait chaque semaine sans raison."""
     S = "Portefeuille"
     if not holdings:
         return [Finding(S, "INFO", "Aucune position ouverte (100 % USDT)")]
@@ -371,10 +382,15 @@ def check_portfolio(holdings: List[Dict[str, Any]], close: pd.DataFrame,
     else:
         corr_risk, avg = float(r.sum()), 1.0
     tot = float(r.sum())
-    lvl = "OK" if tot / equity <= 0.06 else "ATTENTION"
+    # Le plafond borne le risque À L'ENTRÉE ; quand les positions gagnent,
+    # l'écart au stop grandit (gains latents exposés) : marge de 50 %.
+    lvl = "OK" if tot / equity <= max_total_risk * 1.5 else "ATTENTION"
     out.append(Finding(S, lvl, f"Perte si tous les stops sont touchés : {tot:,.0f} USDT "
-                       f"({tot / equity * 100:.1f} % du capital) ; risque ajusté des "
-                       f"corrélations {corr_risk / equity * 100:.1f} %"))
+                       f"({tot / equity * 100:.1f} % du capital, plafond à l'entrée "
+                       f"{max_total_risk * 100:.0f} %) ; risque ajusté des "
+                       f"corrélations {corr_risk / equity * 100:.1f} %",
+                       "" if lvl == "OK" else "Risque engagé nettement au-dessus du "
+                       "plafond : vérifier les stops posés sur Binance."))
     if len(names) > 1:
         lvl = "ATTENTION" if avg > 0.7 else "INFO"
         out.append(Finding(S, lvl, f"Corrélation moyenne des positions (90 j) : {avg:.2f}",
@@ -383,10 +399,15 @@ def check_portfolio(holdings: List[Dict[str, Any]], close: pd.DataFrame,
     for shock in (0.20, 0.35):
         loss = sum(h["qty"] * (prices.get(h["asset"]) or h["entry"]) * shock
                    for h in holdings)
-        lvl = "INFO" if loss / equity < 0.15 else "ATTENTION"
+        # Scénario de stress : n'alerte que s'il approcherait l'arrêt
+        # d'urgence (TG_KILL_DRAWDOWN).
+        lvl = "INFO" if loss / equity < kill_drawdown * 0.75 else "ATTENTION"
         out.append(Finding(S, lvl, f"Krach instantané de -{shock * 100:.0f} % sans "
                            f"exécution des stops (gap) : -{loss / equity * 100:.1f} % "
-                           f"du capital"))
+                           f"du capital",
+                           "" if lvl == "INFO" else "Exposition très forte : un krach "
+                           "avec gap approcherait l'arrêt d'urgence ; envisager "
+                           "TG_RISK_PCT=0.005 ou moins de positions."))
     return out
 
 
@@ -553,7 +574,8 @@ def run_diagnosis(exchange: Any, p: ts.TrendParams, bases: List[str],
     if "signals" in sections:
         findings += check_signals(close, volume, p, held)
     if "portfolio" in sections:
-        findings += check_portfolio(holdings, close, prices, max(equity, 1e-9))
+        findings += check_portfolio(holdings, close, prices, max(equity, 1e-9),
+                                    p.max_total_risk)
     res = None
     if "strategy" in sections or "live" in sections:
         health, res = strategy_health(close, volume, p)

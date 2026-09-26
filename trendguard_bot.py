@@ -98,6 +98,7 @@ class GuardConfig:
     ohlcv_limit: int = 1000
     kill_drawdown: float = 0.40
     heartbeat_min: int = 15
+    clock_resync_min: int = 60          # réel : horloge recalée sur Binance
     auto_diagnose_days: int = 7         # 0 = désactivé
     max_capital: float = 0.0            # 0 = tout le compte
     allow_recovery: bool = False        # adopter les ordres du bot inconnus
@@ -207,6 +208,12 @@ class Slot:
     ctx: v29.BotContext
 
 
+class DecisionDeferred(RuntimeError):
+    """Données insuffisantes pour décider sans risque : la décision
+    quotidienne est retentée au cycle suivant (jamais de vente sur une
+    simple panne réseau)."""
+
+
 def last_closed_day(now: datetime, delay_sec: int = 0) -> str:
     """Date (UTC) de la dernière bougie journalière clôturée depuis au
     moins `delay_sec` secondes."""
@@ -230,6 +237,7 @@ class TrendGuardBot:
         self.sleep = time.sleep
         self._now: datetime = v29._utcnow()
         self._last_heartbeat = 0.0
+        self._last_clock_sync = 0.0
 
     @property
     def live(self) -> bool:
@@ -393,18 +401,59 @@ class TrendGuardBot:
         now = now or v29._utcnow()
         self._now = now
         if self.live:
+            self._sync_clock()
             self._maintain_live()
         else:
             self._maintain_paper()
         day = last_closed_day(now, self.g.decision_delay_sec)
         if self.state.get("last_decision_day") != day:
-            self.daily_decision(now, day)
+            try:
+                self.daily_decision(now, day)
+                self.state.pop("decision_deferred_since", None)
+            except DecisionDeferred as e:
+                self._decision_deferred(day, str(e))
         # Horloge réelle (et non `now`, simulé en rejeu) : sert au contrôle
         # de santé du conteneur.
         self.state["last_cycle_ts"] = time.time()
         self._save_state()
         self._heartbeat(now)
         self._auto_diagnose(now, day)
+
+    def _decision_deferred(self, day: str, why: str) -> None:
+        """Décision reportée au cycle suivant ; alerte si cela dure plus
+        d'une heure."""
+        since = self.state.setdefault("decision_deferred_since", time.time())
+        waited = time.time() - float(since)
+        self.logger.warning(f"[DECISION] {day} reportée ({why}) — en attente "
+                            f"depuis {waited / 60:.0f} min")
+        if waited >= 3600 and not self.state.get("decision_deferred_notified") == day:
+            self.state["decision_deferred_notified"] = day
+            self.notifier(f"⚠️ TrendGuard : décision du {day} bloquée depuis "
+                          f"{waited / 3600:.1f} h ({why}). Vérifier la connexion "
+                          f"à Binance.", critical=True)
+
+    def _sync_clock(self) -> None:
+        """Mode réel : recale l'horodatage des requêtes signées sur l'horloge
+        de Binance toutes les `clock_resync_min` minutes. Une horloge non
+        synchronisée (service de temps Windows arrêté) dérive de plusieurs
+        secondes par jour ; au-delà de 10 s, Binance refuserait tous les
+        ordres, y compris les stops (-1021)."""
+        every = self.g.clock_resync_min * 60
+        if every <= 0 or time.time() - self._last_clock_sync < every:
+            return
+        self._last_clock_sync = time.time()
+        offset = v29.resync_clock(self.exchange)
+        if offset is None:
+            self._last_clock_sync -= max(every - 300, 0)   # nouvel essai dans 5 min
+            self.logger.warning("[CLOCK] resynchronisation de l'horloge impossible "
+                                "(réseau) : nouvel essai dans 5 min")
+            return
+        self.state["clock_offset_ms"] = offset
+        if abs(offset) >= 2000:
+            self.logger.warning(
+                f"[CLOCK] horloge locale décalée de {offset / 1000:+.1f} s par rapport "
+                f"à Binance : écart compensé, mais synchronisez l'horloge du "
+                f"système (README, section Windows)")
 
     def holdings_for_diagnosis(self) -> List[Dict[str, Any]]:
         return [{"asset": a, "qty": h.qty, "entry": h.entry, "stop": h.stop,
@@ -427,7 +476,8 @@ class TrendGuardBot:
                 self.state, self.holdings_for_diagnosis(),
                 float(self.state.get("last_equity") or 0.0), day, now,
                 quote=self.g.quote,
-                sections=("data", "market", "portfolio", "strategy", "live"))
+                sections=("data", "market", "portfolio", "strategy", "live",
+                          "alternatives"))
         except Exception as e:
             self.logger.warning(f"[DIAG] auto-diagnostic impossible : {e}")
             return
@@ -477,16 +527,25 @@ class TrendGuardBot:
             self.logger.warning(f"[HEARTBEAT] indisponible : {e}")
 
     def _maintain_live(self) -> None:
+        """Protection de chaque position ; une paire en erreur (réseau) ne
+        bloque jamais la surveillance des autres."""
         for s in self.slots.values():
             if not (s.ctx.position.in_position or s.ctx.pending_order):
                 continue
             before = self._closed_count(s)
-            s.eng.resolve_pending(s.ctx)
-            if s.ctx.position.in_position:
-                px = s.ex.get_ticker()["last"]
-                s.eng.maintain_protection(s.ctx, px)
-            self._harvest_live_trade(s, before, "EXCHANGE_STOP")
-            self._save_slot(s)
+            try:
+                s.eng.resolve_pending(s.ctx)
+                if s.ctx.position.in_position:
+                    px = s.ex.get_ticker()["last"]
+                    s.eng.maintain_protection(s.ctx, px)
+            except ccxt.NetworkError as e:
+                self.logger.warning(f"[PROT] {s.symbol} : réseau ({type(e).__name__}) "
+                                    f"→ nouvel essai au prochain cycle")
+            except Exception as e:
+                self.logger.exception(f"[PROT] {s.symbol} : {e}")
+            finally:
+                self._harvest_live_trade(s, before, "EXCHANGE_STOP")
+                self._save_slot(s)
 
     def _maintain_paper(self) -> None:
         """Paper : simulation du stop catastrophe exchange en intrajournalier."""
@@ -496,7 +555,12 @@ class TrendGuardBot:
             s = self.slots.get(a.upper())
             if s is None:
                 continue
-            px = s.ex.get_ticker()["last"]
+            try:
+                px = s.ex.get_ticker()["last"]
+            except Exception as e:
+                self.logger.warning(f"[PAPER] {s.symbol} : prix indisponible "
+                                    f"({type(e).__name__}) → nouvel essai au prochain cycle")
+                continue
             if px <= h["disaster"]:
                 self._paper_exit(a, min(px, h["disaster"]), "EXCHANGE_STOP")
 
@@ -520,11 +584,29 @@ class TrendGuardBot:
                                     Dict[str, float]]:
         now_ms = int(now.timestamp() * 1000)
         closes, vols = {}, {}
-        for base, s in self.slots.items():
-            try:
-                df = s.ex.fetch_ohlcv_htf(s.symbol, "1d", limit=self.g.ohlcv_limit)
-            except Exception as e:
-                self.logger.warning(f"[DATA] {s.symbol} OHLCV KO: {e}")
+        failed: List[str] = []
+        # BTC d'abord : sans lui (régime), inutile d'interroger les autres.
+        for base, s in sorted(self.slots.items(), key=lambda kv: kv[0] != "BTC"):
+            df = None
+            for k in range(3):
+                try:
+                    df = s.ex.fetch_ohlcv_htf(s.symbol, "1d", limit=self.g.ohlcv_limit)
+                    break
+                except Exception as e:
+                    if k == 2:
+                        self.logger.warning(f"[DATA] {s.symbol} OHLCV KO après 3 "
+                                            f"essais : {type(e).__name__}")
+                    else:
+                        self.sleep(2 * (k + 1))
+            if df is None:
+                failed.append(base.lower())
+                # Connexion coupée : inutile d'attendre les délais des autres
+                # paires (la surveillance des stops passerait après).
+                if base.upper() == "BTC":
+                    raise DecisionDeferred("clôtures BTC indisponibles")
+                if len(failed) >= 3 and len(failed) > len(closes):
+                    raise DecisionDeferred("connexion à Binance instable "
+                                           f"({len(failed)} paires sans données)")
                 continue
             if df.empty:
                 continue
@@ -538,12 +620,22 @@ class TrendGuardBot:
                 (df["volume"].astype(float) * df["close"].astype(float)).values,
                 index=idx)
         if "btc" not in closes:
-            raise RuntimeError("Clôtures BTC indisponibles : décision reportée")
+            raise DecisionDeferred("clôtures BTC indisponibles")
+        held_missing = sorted(set(self._holdings()) & set(failed))
+        if held_missing:
+            # Sans donnée, une position détenue serait traitée comme retirée
+            # de la cote et vendue : on attend plutôt le retour des données
+            # (le stop catastrophe posé sur Binance reste actif).
+            raise DecisionDeferred("données indisponibles pour des positions "
+                                   "détenues : " + ", ".join(a.upper() for a in held_missing))
+        if failed:
+            self.logger.warning("[DATA] décision prise sans (données indisponibles) : "
+                                + ", ".join(a.upper() for a in failed))
         close = pd.DataFrame(closes).sort_index()
         volume = pd.DataFrame(vols).reindex(close.index)
         d = pd.Timestamp(day, tz="UTC")
         if d not in close.index:
-            raise RuntimeError(f"Bougie du {day} absente : décision reportée")
+            raise DecisionDeferred(f"bougie du {day} absente")
         i = close.index.get_loc(d)
         snap: Dict[str, Dict[str, float]] = {}
         for a in close.columns:
@@ -952,15 +1044,9 @@ def replay(data_dir: str, start: str, end: Optional[str] = None,
 
 def _build(gcfg: GuardConfig) -> TrendGuardBot:
     logger = build_guard_logger(gcfg.log_file)
-    opts = {"enableRateLimit": True, "options": {"defaultType": "spot",
-                                                 "adjustForTimeDifference": True}}
-    key = os.environ.get("BINANCE_API_KEY", "").strip()
-    secret = os.environ.get("BINANCE_API_SECRET", "").strip()
-    if key and secret:
-        opts.update({"apiKey": key, "secret": secret})
-    exchange = ccxt.binance(opts)
-    if gcfg.binance_testnet:
-        exchange.set_sandbox_mode(True)
+    exchange = v29.make_binance(os.environ.get("BINANCE_API_KEY", "").strip(),
+                                os.environ.get("BINANCE_API_SECRET", "").strip(),
+                                gcfg.binance_testnet)
     store = v29.Store(gcfg.db_file, logger)
     notifier = v29.Notifier(os.environ.get("TELEGRAM_TOKEN", ""),
                             os.environ.get("TELEGRAM_CHAT_ID", ""), logger=logger)
@@ -1048,15 +1134,11 @@ def cmd_verify(gcfg: GuardConfig, exchange: Any = None,
         key = os.environ.get("BINANCE_API_KEY", "").strip()
         secret = os.environ.get("BINANCE_API_SECRET", "").strip()
         if not key or not secret:
-            say("❌ BINANCE_API_KEY ou BINANCE_API_SECRET absent de .env "
-                "(secret : python trendguard_bot.py set-secret)")
-            return 1
-        exchange = ccxt.binance({"apiKey": key, "secret": secret,
-                                 "enableRateLimit": True,
-                                 "options": {"defaultType": "spot",
-                                             "adjustForTimeDifference": True}})
-        if gcfg.binance_testnet:
-            exchange.set_sandbox_mode(True)
+            say("ℹ️  Pas de clé API dans .env : vérification publique seulement "
+                "(droits, soldes et order/test demandent une clé ; secret : "
+                "python trendguard_bot.py set-secret).\n")
+            return cmd_verify_public(gcfg, now=now, out=out)
+        exchange = v29.make_binance(key, secret, gcfg.binance_testnet)
     _forbid_orders(exchange)
     say(f"Vérification {'TESTNET' if gcfg.binance_testnet else 'BINANCE RÉEL'} "
         f"— aucun ordre ne sera passé")
@@ -1123,7 +1205,11 @@ def cmd_verify(gcfg: GuardConfig, exchange: Any = None,
         say("  Validation des types d'ordres (order/test) : OK ✓")
         now = now or v29._utcnow()
         day = last_closed_day(now, live.decision_delay_sec)
-        snap, bull, prices = bot._market_snapshot(now, day)
+        try:
+            snap, bull, prices = bot._market_snapshot(now, day)
+        except DecisionDeferred as e:
+            say(f"  ❌ Décision du jour impossible : {e}")
+            return 1
         equity, cash = bot._equity_and_cash(prices)
         orphans = [b for b, sl in bot.slots.items() if sl.ctx.orphan_balance]
         eligible = {a: x for a, x in snap.items() if bot._can_enter(a)}
@@ -1156,6 +1242,144 @@ def cmd_verify(gcfg: GuardConfig, exchange: Any = None,
         say("  Aucun achat prévu aujourd'hui.")
     say("\n" + ("✅ Prêt pour le mode réel." if ok else
                 "❌ À corriger avant le mode réel (voir ci-dessus)."))
+    return 0 if ok else 1
+
+
+def cmd_verify_public(gcfg: GuardConfig, exchange: Any = None,
+                      now: Optional[datetime] = None, out=None) -> int:
+    """Vérification sur le VRAI Binance SANS clé API ni ordre : connexion,
+    horloge, règles de marché des paires, puis construction complète des
+    ordres que le bot passerait aujourd'hui (quantités arrondies aux pas
+    Binance, montants minimums, stop catastrophe, requêtes ccxt préparées
+    mais jamais envoyées). Retourne 0 si tout est conforme."""
+    out = out or sys.stdout
+    say = lambda msg="": print(msg, file=out)       # noqa: E731
+    ok = True
+    exchange = exchange or v29.make_binance(testnet=gcfg.binance_testnet)
+    _forbid_orders(exchange)
+    say(f"Vérification {'TESTNET' if gcfg.binance_testnet else 'BINANCE RÉEL'} "
+        f"— mode public, aucun ordre")
+
+    say("\n── 1. Connexion")
+    fetch_time = getattr(exchange, "fetch_time", None)
+    if callable(fetch_time):
+        try:
+            t0 = time.time()
+            server = int(fetch_time())
+            t1 = time.time()
+            say(f"  Binance joignable ✓ (latence {(t1 - t0) * 1000:.0f} ms, écart "
+                f"d'horloge {(server - (t0 + t1) / 2 * 1000) / 1000:+.1f} s, compensé "
+                f"par le bot)")
+        except Exception as e:
+            say(f"  ❌ Binance injoignable : {type(e).__name__}: {str(e)[:120]}")
+            return 1
+    capital = gcfg.max_capital or gcfg.paper_capital
+    sim = dataclasses.replace(gcfg, run_mode="paper", paper_capital=capital,
+                              db_file=":memory:", log_file=os.devnull,
+                              lock_file=os.devnull, auto_diagnose_days=0,
+                              heartbeat_min=0)
+    quiet = logging.getLogger("trendguard.verify")
+    reasons = logging.StreamHandler(out)
+    reasons.setLevel(logging.WARNING)
+    reasons.setFormatter(logging.Formatter("  ⚠️  %(message)s"))
+    quiet.handlers[:] = [reasons]
+    quiet.setLevel(logging.WARNING)
+    quiet.propagate = False
+    store = v29.Store(":memory:", quiet)
+    bot = TrendGuardBot(sim, quiet, exchange, store,
+                        v29.Notifier("", "", logger=quiet))
+    t0 = time.time()
+    try:
+        if not bot.boot():
+            say("  ❌ Chargement des marchés impossible (causes ci-dessus).")
+            return 1
+        say(f"  Marchés chargés en {time.time() - t0:.1f} s ✓")
+
+        say("\n── 2. Règles Binance des paires")
+        missing = [b for b in gcfg.universe if b not in bot.slots]
+        if missing:
+            ok = False
+            say(f"  ❌ Paires absentes ou suspendues : {', '.join(missing)}")
+        for base, sl in sorted(bot.slots.items()):
+            r = sl.ex.rules
+            try:
+                stop = sl.ex.stop_order_type
+            except Exception as e:
+                ok = False
+                say(f"  ❌ {base:<5} aucun ordre stop disponible ({e})")
+                continue
+            say(f"  ✓ {base:<5} stop {stop:<15} minimum {r.min_cost:g} USDT, "
+                f"pas de quantité {r.step_size:g}, pas de prix {r.tick_size:g}")
+
+        now = now or v29._utcnow()
+        day = last_closed_day(now, sim.decision_delay_sec)
+        try:
+            snap, bull, _prices = bot._market_snapshot(now, day)
+        except DecisionDeferred as e:
+            say(f"\n  ❌ Décision du jour impossible : {e}")
+            return 1
+        plans = ts.plan_entries({}, snap, bull, capital, capital, sim.params)
+        say(f"\n── 3. Ordres que le bot passerait aujourd'hui (capital simulé "
+            f"{capital:,.2f} USDT, bougie du {day}, régime BTC "
+            f"{'HAUSSIER' if bull else 'BAISSIER'})")
+        if capital < MIN_LIVE_CAPITAL:
+            ok = False
+            say(f"  ❌ Capital simulé < {MIN_LIVE_CAPITAL:.0f} USDT : la plupart des "
+                f"ordres seraient sous le minimum de Binance.")
+        build = getattr(exchange, "create_order_request", None)
+        cash = capital
+        for plan in plans:
+            a = plan["asset"].upper()
+            sl = bot.slots[a]
+            t = sl.ex.get_ticker()
+            adj = ts.reprice_entry(plan, float(t["ask"]), capital, cash, sim.params)
+            if adj is None:
+                say(f"  ↷ {a:<5} achat annulé : prix actuel trop proche du stop")
+                continue
+            errors: List[str] = []
+            qty = sl.ex.round_amount(adj["qty"])
+            notional = qty * float(t["ask"])
+            if qty <= 0 or notional < sl.ex.min_notional() * 1.05:
+                errors.append(f"achat de {notional:.2f} USDT sous le minimum "
+                              f"({sl.ex.min_notional():g} USDT)")
+            net = sl.ex.round_amount(qty * (1 - sim.params.fee))  # frais en base
+            disaster = adj["stop"] - gcfg.catastrophe_atr * adj["vol"]
+            if disaster <= 0:
+                disaster = adj["stop"] * 0.5
+            stop_px = sl.ex.round_price(disaster, "down")
+            if not 0 < stop_px < float(t["last"]):
+                errors.append(f"stop {stop_px:g} au-dessus du prix actuel")
+            try:
+                stop_type = sl.ex.stop_order_type
+                if callable(build):
+                    build(sl.symbol, "market", "buy", qty, None,
+                          {"newClientOrderId": "TGVERIFY"})
+                    params: Dict[str, Any] = {"stopPrice": stop_px}
+                    price = None
+                    if stop_type == "STOP_LOSS_LIMIT":
+                        price = sl.ex.round_price(
+                            stop_px * (1 - sl.cfg.stop_limit_offset_pct), "down")
+                        params["timeInForce"] = "GTC"
+                    build(sl.symbol, stop_type, "sell", net, price, params)
+            except Exception as e:
+                errors.append(f"requête refusée : {type(e).__name__}: {str(e)[:100]}")
+            if errors:
+                ok = False
+                say(f"  ❌ {a:<5} " + " ; ".join(errors))
+            else:
+                say(f"  ✓ {a:<5} achat {qty:g} ≈ {notional:,.2f} USDT, puis stop "
+                    f"{stop_type} de {net:g} à {stop_px:g} (stop de clôture "
+                    f"{adj['stop']:.6g}, risque {adj['risk_quote']:.2f} USDT)")
+            cash -= adj["cost"]
+        if not plans:
+            say("  Aucun achat prévu aujourd'hui.")
+    finally:
+        store.close()
+    say("\n── 4. Reste à vérifier avec une clé API (python trendguard_bot.py verify)")
+    say("  Droits de la clé (retrait interdit), soldes réels et validation des "
+        "ordres signés par Binance (order/test).")
+    say("\n" + ("✅ Tout est conforme côté marché." if ok else
+                "❌ Points à corriger (voir ci-dessus)."))
     return 0 if ok else 1
 
 
@@ -1192,11 +1416,7 @@ def cmd_diagnose(gcfg: GuardConfig, out_path: Optional[str] = None,
     """Diagnostic complet en lecture seule (aucun ordre, bot arrêté ou non)."""
     now = now or v29._utcnow()
     if exchange is None:
-        exchange = ccxt.binance({"enableRateLimit": True,
-                                 "options": {"defaultType": "spot",
-                                             "adjustForTimeDifference": True}})
-        if gcfg.binance_testnet:
-            exchange.set_sandbox_mode(True)
+        exchange = v29.make_binance(testnet=gcfg.binance_testnet)
     _forbid_orders(exchange)
     quiet = logging.getLogger("trendguard.diagnose")
     quiet.handlers[:] = [logging.NullHandler()]
