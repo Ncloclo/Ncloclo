@@ -679,6 +679,25 @@ def test_paper_disaster_stop_follows_trailing(logger):
     assert raised
 
 
+def test_paper_disaster_stop_never_raised_above_market(logger):
+    """_raise_paper_disaster (comme _raise_exchange_stops en réel) ne doit
+    jamais remonter le stop catastrophe simulé au ras ou au-dessus du prix
+    courant : Binance rejetterait un stop de vente déjà franchi. Dans ce
+    cas, la sortie reste gérée par le stop de clôture du jour suivant."""
+    close, volume = synthetic_market()
+    bot, fb = make_bot("paper", close, logger)
+    assert bot.boot()
+    bot.state["paper"]["holdings"]["eth"] = {"disaster": 90.0}
+    fb.set_price("ETH/USDT", 100.0)
+    holdings = {"eth": ts.Holding(asset="eth", qty=1.0, entry=95.0, stop=99.5,
+                                  high=100.0, entry_date="2026-01-01",
+                                  risk_quote=1.0, cost=95.0)}
+    # catastrophe_atr par défaut = 1.0 → cible = 99.5 - 1.0*0.01 = 99.49,
+    # au-dessus de 99 % du dernier prix (99.0) : la remontée est refusée.
+    bot._raise_paper_disaster(holdings, {"eth": {"vol": 0.01}})
+    assert bot.state["paper"]["holdings"]["eth"]["disaster"] == 90.0
+
+
 def test_live_catch_up_closes_position_and_its_exchange_stop(logger):
     close, volume = synthetic_market()
     daily, fb_a = make_bot("paper", close, logger)

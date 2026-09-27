@@ -110,3 +110,26 @@ def test_public_klines_without_market_list():
     assert rows == [[1790467200000, 84433.11, 85159.03, 84257.07, 84494.0, 812.5]]
     assert calls == [{"symbol": "BTCUSDT", "interval": "1d", "limit": 5, "startTime": 1790380800000}]
     assert ra.public_client().urls["api"]["public"] == ra.PUBLIC_DATA_API
+
+
+def test_public_klines_fetch_time_and_network_error():
+    """fetch_time délègue et convertit en entier ; une panne réseau n'est
+    pas avalée (le retard/l'échec doit rester visible, pas un succès
+    silencieux)."""
+    class Raw:
+        def fetch_time(self):
+            return 1790467200123.0
+
+    assert ra.PublicKlines(Raw()).fetch_time() == 1790467200123
+
+    class Down:
+        def fetch_time(self):
+            raise v29.ccxt.NetworkError("data-api.binance.vision injoignable")
+
+        def publicGetKlines(self, params):
+            raise v29.ccxt.NetworkError("data-api.binance.vision injoignable")
+
+    with pytest.raises(v29.ccxt.NetworkError):
+        ra.PublicKlines(Down()).fetch_time()
+    with pytest.raises(v29.ccxt.NetworkError):
+        ra.PublicKlines(Down()).fetch_ohlcv("BTC/USDT")
