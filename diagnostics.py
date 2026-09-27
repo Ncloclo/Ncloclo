@@ -375,7 +375,11 @@ def check_portfolio(holdings: List[Dict[str, Any]], close: pd.DataFrame,
     if below:
         out.append(Finding(S, "INFO", f"Sous leur stop de clôture : {', '.join(below)} "
                            f"→ vente à la prochaine décision si la clôture confirme"))
-    rets = np.log(close[names] / close[names].shift(1)).iloc[-90:]
+    # Position sans historique (erreur de téléchargement, déjà signalée dans
+    # « Données ») : colonne vide plutôt qu'un KeyError qui ferait échouer
+    # tout le diagnostic.
+    held_close = close.reindex(columns=names)
+    rets = np.log(held_close / held_close.shift(1)).iloc[-90:]
     r = np.array(risks)
     if len(names) > 1:
         c = rets.corr().fillna(0).to_numpy(copy=True)   # pandas 3 : .values en lecture seule
@@ -555,7 +559,8 @@ def run_diagnosis(exchange: Any, p: ts.TrendParams, bases: List[str],
                   state: Dict[str, Any], holdings: List[Dict[str, Any]],
                   equity: float, expected_day: str, now: datetime,
                   db_file: str = "", running: Optional[bool] = None,
-                  quote: str = "USDT", sections: Tuple[str, ...] = (
+                  quote: str = "USDT", kill_drawdown: float = 0.40,
+                  sections: Tuple[str, ...] = (
                       "system", "data", "market", "signals", "portfolio",
                       "strategy", "live", "alternatives")) -> List[Finding]:
     findings: List[Finding] = []
@@ -578,7 +583,7 @@ def run_diagnosis(exchange: Any, p: ts.TrendParams, bases: List[str],
         findings += check_signals(close, volume, p, held)
     if "portfolio" in sections:
         findings += check_portfolio(holdings, close, prices, max(equity, 1e-9),
-                                    p.max_total_risk)
+                                    p.max_total_risk, kill_drawdown)
     res = None
     if "strategy" in sections or "live" in sections:
         health, res = strategy_health(close, volume, p)

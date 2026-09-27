@@ -252,6 +252,58 @@ def test_live_catastrophe_stop_between_closes(logger):
     assert t["pnl"] < 0 and t["r"] > -2.5
 
 
+def test_paper_crash_exits_at_raised_catastrophe_stop(logger):
+    """Paper : une fois le stop catastrophe remonté avec le trailing, un
+    krach entre deux clôtures sort à ce niveau remonté, pas au niveau
+    d'entrée."""
+    close, volume = synthetic_market()
+    bot, fb = make_bot("paper", close, logger)
+    assert bot.boot()
+    feed(fb, close, volume)
+    book = bot.state["paper"]["holdings"]
+    first: dict = {}
+    raised = None
+    for d in close.index[SIM_FROM:N_DAYS]:
+        for a in close.columns:
+            fb.set_price(f"{a.upper()}/USDT", float(close[a].loc[d]))
+        bot.run_cycle(now=d.to_pydatetime() + DAY + timedelta(minutes=5))
+        for a, h in book.items():
+            first.setdefault((a, h["entry_date"]), h["disaster"])
+            if h["disaster"] > first[(a, h["entry_date"])] * 1.01:
+                raised = a
+        if raised:
+            break
+    assert raised, "aucune remontée du stop catastrophe paper"
+    h = book[raised]
+    assert h["disaster"] < h["stop"]                 # toujours sous le stop de clôture
+    n = len(bot.state["trades"])
+    crash = h["disaster"] * 0.99
+    fb.set_price(f"{raised.upper()}/USDT", crash)    # krach intrajournalier
+    bot.run_cycle(now=d.to_pydatetime() + DAY + timedelta(hours=6))
+    assert raised not in book
+    t = bot.state["trades"][n]
+    assert t["reason"] == "EXCHANGE_STOP" and t["exit"] == pytest.approx(crash)
+
+
+def test_heartbeat_countdown_before_daily_decision(logger, caplog):
+    close, volume = synthetic_market()
+    bot, fb = make_bot("paper", close, logger)
+    assert bot.boot()
+    run_days(bot, fb, close, volume, SIM_FROM, SIM_FROM + 1)
+    d = close.index[SIM_FROM]
+    lg = logging.getLogger("test.tg.hb2")
+    bot.logger = lg
+    with caplog.at_level(logging.INFO, logger="test.tg.hb2"):
+        bot._last_heartbeat = 0.0                    # 00:01 UTC : décision à 00:02
+        bot._heartbeat(d.to_pydatetime() + 2 * DAY + timedelta(minutes=1))
+        bot.state["last_decision_day"] = "2000-01-01"   # décision reportée
+        bot._last_heartbeat = 0.0
+        bot._heartbeat(d.to_pydatetime() + 2 * DAY + timedelta(hours=3))
+    beats = [r.getMessage() for r in caplog.records if "[HEARTBEAT]" in r.getMessage()]
+    assert "prochaine décision dans 0 h 01" in beats[0]
+    assert "en attente" in beats[1]
+
+
 def test_kill_switch_blocks_entries(logger):
     close, volume = synthetic_market()
     bot, fb = make_bot("paper", close, logger, kill_drawdown=0.01)

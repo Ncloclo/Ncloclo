@@ -447,3 +447,130 @@ def test_stalled_cycle_dumps_thread_stacks(logger, tmp_path, monkeypatch):
         tg._running = True
     dump = (tmp_path / "tg.log.blocage.txt").read_text(encoding="utf-8")
     assert "Timeout" in dump and "cycle" in dump and calls["n"] == 2
+
+
+# ---------- Saisie guidée des clés API ----------
+
+KEY, SECRET = "K" * 32 + "k" * 32, "S" * 32 + "s" * 32
+
+
+class _Account:
+    """Faux Binance : n'accepte que la paire (KEY, SECRET) sur `env`."""
+
+    def __init__(self, key, secret, testnet, env="testnet", down=False):
+        self.key, self.secret, self.testnet = key, secret, testnet
+        self.env, self.down = env, down
+        self.options = {}
+
+    def fetch_time(self):
+        return int(time.time() * 1000)
+
+    def fetch_balance(self):
+        if self.down is True or (self.down == "real" and not self.testnet):
+            raise v29.ccxt.RequestTimeout("timeout")
+        right_env = self.testnet == (self.env == "testnet")
+        if self.key == KEY and right_env:
+            if self.secret != SECRET:
+                raise v29.ccxt.AuthenticationError(
+                    'binance {"code":-1022,"msg":"Signature for this request is not valid."}')
+            return {"total": {}}
+        raise v29.ccxt.AuthenticationError(
+            'binance {"code":-2015,"msg":"Invalid API-key, IP, or permissions for '
+            'action, request ip: 41.202.1.2"}')
+
+
+def _set_keys(tmp_path, answers, env="testnet", down=False):
+    path = tmp_path / ".env"
+    path.write_text("RUN_MODE=paper\n", encoding="utf-8")
+    choice, *secrets = answers
+    out = io.StringIO()
+    rc = tg.cmd_set_keys(str(path), ask=lambda _p: secrets.pop(0),
+                         read=lambda _p: choice,
+                         factory=lambda k, s, t: _Account(k, s, t, env, down), out=out)
+    return rc, path.read_text(encoding="utf-8"), out.getvalue()
+
+
+def test_set_keys_saves_only_keys_accepted_by_binance(tmp_path):
+    rc, env, text = _set_keys(tmp_path, ["1", KEY, SECRET])
+    assert rc == 0 and f"BINANCE_API_KEY={KEY}" in env
+    assert f"BINANCE_API_SECRET={SECRET}" in env and "BINANCE_TESTNET=true" in env
+    assert "RUN_MODE=paper" in env and "✅" in text
+    assert KEY not in text and SECRET not in text          # jamais affichées
+
+
+def test_set_keys_fixes_swapped_keys_and_wrong_account(tmp_path):
+    rc, env, text = _set_keys(tmp_path, ["1", SECRET, KEY])  # inversées
+    assert rc == 0 and f"BINANCE_API_KEY={KEY}" in env and "inversées" in text
+    rc, env, text = _set_keys(tmp_path, ["1", KEY, SECRET], env="real")
+    assert rc == 0 and "BINANCE_TESTNET=false" in env and "compte réel" in text
+
+
+def test_set_keys_refused_writes_nothing_and_shows_ip(tmp_path):
+    rc, env, text = _set_keys(tmp_path, ["2", "A" * 64, "B" * 64])
+    assert rc == 1 and env == "RUN_MODE=paper\n"
+    assert "41.202.1.2" in text and "Rien n'a été modifié" in text
+    assert "l'adresse IP ci-dessus" in text
+    rc, env, text = _set_keys(tmp_path, ["1", KEY, "C" * 64])
+    assert rc == 1 and "Secret Key incorrecte" in text
+
+
+def test_set_keys_network_down_and_bad_format(tmp_path):
+    rc, env, text = _set_keys(tmp_path, ["1", KEY, SECRET], down=True)
+    assert rc == 1 and "injoignable" in text and env == "RUN_MODE=paper\n"
+    rc, env, text = _set_keys(tmp_path, ["1", "trop-court", SECRET])
+    assert rc == 1 and "64" in text
+
+
+def test_set_keys_reports_wrong_secret_on_the_other_account(tmp_path):
+    """Clé du compte réel, testnet choisi, secret faux : le diagnostic
+    précis (secret incorrect, compte réel) prime sur « clé inconnue »."""
+    rc, env, text = _set_keys(tmp_path, ["1", KEY, "C" * 64], env="real")
+    assert rc == 1 and env == "RUN_MODE=paper\n"
+    assert "Secret Key incorrecte" in text and "compte réel" in text
+
+
+def test_set_keys_outage_midway_is_not_a_refusal(tmp_path):
+    """Compte réel injoignable après les essais sur le testnet : pas de
+    conclusion « clés refusées » (elles sont peut-être valides)."""
+    rc, env, text = _set_keys(tmp_path, ["1", KEY, SECRET], env="real", down="real")
+    assert rc == 1 and env == "RUN_MODE=paper\n"
+    assert "Vérification impossible" in text and "refuse" not in text
+
+
+def test_key_commands_write_the_env_file_the_bot_reads(monkeypatch):
+    """Le bot lit le .env du dossier du projet : set-keys y écrit, quel que
+    soit le dossier courant, même si une autre variable de .env est
+    invalide."""
+    import inspect
+    import os
+    assert tg.ENV_FILE == os.path.join(os.path.dirname(os.path.abspath(tg.__file__)),
+                                       ".env")
+    for fn in (tg.cmd_set_keys, tg.cmd_set_secret):
+        assert inspect.signature(fn).parameters["env_path"].default == tg.ENV_FILE
+    monkeypatch.setenv("RUN_MODE", "live")          # live sans confirmation : invalide
+    monkeypatch.delenv("LIVE_TRADING_CONFIRMATION", raising=False)
+    monkeypatch.setattr(tg, "cmd_set_keys", lambda: 0)
+    assert tg.main(["set-keys"]) == 0
+
+
+def test_paper_mode_ignores_testnet_flag(monkeypatch, tmp_path):
+    """BINANCE_TESTNET ne concerne que le mode réel : en paper, les prix
+    viennent du vrai marché (le testnet est un marché artificiel)."""
+    monkeypatch.delenv("BINANCE_API_KEY", raising=False)
+    monkeypatch.delenv("BINANCE_API_SECRET", raising=False)
+    for mode, extra, expect_testnet in (
+            ("paper", {}, False),
+            ("live", {"enable_live_trading": True,
+                      "live_confirmation": "I_UNDERSTAND_RISK"}, True)):
+        g = tg.GuardConfig(run_mode=mode, binance_testnet=True, db_file=":memory:",
+                           log_file=str(tmp_path / f"{mode}.log"),
+                           lock_file=str(tmp_path / f"{mode}.lock"), **extra)
+        bot = tg._build(g)
+        try:
+            api = str(bot.exchange.urls["api"]).lower()
+            assert ("testnet" in api) is expect_testnet, mode
+        finally:
+            bot.store.close()
+            for h in list(bot.logger.handlers):
+                h.close()
+                bot.logger.removeHandler(h)

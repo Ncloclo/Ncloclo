@@ -137,6 +137,16 @@ def test_portfolio_concentration_warning():
     assert "Corrélation moyenne" in text and "Krach" in text
 
 
+def test_portfolio_survives_held_asset_without_history():
+    """Historique d'une position indisponible (déjà signalé dans « Données ») :
+    le diagnostic continue au lieu d'échouer sur un KeyError."""
+    close, _ = synthetic_market()
+    holdings = [{"asset": a, "qty": 1.0, "entry": 10.0, "stop": 9.0,
+                 "risk_quote": 1.0} for a in ("eth", "sol")]      # sol : absent
+    findings = dg.check_portfolio(holdings, close, {"eth": 10.0}, 10_000.0)
+    assert "2 position(s)" in findings[0].message
+
+
 def test_strategy_edge_loss_is_detected(monkeypatch):
     close, volume = synthetic_market()
     real = ts.backtest

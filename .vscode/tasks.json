@@ -37,6 +37,13 @@
       "problemMatcher": []
     },
     {
+      "label": "Binance — enregistrer les clés API (vérifiées, saisie masquée)",
+      "type": "shell",
+      "command": "python trendguard_bot.py set-keys",
+      "presentation": { "focus": true, "panel": "dedicated" },
+      "problemMatcher": []
+    },
+    {
       "label": "Binance — enregistrer la clé secrète (saisie masquée)",
       "type": "shell",
       "command": "python trendguard_bot.py set-secret",

@@ -38,7 +38,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from logging.handlers import RotatingFileHandler
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import ccxt
 import pandas as pd
@@ -61,7 +61,7 @@ TG_ENV_DOC: Dict[str, str] = {
     "LIVE_TRADING_CONFIRMATION": "Doit valoir I_UNDERSTAND_RISK",
     "BINANCE_API_KEY": "Clé API Binance (trading autorisé, retraits INTERDITS)",
     "BINANCE_API_SECRET": "Secret API Binance",
-    "BINANCE_TESTNET": "true : Binance Spot testnet",
+    "BINANCE_TESTNET": "true : Binance Spot testnet (live uniquement ; le paper suit le vrai marché)",
     "TG_UNIVERSE": "Actifs tradés (CSV de bases, cotées en USDT)",
     "TG_RISK_PCT": "Risque par trade en fraction d'equity (0.01 = 1 %)",
     "TG_MAX_POSITIONS": "Nombre maximum de positions simultanées",
@@ -494,7 +494,7 @@ class TrendGuardBot:
                 self.exchange, self.p, [s.base for s in self.slots.values()],
                 self.state, self.holdings_for_diagnosis(),
                 float(self.state.get("last_equity") or 0.0), day, now,
-                quote=self.g.quote,
+                quote=self.g.quote, kill_drawdown=self.g.kill_drawdown,
                 sections=("data", "market", "portfolio", "strategy", "live",
                           "alternatives"))
         except Exception as e:
@@ -529,10 +529,18 @@ class TrendGuardBot:
             start = self.state.get("start_equity") or equity
             parts = [f"{a.upper()} {(prices.get(a, h.entry) / h.entry - 1) * 100:+.1f} %"
                      for a, h in sorted(holdings.items())]
-            nxt = (datetime.combine(now.date() + timedelta(days=1),
-                                    datetime.min.time(), tzinfo=now.tzinfo)
-                   + timedelta(seconds=self.g.decision_delay_sec)) - now
-            h_left, rem = divmod(int(nxt.total_seconds()), 3600)
+            # Décision du jour à 00:00 UTC + délai : entre 00:00 et 00:02,
+            # elle est encore à venir aujourd'hui, pas demain.
+            nxt = (datetime.combine(now.date(), datetime.min.time(),
+                                    tzinfo=now.tzinfo)
+                   + timedelta(seconds=self.g.decision_delay_sec))
+            if nxt <= now:
+                nxt += timedelta(days=1)
+            h_left, rem = divmod(int((nxt - now).total_seconds()), 3600)
+            day = last_closed_day(now, self.g.decision_delay_sec)
+            when = (f"décision du {day} en attente (nouvel essai à chaque cycle)"
+                    if self.state.get("last_decision_day") != day
+                    else f"prochaine décision dans {h_left} h {rem // 60:02d}")
             bull = self.state.get("last_regime_bull")
             regime = "?" if bull is None else ("HAUSSIER" if bull else "BAISSIER")
             self.logger.info(
@@ -540,7 +548,7 @@ class TrendGuardBot:
                 f"({(equity / start - 1) * 100:+.2f} %) | régime BTC {regime} | "
                 f"{len(holdings)} position(s)"
                 + (f" : {', '.join(parts)}" if parts else "")
-                + f" | prochaine décision dans {h_left} h {rem // 60:02d}"
+                + f" | {when}"
                 + (f" | heure Binance ({v29.describe_clock(v29.clock_offset_ms())})"
                    if self.state.get("clock_synced_at") else "")
                 + (" | 🛑 KILL-SWITCH" if self.state.get("halted") else ""))
@@ -1164,13 +1172,21 @@ def replay(data_dir: str, start: str, end: Optional[str] = None,
 
 def _build(gcfg: GuardConfig) -> TrendGuardBot:
     logger = build_guard_logger(gcfg.log_file)
+    # Le testnet ne sert qu'au mode réel : en paper, les prix du testnet
+    # (marché artificiel) fausseraient les décisions.
     exchange = v29.make_binance(os.environ.get("BINANCE_API_KEY", "").strip(),
                                 os.environ.get("BINANCE_API_SECRET", "").strip(),
-                                gcfg.binance_testnet)
+                                gcfg.binance_testnet and gcfg.run_mode == "live")
     store = v29.Store(gcfg.db_file, logger)
     notifier = v29.Notifier(os.environ.get("TELEGRAM_TOKEN", ""),
                             os.environ.get("TELEGRAM_CHAT_ID", ""), logger=logger)
     return TrendGuardBot(gcfg, logger, exchange, store, notifier)
+
+
+# Le .env lu par le bot (v29 : load_dotenv depuis le dossier du projet), et
+# non celui du dossier courant : lancé d'ailleurs, set-keys écrirait des
+# clés que le bot ne lirait jamais.
+ENV_FILE = os.path.join(v29.APP_DIR, ".env")
 
 
 def set_env_var(path: str, name: str, value: str) -> None:
@@ -1206,7 +1222,7 @@ def clean_api_secret(raw: str) -> str:
     return s
 
 
-def cmd_set_secret(env_path: str = ".env") -> int:
+def cmd_set_secret(env_path: str = ENV_FILE) -> int:
     """Saisie MASQUÉE du secret API (rien ne s'affiche à l'écran ni dans
     l'historique du terminal), puis écriture dans .env."""
     import getpass
@@ -1223,6 +1239,112 @@ def cmd_set_secret(env_path: str = ".env") -> int:
     set_env_var(env_path, "BINANCE_API_SECRET", secret)
     print(f"✅ Secret enregistré dans {env_path} (fichier privé, jamais commité).")
     return 0
+
+
+def _auth_hint(msg: str) -> str:
+    """Traduit un refus d'authentification Binance."""
+    ip = re.search(r"request ip:\s*([0-9A-Fa-f.:]+)", msg)
+    if "-2015" in msg:
+        return ("clé inconnue sur ce compte, adresse IP non autorisée"
+                + (f" (votre adresse IP vue par Binance : {ip.group(1)})" if ip else "")
+                + " ou lecture du compte non autorisée")
+    if "-1022" in msg:
+        return "API Key reconnue mais Secret Key incorrecte"
+    if "-2014" in msg:
+        return "format d'API Key refusé"
+    return msg[:160]
+
+
+def check_api_keys(key: str, secret: str, testnet: bool,
+                   factory: Callable[..., Any] = v29.make_binance
+                   ) -> Tuple[bool, str, bool]:
+    """Lecture du compte (aucun ordre). Retourne (acceptées, raison,
+    refus d'authentification) ; une panne réseau n'est pas un refus."""
+    ex = factory(key, secret, testnet)
+    try:
+        v29.sync_exchange_clock(ex, samples=3)
+        ex.fetch_balance()
+        return True, "", False
+    except ccxt.AuthenticationError as e:
+        return False, _auth_hint(str(e)), True
+    except ccxt.NetworkError as e:
+        return False, f"Binance injoignable ({type(e).__name__})", False
+    except Exception as e:
+        return False, f"{type(e).__name__}: {str(e)[:160]}", False
+
+
+def cmd_set_keys(env_path: str = ENV_FILE, ask: Optional[Callable[[str], str]] = None,
+                 read: Optional[Callable[[str], str]] = None,
+                 factory: Callable[..., Any] = v29.make_binance, out=None) -> int:
+    """Enregistre API Key + Secret Key (saisie MASQUÉE) après les avoir fait
+    accepter par Binance (lecture du compte, aucun ordre). Corrige seul les
+    deux erreurs courantes : clés inversées, clés du testnet déclarées
+    réelles (ou l'inverse). Rien n'est écrit si Binance refuse."""
+    import getpass
+    ask = ask or getpass.getpass
+    read = read or input
+    out = out or sys.stdout
+    say = lambda msg="": print(msg, file=out)       # noqa: E731
+    say("Enregistrement des clés API Binance (rien ne s'affiche pendant la "
+        "saisie : c'est normal).")
+    try:
+        choice = read("Compte : 1 = testnet (conseillé pour commencer), "
+                      "2 = compte réel [1] : ").strip() or "1"
+        testnet = choice != "2"
+        key = clean_api_secret(ask("API Key    : "))
+        secret = clean_api_secret(ask("Secret Key : "))
+    except ValueError as e:
+        say(f"❌ Clé refusée : {e}. Rien n'a été modifié.")
+        return 1
+    except (EOFError, KeyboardInterrupt):
+        say("\nAnnulé. Rien n'a été modifié.")
+        return 1
+    if key == secret:
+        say("❌ API Key et Secret Key identiques : ce sont deux valeurs "
+            "différentes sur Binance. Rien n'a été modifié.")
+        return 1
+    where = lambda t: "testnet" if t else "compte réel"   # noqa: E731
+    say(f"Vérification auprès de Binance ({where(testnet)}), sans aucun ordre…")
+    attempts = [(key, secret, testnet, ""),
+                (secret, key, testnet, "API Key et Secret Key étaient inversées"),
+                (key, secret, not testnet,
+                 f"ces clés sont celles du {where(not testnet)}"),
+                (secret, key, not testnet,
+                 f"clés inversées et appartenant au {where(not testnet)}")]
+    refusals: List[Tuple[str, bool]] = []
+    for k, sec, tn, fix in attempts:
+        ok, reason, auth = check_api_keys(k, sec, tn, factory)
+        if ok:
+            set_env_var(env_path, "BINANCE_API_KEY", k)
+            set_env_var(env_path, "BINANCE_API_SECRET", sec)
+            set_env_var(env_path, "BINANCE_TESTNET", "true" if tn else "false")
+            if fix:
+                say(f"ℹ️  Corrigé automatiquement : {fix}.")
+            say(f"✅ Clés acceptées par Binance ({where(tn)}) et enregistrées dans "
+                f"{env_path} (fichier privé, jamais commité).")
+            say("Étape suivante : python trendguard_bot.py verify "
+                "(aucun ordre n'est passé).")
+            return 0
+        if not auth:
+            # Panne réseau : les autres essais n'ont pas eu lieu, un refus
+            # ne peut pas être conclu.
+            say(f"❌ Vérification impossible : {reason}. Rien n'a été modifié ; "
+                f"relancer une fois la connexion rétablie.")
+            return 1
+        refusals.append((reason, tn))
+    # API Key reconnue (seul le secret est faux) : c'est le diagnostic le
+    # plus précis. Sinon, le premier refus (compte choisi, adresse IP).
+    reason, tn = next(((r, t) for r, t in refusals if "Secret Key incorrecte" in r),
+                      refusals[0])
+    say(f"❌ Binance refuse ces clés ({where(tn)}) : {reason}. Rien n'a été modifié.")
+    if "adresse IP" in reason:
+        # Binance n'indique pas toujours l'adresse vue (« request ip »).
+        ip = ("l'adresse IP ci-dessus" if "vue par Binance" in reason
+              else "l'adresse IP publique de ce PC")
+        say("   Sur Binance ▸ Gestion des API : vérifier que la clé est active, que "
+            f"« Activer la lecture » est coché, et autoriser {ip} "
+            "(ou retirer la restriction IP le temps du test).")
+    return 1
 
 
 MIN_LIVE_CAPITAL = 100.0     # USDT : en dessous, la plupart des ordres < minimum
@@ -1255,8 +1377,8 @@ def cmd_verify(gcfg: GuardConfig, exchange: Any = None,
         secret = os.environ.get("BINANCE_API_SECRET", "").strip()
         if not key or not secret:
             say("ℹ️  Pas de clé API dans .env : vérification publique seulement "
-                "(droits, soldes et order/test demandent une clé ; secret : "
-                "python trendguard_bot.py set-secret).\n")
+                "(droits, soldes et order/test demandent une clé ; pour les "
+                "enregistrer : python trendguard_bot.py set-keys).\n")
             return cmd_verify_public(gcfg, now=now, out=out)
         exchange = v29.make_binance(key, secret, gcfg.binance_testnet)
     _forbid_orders(exchange)
@@ -1267,10 +1389,9 @@ def cmd_verify(gcfg: GuardConfig, exchange: Any = None,
     try:
         r = exchange.sapi_get_account_apirestrictions()
     except ccxt.AuthenticationError as e:
-        msg = str(e)
-        hint = (" → adresse IP non autorisée, clé supprimée ou droits manquants"
-                if "-2015" in msg else " → secret incorrect" if "-1022" in msg else "")
-        say(f"  ❌ Clé refusée par Binance{hint} ({msg[:120]})")
+        say(f"  ❌ Clé refusée par Binance : {_auth_hint(str(e))}")
+        say("     → python trendguard_bot.py set-keys vérifie les clés auprès de "
+            "Binance et corrige les clés inversées ou du mauvais compte.")
         return 1
     except Exception as e:
         r = None
@@ -1531,7 +1652,8 @@ def cmd_diagnose(gcfg: GuardConfig, out_path: Optional[str] = None,
                  exchange: Any = None, now: Optional[datetime] = None) -> int:
     """Diagnostic complet en lecture seule (aucun ordre, bot arrêté ou non)."""
     if exchange is None:
-        exchange = v29.make_binance(testnet=gcfg.binance_testnet)
+        exchange = v29.make_binance(
+            testnet=gcfg.binance_testnet and gcfg.run_mode == "live")
     _forbid_orders(exchange)
     if now is None:
         v29.sync_exchange_clock(exchange, samples=3)     # heure de Binance
@@ -1575,7 +1697,8 @@ def cmd_diagnose(gcfg: GuardConfig, out_path: Optional[str] = None,
           f"depuis 2018)…", flush=True)
     findings = dg.run_diagnosis(exchange, gcfg.params, list(gcfg.universe), state,
                                 holdings, equity, day, now, db_file=gcfg.db_file,
-                                running=running, quote=gcfg.quote)
+                                running=running, quote=gcfg.quote,
+                                kill_drawdown=gcfg.kill_drawdown)
     text = dg.render(findings, f"({gcfg.run_mode.upper()}, {day})")
     print(text)
     if out_path:
@@ -1590,7 +1713,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(description="TrendGuard Bot (Binance Spot)")
     ap.add_argument("cmd", choices=["run", "once", "status", "resume", "docs",
                                     "health", "replay", "set-secret",
-                                    "verify", "diagnose"])
+                                    "set-keys", "verify", "diagnose"])
     ap.add_argument("--out", default=None, help="(diagnose) fichier du rapport")
     ap.add_argument("--data", default="data", help="(replay) dossier Coin Metrics")
     ap.add_argument("--start", default="2025-06-01", help="(replay) début")
@@ -1625,13 +1748,17 @@ def main(argv: Optional[List[str]] = None) -> int:
         for k, v in sorted(TG_ENV_DOC.items()):
             print(f"  {k:<28} {v}")
         return 0
+    # Saisie des clés avant la lecture de la configuration : une autre
+    # variable invalide dans .env ne doit pas empêcher de les enregistrer.
+    if args.cmd == "set-secret":
+        return cmd_set_secret()
+    if args.cmd == "set-keys":
+        return cmd_set_keys()
     try:
         gcfg = load_guard_config_from_env()
     except ValueError as e:
         print(f"Configuration invalide : {e}", file=sys.stderr)
         return 2
-    if args.cmd == "set-secret":
-        return cmd_set_secret()
     if args.cmd == "verify":
         return cmd_verify(gcfg)
     if args.cmd == "diagnose":
@@ -1677,7 +1804,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     bot = _build(gcfg)
     try:
         bot.logger.info(f"TrendGuard — {gcfg.run_mode.upper()}"
-                        f"{' TESTNET' if gcfg.binance_testnet else ''} — "
+                        f"{' TESTNET' if gcfg.binance_testnet and gcfg.run_mode == 'live' else ''} — "
                         f"{len(gcfg.universe)} actifs, risque "
                         f"{gcfg.params.risk_pct*100:.2f} %/trade")
         signal.signal(signal.SIGINT, _stop)

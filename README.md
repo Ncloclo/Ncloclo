@@ -110,6 +110,7 @@ python trendguard_bot.py replay --data data --start 2025-06-01   # paper rejoué
 python trendguard_bot.py status                       # état du portefeuille
 python trendguard_bot.py diagnose                     # auto-diagnostic complet (lecture seule)
 python trendguard_bot.py verify                       # sans clé : test réel des ordres du jour, sans envoi
+python trendguard_bot.py set-keys                     # clés API vérifiées par Binance, saisie masquée
 python strategy_lab.py --cache data_binance           # tournoi des stratégies + méta-apprentissage
 ```
 
@@ -143,10 +144,14 @@ Compte réel :
 
 1. Créez la clé API sur Binance **sans droit de retrait**, limitée à l'adresse
    IP du serveur.
-2. Mettez la clé dans `.env` (`BINANCE_API_KEY=`), puis enregistrez le secret
-   par saisie masquée : `python trendguard_bot.py set-secret`. Dans VS Code,
-   c'est la tâche « Binance — enregistrer la clé secrète ». Le secret ne passe
-   ni par l'écran ni par l'historique du terminal.
+2. Enregistrez l'API Key et la Secret Key par saisie masquée :
+   `python trendguard_bot.py set-keys`. Dans VS Code, c'est la tâche
+   « Binance — enregistrer les clés API ». Binance vérifie d'abord les clés
+   (lecture du compte, aucun ordre) : des clés inversées ou appartenant au
+   testnet sont corrigées automatiquement, et rien n'est écrit si Binance les
+   refuse. Les clés ne passent ni par l'écran ni par l'historique du terminal.
+   `BINANCE_TESTNET` ne concerne que le mode réel : le paper suit toujours le
+   vrai marché.
 3. Lancez `python trendguard_bot.py verify` : droits de la clé (retrait
    interdit, trading autorisé), soldes, validation des ordres par Binance et
    simulation des achats du jour. **Aucun ordre n'est passé.** Sans clé, la
