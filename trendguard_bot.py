@@ -44,6 +44,7 @@ import ccxt
 import pandas as pd
 
 import diagnostics as dg
+import market_watch as mw
 import trend_strategy as ts
 import v29
 
@@ -71,6 +72,9 @@ TG_ENV_DOC: Dict[str, str] = {
     "TG_MAX_CAPITAL": "Capital max géré par le bot en USDT (0 = tout le compte)",
     "TG_DD_THROTTLE": "Profil prudent : baisse:multiplicateur (ex. 0.10:0.5) ; vide = off",
     "TG_AUTO_DIAGNOSE_DAYS": "Auto-diagnostic tous les N jours (0 = désactivé)",
+    "TG_VEILLE": "true : annonces officielles Binance lues chaque jour (retrait = achats bloqués)",
+    "TG_VEILLE_IA": "true : rapport quotidien des IA (conseil seulement, clés dans .env)",
+    "TG_VEILLE_DB": "Base de la veille (mémoire des IA et des annonces)",
     "TG_ALLOW_RECOVERY": "true : adopter les ordres du bot inconnus de la base (base perdue)",
     "TG_PAPER_CAPITAL": "Capital initial du mode paper (USDT)",
     "TG_DB_FILE": "Base SQLite du bot",
@@ -101,6 +105,11 @@ class GuardConfig:
     heartbeat_min: int = 15
     clock_resync_min: int = 60          # bot remis à l'heure de Binance
     auto_diagnose_days: int = 7         # 0 = désactivé
+    # Veille (market_watch.py) : désactivée par défaut dans le code (tests,
+    # rejeu hors ligne), activée par l'environnement (TG_VEILLE=true).
+    watch: bool = False                 # annonces officielles → veto d'achat
+    watch_ai: bool = False              # rapport quotidien des IA (conseil)
+    watch_db: str = ""
     max_capital: float = 0.0            # 0 = tout le compte
     allow_recovery: bool = False        # adopter les ordres du bot inconnus
     paper_capital: float = 10_000.0
@@ -168,6 +177,9 @@ def load_guard_config_from_env() -> GuardConfig:
         kill_drawdown=v29._env_f("TG_KILL_DRAWDOWN", 0.40),
         heartbeat_min=v29._env_i("TG_HEARTBEAT_MIN", 15),
         auto_diagnose_days=v29._env_i("TG_AUTO_DIAGNOSE_DAYS", 7),
+        watch=v29._env_b("TG_VEILLE", True),
+        watch_ai=v29._env_b("TG_VEILLE_IA", True),
+        watch_db=v29._env_s("TG_VEILLE_DB", os.path.join(v29.APP_DIR, "trendguard_veille.db")),
         max_capital=v29._env_f("TG_MAX_CAPITAL", 0.0),
         allow_recovery=v29._env_b("TG_ALLOW_RECOVERY", False),
         paper_capital=v29._env_f("TG_PAPER_CAPITAL", 10_000.0),
@@ -252,6 +264,8 @@ class TrendGuardBot:
         self._now: datetime = v29._utcnow()
         self._last_heartbeat = 0.0
         self._last_clock_sync = 0.0
+        self._last_veto_refresh = 0.0
+        self._last_close: Optional[pd.DataFrame] = None   # apprentissage de la veille
 
     @property
     def live(self) -> bool:
@@ -422,6 +436,7 @@ class TrendGuardBot:
             self._maintain_paper()
         day = last_closed_day(now, self.g.decision_delay_sec)
         if self.state.get("last_decision_day") != day:
+            self._refresh_vetoes(now)
             try:
                 self.daily_decision(now, day)
                 self.state.pop("decision_deferred_since", None)
@@ -433,6 +448,81 @@ class TrendGuardBot:
         self._save_state()
         self._heartbeat(now)
         self._auto_diagnose(now, day)
+        self._daily_watch(now, day)
+
+    # ---------- Veille (market_watch.py) ----------
+
+    def _vetoed(self, a: str) -> Optional[Dict[str, Any]]:
+        """Veto officiel actif sur cette crypto (annonce de retrait Binance)."""
+        v = (self.state.get("vetoes") or {}).get(a.lower())
+        if v and v.get("until", "") >= self._now.date().isoformat():
+            return v
+        return None
+
+    def _refresh_vetoes(self, now: datetime) -> None:
+        """Annonces officielles de Binance, lues sans IA avant chaque
+        décision (au plus une fois par heure si la décision est reportée).
+        Binance injoignable : les vetos précédents restent en place et la
+        décision a lieu quand même."""
+        if not self.g.watch or time.time() - self._last_veto_refresh < 3600:
+            return
+        self._last_veto_refresh = time.time()
+        memory = None
+        try:
+            memory = mw.WatchMemory(self.g.watch_db)
+            vetoes, monitoring = mw.refresh_official(
+                [s.base.lower() for s in self.slots.values()], now, memory)
+        except Exception as e:
+            self.logger.warning(f"[VEILLE] annonces Binance indisponibles "
+                                f"({mw.friendly_error(e)}) : vetos précédents conservés")
+            return
+        finally:
+            if memory is not None:
+                memory.close()
+        held = set(self._holdings())
+        for a, v in vetoes.items():
+            if a not in (self.state.get("vetoes") or {}):
+                warn = (" ; position DÉTENUE : le stop reste actif, vendre avant la date du "
+                        "retrait est conseillé" if a in held else "")
+                self.logger.warning(f"[VEILLE] {v['reason']} : nouveaux achats bloqués{warn} — {v['url']}")
+                self.notifier(f"⚠️ TrendGuard : {v['reason']}, nouveaux achats bloqués{warn}.\n{v['url']}",
+                              critical=a in held, dedup_key=f"tg-veto-{a}-{v['date']}")
+        for m in monitoring:
+            self.logger.info(f"[VEILLE] Binance place {', '.join(a.upper() for a in m['assets'])} "
+                             f"sous surveillance (Monitoring Tag, {m['date']}) — {m['url']}")
+        self.state["vetoes"] = vetoes
+
+    def _daily_watch(self, now: datetime, day: str) -> None:
+        """Rapport quotidien des IA (conseil seulement : aucun effet sur les
+        ordres). Une panne des IA ou du réseau n'affecte jamais le trading."""
+        if not (self.g.watch and self.g.watch_ai) or self.state.get("last_watch_day") == day:
+            return
+        self.state["last_watch_day"] = day
+        self._save_state()
+        memory = None
+        try:
+            memory = mw.WatchMemory(self.g.watch_db)
+            report = mw.daily_report([s.base.lower() for s in self.slots.values()],
+                                     list(self._holdings()), now, memory,
+                                     close=self._last_close)
+        except Exception as e:
+            self.logger.warning(f"[VEILLE] rapport impossible : {mw.friendly_error(e)}")
+            return
+        finally:
+            if memory is not None:
+                memory.close()
+        c = report["consensus"]
+        self.state["last_watch"] = {
+            "day": report["day"], "sentiment": c["sentiment"], "providers": c["providers"],
+            "providers_total": len(report["providers"]),
+            "alerts": [a["text"] for a in report["alerts"][:6]]}
+        self._save_state()
+        self.logger.info("[VEILLE]\n" + mw.render(report))
+        urgent = [a for a in report["alerts"] if a["level"] >= 2]
+        if urgent:
+            self.notifier("🔎 TrendGuard veille " + day + "\n" + "\n".join(
+                f"• {a['text']}" for a in urgent[:6]),
+                critical=any(a["level"] >= 3 for a in urgent), dedup_key=f"tg-veille-{day}")
 
     def _decision_deferred(self, day: str, why: str) -> None:
         """Décision reportée au cycle suivant ; alerte si cela dure plus
@@ -496,7 +586,7 @@ class TrendGuardBot:
                 float(self.state.get("last_equity") or 0.0), day, now,
                 quote=self.g.quote, kill_drawdown=self.g.kill_drawdown,
                 sections=("data", "market", "portfolio", "strategy", "live",
-                          "alternatives"))
+                          "alternatives", "watch"))
         except Exception as e:
             self.logger.warning(f"[DIAG] auto-diagnostic impossible : {e}")
             return
@@ -769,6 +859,7 @@ class TrendGuardBot:
     def daily_decision(self, now: datetime, day: str) -> None:
         p = self.p
         close, feats, regime = self._load_market(now)
+        self._last_close = close
         snap, bull, prices = self._snapshot_at(close, feats, regime, day)
         missed = self._missed_days(close.index,
                                    self.state.get("last_decision_day"), day)
@@ -805,6 +896,10 @@ class TrendGuardBot:
                 f"pic → risque par trade × {mult:g}")
         if not self.state.get("halted"):
             eligible = {a: s for a, s in snap.items() if self._can_enter(a)}
+            for a in sorted(snap):
+                v = self._vetoed(a)
+                if v and a not in holdings and ts.entry_signal(snap[a], p):
+                    self.logger.warning(f"[VEILLE] achat de {a.upper()} bloqué : {v['reason']}")
             cash_left = cash
             for plan in ts.plan_entries(holdings, eligible, bull, equity, cash,
                                         p, mult):
@@ -817,7 +912,7 @@ class TrendGuardBot:
 
     def _can_enter(self, a: str) -> bool:
         s = self.slots.get(a.upper())
-        if s is None:
+        if s is None or self._vetoed(a):
             return False
         if not self.live:
             return True

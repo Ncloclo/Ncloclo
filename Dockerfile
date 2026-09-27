@@ -23,7 +23,8 @@ USER bot
 ENV RUN_MODE=paper \
     TG_DB_FILE=/data/trendguard.db \
     TG_LOG_FILE=/data/trendguard.log \
-    TG_LOCK_FILE=/data/trendguard.lock
+    TG_LOCK_FILE=/data/trendguard.lock \
+    TG_VEILLE_DB=/data/trendguard_veille.db
 VOLUME /data
 
 HEALTHCHECK --interval=2m --timeout=30s --start-period=5m --retries=3 \

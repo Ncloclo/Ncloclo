@@ -3,6 +3,9 @@ ccxt>=4.3
 numpy>=1.24
 pandas>=2.0
 python-dotenv>=1.0
+# Optionnel : veille par Claude (ANTHROPIC_API_KEY) ; les autres IA passent
+# par leur API HTTP, sans module à installer.
+anthropic>=1.8
 # Optionnel : wallet EVM (BLOCKCHAIN_ENABLED=true)
 web3>=6.0
 # Tests

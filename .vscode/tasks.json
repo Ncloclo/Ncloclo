@@ -37,6 +37,25 @@
       "problemMatcher": []
     },
     {
+      "label": "Veille IA — enregistrer une clé d'IA (saisie masquée)",
+      "type": "shell",
+      "command": "python market_watch.py set-key ${input:veilleIA}",
+      "presentation": { "focus": true, "panel": "dedicated" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Veille IA — tester les IA configurées",
+      "type": "shell",
+      "command": "python market_watch.py check",
+      "problemMatcher": []
+    },
+    {
+      "label": "Veille IA — rapport du jour",
+      "type": "shell",
+      "command": "python market_watch.py",
+      "problemMatcher": []
+    },
+    {
       "label": "Binance — enregistrer les clés API (vérifiées, saisie masquée)",
       "type": "shell",
       "command": "python trendguard_bot.py set-keys",
@@ -69,6 +88,14 @@
       "type": "shell",
       "command": "docker compose exec trendguard python trendguard_bot.py status",
       "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "veilleIA",
+      "type": "pickString",
+      "description": "IA dont vous enregistrez la clé",
+      "options": ["claude", "openai", "gemini", "deepseek", "mistral", "kimi", "perplexity", "grok"]
     }
   ]
 }

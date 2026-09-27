@@ -509,6 +509,35 @@ def check_alternatives(close: pd.DataFrame, volume: pd.DataFrame,
     return out
 
 
+def check_watch(state: Dict[str, Any], held: List[str],
+                today: Optional[str] = None) -> List[Finding]:
+    """Veille (market_watch.py) : vetos officiels actifs et dernier avis des IA."""
+    S = "Veille"
+    out: List[Finding] = []
+    for a, v in sorted((state.get("vetoes") or {}).items()):
+        if today and v.get("until", "") < today:
+            continue
+        lvl = "ALERTE" if a in held else "INFO"
+        out.append(Finding(S, lvl, f"Achats de {a.upper()} bloqués : {v.get('reason')} "
+                           f"(jusqu'au {v.get('until')})",
+                           f"Position détenue que Binance va retirer : la vendre avant la date "
+                           f"annoncée ({v.get('url')})." if lvl == "ALERTE" else ""))
+    last = state.get("last_watch")
+    if not last:
+        out.append(Finding(S, "INFO", "Veille par IA pas encore exécutée (quotidienne quand le "
+                           "bot tourne ; clés d'IA : python market_watch.py set-key <ia>)"))
+        return out
+    n, tot = last.get("providers", 0), last.get("providers_total", 0)
+    who = f"{n}/{tot} IA" if tot else "mots-clés seulement (aucune IA configurée)"
+    out.append(Finding(S, "INFO", f"Dernière veille {last.get('day')} : climat "
+                       f"{last.get('sentiment', 0):+.2f} ({who})"
+                       + ("".join(f"\n      • {t}" for t in last.get("alerts") or []))))
+    if tot and n == 0:
+        out.append(Finding(S, "ATTENTION", "Aucune IA n'a répondu à la dernière veille",
+                           "Vérifier les clés et les modèles : python market_watch.py check."))
+    return out
+
+
 def live_vs_expected(bot_trades: List[Dict[str, Any]],
                      reference: List[Dict[str, Any]]) -> List[Finding]:
     S = "Réel vs attendu"
@@ -562,10 +591,12 @@ def run_diagnosis(exchange: Any, p: ts.TrendParams, bases: List[str],
                   quote: str = "USDT", kill_drawdown: float = 0.40,
                   sections: Tuple[str, ...] = (
                       "system", "data", "market", "signals", "portfolio",
-                      "strategy", "live", "alternatives")) -> List[Finding]:
+                      "strategy", "live", "alternatives", "watch")) -> List[Finding]:
     findings: List[Finding] = []
     if "system" in sections:
         findings += check_system(exchange, state, expected_day, db_file, running, now)
+    if "watch" in sections:
+        findings += check_watch(state, [h["asset"] for h in holdings], now.date().isoformat())
     close, volume, errors = fetch_daily_history(exchange, bases, quote, now=now)
     if "btc" not in close:
         findings.append(Finding("Données", "ALERTE", "Historique BTC indisponible : "

@@ -122,6 +122,42 @@ Activation unique sur GitHub : Settings ▸ Pages ▸ Source : « GitHub Actions
 La section du portefeuille paper n'y figure pas : la base du bot reste sur ce
 PC.
 
+### Veille de marché par IA (`market_watch.py`)
+
+Chaque jour, pendant que le bot tourne :
+
+1. **Annonces officielles Binance**, lues sans IA : une crypto dont Binance
+   annonce le retrait de la cote, ou la suppression de sa paire USDT, n'est
+   plus achetée pendant 90 jours. La veille ne vend jamais une position
+   détenue : une alerte conseille de la vendre avant la date du retrait.
+2. **Actualités** (Google Actualités, CoinDesk, Cointelegraph, Decrypt), indice
+   Fear & Greed et parité USDC/USDT.
+3. **Analyse par les IA, en parallèle** : Claude, GPT, Gemini, DeepSeek,
+   Mistral, Kimi, Perplexity (recherche web en direct) et Grok, selon les clés
+   présentes dans `.env`. Un événement doit citer une source réellement
+   collectée qui nomme la crypto ; une alerte demande l'accord d'au moins deux
+   IA.
+4. **Mémoire** : les résumés des 7 derniers jours sont redonnés aux IA, et
+   l'avis de chaque IA est comparé au cours réel 7 jours plus tard. Son poids
+   dans le consensus suit sa fiabilité mesurée, après 30 avis vérifiés.
+
+Aucune IA ne passe d'ordre ni ne bloque un achat : un message manipulateur
+publié sur un forum n'a aucun effet sur le trading. Le rapport s'affiche dans
+le journal (`[VEILLE]`), part sur Telegram en cas d'alerte et apparaît dans
+`diagnose`.
+
+```bash
+python market_watch.py set-key claude    # clé d'IA en saisie masquée
+python market_watch.py check             # teste chaque IA configurée
+python market_watch.py                   # rapport du jour
+python market_watch.py --no-ai           # sans IA (mots-clés seulement)
+```
+
+Sans clé d'IA, la veille fonctionne quand même : annonces officielles et
+mots-clés. Chaque IA facture ses appels, à raison d'un rapport par jour. Reddit
+refuse les requêtes sans application enregistrée : les réseaux sociaux et les
+forums passent par la recherche web de Perplexity.
+
 ### Utilisation
 
 ```bash
@@ -309,7 +345,7 @@ walkforward | status | resume` (voir `python v29.py docs`).
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 244 tests, simulateurs Binance Spot mono et multi-paires
+python -m pytest tests -q      # 258 tests, simulateurs Binance Spot mono et multi-paires
 ```
 
 À chaque envoi sur GitHub, `.github/workflows/checks.yml` lance ces tests, puis
