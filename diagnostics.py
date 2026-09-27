@@ -186,7 +186,10 @@ def check_system(exchange: Any, state: Dict[str, Any], expected_day: str,
         lvl = "OK" if age < 600 or running is False else "ALERTE"
         out.append(Finding(S, lvl, f"Dernier cycle réussi il y a {age / 60:.0f} min",
                            "" if lvl == "OK" else "Le bot tourne mais ne réussit "
-                           "plus ses cycles : consulter le journal."))
+                           "plus ses cycles : consulter le journal et le fichier "
+                           "<journal>.blocage.txt (pile écrite après 20 min de "
+                           "blocage). Lancé avec F5 dans VS Code, il est peut-être "
+                           "en pause dans le débogueur : le relancer avec Ctrl+F5."))
     last_day = state.get("last_decision_day")
     if last_day:
         lvl = "OK" if last_day >= expected_day or running is False else "ALERTE"

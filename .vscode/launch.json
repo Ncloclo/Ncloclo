@@ -4,9 +4,12 @@
   "version": "0.2.0",
   "configurations": [
     {
+      // Bot en continu : lancé SANS débogueur (noDebug), sinon une pause du
+      // débogueur (exception, point d'arrêt) le fige sans prévenir.
       "name": "TrendGuard — paper (prix réels Binance)",
       "type": "debugpy",
       "request": "launch",
+      "noDebug": true,
       "program": "${workspaceFolder}/trendguard_bot.py",
       "args": ["run"],
       "cwd": "${workspaceFolder}",

@@ -474,8 +474,8 @@ BINANCE_TIMEOUT_MS = 30_000
 def make_binance(api_key: str = "", secret: str = "",
                  testnet: bool = False) -> Any:
     """Client ccxt Binance Spot partagé par tous les outils :
-    - marchés Spot uniquement : trois fois moins de données au démarrage que
-      le chargement par défaut (Spot + deux marchés à terme) ;
+    - marchés Spot uniquement : une requête au démarrage au lieu de trois
+      (ccxt charge par défaut aussi les deux marchés à terme, inutiles ici) ;
     - délai de 30 s au lieu de 10 s : une connexion lente ne fait plus
       échouer le chargement des marchés ;
     - horodatage des requêtes signées corrigé de l'écart d'horloge avec

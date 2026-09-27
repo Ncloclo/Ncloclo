@@ -1,6 +1,7 @@
 """Conditions réelles : horloge du PC décalée, connexion lente,
 vérification publique sur Binance (sans clé ni ordre)."""
 
+import dataclasses
 import io
 import time
 from datetime import datetime, timedelta, timezone
@@ -332,3 +333,29 @@ def test_network_outage_defers_quickly_without_waiting_every_pair(logger):
     assert bot.state.get("last_decision_day") != str(d.date())
     assert "decision_deferred_since" in bot.state
     assert len(calls) <= 3                       # BTC d'abord : arrêt immédiat
+
+
+def test_stalled_cycle_dumps_thread_stacks(logger, tmp_path, monkeypatch):
+    """Un cycle bloqué (ici 0,3 s au lieu de 20 min) laisse la pile des
+    threads dans <journal>.blocage.txt ; un cycle normal n'écrit rien."""
+    close, volume = synthetic_market()
+    log = tmp_path / "tg.log"
+    bot, fb = make_bot("paper", close, logger)
+    bot.g = dataclasses.replace(bot.g, log_file=str(log))
+    monkeypatch.setattr(tg.TrendGuardBot, "STALL_DUMP_SEC", 0.3)
+    calls = {"n": 0}
+
+    def cycle(now=None):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            time.sleep(1.0)                      # blocage simulé
+            tg._running = False
+    monkeypatch.setattr(bot, "run_cycle", cycle)
+    monkeypatch.setattr(tg, "_sleep", lambda s: None)
+    tg._running = True
+    try:
+        bot.run_forever()
+    finally:
+        tg._running = True
+    dump = (tmp_path / "tg.log.blocage.txt").read_text(encoding="utf-8")
+    assert "Timeout" in dump and "cycle" in dump and calls["n"] == 2

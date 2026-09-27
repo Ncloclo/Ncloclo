@@ -104,7 +104,9 @@ python strategy_lab.py --cache data_binance           # tournoi des stratégies 
 2. Lancez `Terminal ▸ Exécuter la tâche… ▸ Installer les dépendances`.
 3. Copiez `.env.example` en `.env`. Les réglages par défaut conviennent pour le mode paper.
 4. Ouvrez `Exécuter et déboguer`, choisissez une configuration, puis appuyez sur **F5** :
-   - **TrendGuard — paper (prix réels Binance)** : le bot en continu ;
+   - **TrendGuard — paper (prix réels Binance)** : le bot en continu, lancé
+     sans débogueur. Sous débogueur, une exception ou un point d'arrêt le met
+     en pause sans prévenir ;
    - **TrendGuard — un seul cycle** : une décision, puis arrêt ;
    - **TrendGuard — rejeu paper 12 mois** : télécharge l'historique et le rejoue ;
    - **TrendGuard — statut du portefeuille** ;
@@ -186,6 +188,10 @@ w32tm /resync /force
   été retirée de la cote. Le stop catastrophe posé sur Binance reste actif. Une
   notification part si le blocage dure plus d'une heure.
 - Une paire injoignable ne bloque pas la surveillance des autres positions.
+- Si un cycle reste bloqué plus de 20 minutes, la pile de chaque thread est
+  écrite dans `<journal>.blocage.txt` (par exemple `trendguard_paper.log.blocage.txt`),
+  pour savoir où le bot s'est arrêté. `diagnose` signale un bot qui tourne sans
+  réussir ses cycles.
 
 ## Déploiement (Docker)
 
@@ -233,7 +239,7 @@ walkforward | status | resume` (voir `python v29.py docs`).
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 217 tests, simulateurs Binance Spot mono et multi-paires
+python -m pytest tests -q      # 218 tests, simulateurs Binance Spot mono et multi-paires
 ```
 
 ## Limites connues

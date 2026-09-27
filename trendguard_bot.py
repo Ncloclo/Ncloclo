@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import faulthandler
 import logging
 import math
 import os
@@ -874,21 +875,41 @@ class TrendGuardBot:
 
     # ---------- Boucle ----------
 
+    STALL_DUMP_SEC = 20 * 60
+
     def run_forever(self) -> None:
-        backoff = 5
-        while _running:
+        # Cycle bloqué plus de 20 min (appel réseau figé, débogueur en
+        # pause…) : la pile de chaque thread est écrite dans
+        # <journal>.blocage.txt, pour savoir OÙ le bot s'est arrêté.
+        hang = None
+        if self.g.log_file and self.g.log_file != os.devnull:
             try:
-                self.run_cycle()
-                backoff = 5
-                _sleep(self.g.loop_interval_sec)
-            except ccxt.NetworkError as e:
-                self.logger.warning(f"[CYCLE] réseau: {e}")
-                _sleep(backoff)
-                backoff = min(backoff * 2, 300)
-            except Exception as e:
-                self.logger.exception(f"[CYCLE] KO: {e}")
-                _sleep(backoff)
-                backoff = min(backoff * 2, 300)
+                hang = open(self.g.log_file + ".blocage.txt", "a", encoding="utf-8")
+            except OSError:
+                hang = None
+        backoff = 5
+        try:
+            while _running:
+                if hang is not None:
+                    faulthandler.dump_traceback_later(self.STALL_DUMP_SEC, file=hang)
+                try:
+                    self.run_cycle()
+                    backoff = 5
+                    wait = self.g.loop_interval_sec
+                except ccxt.NetworkError as e:
+                    self.logger.warning(f"[CYCLE] réseau: {e}")
+                    wait, backoff = backoff, min(backoff * 2, 300)
+                except Exception as e:
+                    self.logger.exception(f"[CYCLE] KO: {e}")
+                    wait, backoff = backoff, min(backoff * 2, 300)
+                finally:
+                    if hang is not None:
+                        faulthandler.cancel_dump_traceback_later()
+                _sleep(wait)
+        finally:
+            if hang is not None:
+                faulthandler.cancel_dump_traceback_later()
+                hang.close()
 
 
 _running = True
