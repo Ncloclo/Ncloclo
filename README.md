@@ -158,6 +158,20 @@ mots-clés. Chaque IA facture ses appels, à raison d'un rapport par jour. Reddi
 refuse les requêtes sans application enregistrée : les réseaux sociaux et les
 forums passent par la recherche web de Perplexity.
 
+### Revue hebdomadaire par Claude Code
+
+Chaque lundi, un agent Claude Code dans le cloud relit la veille, le
+diagnostic et le laboratoire des stratégies, fait ses propres recherches sur
+le web, revoit le code, puis ouvre une Pull Request avec un rapport en
+français (`docs/revues/`). Il ne fusionne jamais : vous décidez. Il ne change
+la stratégie que si une variante bat TrendGuard sur 2018-2022 **et** sur
+2023 à aujourd'hui, jamais le risque de 1 % par trade.
+
+Son environnement n'a pas accès à Binance : GitHub Actions
+(`.github/workflows/donnees.yml`) prépare ses données le lundi à 00:40 UTC
+sur la branche `donnees` (veille, diagnostic, laboratoire, historique
+Binance). Réglages de l'agent : <https://claude.ai/code/routines>.
+
 ### Utilisation
 
 ```bash
