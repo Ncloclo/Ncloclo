@@ -16,3 +16,6 @@ data/
 runtime/
 diagnostic.txt
 data_binance/
+# Environnements virtuels
+.venv*/
+venv/

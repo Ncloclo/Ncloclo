@@ -1,3 +1,8 @@
 {
-  "recommendations": ["ms-python.python", "ms-python.debugpy"]
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.debugpy",
+    "anthropic.claude-code",
+    "davidanson.vscode-markdownlint"
+  ]
 }

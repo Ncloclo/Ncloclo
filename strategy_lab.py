@@ -604,7 +604,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         parts.append(lab_report(c2, v2.reindex(c2.index),
                                 "Coin Metrics, actifs effondrés inclus (FTT, EOS…)"))
     parts.append(OUTRO)
-    text = "\n".join(parts)
+    text = ts.format_markdown("\n".join(parts))
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as fh:
         fh.write(text)

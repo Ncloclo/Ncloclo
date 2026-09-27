@@ -18,7 +18,8 @@ que la limite de 1 % par trade interdit.
 
 TrendGuard fait le choix inverse et mesurable :
 
-- **perte ≈ 1 % du capital par trade** : −1,0 R en moyenne, pire −2,8 R lors d'un gap ;
+- **perte ≈ 1 % du capital par trade** : −1,0 R en moyenne, pire −2,8 R lors
+  d'un gap ;
 - **gains moyens de plusieurs R** ;
 - **35 à 50 % de trades gagnants**.
 
@@ -27,7 +28,7 @@ TrendGuard fait le choix inverse et mesurable :
 Ces adaptations sont fixées à l'avance et non apprises sur les résultats :
 
 | Mécanisme | Réagit à |
-|---|---|
+| --- | --- |
 | Filtre de régime (BTC vs moyenne 150 j) | marché baissier → aucun achat, capital en USDT |
 | Stop resserré en régime baissier (2 × vol au lieu de 5 ×) | retournement du marché |
 | Stops et tailles proportionnels à la volatilité | actif calme ou agité → même risque de 1 % |
@@ -42,7 +43,7 @@ puis vérifiée sur **2023 → septembre 2026**, une période qu'elle n'a pas vu
 Critère principal : Calmar, soit le rendement annuel divisé par la pire baisse.
 
 | Variante | 2018-22 CAGR | 2018-22 baisse max | 2018-22 Calmar | 2023-26 CAGR | 2023-26 baisse max | 2023-26 Calmar |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | **Référence** | +41,2 % | −25,4 % | 1,62 | +37,2 % | −33,6 % | 1,11 |
 | Baisse ≥ 10 % → risque × 0,5 | +31,8 % | −20,6 % | 1,54 | +32,1 % | −24,2 % | 1,33 |
 | Baisse ≥ 20 % → risque × 0,5 | +42,1 % | −22,9 % | 1,84 | +31,3 % | −29,2 % | 1,07 |
@@ -85,7 +86,7 @@ diagnose`, et automatiquement tous les 7 jours pendant qu'il tourne,
 `TG_AUTO_DIAGNOSE_DAYS`) :
 
 | Contrôle | Alerte si |
-|---|---|
+| --- | --- |
 | Espérance des trades des 24 derniers mois (intervalle de confiance 90 %, bootstrap) | intervalle entièrement négatif → avantage disparu |
 | Rendement sur 12 mois glissants vs historique | sous le 10e percentile |
 | Trades réels du bot vs distribution historique (test statistique) | moins de 2 % de chances d'un résultat aussi faible |

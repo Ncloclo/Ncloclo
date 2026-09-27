@@ -2,12 +2,14 @@
 
 > ⚠️ Logiciel de trading automatisé : risque de perte en capital. Les
 > performances passées ne garantissent pas les performances futures. Validez
-> toujours en **paper**, puis sur le **testnet Binance**, avant tout capital réel.
+> toujours en **paper**, puis sur le **testnet Binance**, avant tout capital
+> réel.
 
-Le dépôt contient deux stratégies partageant le même moteur d'exécution sécurisé :
+Le dépôt contient deux stratégies partageant le même moteur d'exécution
+sécurisé :
 
 | | **TrendGuard** (recommandée) | V29.6 intraday |
-|---|---|---|
+| --- | --- | --- |
 | Fichiers | `trend_strategy.py`, `trendguard_bot.py` | `v29.py` |
 | Style | Suivi de tendance, portefeuille multi-actifs, journalier | Signaux multi-modules, une paire, 1 h |
 | Validation | Données réelles 2018→2026, hors échantillon, walk-forward | Aucun avantage démontré |
@@ -26,27 +28,35 @@ Le dépôt contient deux stratégies partageant le même moteur d'exécution sé
 4. **Taille** : **1 % du capital risqué par trade** ; max 8 positions, 6 % de
    risque cumulé, 25 % du capital par position.
 
-### Résultats (détails dans [`docs/TRENDGUARD_REPORT.md`](docs/TRENDGUARD_REPORT.md))
+### Résultats
+
+Détails complets : [`docs/TRENDGUARD_REPORT.md`](docs/TRENDGUARD_REPORT.md).
 
 Données Coin Metrics, 24 actifs dont plusieurs effondrés (FTT, EOS, NEO…).
 Frais 0,1 % + slippage 0,1 % par côté. Paramètres choisis sur 2018-2022,
 puis **gelés** et testés une seule fois sur 2023→mai 2026 :
 
 | Période | CAGR | Max DD | Sharpe | Trades | Gagnants | Gain moy. | Perte moy. |
-|---|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- | --- |
 | 2018-2022 (conception) | +44,1 % | −24,6 % | 1,22 | 161 | 49 % | +4,2 R | −1,03 R |
 | **2023-2026 (hors échantillon)** | **+40,0 %** | **−33,4 %** | **1,22** | 176 | 36 % | +3,9 R | −1,02 R |
 | BTC achat-conservation 2023-2026 | +57,0 % | −49,1 % | 1,19 | — | — | — | — |
 
-- Les 144 variantes de paramètres testées en conception sont toutes rentables : le résultat ne tient pas à un réglage chanceux.
-- En walk-forward (ré-optimisation tous les 6 mois), la stratégie fait +45,8 % par an avec un drawdown max de −28 %.
-- À ne pas attendre : un taux de réussite élevé. La stratégie gagne 36 à 49 % de ses trades, mais un gain moyen vaut environ 3,8 fois une perte moyenne.
-- Il faut accepter des séries de 7 à 12 pertes consécutives et des drawdowns de 25 à 35 %.
-- Pour plus de stabilité, `TG_RISK_PCT=0.005` donne −18 % de drawdown pour +28 % par an.
+- Les 144 variantes de paramètres testées en conception sont toutes rentables :
+  le résultat ne tient pas à un réglage chanceux.
+- En walk-forward (ré-optimisation tous les 6 mois), la stratégie fait +45,8 %
+  par an avec un drawdown max de −28 %.
+- À ne pas attendre : un taux de réussite élevé. La stratégie gagne 36 à 49 % de
+  ses trades, mais un gain moyen vaut environ 3,8 fois une perte moyenne.
+- Il faut accepter des séries de 7 à 12 pertes consécutives et des drawdowns de
+  25 à 35 %.
+- Pour plus de stabilité, `TG_RISK_PCT=0.005` donne −18 % de drawdown pour +28 %
+  par an.
 
 ### Auto-diagnostic et adaptation ([`docs/ADAPTATION.md`](docs/ADAPTATION.md))
 
 `python trendguard_bot.py diagnose` analyse, sans passer d'ordre :
+
 - **le système** : horloge et latence vers Binance, bot actif, disque ;
 - **les données** : retards, trous, prix aberrants, liquidité ;
 - **le marché** : régime BTC, hésitation, volatilité ;
@@ -54,15 +64,19 @@ puis **gelés** et testés une seule fois sur 2023→mai 2026 :
 - **le portefeuille** : risque engagé, corrélations, scénarios de krach ;
 - **la santé de la stratégie** : l'avantage statistique existe-t-il encore ?
   Avec la probabilité historique de finir en gain sur 12, 24 et 36 mois ;
-- **les résultats réels du bot comparés à l'historique**, par un test statistique ;
+- **les résultats réels du bot comparés à l'historique**, par un test
+  statistique ;
 - **les alternatives** : un tournoi de sept stratégies sur les 24 derniers mois
   indique si TrendGuard reste compétitive.
 
-Le bot relance ce diagnostic tous les 7 jours (`TG_AUTO_DIAGNOSE_DAYS`) et notifie en cas d'alerte.
+Le bot relance ce diagnostic tous les 7 jours (`TG_AUTO_DIAGNOSE_DAYS`) et
+notifie en cas d'alerte.
 
-Aucune règle ne s'auto-modifie : sur données réelles, les adaptations « apprises des
+Aucune règle ne s'auto-modifie : sur données réelles, les adaptations « apprises
+des
 résultats récents » font moins bien hors échantillon. Seul un **profil prudent**
-optionnel est proposé (`TG_DD_THROTTLE=0.10:0.5` : risque divisé par 2 au-delà de 10 %
+optionnel est proposé (`TG_DD_THROTTLE=0.10:0.5` : risque divisé par 2 au-delà
+de 10 %
 de baisse). Il réduit la pire baisse de −33,6 % à −24,2 % sur 2023-2026, pour
 +32 % par an au lieu de +37 %.
 
@@ -81,7 +95,8 @@ la question « le bot peut-il apprendre et adopter la meilleure stratégie ? » 
   stratégie des 24 derniers mois a fait moins bien que TrendGuard seule sur les
   deux périodes.
 - **Le succès se mesure sur la durée** : 80 % des fenêtres de 12 mois finissent
-  en gain et 92 % des fenêtres de 24 mois (2019-2026, sans garantie pour l'avenir).
+  en gain et 92 % des fenêtres de 24 mois (2019-2026, sans garantie pour
+  l'avenir).
 
 ### Utilisation
 
@@ -100,15 +115,19 @@ python strategy_lab.py --cache data_binance           # tournoi des stratégies 
 
 ### Dans VS Code
 
-1. Ouvrez le dossier du projet, puis installez l'extension **Python** (proposée automatiquement).
+1. Ouvrez le dossier du projet, puis installez l'extension **Python** (proposée
+   automatiquement).
 2. Lancez `Terminal ▸ Exécuter la tâche… ▸ Installer les dépendances`.
-3. Copiez `.env.example` en `.env`. Les réglages par défaut conviennent pour le mode paper.
-4. Ouvrez `Exécuter et déboguer`, choisissez une configuration, puis appuyez sur **F5** :
+3. Copiez `.env.example` en `.env`. Les réglages par défaut conviennent pour le
+   mode paper.
+4. Ouvrez `Exécuter et déboguer`, choisissez une configuration, puis appuyez sur
+   **F5** :
    - **TrendGuard — paper (prix réels Binance)** : le bot en continu, lancé
      sans débogueur. Sous débogueur, une exception ou un point d'arrêt le met
      en pause sans prévenir ;
    - **TrendGuard — un seul cycle** : une décision, puis arrêt ;
-   - **TrendGuard — rejeu paper 12 mois** : télécharge l'historique et le rejoue ;
+   - **TrendGuard — rejeu paper 12 mois** : télécharge l'historique et le
+     rejoue ;
    - **TrendGuard — statut du portefeuille** ;
    - **Tests (pytest)**.
 
@@ -141,6 +160,11 @@ Compte réel :
 Le bot prend ses décisions une fois par jour, juste après la clôture de 00:00
 UTC. Il appelle **exactement les mêmes fonctions** que le backtest. Un test
 vérifie la parité exacte : mêmes trades, même PnL, même equity.
+
+S'il a été arrêté plusieurs jours, le bot rattrape au redémarrage les clôtures
+manquées : il réévalue chaque stop jour par jour (trailing compris) et vend au
+prix actuel toute position dont le stop a été franchi pendant l'arrêt. Il ne
+prend aucune entrée sur un jour passé.
 
 Chaque position est protégée à deux niveaux :
 
@@ -177,7 +201,8 @@ La mesure compare l'heure du serveur au milieu de l'aller-retour réseau et
 retient la requête la plus rapide. L'erreur reste sous un demi aller-retour
 (± 0,2 s sur une connexion à 430 ms). La méthode de ccxt, elle, se trompe
 d'un demi aller-retour de plus. Le démarrage et chaque battement de cœur
-affichent l'écart, par exemple `heure Binance (PC en retard de 1,3 s sur Binance)`.
+affichent l'écart, par exemple `heure Binance (PC en retard de 1,3 s sur
+Binance)`.
 
 Régler l'horloge du PC reste conseillé. Si le service de temps Windows est
 arrêté, lancez ces commandes dans un PowerShell **administrateur** :
@@ -199,7 +224,8 @@ w32tm /resync /force
   notification part si le blocage dure plus d'une heure.
 - Une paire injoignable ne bloque pas la surveillance des autres positions.
 - Si un cycle reste bloqué plus de 20 minutes, la pile de chaque thread est
-  écrite dans `<journal>.blocage.txt` (par exemple `trendguard_paper.log.blocage.txt`),
+  écrite dans `<journal>.blocage.txt` (par exemple
+  `trendguard_paper.log.blocage.txt`),
   pour savoir où le bot s'est arrêté. `diagnose` signale un bot qui tourne sans
   réussir ses cycles.
 
@@ -213,7 +239,7 @@ docker compose up -d --build      # construit l'image (tests inclus) et démarre
 ```
 
 | Action | Commande |
-|---|---|
+| --- | --- |
 | Suivre le bot (une ligne `[HEARTBEAT]` toutes les 15 min) | `docker compose logs -f` |
 | État du portefeuille | `docker compose exec trendguard python trendguard_bot.py status` |
 | Santé (`healthy` / `unhealthy`) | `docker compose ps` |
@@ -234,13 +260,15 @@ docker compose up -d --build      # construit l'image (tests inclus) et démarre
 ## Moteur d'exécution (commun, `v29.py`)
 
 - Une position live n'est jamais laissée sans protection exchange : la
-  protection est revérifiée à chaque cycle, avec un stop logiciel en dernier recours.
+  protection est revérifiée à chaque cycle, avec un stop logiciel en dernier
+  recours.
 - Aucune vente marché n'est envoyée tant que l'annulation de la protection
   n'est pas confirmée. Chaque jambe est relue après annulation.
 - Chaque exécution est comptée une seule fois (registre par `order_id`).
 - Chaque ordre est précédé d'une intention persistée, résolue par client-id
   après un crash ou un timeout.
-- Les quantités sont plafonnées au solde réel, et les frais prélevés en base sont pris en compte.
+- Les quantités sont plafonnées au solde réel, et les frais prélevés en base
+  sont pris en compte.
 - La reconciliation au boot est *fail-closed*.
 
 Le bot V29.6 intraday reste disponible : `python v29.py bot | backtest |
@@ -254,6 +282,10 @@ python -m pytest tests -q      # 222 tests, simulateurs Binance Spot mono et mul
 
 ## Limites connues
 
+- Un GitHub Codespace s'arrête après une période d'inactivité, et le bot avec
+  lui : le rattrapage limite les dégâts, mais les stops ne sont plus surveillés
+  pendant l'arrêt. Pour faire tourner le bot en continu, utilisez Docker sur un
+  serveur allumé en permanence (voir « Déploiement »).
 - Les simulateurs reproduisent les mécanismes de risque de Binance Spot :
   soldes bloqués, frais en base, OCO (l'autre jambe expire dès une exécution
   partielle), carnet à profondeur finie, filtres de prix, de quantité et de

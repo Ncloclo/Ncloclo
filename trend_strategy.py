@@ -37,7 +37,9 @@ import dataclasses
 import itertools
 import math
 import os
+import re
 import sys
+import textwrap
 import urllib.request
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
@@ -598,6 +600,63 @@ def _fmt_m(m: Dict[str, float], trades: bool = True) -> str:
     return s
 
 
+_MD_DELIM = re.compile(r"^\|(\s*:?-+:?\s*\|)+\s*$")
+_MD_LIST = re.compile(r"^((?:[-*+]|\d+\.)\s+)")
+_MD_GLUE = re.compile(r" (?=[:;!?»])|(?<=«) ")   # typographie française
+
+
+def format_markdown(text: str, width: int = 80) -> str:
+    """Met en forme le Markdown généré selon les règles markdownlint du dépôt
+    (.markdownlint.jsonc) : lignes de texte repliées à `width` caractères,
+    séparateurs de tableau espacés (« | --- | »), blocs de code typés,
+    ligne vide avant une liste. Les
+    tableaux, titres et blocs de code ne sont pas repliés ; le rendu est
+    identique (un retour à la ligne simple ne coupe pas un paragraphe)."""
+    out: List[str] = []
+    in_code = False
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            if not in_code and stripped == "```":
+                line = line.replace("```", "```text", 1)
+            in_code = not in_code
+            out.append(line)
+            continue
+        if in_code:
+            out.append(line)
+            continue
+        if _MD_DELIM.match(stripped):
+            cols = stripped.strip("|").split("|")
+            out.append("| " + " | ".join(
+                (":" if c.strip().startswith(":") else "") + "---"
+                + (":" if c.strip().endswith(":") else "") for c in cols) + " |")
+            continue
+        # Liste collée à un paragraphe (MD032) : ligne vide insérée.
+        if (_MD_LIST.match(line) and out and out[-1].strip()
+                and not _MD_LIST.match(out[-1]) and not out[-1].startswith(
+                    (" ", "|", "#", ">"))):
+            out.append("")
+        if (len(line) <= width or stripped.startswith(("|", "#"))
+                or not stripped):
+            out.append(line)
+            continue
+        prefix, rest = ("> ", line[2:]) if line.startswith("> ") else ("", line)
+        indent = rest[:len(rest) - len(rest.lstrip(" "))]
+        rest = rest[len(indent):]
+        m = _MD_LIST.match(rest)
+        marker = m.group(1) if m else ""
+        # Espace insécable provisoire : « : », « ; »… ne se retrouvent jamais
+        # seuls en début de ligne.
+        body = _MD_GLUE.sub("\u00a0", rest[len(marker):])
+        wrapped = textwrap.wrap(body, width=width,
+                                initial_indent=prefix + indent + marker,
+                                subsequent_indent=prefix + indent
+                                + " " * len(marker),
+                                break_long_words=False, break_on_hyphens=False)
+        out.extend(w.replace("\u00a0", " ") for w in wrapped)
+    return "\n".join(out)
+
+
 def research_report(data_dir: str, out_path: str,
                     oos_end: Optional[str] = None) -> str:
     close, volume = load_coinmetrics(data_dir, DEFAULT_UNIVERSE)
@@ -619,7 +678,7 @@ def research_report(data_dir: str, out_path: str,
              f"**{oos[0]} → {oos[1]}** conservée intacte et évaluée une seule "
              "fois avec les paramètres gelés.\n")
     L.append("## Paramètres retenus\n")
-    L.append("```\n" + "\n".join(f"{k} = {v}" for k, v in
+    L.append("```text\n" + "\n".join(f"{k} = {v}" for k, v in
                                  dataclasses.asdict(p).items()) + "\n```\n")
     grid = {"breakout_n": [20, 30, 50, 70],
             "init_stop_atr": [2.0, 3.0, 4.0],
@@ -722,7 +781,7 @@ def research_report(data_dir: str, out_path: str,
              "quand BTC est sous sa moyenne 150 j (capital protégé en USDT).")
     L.append("- Performances passées ≠ performances futures. À valider en "
              "paper puis testnet avant tout capital réel.\n")
-    text = "\n".join(L)
+    text = format_markdown("\n".join(L))
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as fh:
         fh.write(text)

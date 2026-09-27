@@ -658,3 +658,33 @@ def test_live_catch_up_closes_position_and_its_exchange_stop(logger):
     if p.in_position:
         assert sells[0]["amount"] <= p.amount_held + 1e-9
     assert not slot.ctx.risk.halted and not slot.ctx.orphan_balance
+
+
+def test_format_markdown_rules():
+    src = ("| a | b |\n|---|:--:|\n| 1 | 2 |\n\n```\nx = 1\n```\n\n"
+           "- " + "mot " * 30 + ": fin ;\n")
+    out = ts.format_markdown(src)
+    assert "| --- | :---: |" in out
+    assert "```text" in out
+    lines = out.split("\n")
+    assert all(len(line) <= 80 for line in lines if not line.startswith("|"))
+    assert not any(line.lstrip().startswith((":", ";")) for line in lines)
+    assert all(line.startswith("  ") for line in lines[lines.index(
+        next(line for line in lines if line.startswith("- "))) + 1:] if line)
+    assert ts.format_markdown(out) == out                 # idempotent
+    # Liste collée à un paragraphe : ligne vide insérée (MD032).
+    assert ts.format_markdown("Texte :\n- a\n- b") == "Texte :\n\n- a\n- b"
+
+
+def test_repository_markdown_is_formatted():
+    """README et rapport respectent les règles markdownlint du dépôt."""
+    import os
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    docs = ["README.md"] + [os.path.join("docs", n) for n in (
+        "TRENDGUARD_REPORT.md", "ADAPTATION.md", "STRATEGIES.md")]
+    names = [n for n in docs if os.path.exists(os.path.join(root, n))]
+    if not names:
+        pytest.skip("documentation absente (image Docker)")
+    for name in names:
+        text = open(os.path.join(root, name), encoding="utf-8").read().rstrip("\n")
+        assert ts.format_markdown(text) == text, name

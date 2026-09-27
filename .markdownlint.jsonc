@@ -1,0 +1,11 @@
+// Règles markdownlint du dépôt (extension VS Code « markdownlint » et
+// markdownlint-cli2). Les tableaux, titres et blocs de code ne peuvent pas
+// être repliés : seule la longueur des lignes de texte est contrôlée.
+{
+  "default": true,
+  "MD013": {
+    "line_length": 80, "tables": false, "code_blocks": false,
+    "headings": false
+  },
+  "MD060": { "style": "compact" }
+}
