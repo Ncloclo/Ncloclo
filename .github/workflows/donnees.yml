@@ -35,6 +35,11 @@ jobs:
           cache-dependency-path: requirements-docker.txt
       - run: pip install -r requirements-docker.txt
       - name: Veille, diagnostic et laboratoire (données publiques Binance)
+        env:
+          # Réglage du .env du bot de Clovis (profil prudent) : le diagnostic
+          # porte sur la configuration réellement utilisée. À aligner si le
+          # .env change ; le laboratoire compare, lui, les règles de base.
+          TG_DD_THROTTLE: "0.10:0.5"
         run: |
           mkdir -p out
           date -u +%Y-%m-%dT%H:%M:%SZ > out/DATE
