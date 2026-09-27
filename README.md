@@ -113,7 +113,7 @@ panneau de contrôle ») :
   clic ouvre le détail (bougies, volume, achats et ventes, stops, zoom,
   intervalles de 15 min à 1 jour) ;
 - **Cryptos** : les 21 paires avec cours, variation, volume, courbe de 48 h et
-  la raison du choix du bot, filtres (détenues, sous surveillance, bloquées) et
+  la raison du choix du bot, filtres (détenues, surveillées, bloquées) et
   recherche ;
 - **Positions**, **Veille**, **Journal** et **Réglages** (démarrage avec
   l'ordinateur, test des alertes, thème clair ou sombre, accès depuis un
@@ -173,7 +173,7 @@ tableau de bord résume sa décision (régime du marché, achats, ventes, crypto
 proches d'un signal d'achat), et chaque carte de la page Cryptos dit pourquoi le
 bot détient, achète ou ignore cette crypto : pas de cassure (avec la hausse
 encore nécessaire), tendance de fond négative, trop peu échangée, bloquée par la
-veille, plafond de risque atteint. Le filtre « Sous surveillance » montre les
+veille, plafond de risque atteint. Le filtre « Surveillées » montre les
 candidates.
 
 Ce que le bot ne fait pas : changer seul ses règles après quelques résultats.
