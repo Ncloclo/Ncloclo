@@ -493,7 +493,7 @@ def validate(raw: Dict[str, Any], items: List[Item], universe: List[str],
     liste, catégories connues, bornes respectées, et pour chaque événement
     au moins une source réelle qui nomme la crypto."""
     uni = set(universe)
-    item_urls = {it.url for it in items}
+    item_by_url = {it.url: it for it in items}
     events = []
     for e in raw.get("events") or []:
         if not isinstance(e, dict):
@@ -512,7 +512,17 @@ def validate(raw: Dict[str, Any], items: List[Item], universe: List[str],
                 k = int(m.group(1))
                 if 1 <= k <= len(items) and (asset == "market" or mentions(items[k - 1].title, asset)):
                     good.append(items[k - 1].url)
-            elif s.startswith(("http://", "https://")) and (s in item_urls or s in web_urls):
+            elif s.startswith(("http://", "https://")) and s in item_by_url:
+                # Source citée par son URL plutôt que par numéro : même
+                # exigence que pour une citation « #n » (le titre collecté
+                # doit nommer la crypto), sinon une IA pourrait rattacher
+                # un événement à un actif via une page hors sujet.
+                if asset == "market" or mentions(item_by_url[s].title, asset):
+                    good.append(s)
+            elif s.startswith(("http://", "https://")) and s in web_urls:
+                # Recherche web (Perplexity) : seule l'URL est connue, pas
+                # de titre à vérifier ; on ne garde que les pages réellement
+                # consultées (aucune source inventée).
                 good.append(s)
         if not good:
             continue                       # invérifiable : écarté

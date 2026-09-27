@@ -147,6 +147,16 @@ def test_portfolio_survives_held_asset_without_history():
     assert "2 position(s)" in findings[0].message
 
 
+def test_portfolio_survives_zero_equity():
+    """equity=0.0 (aucune décision live encore prise) avec des positions
+    déjà en base : pas de ZeroDivisionError, diagnostic quand même rendu."""
+    close, _ = synthetic_market()
+    holdings = [{"asset": "eth", "qty": 1.0, "entry": 10.0, "stop": 9.0,
+                 "risk_quote": 1.0}]
+    findings = dg.check_portfolio(holdings, close, {"eth": 10.0}, 0.0)
+    assert any("Perte si tous les stops sont touchés" in f.message for f in findings)
+
+
 def test_strategy_edge_loss_is_detected(monkeypatch):
     close, volume = synthetic_market()
     real = ts.backtest

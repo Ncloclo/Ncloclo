@@ -389,13 +389,16 @@ def check_portfolio(holdings: List[Dict[str, Any]], close: pd.DataFrame,
     else:
         corr_risk, avg = float(r.sum()), 1.0
     tot = float(r.sum())
+    # Equity nulle ou négative (jamais encore de décision en live) : évite
+    # une ZeroDivisionError qui ferait échouer tout le diagnostic.
+    eq = max(equity, 1e-9)
     # Le plafond borne le risque À L'ENTRÉE ; quand les positions gagnent,
     # l'écart au stop grandit (gains latents exposés) : marge de 50 %.
-    lvl = "OK" if tot / equity <= max_total_risk * 1.5 else "ATTENTION"
+    lvl = "OK" if tot / eq <= max_total_risk * 1.5 else "ATTENTION"
     out.append(Finding(S, lvl, f"Perte si tous les stops sont touchés : {tot:,.0f} USDT "
-                       f"({tot / equity * 100:.1f} % du capital, plafond à l'entrée "
+                       f"({tot / eq * 100:.1f} % du capital, plafond à l'entrée "
                        f"{max_total_risk * 100:.0f} %) ; risque ajusté des "
-                       f"corrélations {corr_risk / equity * 100:.1f} %",
+                       f"corrélations {corr_risk / eq * 100:.1f} %",
                        "" if lvl == "OK" else "Risque engagé nettement au-dessus du "
                        "plafond : vérifier les stops posés sur Binance."))
     if len(names) > 1:
@@ -408,9 +411,9 @@ def check_portfolio(holdings: List[Dict[str, Any]], close: pd.DataFrame,
                    for h in holdings)
         # Scénario de stress : n'alerte que s'il approcherait l'arrêt
         # d'urgence (TG_KILL_DRAWDOWN).
-        lvl = "INFO" if loss / equity < kill_drawdown * 0.75 else "ATTENTION"
+        lvl = "INFO" if loss / eq < kill_drawdown * 0.75 else "ATTENTION"
         out.append(Finding(S, lvl, f"Krach instantané de -{shock * 100:.0f} % sans "
-                           f"exécution des stops (gap) : -{loss / equity * 100:.1f} % "
+                           f"exécution des stops (gap) : -{loss / eq * 100:.1f} % "
                            f"du capital",
                            "" if lvl == "INFO" else "Exposition très forte : un krach "
                            "avec gap approcherait l'arrêt d'urgence ; envisager "

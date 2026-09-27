@@ -187,6 +187,13 @@ def test_validate_keeps_only_verifiable_events():
     # Une IA qui cherche sur le web peut citer les pages qu'elle a consultées.
     web = mw.validate(raw, items, UNIVERSE, {"https://evil.example/x"})
     assert ("aave", "other") in [(e["asset"], e["category"]) for e in web["events"]]
+    # Une source citée par son URL (plutôt que « #n ») doit nommer la
+    # crypto, comme une citation numérotée : citer l'URL d'un article sur
+    # Bitcoin pour justifier un événement AAVE est écarté.
+    off_topic = {"market_summary": "x", "market_sentiment": 0, "events": [
+        {"asset": "aave", "category": "hack", "severity": 1, "sentiment": -1,
+         "summary": "hors sujet", "sources": ["https://news.example/btc"]}]}
+    assert mw.validate(off_topic, items, UNIVERSE, set())["events"] == []
 
 
 def test_alert_needs_two_ais_and_ai_never_vetoes(memory):
