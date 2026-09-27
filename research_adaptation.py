@@ -29,17 +29,18 @@ import pandas as pd
 import diagnostics as dg
 import trend_strategy as ts
 import trendguard_bot as tg
+import v29
 
 
 def load_binance(cache: str) -> tuple:
     """Clôtures/volumes Binance, mis en cache au format Coin Metrics."""
     bases = [a.lower() for a in tg.LIVE_UNIVERSE_DEFAULT]
     if not all(os.path.exists(os.path.join(cache, f"{a}.csv")) for a in bases):
-        import ccxt
         os.makedirs(cache, exist_ok=True)
+        # Données publiques (data-api.binance.vision) : accessibles partout,
+        # y compris depuis un serveur aux États-Unis.
         close, volume, errors = dg.fetch_daily_history(
-            ccxt.binance({"enableRateLimit": True}), [a.upper() for a in bases],
-            since="2017-07-01")
+            v29.PublicKlines(), [a.upper() for a in bases], since="2017-07-01")
         if errors:
             print(f"Erreurs de téléchargement : {errors}")
         for a in close.columns:

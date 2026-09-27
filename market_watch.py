@@ -846,7 +846,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             pass
         finally:
             con.close()
-    v29.sync_exchange_clock(v29.make_binance(), samples=2)
+    v29.sync_exchange_clock(v29.PublicKlines(), samples=2)
     memory = WatchMemory(args.db)
     try:
         report = daily_report([b.lower() for b in g.universe], held, v29._utcnow(), memory,

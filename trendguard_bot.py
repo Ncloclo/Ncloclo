@@ -1747,8 +1747,9 @@ def cmd_diagnose(gcfg: GuardConfig, out_path: Optional[str] = None,
                  exchange: Any = None, now: Optional[datetime] = None) -> int:
     """Diagnostic complet en lecture seule (aucun ordre, bot arrêté ou non)."""
     if exchange is None:
-        exchange = v29.make_binance(
-            testnet=gcfg.binance_testnet and gcfg.run_mode == "live")
+        # Historique public (data-api.binance.vision) : sans la liste des
+        # marchés (4,7 Mo) et accessible depuis n'importe quel serveur.
+        exchange = v29.PublicKlines()
     _forbid_orders(exchange)
     if now is None:
         v29.sync_exchange_clock(exchange, samples=3)     # heure de Binance

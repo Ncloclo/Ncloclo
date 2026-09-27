@@ -510,6 +510,42 @@ def make_binance(api_key: str = "", secret: str = "",
     return ex
 
 
+# Données publiques de marché : data-api.binance.vision sert les mêmes
+# bougies qu'api.binance.com, sans restriction géographique (serveurs de
+# GitHub Actions ou d'un agent dans le cloud, aux États-Unis : 451 sur
+# api.binance.com).
+PUBLIC_DATA_API = "https://data-api.binance.vision/api/v3"
+
+
+def make_public_binance() -> Any:
+    """Client Binance Spot en lecture seule sur les données publiques de
+    marché (aucune clé, aucun ordre possible)."""
+    ex = make_binance()
+    ex.urls["api"]["public"] = PUBLIC_DATA_API
+    return ex
+
+
+class PublicKlines:
+    """Bougies par requête directe /api/v3/klines, sans charger la liste
+    complète des marchés (4,7 Mo avec ccxt) : rapide sur une connexion
+    faible. Pour l'historique et l'heure de Binance uniquement."""
+
+    def __init__(self, exchange: Any = None):
+        self.exchange = exchange or make_public_binance()
+
+    def fetch_time(self) -> int:
+        return int(self.exchange.fetch_time())
+
+    def fetch_ohlcv(self, symbol: str, timeframe: str = "1d",
+                    since: Optional[int] = None, limit: int = 1000) -> List[List[float]]:
+        params: Dict[str, Any] = {"symbol": symbol.replace("/", ""),
+                                  "interval": timeframe, "limit": limit}
+        if since is not None:
+            params["startTime"] = int(since)
+        rows = self.exchange.publicGetKlines(params)
+        return [[int(r[0])] + [float(x) for x in r[1:6]] for r in rows]
+
+
 @dataclass
 class ClockSync:
     offset_ms: float        # heure Binance − heure du PC

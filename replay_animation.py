@@ -44,44 +44,15 @@ JS_TAG = '<script src="rejeu_trendguard.js"></script>'
 # Historique chargé avant le début du rejeu : indicateurs (moyenne 150 j,
 # momentum 90 j) et ancienneté minimale (250 j) déjà valides au jour 1.
 WARMUP_DAYS = 800
-# Données publiques de marché : data-api.binance.vision sert les mêmes
-# bougies que api.binance.com, sans restriction géographique (les serveurs
-# de GitHub Actions sont aux États-Unis, où api.binance.com répond 451).
-PUBLIC_DATA_API = "https://data-api.binance.vision/api/v3"
+# Données publiques sans restriction géographique : client partagé de v29.
+PUBLIC_DATA_API = v29.PUBLIC_DATA_API
+PublicKlines = v29.PublicKlines
+public_client = v29.make_public_binance
 
 
 def _sig(x: Any, n: int = 6) -> Optional[float]:
     """Arrondi à n chiffres significatifs (page plus légère), None si absent."""
     return None if x is None or pd.isna(x) else float(f"{float(x):.{n}g}")
-
-
-def public_client() -> Any:
-    """Client Binance Spot en lecture seule sur les données publiques de
-    marché (aucune clé, aucun ordre possible)."""
-    ex = v29.make_binance()
-    ex.urls["api"]["public"] = PUBLIC_DATA_API
-    return ex
-
-
-class PublicKlines:
-    """Bougies journalières par requête directe /api/v3/klines : ccxt
-    téléchargerait d'abord la liste complète des marchés (4,7 Mo), trop
-    lente sur une connexion faible et inutile ici."""
-
-    def __init__(self, exchange: Any):
-        self.exchange = exchange
-
-    def fetch_time(self) -> int:
-        return int(self.exchange.fetch_time())
-
-    def fetch_ohlcv(self, symbol: str, timeframe: str = "1d",
-                    since: Optional[int] = None, limit: int = 1000) -> List[List[float]]:
-        params: Dict[str, Any] = {"symbol": symbol.replace("/", ""),
-                                  "interval": timeframe, "limit": limit}
-        if since is not None:
-            params["startTime"] = int(since)
-        rows = self.exchange.publicGetKlines(params)
-        return [[int(r[0])] + [float(x) for x in r[1:6]] for r in rows]
 
 
 def fetch_binance(bases: List[str], start: str, exchange: Any = None,
