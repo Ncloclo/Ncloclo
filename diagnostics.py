@@ -40,6 +40,7 @@ import pandas as pd
 
 import strategy_lab as sl
 import trend_strategy as ts
+import v29
 
 DAY_MS = 86_400_000
 LEVELS = ("OK", "INFO", "ATTENTION", "ALERTE")
@@ -155,20 +156,19 @@ def check_system(exchange: Any, state: Dict[str, Any], expected_day: str,
             latency, offset = min(samples)          # mesure la plus rapide
             uncertainty = latency / 2
             excess = abs(offset) - uncertainty
-            # Le bot recale l'horodatage des ordres sur Binance au démarrage
-            # et toutes les heures : un écart de quelques secondes est sans
-            # effet. Au-delà, l'heure de la décision quotidienne se décale.
-            lvl = ("OK" if excess < 1000 else "INFO" if excess < 30_000 else
-                   "ATTENTION" if excess < 120_000 else "ALERTE")
-            note = ("" if lvl == "OK" else " — compensé par le bot (recalage "
-                    "horaire) ; synchroniser quand même l'horloge du PC "
-                    "(README, section Windows)")
+            # Le bot vit à l'heure de Binance (v29.sync_exchange_clock, au
+            # démarrage puis toutes les heures) : l'écart du PC n'affecte ni
+            # les décisions, ni les ordres, ni les journaux. Seul un écart
+            # énorme pose problème (certificats HTTPS refusés).
+            lvl = ("OK" if excess < 1000 else "INFO" if excess < 3_600_000
+                   else "ATTENTION")
+            note = ("" if lvl == "OK" else " — le bot utilise l'heure de Binance "
+                    "(décisions, ordres, journaux)")
             out.append(Finding(
-                S, lvl, f"Horloge : écart {offset / 1000:+.1f} s avec Binance "
-                f"(± {uncertainty / 1000:.1f} s){note}",
-                "" if lvl in ("OK", "INFO") else "Synchroniser l'horloge du PC "
-                "(README, section Windows) : un écart de plusieurs minutes "
-                "décale la décision quotidienne du bot."))
+                S, lvl, f"Horloge : {v29.describe_clock(offset, uncertainty)}{note}",
+                "" if lvl in ("OK", "INFO") else "Écart de plus d'une heure : "
+                "régler l'horloge du PC (README, section Windows) ; au-delà, "
+                "les connexions sécurisées (HTTPS) peuvent échouer."))
             lvl = "OK" if latency < 1000 else "ATTENTION" if latency < 3000 else "ALERTE"
             out.append(Finding(
                 S, lvl, f"Latence réseau vers Binance : {latency:.0f} ms "

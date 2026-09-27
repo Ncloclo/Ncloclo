@@ -99,7 +99,7 @@ class GuardConfig:
     ohlcv_limit: int = 1000
     kill_drawdown: float = 0.40
     heartbeat_min: int = 15
-    clock_resync_min: int = 60          # réel : horloge recalée sur Binance
+    clock_resync_min: int = 60          # bot remis à l'heure de Binance
     auto_diagnose_days: int = 7         # 0 = désactivé
     max_capital: float = 0.0            # 0 = tout le compte
     allow_recovery: bool = False        # adopter les ordres du bot inconnus
@@ -179,11 +179,24 @@ def load_guard_config_from_env() -> GuardConfig:
         lock_file=v29._env_s("TG_LOCK_FILE", ""))
 
 
+class ExchangeTimeFormatter(logging.Formatter):
+    """Horodatage des journaux à l'heure de Binance (heure du PC corrigée
+    de l'écart mesuré par v29.sync_exchange_clock), millisecondes
+    comprises."""
+
+    def formatTime(self, record, datefmt=None):
+        t = record.created + v29.clock_offset_ms() / 1000
+        s = time.strftime(datefmt or self.default_time_format, time.localtime(t))
+        if not datefmt:
+            s = self.default_msec_format % (s, int((t % 1) * 1000))
+        return s
+
+
 def build_guard_logger(log_file: str) -> logging.Logger:
     lg = logging.getLogger("trendguard")
     lg.handlers.clear()
     lg.setLevel(logging.INFO)
-    fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+    fmt = ExchangeTimeFormatter("%(asctime)s [%(levelname)s] %(message)s")
     fh = RotatingFileHandler(log_file, maxBytes=10_000_000, backupCount=5,
                              encoding="utf-8")
     fh.setFormatter(fmt)
@@ -288,6 +301,7 @@ class TrendGuardBot:
             self.logger.critical("[BOOT] BTC/USDT indisponible (régime) → arrêt")
             return False
         self.state = self.store.get_kv(self.STATE_KEY) or {}
+        self._sync_clock(force=True)       # heure de Binance avant toute décision
         self.state.setdefault("last_decision_day", None)
         self.state.setdefault("peak_equity", None)
         self.state.setdefault("halted", False)
@@ -399,10 +413,10 @@ class TrendGuardBot:
     # ---------- Cycle ----------
 
     def run_cycle(self, now: Optional[datetime] = None) -> None:
-        now = now or v29._utcnow()
+        self._sync_clock()
+        now = now or v29._utcnow()          # heure de Binance
         self._now = now
         if self.live:
-            self._sync_clock()
             self._maintain_live()
         else:
             self._maintain_paper()
@@ -433,28 +447,32 @@ class TrendGuardBot:
                           f"{waited / 3600:.1f} h ({why}). Vérifier la connexion "
                           f"à Binance.", critical=True)
 
-    def _sync_clock(self) -> None:
-        """Mode réel : recale l'horodatage des requêtes signées sur l'horloge
-        de Binance toutes les `clock_resync_min` minutes. Une horloge non
-        synchronisée (service de temps Windows arrêté) dérive de plusieurs
-        secondes par jour ; au-delà de 10 s, Binance refuserait tous les
-        ordres, y compris les stops (-1021)."""
+    def _sync_clock(self, force: bool = False) -> None:
+        """Met le bot à l'heure de Binance (au démarrage puis toutes les
+        `clock_resync_min` minutes, en paper comme en réel) : décisions,
+        clôture des bougies, dates, journaux et horodatage des ordres
+        signés. Le PC peut dériver de plusieurs secondes par jour (service
+        de temps Windows arrêté) ; au-delà de 10 s, Binance refuserait
+        tous les ordres, y compris les stops (-1021)."""
         every = self.g.clock_resync_min * 60
-        if every <= 0 or time.time() - self._last_clock_sync < every:
+        if every <= 0 or (not force
+                          and time.time() - self._last_clock_sync < every):
             return
         self._last_clock_sync = time.time()
-        offset = v29.resync_clock(self.exchange)
-        if offset is None:
-            self._last_clock_sync -= max(every - 300, 0)   # nouvel essai dans 5 min
-            self.logger.warning("[CLOCK] resynchronisation de l'horloge impossible "
-                                "(réseau) : nouvel essai dans 5 min")
+        sync = v29.sync_exchange_clock(self.exchange)
+        if sync is None:
+            if callable(getattr(self.exchange, "fetch_time", None)):
+                self._last_clock_sync -= max(every - 300, 0)   # nouvel essai dans 5 min
+                self.logger.warning("[CLOCK] heure de Binance indisponible (réseau) : "
+                                    "dernier écart conservé, nouvel essai dans 5 min")
             return
-        self.state["clock_offset_ms"] = offset
-        if abs(offset) >= 2000:
-            self.logger.warning(
-                f"[CLOCK] horloge locale décalée de {offset / 1000:+.1f} s par rapport "
-                f"à Binance : écart compensé, mais synchronisez l'horloge du "
-                f"système (README, section Windows)")
+        previous = self.state.get("clock_offset_ms")
+        self.state["clock_offset_ms"] = round(sync.offset_ms)
+        self.state["clock_uncertainty_ms"] = round(sync.uncertainty_ms)
+        self.state["clock_synced_at"] = v29._utcnow_iso()
+        if force or previous is None or abs(sync.offset_ms - float(previous)) >= 500:
+            self.logger.info(f"[CLOCK] {v29.describe_clock(sync.offset_ms, sync.uncertainty_ms)}"
+                             f" → le bot utilise l'heure de Binance")
 
     def holdings_for_diagnosis(self) -> List[Dict[str, Any]]:
         return [{"asset": a, "qty": h.qty, "entry": h.entry, "stop": h.stop,
@@ -523,6 +541,8 @@ class TrendGuardBot:
                 f"{len(holdings)} position(s)"
                 + (f" : {', '.join(parts)}" if parts else "")
                 + f" | prochaine décision dans {h_left} h {rem // 60:02d}"
+                + (f" | heure Binance ({v29.describe_clock(v29.clock_offset_ms())})"
+                   if self.state.get("clock_synced_at") else "")
                 + (" | 🛑 KILL-SWITCH" if self.state.get("halted") else ""))
         except Exception as e:
             self.logger.warning(f"[HEARTBEAT] indisponible : {e}")
@@ -1282,18 +1302,14 @@ def cmd_verify_public(gcfg: GuardConfig, exchange: Any = None,
         f"— mode public, aucun ordre")
 
     say("\n── 1. Connexion")
-    fetch_time = getattr(exchange, "fetch_time", None)
-    if callable(fetch_time):
-        try:
-            t0 = time.time()
-            server = int(fetch_time())
-            t1 = time.time()
-            say(f"  Binance joignable ✓ (latence {(t1 - t0) * 1000:.0f} ms, écart "
-                f"d'horloge {(server - (t0 + t1) / 2 * 1000) / 1000:+.1f} s, compensé "
-                f"par le bot)")
-        except Exception as e:
-            say(f"  ❌ Binance injoignable : {type(e).__name__}: {str(e)[:120]}")
+    if callable(getattr(exchange, "fetch_time", None)):
+        clock = v29.sync_exchange_clock(exchange)
+        if clock is None:
+            say("  ❌ Binance injoignable (heure du serveur illisible)")
             return 1
+        say(f"  Binance joignable ✓ (latence {clock.latency_ms:.0f} ms)")
+        say(f"  Heure : {v29.describe_clock(clock.offset_ms, clock.uncertainty_ms)}"
+            f" → le bot utilise l'heure de Binance")
     capital = gcfg.max_capital or gcfg.paper_capital
     sim = dataclasses.replace(gcfg, run_mode="paper", paper_capital=capital,
                               db_file=":memory:", log_file=os.devnull,
@@ -1435,10 +1451,12 @@ def health_check(gcfg: GuardConfig, max_age_sec: int) -> int:
 def cmd_diagnose(gcfg: GuardConfig, out_path: Optional[str] = None,
                  exchange: Any = None, now: Optional[datetime] = None) -> int:
     """Diagnostic complet en lecture seule (aucun ordre, bot arrêté ou non)."""
-    now = now or v29._utcnow()
     if exchange is None:
         exchange = v29.make_binance(testnet=gcfg.binance_testnet)
     _forbid_orders(exchange)
+    if now is None:
+        v29.sync_exchange_clock(exchange, samples=3)     # heure de Binance
+        now = v29._utcnow()
     quiet = logging.getLogger("trendguard.diagnose")
     quiet.handlers[:] = [logging.NullHandler()]
     quiet.propagate = False

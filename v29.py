@@ -390,8 +390,26 @@ def _dataclass_from_dict(klass, data: Dict[str, Any]):
     return klass(**clean)
 
 
+# Horloge du bot : l'heure de l'exchange (Binance), pas celle du PC.
+# _CLOCK_OFFSET_MS = heure Binance − heure du PC, mesuré par
+# sync_exchange_clock() ; 0 tant qu'aucune mesure n'a été faite.
+_CLOCK_OFFSET_MS = 0.0
+
+
+def clock_offset_ms() -> float:
+    return _CLOCK_OFFSET_MS
+
+
+def set_clock_offset_ms(offset_ms: float) -> None:
+    global _CLOCK_OFFSET_MS
+    _CLOCK_OFFSET_MS = float(offset_ms)
+
+
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    """Heure du bot = heure de Binance (heure du PC corrigée de l'écart
+    mesuré). Sert aux décisions, à la clôture des bougies et aux dates
+    enregistrées."""
+    return datetime.now(timezone.utc) + timedelta(milliseconds=_CLOCK_OFFSET_MS)
 
 
 def _utcnow_iso() -> str:
@@ -479,7 +497,7 @@ def make_binance(api_key: str = "", secret: str = "",
     - délai de 30 s au lieu de 10 s : une connexion lente ne fait plus
       échouer le chargement des marchés ;
     - horodatage des requêtes signées corrigé de l'écart d'horloge avec
-      Binance (voir aussi resync_clock)."""
+      Binance (voir sync_exchange_clock)."""
     opts: Dict[str, Any] = {
         "enableRateLimit": True, "timeout": BINANCE_TIMEOUT_MS,
         "options": {"defaultType": "spot", "adjustForTimeDifference": True,
@@ -492,18 +510,77 @@ def make_binance(api_key: str = "", secret: str = "",
     return ex
 
 
+@dataclass
+class ClockSync:
+    offset_ms: float        # heure Binance − heure du PC
+    uncertainty_ms: float   # ± demi aller-retour de la meilleure mesure
+    latency_ms: float       # aller-retour de la meilleure mesure
+    samples: int            # mesures réussies
+
+
+def measure_exchange_clock(exchange: Any, samples: int = 5,
+                           time_fn: Callable[[], float] = time.time
+                           ) -> Optional[ClockSync]:
+    """Écart entre l'heure du serveur Binance et celle du PC. L'heure du
+    serveur est comparée au MILIEU de l'aller-retour, et seule la mesure la
+    plus rapide est retenue : l'erreur est au plus d'un demi aller-retour
+    (ccxt, lui, la compare à l'heure de réception : erreur jusqu'à un
+    aller-retour complet, plusieurs secondes sur une connexion lente)."""
+    fetch_time = getattr(exchange, "fetch_time", None)
+    if not callable(fetch_time):
+        return None
+    best: Optional[Tuple[float, float]] = None
+    ok = 0
+    for _ in range(max(1, samples)):
+        try:
+            t0 = time_fn()
+            server_ms = float(fetch_time())
+            t1 = time_fn()
+        except Exception:
+            continue
+        ok += 1
+        rtt = (t1 - t0) * 1000
+        offset = server_ms - (t0 + t1) / 2 * 1000
+        if best is None or rtt < best[0]:
+            best = (rtt, offset)
+    if best is None:
+        return None
+    return ClockSync(offset_ms=best[1], uncertainty_ms=best[0] / 2,
+                     latency_ms=best[0], samples=ok)
+
+
+def sync_exchange_clock(exchange: Any, samples: int = 5) -> Optional[ClockSync]:
+    """Met le bot à l'heure de Binance : _utcnow() (décisions, bougies
+    clôturées, dates, journaux) ET l'horodatage des requêtes signées
+    (ccxt : timeDifference = PC − Binance). Au-delà de 10 s d'écart,
+    Binance refuserait tous les ordres, y compris les stops (-1021).
+    None si Binance est injoignable (l'écart précédent est conservé)."""
+    s = measure_exchange_clock(exchange, samples)
+    if s is None:
+        return None
+    set_clock_offset_ms(s.offset_ms)
+    opts = getattr(exchange, "options", None)
+    if isinstance(opts, dict):
+        opts["timeDifference"] = int(round(-s.offset_ms))
+    return s
+
+
 def resync_clock(exchange: Any) -> Optional[int]:
-    """Recalcule l'écart (ms) entre l'horloge locale et celle de Binance,
-    utilisé par ccxt pour horodater les requêtes signées. Une horloge qui
-    dérive au-delà de la fenêtre de réception (10 s) ferait refuser tous
-    les ordres (-1021). None si la mesure est impossible."""
-    fn = getattr(exchange, "load_time_difference", None)
-    if not callable(fn):
-        return None
-    try:
-        return int(fn())
-    except Exception:
-        return None
+    """Recalage rapide (3 mesures) ; écart en ms (Binance − PC) ou None."""
+    s = sync_exchange_clock(exchange, samples=3)
+    return None if s is None else int(round(s.offset_ms))
+
+
+def describe_clock(offset_ms: float, uncertainty_ms: Optional[float] = None) -> str:
+    """« PC en retard de 1,3 s sur Binance (± 0,2 s) »."""
+    if abs(offset_ms) < 50:
+        txt = "PC à l'heure de Binance"
+    else:
+        txt = (f"PC en {'retard' if offset_ms > 0 else 'avance'} de "
+               f"{abs(offset_ms) / 1000:.1f} s sur Binance").replace(".", ",")
+    if uncertainty_ms is not None:
+        txt += f" (± {uncertainty_ms / 1000:.1f} s)".replace(".", ",")
+    return txt
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -6792,6 +6869,10 @@ class BotRunner:
         except Exception as e:
             self.logger.error(f"[BOOT] load_markets KO: {e}")
             return False
+        clock = sync_exchange_clock(self.ex.exchange)
+        if clock is not None:
+            self.logger.info(f"[CLOCK] {describe_clock(clock.offset_ms, clock.uncertainty_ms)}"
+                             f" → le bot utilise l'heure de Binance")
         if cfg.run_mode == "live" and not self.ex.self_test_conditional_orders():
             self.logger.critical("[BOOT] self-test ordres KO → arrêt")
             return False

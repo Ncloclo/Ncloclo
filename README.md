@@ -161,14 +161,26 @@ une autre instance tourne peut-être. Si c'est votre base qui a été perdue,
 relancez une seule fois avec `TG_ALLOW_RECOVERY=true` pour reprendre ces
 positions.
 
-### Windows : synchroniser l'horloge
+### Heure du bot = heure de Binance
 
-Binance refuse les ordres signés dont l'horodatage s'écarte de plus de 10 s.
-Le bot recale ses requêtes sur l'horloge de Binance au démarrage et toutes les
-heures ; un ordre refusé pour horodatage (-1021) est renvoyé une fois après
-recalage. Un écart de quelques secondes est donc sans effet. Si le service de temps Windows est arrêté, l'horloge
-dérive pourtant jour après jour. Pour le réactiver, dans un PowerShell
-**administrateur** :
+Le bot ne se fie pas à l'horloge du PC. Il mesure l'écart avec l'heure du
+serveur Binance au démarrage, puis toutes les heures (en paper comme en réel),
+et vit à l'heure de Binance pour :
+
+- la décision quotidienne et la clôture des bougies (00:00 UTC chez Binance) ;
+- l'horodatage des ordres signés : Binance refuse ceux qui s'écartent de plus
+  de 10 s. Un ordre refusé pour cette raison (-1021) est renvoyé une fois
+  après recalage, avec le même identifiant ;
+- les dates enregistrées et les journaux, millisecondes comprises.
+
+La mesure compare l'heure du serveur au milieu de l'aller-retour réseau et
+retient la requête la plus rapide. L'erreur reste sous un demi aller-retour
+(± 0,2 s sur une connexion à 430 ms). La méthode de ccxt, elle, se trompe
+d'un demi aller-retour de plus. Le démarrage et chaque battement de cœur
+affichent l'écart, par exemple `heure Binance (PC en retard de 1,3 s sur Binance)`.
+
+Régler l'horloge du PC reste conseillé. Si le service de temps Windows est
+arrêté, lancez ces commandes dans un PowerShell **administrateur** :
 
 ```powershell
 sc.exe config w32time start= auto
@@ -176,8 +188,6 @@ net start w32time
 w32tm /config /manualpeerlist:"time.windows.com,0x9" /syncfromflags:manual /update
 w32tm /resync /force
 ```
-
-`python trendguard_bot.py diagnose` affiche l'écart mesuré.
 
 ### Pannes réseau
 
@@ -239,7 +249,7 @@ walkforward | status | resume` (voir `python v29.py docs`).
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 218 tests, simulateurs Binance Spot mono et multi-paires
+python -m pytest tests -q      # 222 tests, simulateurs Binance Spot mono et multi-paires
 ```
 
 ## Limites connues

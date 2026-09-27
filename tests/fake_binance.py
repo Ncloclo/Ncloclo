@@ -24,8 +24,11 @@ pour la gestion du risque :
   exécution ENTRE deux appels du bot (courses) ;
 - identifiants d'ordres numérotés par paire (FakeBinanceMulti), comme sur
   Binance : deux paires peuvent avoir le même orderId ;
-- horloge décalée (clock_skewed) : tout ordre signé est refusé (-1021)
-  jusqu'au recalage load_time_difference() ; fetch_time() ;
+- horloge : le serveur a sa propre heure (server_offset_ms = heure du
+  serveur − heure du PC) ; un ordre signé dont l'horodatage (heure du PC −
+  options["timeDifference"], comme ccxt) s'écarte de plus de 10 s de
+  l'heure du serveur est refusé (-1021) ; fetch_time() donne l'heure du
+  serveur (avec un délai réseau simulé optionnel, latency_s) ;
 - create_order_request : prépare une requête sans l'envoyer (comme ccxt).
 
 Par défaut (book_depth=None) la liquidité est infinie.
@@ -106,19 +109,37 @@ class FakeBinance:
         self.fetch_includes_fees = False
         self.calls: List[str] = []
         self.markets: Dict[str, Any] = {}
-        self.clock_skewed = False
-        self.clock_syncs = 0
+        self.server_offset_ms = 0.0
+        self.latency_s = 0.0
+        self.recv_window_ms = 10_000
+        self.options: Dict[str, Any] = {"timeDifference": 0}
+        self.time_calls = 0
         self.set_price(price)
 
     # ---------- horloge ----------
 
     def fetch_time(self):
-        return int(time.time() * 1000)
+        """Heure du serveur, lue au milieu d'un aller-retour de latency_s."""
+        self.time_calls += 1
+        if self.latency_s:
+            time.sleep(self.latency_s / 2)
+        server = int(time.time() * 1000 + self.server_offset_ms)
+        if self.latency_s:
+            time.sleep(self.latency_s / 2)
+        return server
 
     def load_time_difference(self):
-        self.clock_syncs += 1
-        self.clock_skewed = False
-        return 0
+        """Méthode de ccxt : heure de RÉCEPTION − heure du serveur."""
+        server = self.fetch_time()
+        self.options["timeDifference"] = int(time.time() * 1000) - server
+        return self.options["timeDifference"]
+
+    def _check_timestamp(self):
+        signed = time.time() * 1000 - float(self.options.get("timeDifference", 0))
+        server = time.time() * 1000 + self.server_offset_ms
+        if abs(signed - server) > self.recv_window_ms:
+            raise ccxt.InvalidNonce('binance {"code":-1021,"msg":"Timestamp for '
+                                    'this request is outside of the recvWindow."}')
 
     # ---------- marché ----------
 
@@ -439,9 +460,7 @@ class FakeBinance:
         self._hook("create_order")
         params = dict(params or {})
         self.calls.append(f"create_order:{type}:{side}")
-        if self.clock_skewed:
-            raise ccxt.InvalidNonce('binance {"code":-1021,"msg":"Timestamp for '
-                                    'this request is outside of the recvWindow."}')
+        self._check_timestamp()
         otype = str(type).upper()
         if otype not in self.order_types:
             raise ccxt.InvalidOrder(
@@ -690,6 +709,7 @@ class FakeBinanceMulti:
         self.fakes: Dict[str, FakeBinance] = {}
         self.ohlcv: Dict[Any, List[List[float]]] = {}
         self.markets: Dict[str, Any] = {}
+        self.options: Dict[str, Any] = {"timeDifference": 0}
         self.fail_balance = False
         # GET /sapi/v1/account/apiRestrictions (droits de la clé API)
         self.restrictions: Dict[str, Any] = {
@@ -702,6 +722,7 @@ class FakeBinanceMulti:
             self.locked.setdefault(base, 0.0)
             fb.free = self.free
             fb.locked = self.locked
+            fb.options = self.options      # un seul client ccxt : options communes
             # Comme Binance : orderId numéroté PAR PAIRE (collisions possibles
             # entre paires) ; orderListId unique (GET orderList sans symbol).
             fb._ids = itertools.count(5_000_000_000)
@@ -760,17 +781,23 @@ class FakeBinanceMulti:
         return self._f(symbol).create_order_request(symbol, type, side, amount,
                                                     price, params)
 
+    @property
+    def _first(self):
+        return next(iter(self.fakes.values()))
+
     def fetch_time(self):
-        return int(time.time() * 1000)
+        return self._first.fetch_time()
 
     def load_time_difference(self):
-        for fb in self.fakes.values():
-            fb.load_time_difference()
-        return 0
+        return self._first.load_time_difference()
 
-    def skew_clock(self):
+    def set_server_offset(self, ms: float) -> None:
         for fb in self.fakes.values():
-            fb.clock_skewed = True
+            fb.server_offset_ms = ms
+
+    @property
+    def time_calls(self) -> int:
+        return self._first.time_calls
 
     def fetch_order(self, id, symbol=None, params=None):
         return self._f(symbol).fetch_order(id, symbol, params)

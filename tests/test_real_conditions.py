@@ -13,7 +13,6 @@ import trend_strategy as ts
 import trendguard_bot as tg
 import v29
 from conftest import open_live_position
-from fake_binance import FakeBinanceMulti
 from test_trendguard import DAY, SIM_FROM, feed, make_bot, synthetic_market
 
 
@@ -32,20 +31,73 @@ def test_make_binance_spot_only_long_timeout_clock_corrected():
 
 def test_resync_clock_is_safe():
     class Down:
-        def load_time_difference(self):
+        def fetch_time(self):
             raise v29.ccxt.NetworkError("timeout")
+    v29.set_clock_offset_ms(1234)
     assert v29.resync_clock(Down()) is None
     assert v29.resync_clock(object()) is None
+    assert v29.clock_offset_ms() == 1234          # dernier écart conservé
 
 
-# ---------- Horloge décalée (-1021) ----------
+# ---------- Heure du bot = heure de Binance ----------
+
+class _SlowLink:
+    """Horloge et serveur simulés : chaque requête prend `rtt` secondes et
+    le serveur a `offset_ms` d'avance sur le PC."""
+
+    def __init__(self, rtts, offset_ms):
+        self.t = 1_000_000.0
+        self.rtts = list(rtts)
+        self.offset_ms = offset_ms
+
+    def time(self):
+        return self.t
+
+    def fetch_time(self):
+        rtt = self.rtts.pop(0)
+        mid = self.t + rtt / 2
+        self.t += rtt
+        return mid * 1000 + self.offset_ms
+
+
+def test_clock_measure_uses_fastest_round_trip_midpoint():
+    link = _SlowLink([3.2, 0.4, 1.5], offset_ms=1300)
+    m = v29.measure_exchange_clock(link, samples=3, time_fn=link.time)
+    assert m.offset_ms == pytest.approx(1300)
+    assert m.latency_ms == pytest.approx(400) and m.uncertainty_ms == pytest.approx(200)
+    assert m.samples == 3
+    # La méthode de ccxt (heure de réception − heure du serveur) se trompe
+    # d'un demi aller-retour : 1,6 s sur la mesure lente.
+    t0 = link.t = 5_000_000.0
+    link.rtts = [3.2]
+    server = link.fetch_time()
+    ccxt_offset = -(link.t * 1000 - server)
+    assert abs(ccxt_offset - 1300) == pytest.approx(1600)
+    assert t0
+
+
+def test_sync_puts_bot_and_signed_orders_on_binance_time():
+    from fake_binance import FakeBinance
+    fb = FakeBinance()
+    fb.server_offset_ms = 90_000                 # PC en retard de 90 s
+    with pytest.raises(v29.ccxt.InvalidNonce):
+        fb._check_timestamp()                     # avant : ordres refusés
+    sync = v29.sync_exchange_clock(fb)
+    assert sync.offset_ms == pytest.approx(90_000, abs=200)
+    assert fb.options["timeDifference"] == pytest.approx(-90_000, abs=200)
+    lag = (v29._utcnow() - datetime.now(timezone.utc)).total_seconds()
+    assert lag == pytest.approx(90, abs=0.3)
+    fb._check_timestamp()                         # après : acceptés
+    assert "retard de 90,0 s" in v29.describe_clock(sync.offset_ms)
+
 
 def test_order_retried_after_clock_resync(live_env):
     env = live_env
-    env.fb.clock_skewed = True                  # l'horloge a dérivé
+    env.fb.server_offset_ms = 20_000             # l'horloge du PC a dérivé
     res = open_live_position(env)
     assert res == v29.EntryResult.OPENED
-    assert env.fb.clock_syncs == 1
+    assert env.fb.time_calls >= 1
+    assert v29.clock_offset_ms() == pytest.approx(20_000, abs=200)
     buys = [o for o in env.fb.orders.values() if o["side"] == "buy"]
     assert len(buys) == 1                        # jamais d'achat en double
     assert env.ctx.position.protection_mode != "NONE"
@@ -54,8 +106,11 @@ def test_order_retried_after_clock_resync(live_env):
 
 def test_persistent_clock_error_rejects_cleanly(live_env):
     env = live_env
-    env.fb.clock_skewed = True
-    env.fb.load_time_difference = lambda: 0      # le recalage ne suffit pas
+    env.fb.server_offset_ms = 20_000
+
+    def down():
+        raise v29.ccxt.NetworkError("timeout")
+    env.fb.fetch_time = down                     # recalage impossible
     res = open_live_position(env)
     assert res != v29.EntryResult.OPENED
     assert not env.ctx.position.in_position
@@ -63,51 +118,82 @@ def test_persistent_clock_error_rejects_cleanly(live_env):
     assert env.ctx.pending_order is None and not env.ctx.risk.halted
 
 
-def _count_syncs(fb: FakeBinanceMulti) -> int:
-    return next(iter(fb.fakes.values())).clock_syncs
-
-
-def test_live_bot_resyncs_clock_hourly(logger):
+@pytest.mark.parametrize("mode", ["paper", "live"])
+def test_bot_syncs_clock_at_boot_then_hourly(logger, mode):
     close, volume = synthetic_market()
-    bot, fb = make_bot("live", close, logger)
+    bot, fb = make_bot(mode, close, logger)
     feed(fb, close, volume)
+    fb.set_server_offset(45_000)
     assert bot.boot()
+    assert bot.state["clock_offset_ms"] == pytest.approx(45_000, abs=200)
+    assert v29.clock_offset_ms() == pytest.approx(45_000, abs=200)
+    calls = fb.time_calls
     d = close.index[SIM_FROM]
     now = d.to_pydatetime() + DAY + timedelta(minutes=5)
     bot.run_cycle(now=now)
-    assert _count_syncs(fb) == 1 and bot.state["clock_offset_ms"] == 0
-    bot.run_cycle(now=now + timedelta(minutes=1))
-    assert _count_syncs(fb) == 1                 # pas à chaque cycle
+    assert fb.time_calls == calls                # pas à chaque cycle
     bot._last_clock_sync -= 3601
-    bot.run_cycle(now=now + timedelta(minutes=2))
-    assert _count_syncs(fb) == 2
+    bot.run_cycle(now=now + timedelta(minutes=1))
+    assert fb.time_calls > calls
 
 
-def test_paper_bot_never_signs_so_never_resyncs(logger):
+def test_bot_decides_on_binance_time_not_pc_time(logger, monkeypatch):
+    """PC en retard : chez Binance il est 00:03 (la bougie du jour est
+    close), sur le PC pas encore. Le bot décide à l'heure de Binance."""
     close, volume = synthetic_market()
     bot, fb = make_bot("paper", close, logger)
     feed(fb, close, volume)
+    pc_now = datetime.now(timezone.utc)
+    binance_now = (pc_now + timedelta(days=1)).replace(hour=0, minute=3, second=0,
+                                                       microsecond=0)
+    fb.set_server_offset((binance_now - pc_now).total_seconds() * 1000)
     assert bot.boot()
-    d = close.index[SIM_FROM]
-    bot.run_cycle(now=d.to_pydatetime() + DAY + timedelta(minutes=5))
-    assert _count_syncs(fb) == 0
+    seen = {}
+    monkeypatch.setattr(bot, "daily_decision",
+                        lambda now, day: seen.update(now=now, day=day))
+    bot.run_cycle()                               # heure réelle, sans `now`
+    assert abs((seen["now"] - binance_now).total_seconds()) < 60
+    assert seen["day"] == (binance_now - timedelta(days=1)).date().isoformat()
+    assert seen["day"] != tg.last_closed_day(datetime.now(timezone.utc), 120)
 
 
-def test_diagnosis_reports_compensated_clock_offset():
+def test_logs_are_stamped_with_binance_time(tmp_path):
+    """Horodatage complet (secondes ET millisecondes) à l'heure de Binance,
+    y compris pour un écart non entier : 1,7 s."""
+    lg = tg.build_guard_logger(str(tmp_path / "t.log"))
+    v29.set_clock_offset_ms(1700)
+    stamps = []
+    for _ in range(20):
+        lg.info("repère")
+        stamps.append(datetime.now() + timedelta(milliseconds=1700))
+        time.sleep(0.013)
+    for h in lg.handlers:
+        h.flush()
+    lines = (tmp_path / "t.log").read_text(encoding="utf-8").splitlines()
+    for line, expected in zip(lines, stamps):
+        logged = datetime.strptime(line.split(" [")[0], "%Y-%m-%d %H:%M:%S,%f")
+        assert abs((logged - expected).total_seconds()) < 0.1, line
+    for h in list(lg.handlers):
+        h.close()
+        lg.removeHandler(h)
+
+
+def test_diagnosis_reports_clock_offset_as_handled():
     class Skewed:
         def fetch_time(self):
-            return int(time.time() * 1000) + 3000   # Binance 3 s « en avance »
+            return int(time.time() * 1000) + 3000   # PC 3 s en retard
     now = datetime.now(timezone.utc)
     findings = dg.check_system(Skewed(), {}, str(now.date()), "", None, now)
     clock = [f for f in findings if f.message.startswith("Horloge")][0]
-    assert clock.level == "INFO" and "compensé par le bot" in clock.message
+    assert clock.level == "INFO" and "l'heure de Binance" in clock.message
+    assert "retard" in clock.message
 
     class Far:
         def fetch_time(self):
-            return int(time.time() * 1000) + 300_000
+            return int(time.time() * 1000) + 2 * 3600 * 1000
     clock = [f for f in dg.check_system(Far(), {}, str(now.date()), "", None, now)
              if f.message.startswith("Horloge")][0]
-    assert clock.level == "ALERTE" and clock.reco
+    assert clock.level == "ATTENTION" and clock.reco
 
 
 # ---------- Vérification publique (sans clé API) ----------

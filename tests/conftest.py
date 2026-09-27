@@ -16,6 +16,15 @@ import v29  # noqa: E402
 from fake_binance import FakeBinance  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _exchange_clock_reset():
+    """L'heure du bot (écart avec Binance) est globale : remise à zéro
+    avant et après chaque test."""
+    v29.set_clock_offset_ms(0)
+    yield
+    v29.set_clock_offset_ms(0)
+
+
 @pytest.fixture
 def logger():
     lg = logging.getLogger("test.v29")
