@@ -98,6 +98,17 @@ la question « le bot peut-il apprendre et adopter la meilleure stratégie ? » 
   en gain et 92 % des fenêtres de 24 mois (2019-2026, sans garantie pour
   l'avenir).
 
+### Animation du rejeu (`replay_animation.py`)
+
+`python replay_animation.py` rejoue le vrai bot, jour après jour, sur les
+clôtures réelles de Binance (depuis le 1er janvier 2025 par défaut), puis
+ouvre une page HTML animée : le marché de chaque crypto avec les achats, les
+ventes et les stops du bot, le régime BTC, le capital face au BTC conservé, la
+décision de chaque jour étape par étape et le portefeuille paper actuel du bot.
+Les prix et les décisions sont réels ; les ordres sont simulés (capital fictif
+de 10 000 USDT). Aucune clé API, aucun ordre. Options : `--start`, `--end`,
+`--capital`, `--out`, `--no-open`.
+
 ### Utilisation
 
 ```bash
@@ -112,6 +123,7 @@ python trendguard_bot.py diagnose                     # auto-diagnostic complet 
 python trendguard_bot.py verify                       # sans clé : test réel des ordres du jour, sans envoi
 python trendguard_bot.py set-keys                     # clés API vérifiées par Binance, saisie masquée
 python strategy_lab.py --cache data_binance           # tournoi des stratégies + méta-apprentissage
+python replay_animation.py                            # animation du bot sur les prix réels Binance
 ```
 
 ### Dans VS Code
@@ -129,6 +141,8 @@ python strategy_lab.py --cache data_binance           # tournoi des stratégies 
    - **TrendGuard — un seul cycle** : une décision, puis arrêt ;
    - **TrendGuard — rejeu paper 12 mois** : télécharge l'historique et le
      rejoue ;
+   - **TrendGuard — animation du rejeu** : page animée du bot sur les prix
+     réels Binance, ouverte dans le navigateur ;
    - **TrendGuard — statut du portefeuille** ;
    - **Tests (pytest)**.
 
@@ -282,7 +296,7 @@ walkforward | status | resume` (voir `python v29.py docs`).
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 228 tests, simulateurs Binance Spot mono et multi-paires
+python -m pytest tests -q      # 242 tests, simulateurs Binance Spot mono et multi-paires
 ```
 
 ## Limites connues

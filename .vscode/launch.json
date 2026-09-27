@@ -39,6 +39,17 @@
       "preLaunchTask": "Télécharger les données de recherche"
     },
     {
+      // Page HTML ouverte dans le navigateur à la fin (quelques minutes).
+      "name": "TrendGuard — animation du rejeu (prix réels Binance)",
+      "type": "debugpy",
+      "request": "launch",
+      "noDebug": true,
+      "program": "${workspaceFolder}/replay_animation.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "envFile": "${workspaceFolder}/.env"
+    },
+    {
       "name": "TrendGuard — diagnostic complet (lecture seule)",
       "type": "debugpy",
       "request": "launch",
