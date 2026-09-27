@@ -555,3 +555,106 @@ def test_late_paper_decision_buys_at_current_price(logger):
     assert h["entry"] == pytest.approx(c * 1.05 * (1 + p.slippage), rel=1e-9)
     loss = h["qty"] * (h["entry"] * (1 + p.fee) - h["stop"] * (1 - p.fee - p.slippage))
     assert loss <= p.risk_pct * 10_000 * 1.0001
+
+
+def _day_of(iso_now: str):
+    """Jour de bougie traité par un cycle lancé à `iso_now` (J+1 00:05)."""
+    return (datetime.fromisoformat(iso_now) - DAY - timedelta(minutes=5)).date()
+
+
+def test_missed_days_helper():
+    idx = pd.date_range("2026-09-20", periods=8, freq="D", tz="UTC")
+    assert tg.TrendGuardBot._missed_days(idx, None, "2026-09-26") == []
+    assert tg.TrendGuardBot._missed_days(idx, "2026-09-25", "2026-09-26") == []
+    assert tg.TrendGuardBot._missed_days(idx, "2026-09-22", "2026-09-26") == \
+        ["2026-09-23", "2026-09-24", "2026-09-25"]
+
+
+def test_stops_hit_while_bot_stopped_are_caught_up(logger):
+    """Bot arrêté plusieurs jours (Codespace en veille, redémarrage…) : au
+    retour, les stops franchis pendant l'arrêt sont exécutés et les stops des
+    autres positions ont suivi le trailing, comme si le bot avait tourné."""
+    close, volume = synthetic_market()
+    daily, fb_a = make_bot("paper", close, logger)
+    daily.boot()
+    run_days(daily, fb_a, close, volume, SIM_FROM, N_DAYS)
+    dates = [d.date() for d in close.index]
+    trade = next(t for t in daily.state["trades"] if t["reason"] == "STOP"
+                 and (_day_of(t["date"]) - _day_of(t["entry_date"])).days >= 4)
+    entry_i = dates.index(_day_of(trade["entry_date"]))
+    exit_i = dates.index(_day_of(trade["date"]))
+    back_i = exit_i + 2                     # redémarrage 2 jours après le stop
+
+    stopped, fb_b = make_bot("paper", close, logger)
+    stopped.boot()
+    run_days(stopped, fb_b, close, volume, SIM_FROM, entry_i + 1)
+    assert trade["asset"] in stopped.state["paper"]["holdings"]
+    run_days(stopped, fb_b, close, volume, back_i, back_i + 1)
+
+    late = [t for t in stopped.state["trades"] if t["asset"] == trade["asset"]
+            and t["entry_date"] == trade["entry_date"]]
+    assert [t["reason"] for t in late] == ["STOP_LATE"]
+    assert stopped.state["last_decision_day"] == str(dates[back_i])
+    # Positions tenues par les deux bots (même entrée) : même stop.
+    replay, fb_c = make_bot("paper", close, logger)
+    replay.boot()
+    run_days(replay, fb_c, close, volume, SIM_FROM, back_i + 1)
+    ref = replay.state["paper"]["holdings"]
+    for a, h in stopped.state["paper"]["holdings"].items():
+        if a in ref and ref[a]["entry_date"] == h["entry_date"]:
+            assert h["stop"] == pytest.approx(ref[a]["stop"])
+            assert h["high"] == pytest.approx(ref[a]["high"])
+
+
+def test_paper_disaster_stop_follows_trailing(logger):
+    """Paper = réel : le stop catastrophe simulé remonte avec le trailing et
+    reste sous le stop de clôture."""
+    close, volume = synthetic_market()
+    bot, fb = make_bot("paper", close, logger)
+    bot.boot()
+    first: dict = {}
+    raised = False
+    feed(fb, close, volume)
+    for d in close.index[SIM_FROM:N_DAYS]:
+        for a in close.columns:
+            fb.set_price(f"{a.upper()}/USDT", float(close[a].loc[d]))
+        bot.run_cycle(now=d.to_pydatetime() + DAY + timedelta(minutes=5))
+        for a, h in bot.state["paper"]["holdings"].items():
+            key = (a, h["entry_date"])
+            first.setdefault(key, h["disaster"])
+            assert h["disaster"] < h["stop"]
+            raised = raised or h["disaster"] > first[key] * 1.01
+    assert raised
+
+
+def test_live_catch_up_closes_position_and_its_exchange_stop(logger):
+    close, volume = synthetic_market()
+    daily, fb_a = make_bot("paper", close, logger)
+    daily.boot()
+    run_days(daily, fb_a, close, volume, SIM_FROM, N_DAYS)
+    dates = [d.date() for d in close.index]
+    trade = next(t for t in daily.state["trades"] if t["reason"] == "STOP"
+                 and (_day_of(t["date"]) - _day_of(t["entry_date"])).days >= 4)
+    entry_i = dates.index(_day_of(trade["entry_date"]))
+    back_i = dates.index(_day_of(trade["date"])) + 2
+
+    bot, fb = make_bot("live", close, logger)
+    feed(fb, close, volume)
+    assert bot.boot()
+    run_days(bot, fb, close, volume, SIM_FROM, entry_i + 1)
+    slot = bot.slots[trade["asset"].upper()]
+    old_entry = slot.ctx.position.opened_at
+    assert slot.ctx.position.in_position
+    run_days(bot, fb, close, volume, back_i, back_i + 1)
+    assert any(t["asset"] == trade["asset"] and "STOP_LATE" in t["reason"]
+               for t in bot.state["trades"])
+    p = slot.ctx.position
+    # Ancienne position soldée ; une nouvelle entrée le même jour est
+    # possible (cassure), protégée par un seul stop à sa taille.
+    assert not p.in_position or p.opened_at != old_entry
+    sells = [o for o in fb.fakes[slot.symbol].orders.values()
+             if o["status"] == "NEW" and o["side"] == "sell"]
+    assert len(sells) == (1 if p.in_position else 0)
+    if p.in_position:
+        assert sells[0]["amount"] <= p.amount_held + 1e-9
+    assert not slot.ctx.risk.halted and not slot.ctx.orphan_balance

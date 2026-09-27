@@ -600,9 +600,10 @@ class TrendGuardBot:
 
     # ---------- Décision journalière ----------
 
-    def _market_snapshot(self, now: datetime, day: str
-                         ) -> Tuple[Dict[str, Dict[str, float]], bool,
-                                    Dict[str, float]]:
+    def _load_market(self, now: datetime
+                     ) -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame], pd.Series]:
+        """Clôtures journalières FERMÉES à `now`, indicateurs par actif et
+        régime BTC, calculés une seule fois pour tous les jours demandés."""
         now_ms = int(now.timestamp() * 1000)
         closes, vols = {}, {}
         failed: List[str] = []
@@ -654,27 +655,74 @@ class TrendGuardBot:
                                 + ", ".join(a.upper() for a in failed))
         close = pd.DataFrame(closes).sort_index()
         volume = pd.DataFrame(vols).reindex(close.index)
+        feats: Dict[str, pd.DataFrame] = {}
+        for a in close.columns:
+            first_valid = close[a].first_valid_index()
+            if first_valid is None:
+                continue
+            f = ts.asset_features(close[a].loc[first_valid:], self.p,
+                                  volume[a].loc[first_valid:])
+            feats[a] = f.reindex(close.index)
+        return close, feats, ts.btc_regime(close["btc"], self.p)
+
+    @staticmethod
+    def _snapshot_at(close: pd.DataFrame, feats: Dict[str, pd.DataFrame],
+                     regime: pd.Series, day: str
+                     ) -> Tuple[Dict[str, Dict[str, float]], bool,
+                                Dict[str, float]]:
         d = pd.Timestamp(day, tz="UTC")
         if d not in close.index:
             raise DecisionDeferred(f"bougie du {day} absente")
         i = close.index.get_loc(d)
         snap: Dict[str, Dict[str, float]] = {}
-        for a in close.columns:
-            col = close[a]
-            first_valid = col.first_valid_index()
-            if first_valid is None:
-                continue
-            f = ts.asset_features(col.loc[first_valid:], self.p,
-                                  volume[a].loc[first_valid:])
-            f = f.reindex(close.index)
+        for a, f in feats.items():
             row = f.iloc[i]
             if pd.isna(row["close"]):
                 continue
             snap[a] = {k: float(row[k]) for k in
                        ("close", "vol", "prior_high", "mom", "age", "vol30")}
-        bull = bool(ts.btc_regime(close["btc"], self.p).iloc[i])
         prices = {a: s["close"] for a, s in snap.items()}
-        return snap, bull, prices
+        return snap, bool(regime.iloc[i]), prices
+
+    def _market_snapshot(self, now: datetime, day: str
+                         ) -> Tuple[Dict[str, Dict[str, float]], bool,
+                                    Dict[str, float]]:
+        close, feats, regime = self._load_market(now)
+        return self._snapshot_at(close, feats, regime, day)
+
+    @staticmethod
+    def _missed_days(index: pd.Index, last: Optional[str], day: str) -> List[str]:
+        """Clôtures postérieures à la dernière décision et antérieures à
+        `day` : jours où le bot était arrêté."""
+        if not last or last >= day:
+            return []
+        lo, hi = pd.Timestamp(last, tz="UTC"), pd.Timestamp(day, tz="UTC")
+        return [str(d.date()) for d in index if lo < d < hi]
+
+    def _catch_up(self, close: pd.DataFrame, feats: Dict[str, pd.DataFrame],
+                  regime: pd.Series, missed: List[str],
+                  prices_now: Dict[str, float]) -> List[Tuple[str, str]]:
+        """Bot arrêté pendant `missed` : les stops sont réévalués sur chacune
+        de ces clôtures, dans l'ordre (plus hauts et trailing compris). Un
+        stop franchi pendant l'arrêt est exécuté maintenant, au prix actuel :
+        c'est tout ce qu'un bot en réel pourrait faire. Aucune entrée n'est
+        prise sur un jour passé."""
+        self.logger.warning(
+            f"[RATTRAPAGE] {len(missed)} clôture(s) non traitée(s) "
+            f"({missed[0]} → {missed[-1]}), bot arrêté ? Stops réévalués sur "
+            f"ces clôtures ; sorties éventuelles au prix actuel.")
+        holdings = self._holdings()
+        late: List[Tuple[str, str]] = []
+        for d in missed:
+            snap, bull, _ = self._snapshot_at(close, feats, regime, d)
+            # Bougie absente ce jour-là ≠ radiation : l'actif est laissé tel quel.
+            present = {a: h for a, h in holdings.items() if a in snap}
+            for a, reason in ts.update_positions(present, snap, bull, self.p):
+                holdings.pop(a, None)
+                self._execute_exit(a, f"{reason}_LATE", prices_now.get(a))
+                late.append((a, f"{reason}_LATE"))
+            self._write_back(holdings)
+        return late
 
     def _equity_and_cash(self, prices: Dict[str, float]) -> Tuple[float, float]:
         if not self.live:
@@ -712,7 +760,12 @@ class TrendGuardBot:
 
     def daily_decision(self, now: datetime, day: str) -> None:
         p = self.p
-        snap, bull, prices = self._market_snapshot(now, day)
+        close, feats, regime = self._load_market(now)
+        snap, bull, prices = self._snapshot_at(close, feats, regime, day)
+        missed = self._missed_days(close.index,
+                                   self.state.get("last_decision_day"), day)
+        late = (self._catch_up(close, feats, regime, missed, prices)
+                if missed else [])
         holdings = self._holdings()
         exits = ts.update_positions(holdings, snap, bull, p)
         for a, reason in exits:
@@ -721,6 +774,8 @@ class TrendGuardBot:
         self._write_back(holdings)
         if self.live:
             self._raise_exchange_stops(holdings, snap, now)
+        else:
+            self._raise_paper_disaster(holdings, snap)
         equity, cash = self._equity_and_cash(prices)
         self.state.setdefault("start_equity", equity)
         peak = max(float(self.state.get("peak_equity") or 0.0), equity)
@@ -750,7 +805,7 @@ class TrendGuardBot:
                     entries.append(done)
                     cash_left -= done["cost"]
         self.state["last_decision_day"] = day
-        self._summary(day, bull, equity, exits, entries, prices)
+        self._summary(day, bull, equity, late + exits, entries, prices)
 
     def _can_enter(self, a: str) -> bool:
         s = self.slots.get(a.upper())
@@ -804,6 +859,30 @@ class TrendGuardBot:
             s.eng._modify_stop(s.ctx, new_sl, int(now.timestamp() * 1000),
                                "TG_TRAIL")
             self._save_slot(s)
+
+    def _raise_paper_disaster(self, holdings: Dict[str, ts.Holding],
+                              snap: Dict[str, Dict[str, float]]) -> None:
+        """Paper : le stop catastrophe simulé suit le trailing exactement
+        comme le STOP_LOSS posé sur Binance en réel (_raise_exchange_stops).
+        Sans cela, un krach intrajournalier était simulé au niveau du stop
+        d'origine, bien plus bas qu'en réel."""
+        book = self.state["paper"]["holdings"]
+        for a, h in holdings.items():
+            b = book.get(a)
+            s = self.slots.get(a.upper())
+            vol = snap.get(a, {}).get("vol")
+            if b is None or s is None or not ts._finite(vol):
+                continue
+            target = h.stop - self.g.catastrophe_atr * vol
+            if target <= b["disaster"] * (1 + self.g.stop_raise_min_pct):
+                continue
+            try:
+                last = float(s.ex.get_ticker()["last"])
+            except Exception:
+                last = snap.get(a, {}).get("close") or 0.0
+            if target >= last * 0.99:
+                continue   # sortie gérée par le stop de clôture
+            b["disaster"] = target
 
     def _execute_entry(self, plan: Dict[str, Any], equity: float,
                        now: datetime, cash_left: float
