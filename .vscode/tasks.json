@@ -37,6 +37,27 @@
       "problemMatcher": []
     },
     {
+      "label": "Panneau de contrôle (navigateur)",
+      "type": "shell",
+      "command": "python trendguard_bot.py panel",
+      "isBackground": true,
+      "presentation": { "panel": "dedicated" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Alertes — configurer e-mail et WhatsApp (saisie masquée)",
+      "type": "shell",
+      "command": "python alerts.py configurer",
+      "presentation": { "focus": true, "panel": "dedicated" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Alertes — envoyer un message de test",
+      "type": "shell",
+      "command": "python alerts.py tester",
+      "problemMatcher": []
+    },
+    {
       "label": "Veille IA — enregistrer une clé d'IA (saisie masquée)",
       "type": "shell",
       "command": "python market_watch.py set-key ${input:veilleIA}",

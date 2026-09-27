@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir -r requirements-docker.txt
 
 # Tous les modules : le bot importe diagnostics.py, qui importe strategy_lab.py.
 COPY *.py ./
+COPY panel ./panel
 COPY tests ./tests
 # L'image ne se construit pas si un seul test échoue.
 RUN python -m pytest tests -q -p no:cacheprovider

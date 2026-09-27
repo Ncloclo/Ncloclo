@@ -98,6 +98,43 @@ la question « le bot peut-il apprendre et adopter la meilleure stratégie ? » 
   en gain et 92 % des fenêtres de 24 mois (2019-2026, sans garantie pour
   l'avenir).
 
+### Panneau de contrôle (`python trendguard_bot.py panel`)
+
+Application web locale, ouverte dans le navigateur (VS Code : « TrendGuard —
+panneau de contrôle ») :
+
+- **AUTO** démarre l'automatisation du bot, **ARRÊTER** l'arrête proprement
+  (fin du cycle en cours, état enregistré, stops Binance laissés en place). En
+  mode réel, une confirmation est demandée ;
+- **Graphiques** : capital, régime BTC et chaque position en temps réel ; un
+  clic ouvre le détail (bougies, volume, achats et ventes, stops, zoom,
+  intervalles de 15 min à 1 jour) ;
+- **Cryptos** : les 21 paires avec cours, variation, volume et courbe de 48 h,
+  filtres (détenues, bloquées) et recherche ;
+- **Positions**, **Veille**, **Journal** et **Réglages** (test des alertes,
+  thème clair ou sombre, accès depuis un téléphone).
+
+Le panneau lit la base du bot sans la modifier et ne passe aucun ordre
+lui-même. Sans bot ni réseau, `--demo` affiche des données fictives.
+
+Compatibilité : Windows, Linux et macOS (Python et un navigateur). Sur un
+téléphone Android ou un iPhone connecté au même Wi-Fi : mettre
+`PANEL_PASSWORD=…` dans `.env`, lancer `python trendguard_bot.py panel --host
+0.0.0.0`, ouvrir l'adresse affichée, puis « Ajouter à l'écran d'accueil » : le
+panneau s'ouvre comme une application. Il n'y a pas de fichier APK : il
+faudrait publier le panneau sur Internet en HTTPS, ce qui exposerait la
+commande du bot.
+
+### Alertes par e-mail et WhatsApp (`alerts.py`)
+
+`python alerts.py configurer` (saisie masquée des mots de passe) puis `python
+alerts.py tester`. Les alertes partent sur Telegram, par e-mail (SMTP, par
+exemple Gmail avec un mot de passe d'application) et sur WhatsApp (CallMeBot,
+gratuit pour un usage personnel, ou Twilio). Par défaut, seules les alertes
+critiques (arrêt d'urgence, retrait officiel d'une crypto détenue, alerte forte
+de la veille) partent par e-mail et WhatsApp ; `ALERT_LEVEL=all` y ajoute le
+résumé quotidien. Un canal en panne ne ralentit jamais le trading.
+
 ### Animation du rejeu (`replay_animation.py`)
 
 `python replay_animation.py` rejoue le vrai bot, jour après jour, sur les
@@ -187,6 +224,8 @@ python trendguard_bot.py verify                       # sans clé : test réel d
 python trendguard_bot.py set-keys                     # clés API vérifiées par Binance, saisie masquée
 python strategy_lab.py --cache data_binance           # tournoi des stratégies + méta-apprentissage
 python replay_animation.py                            # animation du bot sur les prix réels Binance
+python trendguard_bot.py panel                        # panneau de contrôle (navigateur)
+python alerts.py configurer                           # alertes e-mail et WhatsApp
 ```
 
 ### Dans VS Code

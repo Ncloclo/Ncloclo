@@ -43,6 +43,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import ccxt
 import pandas as pd
 
+import alerts
 import diagnostics as dg
 import market_watch as mw
 import trend_strategy as ts
@@ -75,6 +76,8 @@ TG_ENV_DOC: Dict[str, str] = {
     "TG_VEILLE": "true : annonces officielles Binance lues chaque jour (retrait = achats bloqués)",
     "TG_VEILLE_IA": "true : rapport quotidien des IA (conseil seulement, clés dans .env)",
     "TG_VEILLE_DB": "Base de la veille (mémoire des IA et des annonces)",
+    "PANEL_HOST": "Panneau : 127.0.0.1 (ce PC) ou 0.0.0.0 (téléphone, mot de passe requis)",
+    "PANEL_PORT": "Panneau : port web (8765)",
     "TG_ALLOW_RECOVERY": "true : adopter les ordres du bot inconnus de la base (base perdue)",
     "TG_PAPER_CAPITAL": "Capital initial du mode paper (USDT)",
     "TG_DB_FILE": "Base SQLite du bot",
@@ -83,6 +86,19 @@ TG_ENV_DOC: Dict[str, str] = {
     "TG_HEALTH_MAX_AGE_SEC": "Âge max du dernier cycle réussi pour `health` (s)",
     "TELEGRAM_TOKEN": "Token bot Telegram",
     "TELEGRAM_CHAT_ID": "Chat ID destination",
+    "ALERT_LEVEL": "E-mail et WhatsApp : critical (alertes critiques) ou all (tout)",
+    "SMTP_HOST": "E-mail : serveur SMTP (ex. smtp.gmail.com)",
+    "SMTP_PORT": "E-mail : port (587 STARTTLS, 465 SSL)",
+    "SMTP_USER": "E-mail : identifiant SMTP",
+    "SMTP_PASSWORD": "E-mail : mot de passe (Gmail : mot de passe d'application)",
+    "ALERT_EMAIL_TO": "E-mail : adresse qui reçoit les alertes",
+    "WHATSAPP_PROVIDER": "WhatsApp : callmebot (gratuit) ou twilio",
+    "WHATSAPP_PHONE": "WhatsApp : numéro international (+225…)",
+    "CALLMEBOT_APIKEY": "WhatsApp CallMeBot : clé reçue de callmebot.com",
+    "TWILIO_ACCOUNT_SID": "WhatsApp Twilio : Account SID",
+    "TWILIO_AUTH_TOKEN": "WhatsApp Twilio : Auth Token",
+    "TWILIO_WHATSAPP_FROM": "WhatsApp Twilio : numéro expéditeur",
+    "PANEL_PASSWORD": "Panneau : mot de passe (obligatoire avec PANEL_HOST=0.0.0.0)",
 }
 
 
@@ -143,6 +159,14 @@ class GuardConfig:
                 ("lock_file", os.path.join(v29.APP_DIR, f"trendguard_{self.run_mode}.lock"))):
             if not getattr(self, name):
                 object.__setattr__(self, name, default)
+
+    @property
+    def stop_file(self) -> str:
+        """Demande d'arrêt déposée par le panneau de contrôle, à côté du
+        verrou (fonctionne pareil sous Windows, Linux et macOS)."""
+        if not self.lock_file or self.lock_file in (os.devnull, "/dev/null"):
+            return ""
+        return os.path.splitext(self.lock_file)[0] + ".stop"
 
 
 def parse_dd_throttle(raw: str) -> Tuple[Tuple[float, float], ...]:
@@ -265,6 +289,9 @@ class TrendGuardBot:
         self._last_heartbeat = 0.0
         self._last_clock_sync = 0.0
         self._last_veto_refresh = 0.0
+        self._last_equity_log = 0.0
+        self._stop_flag = False
+        self._started_at = time.time()
         self._last_close: Optional[pd.DataFrame] = None   # apprentissage de la veille
 
     @property
@@ -419,6 +446,34 @@ class TrendGuardBot:
                                 "pnl": float(t.get("pnl", 0.0)),
                                 "r": float(t.get("r", 0.0)),
                                 "reason": t.get("reason") or reason})
+
+    def _log_equity(self, equity: float, cash: float) -> None:
+        """Point d'historique du capital pour les graphiques du panneau, au
+        plus un toutes les 10 minutes."""
+        now = time.time()
+        if now - self._last_equity_log < 600:
+            return
+        self._last_equity_log = now
+        self.store.log_equity(float(equity), float(cash), 0.0, 0.0,
+                              bool(self.state.get("halted")), self.g.run_mode)
+
+    def stop_requested(self) -> bool:
+        """Arrêt propre demandé depuis le panneau (fichier .stop). Une
+        demande déposée plus d'une minute avant le démarrage du bot est
+        périmée : ignorée."""
+        if self._stop_flag:
+            return True
+        path = self.g.stop_file
+        if path and os.path.exists(path):
+            stale = os.path.getmtime(path) < self._started_at - 60
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+            if not stale:
+                self._stop_flag = True
+                self.logger.info("[ARRÊT] demandé depuis le panneau de contrôle : arrêt propre")
+        return self._stop_flag
 
     @staticmethod
     def _closed_count(s: Slot) -> int:
@@ -615,7 +670,8 @@ class TrendGuardBot:
                 s = self.slots.get(a.upper())
                 if s is not None:
                     prices[a] = s.ex.get_ticker()["last"]
-            equity, _cash = self._equity_and_cash(prices)
+            equity, cash = self._equity_and_cash(prices)
+            self._log_equity(equity, cash)
             start = self.state.get("start_equity") or equity
             parts = [f"{a.upper()} {(prices.get(a, h.entry) / h.entry - 1) * 100:+.1f} %"
                      for a, h in sorted(holdings.items())]
@@ -880,6 +936,7 @@ class TrendGuardBot:
         peak = max(float(self.state.get("peak_equity") or 0.0), equity)
         self.state["peak_equity"] = peak
         self.state["last_equity"] = equity
+        self._log_equity(equity, cash)
         self.state["last_regime_bull"] = bull
         if not self.state.get("halted") and equity < peak * (1 - self.g.kill_drawdown):
             self.state["halted"] = True
@@ -1091,7 +1148,7 @@ class TrendGuardBot:
                 hang = None
         backoff = 5
         try:
-            while _running:
+            while _running and not self.stop_requested():
                 if hang is not None:
                     faulthandler.dump_traceback_later(self.STALL_DUMP_SEC, file=hang)
                 try:
@@ -1107,7 +1164,7 @@ class TrendGuardBot:
                 finally:
                     if hang is not None:
                         faulthandler.cancel_dump_traceback_later()
-                _sleep(wait)
+                _sleep(wait, self.stop_requested)
         finally:
             if hang is not None:
                 faulthandler.cancel_dump_traceback_later()
@@ -1122,10 +1179,14 @@ def _stop(sig, frame):
     _running = False
 
 
-def _sleep(seconds: float) -> None:
+def _sleep(seconds: float, should_stop: Optional[Callable[[], bool]] = None) -> None:
+    """Attente interrompue par Ctrl+C, SIGTERM ou une demande d'arrêt
+    (fichier .stop déposé par le panneau), vérifiée chaque seconde."""
     end = time.time() + seconds
     while _running and time.time() < end:
-        time.sleep(min(1.0, end - time.time()))
+        if should_stop is not None and should_stop():
+            return
+        time.sleep(max(0.0, min(1.0, end - time.time())))
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -1273,8 +1334,8 @@ def _build(gcfg: GuardConfig) -> TrendGuardBot:
                                 os.environ.get("BINANCE_API_SECRET", "").strip(),
                                 gcfg.binance_testnet and gcfg.run_mode == "live")
     store = v29.Store(gcfg.db_file, logger)
-    notifier = v29.Notifier(os.environ.get("TELEGRAM_TOKEN", ""),
-                            os.environ.get("TELEGRAM_CHAT_ID", ""), logger=logger)
+    # Telegram, e-mail et WhatsApp (alerts.py, réglages dans .env).
+    notifier = alerts.build_notifier(logger)
     return TrendGuardBot(gcfg, logger, exchange, store, notifier)
 
 
@@ -1809,13 +1870,19 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(description="TrendGuard Bot (Binance Spot)")
     ap.add_argument("cmd", choices=["run", "once", "status", "resume", "docs",
                                     "health", "replay", "set-secret",
-                                    "set-keys", "verify", "diagnose"])
+                                    "set-keys", "verify", "diagnose", "panel"])
     ap.add_argument("--out", default=None, help="(diagnose) fichier du rapport")
     ap.add_argument("--data", default="data", help="(replay) dossier Coin Metrics")
     ap.add_argument("--start", default="2025-06-01", help="(replay) début")
     ap.add_argument("--end", default=None, help="(replay) fin")
     ap.add_argument("--capital", type=float, default=10_000.0,
                     help="(replay) capital initial USDT")
+    ap.add_argument("--host", default=v29._env_s("PANEL_HOST", "127.0.0.1"),
+                    help="(panel) 127.0.0.1 = ce PC ; 0.0.0.0 = réseau local")
+    ap.add_argument("--port", type=int, default=v29._env_i("PANEL_PORT", 8765),
+                    help="(panel) port web")
+    ap.add_argument("--demo", action="store_true", help="(panel) données fictives")
+    ap.add_argument("--no-open", action="store_true", help="(panel) sans ouvrir le navigateur")
     args = ap.parse_args(argv)
     if args.cmd == "replay":
         res = replay(args.data, args.start, args.end, args.capital)
@@ -1855,6 +1922,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     except ValueError as e:
         print(f"Configuration invalide : {e}", file=sys.stderr)
         return 2
+    if args.cmd == "panel":
+        from panel import server as panel_server
+        return panel_server.main(gcfg, args.host, args.port, args.demo, not args.no_open)
     if args.cmd == "verify":
         return cmd_verify(gcfg)
     if args.cmd == "diagnose":
@@ -1917,11 +1987,11 @@ def main(argv: Optional[List[str]] = None) -> int:
                 return 1
             return 0
         delay = 30
-        while _running and not bot.boot():
+        while _running and not bot.stop_requested() and not bot.boot():
             bot.logger.warning(f"[BOOT] nouvelle tentative dans {delay} s")
-            _sleep(delay)
+            _sleep(delay, bot.stop_requested)
             delay = min(delay * 2, 600)
-        if _running:
+        if _running and not bot.stop_requested():
             bot.run_forever()
         return 0
     finally:

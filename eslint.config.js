@@ -1,16 +1,24 @@
-// ESLint (configuration « flat ») : script de la page d'animation et tests
-// navigateur. Lancé par GitHub Actions (.github/workflows/checks.yml).
+// ESLint (configuration « flat ») : scripts de la page d'animation et du
+// panneau de contrôle, tests navigateur. Lancé par GitHub Actions
+// (.github/workflows/checks.yml).
 import js from "@eslint/js";
 import globals from "globals";
 
+const strict = { eqeqeq: ["error", "always", { null: "ignore" }], "no-var": "error", "prefer-const": "error" };
+
 export default [
-  { ignores: ["node_modules/", "tests/web/.out/", "test-results/", "playwright-report/"] },
+  { ignores: ["node_modules/", "tests/web/.out/", "test-results/", "playwright-report/", "panel/static/vendor/"] },
   js.configs.recommended,
   {
-    // Script classique intégré à la page (fonction auto-exécutée).
-    files: ["templates/**/*.js"],
-    languageOptions: { ecmaVersion: "latest", sourceType: "script", globals: globals.browser },
-    rules: { eqeqeq: ["error", "always", { null: "ignore" }], "no-var": "error", "prefer-const": "error" },
+    // Scripts classiques intégrés aux pages (fonctions auto-exécutées).
+    files: ["templates/**/*.js", "panel/static/app.js"],
+    languageOptions: { ecmaVersion: "latest", sourceType: "script", globals: { ...globals.browser, LightweightCharts: "readonly" } },
+    rules: strict,
+  },
+  {
+    files: ["panel/static/sw.js"],
+    languageOptions: { ecmaVersion: "latest", sourceType: "script", globals: globals.serviceworker },
+    rules: strict,
   },
   {
     files: ["tests/web/**/*.js", "eslint.config.js"],

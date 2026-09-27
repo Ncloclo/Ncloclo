@@ -439,7 +439,7 @@ def test_stalled_cycle_dumps_thread_stacks(logger, tmp_path, monkeypatch):
             time.sleep(1.0)                      # blocage simulé
             tg._running = False
     monkeypatch.setattr(bot, "run_cycle", cycle)
-    monkeypatch.setattr(tg, "_sleep", lambda s: None)
+    monkeypatch.setattr(tg, "_sleep", lambda s, should_stop=None: None)
     tg._running = True
     try:
         bot.run_forever()

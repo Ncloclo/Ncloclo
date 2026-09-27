@@ -4,6 +4,29 @@
   "version": "0.2.0",
   "configurations": [
     {
+      // Panneau de contrôle : AUTO / arrêt, graphiques en temps réel, cryptos,
+      // alertes. S'ouvre dans le navigateur ; le bot continue s'il est fermé.
+      "name": "TrendGuard — panneau de contrôle",
+      "type": "debugpy",
+      "request": "launch",
+      "noDebug": true,
+      "program": "${workspaceFolder}/trendguard_bot.py",
+      "args": ["panel"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "envFile": "${workspaceFolder}/.env"
+    },
+    {
+      "name": "TrendGuard — panneau (démonstration)",
+      "type": "debugpy",
+      "request": "launch",
+      "noDebug": true,
+      "program": "${workspaceFolder}/trendguard_bot.py",
+      "args": ["panel", "--demo", "--port", "8799"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    },
+    {
       // Bot en continu : lancé SANS débogueur (noDebug), sinon une pause du
       // débogueur (exception, point d'arrêt) le fige sans prévenir.
       "name": "TrendGuard — paper (prix réels Binance)",

@@ -320,9 +320,13 @@ def test_live_requires_confirmation():
 
 
 def test_tg_env_doc_complete():
-    src = open(tg.__file__, encoding="utf-8").read()
+    # Variables lues par le bot, ses alertes (alerts.py) et son panneau.
+    import os
+    root = os.path.dirname(os.path.abspath(tg.__file__))
+    src = "".join(open(os.path.join(root, f), encoding="utf-8").read()
+                  for f in ("trendguard_bot.py", "alerts.py", os.path.join("panel", "server.py")))
     used = set(re.findall(
-        r'(?:os\.environ\.get|_env_[a-z]+)\(\s*"([A-Z0-9_]+)"', src))
+        r'(?:os\.environ\.get\(|_env_[a-z]+\(|_env\(env,|env\.get\()\s*"([A-Z0-9_]+)"', src))
     assert used - set(tg.TG_ENV_DOC) == set()
     assert set(tg.TG_ENV_DOC) - used == set()
 

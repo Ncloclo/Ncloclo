@@ -1,5 +1,6 @@
 # Contrôles automatiques à chaque envoi : tests Python, puis la page
-# d'animation dans un vrai navigateur (ESLint + Playwright/Chromium).
+# d'animation et le panneau de contrôle dans un vrai navigateur
+# (ESLint + Playwright/Chromium).
 name: Contrôles
 
 on:
@@ -26,7 +27,7 @@ jobs:
       - run: python -m pytest tests -q -p no:cacheprovider
 
   web:
-    name: Page d'animation (ESLint, Playwright)
+    name: Pages web (ESLint, Playwright)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

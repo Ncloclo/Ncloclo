@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TrendGuard</title>
+<meta name="description" content="Panneau de contrôle du bot de trading TrendGuard : automatisation, graphiques en temps réel, cryptos, positions, veille et alertes.">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#0b1016">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<svg class="sprite" aria-hidden="true">
+  <symbol id="i-dash" viewBox="0 0 24 24"><path d="M3 13h8V3H3zm0 8h8v-6H3zm10 0h8V11h-8zm0-18v6h8V3z"/></symbol>
+  <symbol id="i-charts" viewBox="0 0 24 24"><path d="M3 3v18h18v-2H5V3zm4 12 4-5 3 3 5-7 1.6 1.2-6.4 9-3-3-2.6 3.3z"/></symbol>
+  <symbol id="i-coins" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m1 15.9V19h-2v-1.1a4 4 0 0 1-3-3.4h2a2 2 0 0 0 2 1.5c1.2 0 2-.6 2-1.4 0-.9-.7-1.3-2.3-1.7-2-.5-3.5-1.2-3.5-3 0-1.5 1.2-2.6 2.8-2.9V5h2v1.1a3.6 3.6 0 0 1 2.8 3.2h-2c-.1-.8-.8-1.3-1.8-1.3-1.1 0-1.8.5-1.8 1.2 0 .8.8 1.2 2.4 1.6 2 .5 3.4 1.3 3.4 3.1 0 1.6-1.3 2.7-3 3"/></symbol>
+  <symbol id="i-pos" viewBox="0 0 24 24"><path d="M4 4h16v4H4zm0 6h16v4H4zm0 6h10v4H4z"/></symbol>
+  <symbol id="i-watch" viewBox="0 0 24 24"><path d="M12 5c5 0 9 4.5 10 7-1 2.5-5 7-10 7S3 14.5 2 12c1-2.5 5-7 10-7m0 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8m0 2a2 2 0 1 1 0 4 2 2 0 0 1 0-4"/></symbol>
+  <symbol id="i-log" viewBox="0 0 24 24"><path d="M5 3h10l4 4v14H5zm9 1.5V8h3.5zM8 11h8v1.6H8zm0 3.2h8v1.6H8zm0 3.2h5v1.6H8z"/></symbol>
+  <symbol id="i-cog" viewBox="0 0 24 24"><path d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7 7 0 0 0-1.7-1L15 3h-4l-.4 2.9a7 7 0 0 0-1.7 1l-2.5-1-2 3.5L6.5 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7 7 0 0 0 1.7 1L11 21h4l.4-2.9a7 7 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4v16l13-8z"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><path d="M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10M11 1h2v3h-2zm0 19h2v3h-2zM1 11h3v2H1zm19 0h3v2h-3zM4.2 5.6l1.4-1.4 2.1 2.1-1.4 1.4zm12.1 12.1 1.4-1.4 2.1 2.1-1.4 1.4zM4.2 18.4l2.1-2.1 1.4 1.4-2.1 2.1zM16.3 6.3l2.1-2.1 1.4 1.4-2.1 2.1z"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="m6.4 5 5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 4h6v2H6v4H4zm10 0h6v6h-2V6h-4zM4 14h2v4h4v2H4zm14 0h2v6h-6v-2h4z"/></symbol>
+</svg>
+
+<div class="shell">
+  <nav class="side" aria-label="Menu principal">
+    <div class="brand">
+      <img src="icon.svg" alt="" width="30" height="30">
+      <div><strong>TrendGuard</strong><span id="brand-mode">Panneau de contrôle</span></div>
+    </div>
+    <div class="tabs" role="tablist">
+      <a class="tab" href="#dash" data-tab="dash"><svg><use href="#i-dash"/></svg><span>Tableau de bord</span></a>
+      <a class="tab" href="#charts" data-tab="charts"><svg><use href="#i-charts"/></svg><span>Graphiques</span></a>
+      <a class="tab" href="#assets" data-tab="assets"><svg><use href="#i-coins"/></svg><span>Cryptos</span></a>
+      <a class="tab" href="#positions" data-tab="positions"><svg><use href="#i-pos"/></svg><span>Positions</span></a>
+      <a class="tab" href="#watch" data-tab="watch"><svg><use href="#i-watch"/></svg><span>Veille</span></a>
+      <a class="tab" href="#log" data-tab="log"><svg><use href="#i-log"/></svg><span>Journal</span></a>
+      <a class="tab" href="#settings" data-tab="settings"><svg><use href="#i-cog"/></svg><span>Réglages</span></a>
+    </div>
+    <p class="side-note" id="side-note">Données du bot sur ce PC · cours Binance publics · graphiques <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView</a></p>
+  </nav>
+
+  <div class="main">
+    <header class="top">
+      <div class="top-title">
+        <h1 id="page-title">Tableau de bord</h1>
+        <div class="top-meta">
+          <span class="pill" id="st-pill"><i></i><span>Connexion…</span></span>
+          <span class="badge" id="mode-badge">—</span>
+          <span class="updated" id="updated" aria-live="polite"></span>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button class="icon-btn" id="theme-btn" type="button" title="Changer de thème" aria-label="Changer de thème"><svg><use href="#i-sun"/></svg></button>
+        <button class="auto" id="auto-btn" type="button" disabled>
+          <svg class="auto-ico"><use href="#i-play"/></svg>
+          <span class="auto-txt"><strong id="auto-label">AUTO</strong><small id="auto-sub">Chargement…</small></span>
+        </button>
+      </div>
+    </header>
+
+    <main id="pages">
+      <!-- Tableau de bord -->
+      <section class="page" id="page-dash" data-title="Tableau de bord">
+        <div class="hero card">
+          <div class="hero-num">
+            <span class="label">Capital du bot</span>
+            <strong class="big num" id="d-equity">—</strong>
+            <span class="sub" id="d-equity-sub"></span>
+          </div>
+          <div class="hero-chart" id="d-equity-chart" role="img" aria-label="Évolution du capital"></div>
+        </div>
+        <div class="kpis">
+          <div class="kpi card"><span class="label">Positions</span><strong class="num" id="d-pos">—</strong><span class="sub" id="d-pos-sub"></span></div>
+          <div class="kpi card"><span class="label">Régime BTC</span><strong id="d-regime">—</strong><span class="sub" id="d-regime-sub"></span></div>
+          <div class="kpi card"><span class="label">Prochaine décision</span><strong class="num" id="d-next">—</strong><span class="sub">00:02 UTC chaque jour</span></div>
+          <div class="kpi card"><span class="label">Baisse depuis le plus haut</span><strong class="num" id="d-dd">—</strong><span class="sub" id="d-dd-sub"></span></div>
+          <div class="kpi card"><span class="label">Dernier cycle</span><strong class="num" id="d-cycle">—</strong><span class="sub" id="d-cycle-sub"></span></div>
+          <div class="kpi card"><span class="label">Veille du marché</span><strong id="d-watch">—</strong><span class="sub" id="d-watch-sub"></span></div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-head"><h2>Positions ouvertes</h2><a class="link" href="#positions">Tout voir</a></div>
+            <div id="d-positions" class="pos-list"></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h2>Alertes</h2><a class="link" href="#watch">Veille</a></div>
+            <ul id="d-alerts" class="alert-list"></ul>
+          </div>
+        </div>
+        <button class="wide-btn" type="button" data-go="charts"><svg><use href="#i-charts"/></svg>Afficher tous les graphiques en temps réel</button>
+      </section>
+
+      <!-- Graphiques -->
+      <section class="page" id="page-charts" data-title="Graphiques en temps réel">
+        <p class="hint">Mis à jour automatiquement. Cliquez sur un graphique pour l'ouvrir en détail : bougies, volume, achats et ventes, stops, zoom.</p>
+        <div class="chart-grid" id="chart-grid"></div>
+      </section>
+
+      <!-- Cryptos -->
+      <section class="page" id="page-assets" data-title="Cryptos suivies">
+        <div class="toolbar">
+          <div class="seg" role="group" aria-label="Filtrer">
+            <button type="button" data-filter="all" aria-pressed="true">Toutes</button>
+            <button type="button" data-filter="held" aria-pressed="false">Détenues</button>
+            <button type="button" data-filter="vetoed" aria-pressed="false">Bloquées</button>
+          </div>
+          <input type="search" id="asset-search" placeholder="Rechercher (BTC, Cardano…)" aria-label="Rechercher une crypto">
+          <select id="asset-sort" aria-label="Trier">
+            <option value="name">Nom</option>
+            <option value="change">Variation 24 h</option>
+            <option value="volume">Volume 24 h</option>
+          </select>
+        </div>
+        <div class="asset-grid" id="asset-grid"></div>
+      </section>
+
+      <!-- Positions -->
+      <section class="page" id="page-positions" data-title="Positions et trades">
+        <div class="card">
+          <div class="card-head"><h2>Positions ouvertes</h2><span class="sub" id="p-sub"></span></div>
+          <div class="scroll-x" tabindex="0"><table id="p-table"></table></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Trades clos</h2><span class="sub" id="t-sub"></span></div>
+          <div class="scroll-x" tabindex="0"><table id="t-table"></table></div>
+        </div>
+      </section>
+
+      <!-- Veille -->
+      <section class="page" id="page-watch" data-title="Veille du marché">
+        <div class="kpis">
+          <div class="kpi card"><span class="label">Climat selon les IA</span><strong id="w-mood">—</strong><span class="sub" id="w-mood-sub"></span></div>
+          <div class="kpi card"><span class="label">Achats bloqués (Binance)</span><strong class="num" id="w-vetoes">—</strong><span class="sub">annonces officielles de retrait</span></div>
+        </div>
+        <div class="card"><div class="card-head"><h2>Alertes et retraits annoncés</h2></div><ul id="w-list" class="alert-list"></ul></div>
+        <div class="card"><div class="card-head"><h2>Dernier rapport</h2></div><pre id="w-report" class="report"></pre></div>
+      </section>
+
+      <!-- Journal -->
+      <section class="page" id="page-log" data-title="Journal du bot">
+        <div class="toolbar">
+          <select id="log-level" aria-label="Niveau">
+            <option value="all">Tout</option>
+            <option value="warn">Avertissements et erreurs</option>
+            <option value="error">Erreurs</option>
+          </select>
+          <label class="check"><input type="checkbox" id="log-follow" checked> Suivre en direct</label>
+        </div>
+        <div class="card log-card"><ol id="log" class="log"></ol></div>
+      </section>
+
+      <!-- Réglages -->
+      <section class="page" id="page-settings" data-title="Réglages">
+        <div class="grid-2">
+          <div class="card"><div class="card-head"><h2>Bot</h2></div><dl id="s-bot" class="dl"></dl></div>
+          <div class="card">
+            <div class="card-head"><h2>Alertes</h2></div>
+            <ul id="s-alerts" class="channel-list"></ul>
+            <p class="sub">E-mail et WhatsApp : <code>python alerts.py configurer</code> (tâche VS Code « Alertes — configurer »).</p>
+          </div>
+          <div class="card">
+            <div class="card-head"><h2>Sur votre téléphone</h2></div>
+            <div id="s-phone"></div>
+            <button class="btn" id="install-btn" type="button" hidden>Installer l'application</button>
+          </div>
+          <div class="card">
+            <div class="card-head"><h2>Affichage</h2></div>
+            <div class="seg" role="group" aria-label="Thème">
+              <button type="button" data-theme-set="auto">Automatique</button>
+              <button type="button" data-theme-set="dark">Sombre</button>
+              <button type="button" data-theme-set="light">Clair</button>
+            </div>
+            <ul class="links">
+              <li><a href="https://ncloclo.github.io/Ncloclo/" target="_blank" rel="noopener">Animation du rejeu (prix réels Binance)</a></li>
+              <li><a href="https://github.com/Ncloclo/Ncloclo/pulls" target="_blank" rel="noopener">Revues hebdomadaires de l'agent Claude Code</a></li>
+            </ul>
+            <button class="btn ghost" id="logout-btn" type="button" hidden>Se déconnecter</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- Détail d'un graphique -->
+<dialog id="detail" aria-labelledby="detail-title">
+  <div class="detail-head">
+    <div>
+      <h2 id="detail-title">Détail</h2>
+      <div class="legend" id="detail-legend"></div>
+    </div>
+    <div class="detail-actions">
+      <div class="seg" id="detail-intervals" role="group" aria-label="Intervalle">
+        <button type="button" data-interval="15m">15 min</button>
+        <button type="button" data-interval="1h">1 h</button>
+        <button type="button" data-interval="4h">4 h</button>
+        <button type="button" data-interval="1d">1 jour</button>
+      </div>
+      <button class="icon-btn" id="detail-full" type="button" title="Plein écran" aria-label="Plein écran"><svg><use href="#i-expand"/></svg></button>
+      <button class="icon-btn" id="detail-close" type="button" title="Fermer" aria-label="Fermer"><svg><use href="#i-close"/></svg></button>
+    </div>
+  </div>
+  <div class="detail-body">
+    <div class="detail-chart" id="detail-chart"><div class="readout" id="detail-readout"></div></div>
+    <dl class="dl detail-stats" id="detail-stats"></dl>
+  </div>
+</dialog>
+
+<!-- Confirmation (mode réel) -->
+<dialog id="confirm" aria-labelledby="confirm-title">
+  <h2 id="confirm-title">Démarrer en mode RÉEL ?</h2>
+  <p id="confirm-text">Le bot passera de vrais ordres sur Binance avec votre argent.</p>
+  <div class="row-end">
+    <button class="btn ghost" type="button" value="no" id="confirm-no">Annuler</button>
+    <button class="btn danger" type="button" value="yes" id="confirm-yes">Démarrer en réel</button>
+  </div>
+</dialog>
+
+<!-- Connexion (accès depuis le réseau) -->
+<div class="login" id="login" hidden>
+  <form class="card login-card" id="login-form">
+    <img src="icon.svg" alt="" width="44" height="44">
+    <h2>TrendGuard</h2>
+    <input type="text" name="username" value="trendguard" autocomplete="username" hidden>
+    <label for="login-pass">Mot de passe du panneau</label>
+    <input id="login-pass" type="password" autocomplete="current-password" required>
+    <button class="btn" type="submit">Se connecter</button>
+    <p class="err" id="login-err" role="alert"></p>
+  </form>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<noscript><p class="noscript">Ce panneau a besoin de JavaScript.</p></noscript>
+
+<script src="vendor/lightweight-charts.standalone.production.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
