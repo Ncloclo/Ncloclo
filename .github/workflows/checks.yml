@@ -1,0 +1,72 @@
+# Contrôles automatiques à chaque envoi : tests Python, puis la page
+# d'animation dans un vrai navigateur (ESLint + Playwright/Chromium).
+name: Contrôles
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Tests Python
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-docker.txt
+      - run: pip install -r requirements-docker.txt
+      - run: python -m pytest tests -q -p no:cacheprovider
+
+  web:
+    name: Page d'animation (ESLint, Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-docker.txt
+      - run: pip install -r requirements-docker.txt
+      - name: Page d'exemple (données synthétiques, sans réseau)
+        run: python tests/web/build_sample.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --no-audit --no-fund
+      - name: ESLint
+        # Chaque problème devient une annotation sur le fichier concerné.
+        run: |
+          npx eslint . -f json -o eslint.json || true
+          node -e "
+            const path = require('path');
+            const report = JSON.parse(require('fs').readFileSync('eslint.json', 'utf8'));
+            let n = 0;
+            for (const f of report) for (const m of f.messages) {
+              n++;
+              console.log('::error file=' + path.relative(process.cwd(), f.filePath) + ',line=' + (m.line || 1)
+                + ',col=' + (m.column || 1) + '::' + m.message + ' (' + (m.ruleId || 'syntaxe') + ')');
+            }
+            console.log(n ? n + ' problème(s)' : 'ESLint : aucun problème');
+            process.exit(n ? 1 : 0);
+          "
+      - run: npx playwright install --with-deps chromium
+      - name: Playwright
+        run: npx playwright test -c tests/web/playwright.config.js
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            test-results/
+            tests/web/.out/
+          retention-days: 7

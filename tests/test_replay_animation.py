@@ -89,3 +89,24 @@ def test_paper_portfolio_read_only(tmp_path):
     assert live["holdings"][0]["last"] == pytest.approx(close["eth"].iloc[-1], rel=1e-5)
     assert os.path.getmtime(db) == before
     assert ra.read_paper_portfolio(str(tmp_path / "absente.db"), close) is None
+
+
+def test_public_klines_without_market_list():
+    """Bougies demandées directement (/api/v3/klines, hôte public sans
+    restriction géographique) : pas de téléchargement de la liste des
+    marchés, valeurs Binance (texte) converties en nombres."""
+    calls = []
+
+    class Raw:
+        def publicGetKlines(self, params):
+            calls.append(params)
+            return [[1790467200000, "84433.11", "85159.03", "84257.07", "84494.00", "812.5",
+                     1790553599999, "0", 1, "0", "0", "0"]]
+
+        def load_markets(self):
+            raise AssertionError("liste des marchés inutile")
+
+    rows = ra.PublicKlines(Raw()).fetch_ohlcv("BTC/USDT", "1d", since=1790380800000, limit=5)
+    assert rows == [[1790467200000, 84433.11, 85159.03, 84257.07, 84494.0, 812.5]]
+    assert calls == [{"symbol": "BTCUSDT", "interval": "1d", "limit": 5, "startTime": 1790380800000}]
+    assert ra.public_client().urls["api"]["public"] == ra.PUBLIC_DATA_API

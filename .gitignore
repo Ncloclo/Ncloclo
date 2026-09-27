@@ -21,3 +21,10 @@ data_binance/
 # Environnements virtuels
 .venv*/
 venv/
+
+# Contrôles web (npm, Playwright, ESLint)
+node_modules/
+tests/web/.out/
+test-results/
+playwright-report/
+eslint.json

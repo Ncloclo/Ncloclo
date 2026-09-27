@@ -115,6 +115,13 @@ sécurité du contenu) et se pilote au clavier : Espace, ← →, Début et Fin,
 les flèches sur un graphique pour lire chaque jour. Le gabarit est dans
 `templates/` (HTML, CSS et JavaScript séparés).
 
+En ligne : <https://ncloclo.github.io/Ncloclo/>, régénérée chaque nuit à
+00:30 UTC par GitHub Actions (`.github/workflows/pages.yml`) à partir des
+données publiques de Binance (`data-api.binance.vision`, sans clé).
+Activation unique sur GitHub : Settings ▸ Pages ▸ Source : « GitHub Actions ».
+La section du portefeuille paper n'y figure pas : la base du bot reste sur ce
+PC.
+
 ### Utilisation
 
 ```bash
@@ -302,8 +309,12 @@ walkforward | status | resume` (voir `python v29.py docs`).
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 243 tests, simulateurs Binance Spot mono et multi-paires
+python -m pytest tests -q      # 244 tests, simulateurs Binance Spot mono et multi-paires
 ```
+
+À chaque envoi sur GitHub, `.github/workflows/checks.yml` lance ces tests, puis
+vérifie la page d'animation dans Chromium : ESLint sur le script et tests
+Playwright (`tests/web/`) sur une page d'exemple construite sans réseau.
 
 ## Limites connues
 

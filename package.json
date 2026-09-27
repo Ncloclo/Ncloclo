@@ -1,0 +1,16 @@
+{
+  "name": "trendguard-web-checks",
+  "private": true,
+  "type": "module",
+  "description": "Contrôles de la page d'animation (ESLint, Playwright), exécutés par GitHub Actions.",
+  "scripts": {
+    "lint": "eslint .",
+    "test:web": "python tests/web/build_sample.py && playwright test -c tests/web/playwright.config.js"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@playwright/test": "^1.49.0",
+    "eslint": "^9.0.0",
+    "globals": "^16.0.0"
+  }
+}

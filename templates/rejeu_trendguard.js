@@ -8,7 +8,7 @@ const $ = (id) => document.getElementById(id);
 let D;
 try {
   D = JSON.parse($("replay-data").textContent);
-} catch (err) {
+} catch {
   const p = document.createElement("p");
   p.className = "alert";
   p.textContent = "Données du rejeu absentes : générez la page avec « python replay_animation.py ».";
@@ -118,7 +118,9 @@ function table(caption, head, rows, cls, clsCol) {
 // Portefeuille paper réel (fixe)
 (() => {
   const L = D.paper_live;
-  if (!L || !L.holdings.length) { $("live-sub").textContent = "Aucune position dans la base locale du bot."; return; }
+  // Page publique (GitHub Pages) : pas de base locale, section masquée.
+  if (!L) { $("h-live").closest("section").hidden = true; return; }
+  if (!L.holdings.length) { $("live-sub").textContent = "Aucune position dans la base locale du bot."; return; }
   $("live-sub").textContent = `Base locale du bot (trendguard_paper.db) · dernière décision : bougie du ${dLong.format(new Date(L.last_decision_day + "T00:00:00Z"))} · cours : clôture du ${dLong.format(DT[N - 1])}`;
   const rows = L.holdings.map((h) => [up(h.a), h.date.split("-").reverse().join("/"), fpx(h.entry), fpx(h.last), fpx(h.stop), fpx(h.dis),
     h.last ? fpct(h.last / h.entry - 1) : "–", f0.format(h.risk) + " USDT"]);
