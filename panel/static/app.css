@@ -140,6 +140,45 @@ svg { width: 20px; height: 20px; fill: currentColor; flex: none; }
 .wide-btn { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 14px; border-radius: var(--radius); border: 1px dashed var(--border-2); background: transparent; color: var(--ink); font: 600 15px var(--sans); cursor: pointer; transition: background .2s, border-color .2s; }
 .wide-btn:hover { background: var(--accent-wash); border-color: var(--accent); }
 
+/* Raisonnement du bot */
+.mind { position: relative; overflow: hidden; }
+.mind::before { content: ""; position: absolute; inset: 0 0 auto; height: 2px; background: linear-gradient(90deg, transparent, var(--accent), transparent); background-size: 50% 100%; background-repeat: no-repeat; animation: scan 3.5s linear infinite; }
+@keyframes scan { from { background-position: -50% 0; } to { background-position: 150% 0; } }
+.mind-title { display: flex; align-items: center; gap: 8px; }
+.mind-title svg { color: var(--accent-2); }
+.think { display: inline-flex; gap: 3px; margin-left: 2px; }
+.think i { width: 5px; height: 5px; border-radius: 50%; background: var(--accent-2); opacity: .3; animation: think 1.4s infinite; }
+.think i:nth-child(2) { animation-delay: .2s; }
+.think i:nth-child(3) { animation-delay: .4s; }
+@keyframes think { 0%, 60%, 100% { opacity: .25; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
+.mind-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.mind-lines li { position: relative; padding: 7px 12px 7px 28px; border-radius: 10px; background: var(--surface-2); font-size: 14px; animation: line-in .5s var(--ease) both; }
+.mind-lines li::before { content: ""; position: absolute; left: 12px; top: 15px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+@keyframes line-in { from { opacity: 0; transform: translateX(-10px); } }
+.radar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink); font: 13px var(--sans); cursor: pointer; transition: transform .2s var(--ease), background .2s; }
+.chip:hover { transform: translateY(-2px); background: var(--surface-3); }
+.chip strong { font-family: var(--mono); display: inline-flex; align-items: center; gap: 6px; }
+.chip strong::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.chip.watch { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.chip.watch strong::before { background: var(--accent); animation: ping 1.8s infinite; }
+.chip.warn { border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+.chip.warn strong::before { background: var(--warn); }
+@keyframes ping { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent); } 70% { box-shadow: 0 0 0 7px transparent; } 100% { box-shadow: none; } }
+.mind-history { margin-top: 12px; font-size: 13px; color: var(--ink-2); }
+.mind-history summary { cursor: pointer; color: var(--accent-2); font-weight: 600; width: fit-content; }
+.mind-history ol { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+
+/* Interrupteur (démarrage avec l'ordinateur) */
+.switch { display: flex; align-items: center; gap: 12px; padding: 10px 12px; margin-bottom: 12px; border-radius: 12px; background: var(--surface-2); cursor: pointer; position: relative; }
+.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch .track { flex: none; width: 44px; height: 26px; border-radius: 13px; background: var(--surface-3); border: 1px solid var(--border-2); position: relative; transition: background .25s; }
+.switch .track i { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .3); transition: transform .25s var(--ease); }
+.switch input:checked + .track { background: var(--up); }
+.switch input:checked + .track i { transform: translateX(18px); }
+.switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+.switch input:disabled + .track { opacity: .5; }
+
 /* Graphiques */
 .chart-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px; }
 .chart-card { cursor: pointer; display: grid; gap: 8px; transition: transform .25s var(--ease), box-shadow .25s, border-color .25s; animation: card-in .5s var(--ease) both; }
@@ -174,9 +213,17 @@ svg { width: 20px; height: 20px; fill: currentColor; flex: none; }
 .chg.up { background: var(--up-wash); } .chg.down { background: var(--down-wash); }
 .spark { height: 42px; width: 100%; display: block; }
 .tags { display: flex; gap: 6px; flex-wrap: wrap; min-height: 20px; }
-.tag { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px; letter-spacing: .02em; }
+.tag { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px; letter-spacing: .02em; white-space: nowrap; }
+.asset .row:last-child { flex-wrap: wrap; align-items: center; }
+.asset .vol { white-space: nowrap; margin-left: auto; }
 .tag.held { background: var(--accent-wash); color: var(--accent-2); }
 .tag.vetoed { background: var(--down-wash); color: var(--down); }
+.tag.up { background: var(--up-wash); color: var(--up); }
+.tag.down { background: var(--down-wash); color: var(--down); }
+.tag.watch { background: var(--accent-wash); color: var(--accent-2); }
+.tag.warn { background: var(--warn-wash); color: var(--warn); }
+.tag.muted { background: var(--surface-2); color: var(--muted); }
+.asset .why { margin: 0; font-size: 12.5px; line-height: 1.35; color: var(--ink-2); }
 
 /* Tableaux */
 .scroll-x { overflow-x: auto; }

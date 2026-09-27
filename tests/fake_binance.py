@@ -761,6 +761,9 @@ class FakeBinanceMulti:
     def fetch_ticker(self, symbol):
         return self._f(symbol).fetch_ticker(symbol)
 
+    def fetch_order_book(self, symbol, limit=20):
+        return self._f(symbol).fetch_order_book(symbol, limit)
+
     def fetch_ohlcv(self, symbol, timeframe="1d", since=None, limit=500):
         bars = self.ohlcv.get((symbol, timeframe), [])
         if since is not None:

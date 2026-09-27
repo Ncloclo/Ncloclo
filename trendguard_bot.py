@@ -21,6 +21,10 @@ Commandes :
   python trendguard_bot.py once      # un seul cycle (cron)
   python trendguard_bot.py status    # état du portefeuille
   python trendguard_bot.py resume    # lève le kill-switch après audit
+  python trendguard_bot.py supervise # bot relancé seul en cas de plantage
+  python trendguard_bot.py stop      # arrêt propre de l'automatisation
+  python trendguard_bot.py autostart on|off   # démarrage avec l'ordinateur
+  python trendguard_bot.py panel     # panneau de contrôle (navigateur)
 """
 
 from __future__ import annotations
@@ -44,6 +48,7 @@ import ccxt
 import pandas as pd
 
 import alerts
+import autonomy
 import diagnostics as dg
 import market_watch as mw
 import trend_strategy as ts
@@ -73,6 +78,9 @@ TG_ENV_DOC: Dict[str, str] = {
     "TG_MAX_CAPITAL": "Capital max géré par le bot en USDT (0 = tout le compte)",
     "TG_DD_THROTTLE": "Profil prudent : baisse:multiplicateur (ex. 0.10:0.5) ; vide = off",
     "TG_AUTO_DIAGNOSE_DAYS": "Auto-diagnostic tous les N jours (0 = désactivé)",
+    "TG_KEEP_AWAKE": "true : l'ordinateur ne se met pas en veille tout seul pendant que le bot tourne",
+    "TG_MAX_SPREAD": "Ruse : achat différé si l'écart achat/vente dépasse ce seuil (0.005 = 0,5 %)",
+    "TG_ENTRY_RETRY_HOURS": "Ruse : durée des nouveaux essais d'un achat différé (heures)",
     "TG_VEILLE": "true : annonces officielles Binance lues chaque jour (retrait = achats bloqués)",
     "TG_VEILLE_IA": "true : rapport quotidien des IA (conseil seulement, clés dans .env)",
     "TG_VEILLE_DB": "Base de la veille (mémoire des IA et des annonces)",
@@ -127,6 +135,9 @@ class GuardConfig:
     watch_ai: bool = False              # rapport quotidien des IA (conseil)
     watch_db: str = ""
     max_capital: float = 0.0            # 0 = tout le compte
+    keep_awake: bool = False            # anti-veille (activé par l'environnement)
+    max_spread: float = 0.005           # ruse : carnet anormal → achat différé
+    entry_retry_hours: float = 6.0      # achat différé : nouveaux essais pendant 6 h
     allow_recovery: bool = False        # adopter les ordres du bot inconnus
     paper_capital: float = 10_000.0
     enable_live_trading: bool = False
@@ -152,6 +163,10 @@ class GuardConfig:
             raise ValueError("TG_KILL_DRAWDOWN doit être dans ]0, 1[.")
         if self.catastrophe_atr <= 0:
             raise ValueError("catastrophe_atr > 0 requis.")
+        if not (0 < self.max_spread < 0.2):
+            raise ValueError("TG_MAX_SPREAD doit être dans ]0, 0.2[.")
+        if self.entry_retry_hours < 0:
+            raise ValueError("TG_ENTRY_RETRY_HOURS doit être >= 0.")
         self.params.validate()
         for name, default in (
                 ("db_file", os.path.join(v29.APP_DIR, f"trendguard_{self.run_mode}.db")),
@@ -164,9 +179,12 @@ class GuardConfig:
     def stop_file(self) -> str:
         """Demande d'arrêt déposée par le panneau de contrôle, à côté du
         verrou (fonctionne pareil sous Windows, Linux et macOS)."""
-        if not self.lock_file or self.lock_file in (os.devnull, "/dev/null"):
-            return ""
-        return os.path.splitext(self.lock_file)[0] + ".stop"
+        return autonomy.sidecar(self.lock_file, ".stop")
+
+    @property
+    def alive_file(self) -> str:
+        """Signe de vie du bot, surveillé par le superviseur."""
+        return autonomy.sidecar(self.lock_file, ".alive")
 
 
 def parse_dd_throttle(raw: str) -> Tuple[Tuple[float, float], ...]:
@@ -205,6 +223,9 @@ def load_guard_config_from_env() -> GuardConfig:
         watch_ai=v29._env_b("TG_VEILLE_IA", True),
         watch_db=v29._env_s("TG_VEILLE_DB", os.path.join(v29.APP_DIR, "trendguard_veille.db")),
         max_capital=v29._env_f("TG_MAX_CAPITAL", 0.0),
+        keep_awake=v29._env_b("TG_KEEP_AWAKE", True),
+        max_spread=v29._env_f("TG_MAX_SPREAD", 0.005),
+        entry_retry_hours=v29._env_f("TG_ENTRY_RETRY_HOURS", 6.0),
         allow_recovery=v29._env_b("TG_ALLOW_RECOVERY", False),
         paper_capital=v29._env_f("TG_PAPER_CAPITAL", 10_000.0),
         enable_live_trading=v29._env_b("ENABLE_LIVE_TRADING", False),
@@ -292,6 +313,9 @@ class TrendGuardBot:
         self._last_equity_log = 0.0
         self._stop_flag = False
         self._started_at = time.time()
+        self._last_alive = 0.0
+        # Notes d'exécution du jour (achat différé, annulé) pour le raisonnement.
+        self._entry_notes: Dict[str, Tuple[str, str]] = {}
         self._last_close: Optional[pd.DataFrame] = None   # apprentissage de la veille
 
     @property
@@ -475,6 +499,29 @@ class TrendGuardBot:
                 self.logger.info("[ARRÊT] demandé depuis le panneau de contrôle : arrêt propre")
         return self._stop_flag
 
+    ALIVE_EVERY_SEC = 30
+
+    def _touch_alive(self, force: bool = False) -> None:
+        """Signe de vie pour le superviseur : sans lui pendant 30 min, le
+        bot est considéré comme bloqué et relancé."""
+        path = self.g.alive_file
+        now = time.time()
+        if not path or (not force and now - self._last_alive < self.ALIVE_EVERY_SEC):
+            return
+        self._last_alive = now
+        try:
+            with open(path, "a", encoding="utf-8"):
+                pass
+            os.utime(path, None)
+        except OSError:
+            pass
+
+    def waiting(self) -> bool:
+        """Appelé chaque seconde pendant les attentes : signe de vie, puis
+        demande d'arrêt éventuelle."""
+        self._touch_alive()
+        return self.stop_requested()
+
     @staticmethod
     def _closed_count(s: Slot) -> int:
         return s.ctx.portfolio.stats_wins + s.ctx.portfolio.stats_losses
@@ -497,6 +544,11 @@ class TrendGuardBot:
                 self.state.pop("decision_deferred_since", None)
             except DecisionDeferred as e:
                 self._decision_deferred(day, str(e))
+        if self.state.get("pending_entries"):
+            try:
+                self._retry_pending(now)
+            except Exception as e:
+                self.logger.warning(f"[RUSE] nouvel essai d'achat impossible : {e}")
         # Horloge réelle (et non `now`, simulé en rejeu) : sert au contrôle
         # de santé du conteneur.
         self.state["last_cycle_ts"] = time.time()
@@ -917,6 +969,12 @@ class TrendGuardBot:
         close, feats, regime = self._load_market(now)
         self._last_close = close
         snap, bull, prices = self._snapshot_at(close, feats, regime, day)
+        # La décision du jour remplace les achats différés de la veille.
+        stale = self.state.pop("pending_entries", None)
+        if stale:
+            self.logger.info("[RUSE] achats différés remplacés par la décision du jour : "
+                             + ", ".join(a.upper() for a in sorted(stale)))
+        self._entry_notes = {}
         missed = self._missed_days(close.index,
                                    self.state.get("last_decision_day"), day)
         late = (self._catch_up(close, feats, regime, missed, prices)
@@ -965,7 +1023,47 @@ class TrendGuardBot:
                     entries.append(done)
                     cash_left -= done["cost"]
         self.state["last_decision_day"] = day
+        self._explain(day, bull, close, snap, late + exits, entries, mult, now)
         self._summary(day, bull, equity, late + exits, entries, prices)
+
+    # ---------- Raisonnement (affiché dans le panneau) ----------
+
+    def _btc_gap(self, close: pd.DataFrame, day: str) -> Optional[float]:
+        """Écart de BTC à sa moyenne du régime, en %."""
+        try:
+            c = close["btc"]
+            sma = c.rolling(self.p.regime_sma, min_periods=self.p.regime_sma).mean()
+            d = pd.Timestamp(day, tz="UTC")
+            v = (float(c.loc[d]) / float(sma.loc[d]) - 1) * 100
+        except (KeyError, ZeroDivisionError, TypeError, ValueError):
+            return None
+        return v if math.isfinite(v) else None
+
+    def _explain(self, day: str, bull: bool, close: pd.DataFrame,
+                 snap: Dict[str, Dict[str, float]], exits: List[Tuple[str, str]],
+                 entries: List[Dict[str, Any]], mult: float, now: datetime) -> None:
+        holdings = self._holdings()
+        notes: Dict[str, Tuple[str, str]] = {}
+        for a in snap:
+            v = self._vetoed(a)
+            if v and a not in holdings:
+                notes[a] = ("veto", f"Achats bloqués par la veille : {v['reason']}")
+        notes.update(self._entry_notes)
+        r = explain_decision(day, bull, self._btc_gap(close, day), snap, holdings, exits,
+                             [e["asset"] for e in entries], notes,
+                             bool(self.state.get("halted")), mult, self.p)
+        r["at"] = now.isoformat()
+        self.state["reasoning"] = r
+        hist = self.state.get("reasoning_log") or []
+        hist.append({"day": day, "text": " ".join(r["lines"][:2])})
+        self.state["reasoning_log"] = hist[-30:]
+
+    def _note_asset(self, a: str, status: str, text: str) -> None:
+        """Met à jour le raisonnement du jour après un achat différé."""
+        r = self.state.get("reasoning") or {}
+        row = (r.get("assets") or {}).get(a)
+        if row is not None:
+            row.update(status=status, text=text)
 
     def _can_enter(self, a: str) -> bool:
         s = self.slots.get(a.upper())
@@ -1044,6 +1142,107 @@ class TrendGuardBot:
                 continue   # sortie gérée par le stop de clôture
             b["disaster"] = target
 
+    # ---------- Ruse : exécution des achats ----------
+
+    BOOK_DEPTH_MULT = 3.0       # carnet : 3 × le montant de l'achat…
+    BOOK_DEPTH_BAND = 0.01      # … proposé à moins de 1 % du meilleur prix
+    RETRY_EVERY_SEC = 300       # achat différé : nouvel essai toutes les 5 min
+
+    def _pending(self) -> Dict[str, Any]:
+        return self.state.setdefault("pending_entries", {})
+
+    def _book_anomaly(self, s: Slot, notional: float) -> Optional[str]:
+        """Raison de ne PAS acheter maintenant, ou None. Carnet illisible :
+        None (décision inchangée, comme sans cette vérification)."""
+        fetch = getattr(s.ex.exchange, "fetch_order_book", None)
+        if fetch is None:
+            return None
+        try:
+            ob = fetch(s.symbol, limit=100)
+            bids, asks = ob.get("bids") or [], ob.get("asks") or []
+            if not bids or not asks:
+                return "carnet d'ordres vide"
+            bid, ask = float(bids[0][0]), float(asks[0][0])
+            if bid <= 0 or ask <= 0:
+                return None
+            spread = (ask - bid) / ((ask + bid) / 2)
+            if spread > self.g.max_spread:
+                return (f"écart achat/vente anormal ({spread * 100:.2f} %, limite "
+                        f"{self.g.max_spread * 100:.2f} %)")
+            depth = sum(float(p) * float(q) for p, q, *_ in asks
+                        if float(p) <= ask * (1 + self.BOOK_DEPTH_BAND))
+            if depth < self.BOOK_DEPTH_MULT * notional:
+                return (f"carnet d'ordres trop mince ({depth:,.0f} {self.g.quote} à moins "
+                        f"de 1 % du prix pour un achat de {notional:,.0f})")
+        except Exception:
+            return None
+        return None
+
+    def _defer_entry(self, plan: Dict[str, Any], equity: float, now: datetime,
+                     reason: str) -> None:
+        a = plan["asset"]
+        book = self._pending()
+        t = now.timestamp()
+        e = book.get(a)
+        if e is not None:
+            e.update(reason=reason, tries=int(e.get("tries", 1)) + 1,
+                     next=t + self.RETRY_EVERY_SEC)
+            return
+        if self.g.entry_retry_hours <= 0:
+            self.logger.warning(f"[RUSE] achat de {a.upper()} annulé : {reason}")
+            self._entry_notes[a] = ("cancelled", f"Achat annulé : {reason}")
+            return
+        book[a] = {"plan": plan, "equity": float(equity), "reason": reason, "tries": 1,
+                   "since": t, "until": t + self.g.entry_retry_hours * 3600,
+                   "next": t + self.RETRY_EVERY_SEC}
+        self.logger.warning(
+            f"[RUSE] achat de {a.upper()} différé : {reason} → nouvel essai toutes "
+            f"les 5 min pendant {self.g.entry_retry_hours:g} h")
+        self._entry_notes[a] = ("deferred", f"Achat différé : {reason}. Nouvel essai "
+                                            f"toutes les 5 min")
+        self._note_asset(a, *self._entry_notes[a])
+
+    def _retry_pending(self, now: datetime) -> None:
+        """Nouvel essai des achats différés, tant que la décision du jour
+        tient (régime, plafonds, pas de veto, pas d'arrêt d'urgence)."""
+        book = self._pending()
+        t = now.timestamp()
+        p = self.p
+        for a in sorted(book):
+            e = book.get(a)
+            if e is None or t < e["next"]:
+                continue
+            if t >= e["until"]:
+                book.pop(a, None)
+                self.logger.warning(f"[RUSE] achat de {a.upper()} abandonné : {e['reason']} "
+                                    f"pendant {self.g.entry_retry_hours:g} h")
+                self._note_asset(a, "cancelled", f"Achat abandonné : {e['reason']} pendant "
+                                                 f"{self.g.entry_retry_hours:g} h")
+                continue
+            holdings = self._holdings()
+            eq = float(e["equity"])
+            mult = float(self.state.get("risk_mult", 1.0) or 1.0)
+            open_risk = sum(h.risk_quote for h in holdings.values())
+            if (self.state.get("halted") or not self.state.get("last_regime_bull")
+                    or a in holdings or not self._can_enter(a)
+                    or len(holdings) >= p.max_positions
+                    or open_risk + e["plan"]["risk_quote"] > p.max_total_risk * eq * mult + 1e-9):
+                book.pop(a, None)
+                self.logger.info(f"[RUSE] achat différé de {a.upper()} abandonné : la situation "
+                                 f"a changé depuis la décision")
+                self._note_asset(a, "cancelled", "Achat abandonné : la situation a changé "
+                                                 "depuis la décision")
+                continue
+            _eq, cash = self._equity_and_cash({})
+            done = self._execute_entry(e["plan"], eq, now, cash)
+            if done is not None:
+                self.logger.info(f"[RUSE] {a.upper()} acheté au {e['tries'] + 1}e essai : "
+                                 f"carnet d'ordres redevenu normal")
+                self._note_asset(a, "bought", "Achetée après un achat différé : carnet "
+                                              "d'ordres redevenu normal")
+                self.notifier(f"↗ TrendGuard : achat différé de {a.upper()} exécuté "
+                              f"(carnet d'ordres redevenu normal)")
+
     def _execute_entry(self, plan: Dict[str, Any], equity: float,
                        now: datetime, cash_left: float
                        ) -> Optional[Dict[str, Any]]:
@@ -1059,8 +1258,7 @@ class TrendGuardBot:
             t = s.ex.get_ticker()
             px_now = float(t["ask"] if self.live else t["last"])
         except Exception as e:
-            self.logger.warning(f"[ENTRY] {a.upper()} : prix indisponible ({e}) "
-                                f"→ entrée reportée")
+            self._defer_entry(plan, equity, now, f"prix indisponible ({type(e).__name__})")
             return None
         # Cash disponible pour le bot : plafonné (TG_MAX_CAPITAL) et diminué
         # des achats déjà faits dans cette décision.
@@ -1074,7 +1272,19 @@ class TrendGuardBot:
                 f"[ENTRY] {a.upper()} annulée : prix {px_now:.6g} "
                 f"({drift * 100:+.1f} % vs clôture) trop proche du stop "
                 f"{plan['stop']:.6g} ou taille sous le minimum")
+            self._pending().pop(a, None)
+            self._entry_notes[a] = ("cancelled", "Achat annulé : le prix est retombé près du "
+                                                 "stop depuis la clôture (cassure invalidée)")
+            self._note_asset(a, *self._entry_notes[a])
             return None
+        # Ruse : pas d'achat dans un carnet d'ordres anormal (écart achat /
+        # vente très large, carnet vide ou trop mince : krach éclair,
+        # manipulation, maintenance). Nouvel essai plus tard dans la journée.
+        anomaly = self._book_anomaly(s, adj["cost"])
+        if anomaly:
+            self._defer_entry(plan, equity, now, anomaly)
+            return None
+        self._pending().pop(a, None)
         if abs(drift) > 0.01:
             self.logger.info(
                 f"[ENTRY] {a.upper()} : prix {px_now:.6g} ({drift * 100:+.1f} % "
@@ -1122,6 +1332,8 @@ class TrendGuardBot:
         for pl in entries:
             lines.append(f"  ↗ entrée {pl['asset'].upper()} risque "
                          f"{pl['risk_quote']:.2f}")
+        for a, e in sorted((self.state.get("pending_entries") or {}).items()):
+            lines.append(f"  ⏳ achat différé {a.upper()} : {e['reason']}")
         for a, h in holdings.items():
             px = prices.get(a, h.entry)
             lines.append(f"  • {a.upper():<5} {((px / h.entry) - 1) * 100:+6.1f} % "
@@ -1149,6 +1361,7 @@ class TrendGuardBot:
         backoff = 5
         try:
             while _running and not self.stop_requested():
+                self._touch_alive(force=True)
                 if hang is not None:
                     faulthandler.dump_traceback_later(self.STALL_DUMP_SEC, file=hang)
                 try:
@@ -1164,11 +1377,120 @@ class TrendGuardBot:
                 finally:
                     if hang is not None:
                         faulthandler.cancel_dump_traceback_later()
-                _sleep(wait, self.stop_requested)
+                _sleep(wait, self.waiting)
         finally:
             if hang is not None:
                 faulthandler.cancel_dump_traceback_later()
                 hang.close()
+
+
+# ══════════════════════════════════════════════════════════════════════
+# RAISONNEMENT DU JOUR, EN CLAIR
+# ══════════════════════════════════════════════════════════════════════
+
+EXIT_WHY = {"STOP": "clôture sous son stop suiveur, la tendance s'essouffle",
+            "STOP_LATE": "stop franchi pendant l'arrêt du bot",
+            "DELISTED": "plus cotée sur Binance", "DELISTED_LATE": "plus cotée sur Binance",
+            "EXCHANGE_STOP": "stop catastrophe, chute brutale entre deux clôtures"}
+WATCH_BAND_PCT = 5.0        # « sous surveillance » : à moins de 5 % de la cassure
+
+
+def _pc(x: float, d: int = 1) -> str:
+    """0.021 → « +2,1 % » (format français)."""
+    return f"{x * 100:+.{d}f} %".replace(".", ",")
+
+
+def _explain_asset(a: str, s: Dict[str, float], gap: Optional[float], bull: bool,
+                   holdings: Dict[str, ts.Holding], sold: Dict[str, str], bought: List[str],
+                   notes: Dict[str, Tuple[str, str]], halted: bool,
+                   p: ts.TrendParams) -> Tuple[str, str]:
+    if a in sold:
+        return "sold", "Vendue : " + EXIT_WHY.get(sold[a], sold[a].lower())
+    if a in bought:
+        return "bought", ("Achetée : cassure de son plus haut de 30 jours, tendance de fond "
+                          "positive, 1 % du capital risqué")
+    if a in holdings:
+        h, close = holdings[a], s.get("close")
+        if ts._finite(close) and close > 0:
+            return "held", (f"En portefeuille ({_pc(close / h.entry - 1)}) : la tendance "
+                            f"tient, stop à {_pc(h.stop / close - 1)} du cours")
+        return "held", "En portefeuille : la tendance tient"
+    if a in notes:
+        return notes[a]
+    if not s or not ts._finite(s.get("close"), s.get("prior_high"), s.get("vol"), s.get("mom")):
+        return "nodata", "Pas encore assez de données"
+    if s.get("age", 0) < p.min_history:
+        return "young", f"Historique trop court (moins de {p.min_history} jours de cotation)"
+    v30 = s.get("vol30")
+    if not ts._finite(v30) or v30 < p.min_volume_usd:
+        traded = f"{v30 / 1e6:.1f}".replace(".", ",") + " M$" if ts._finite(v30) else "inconnu"
+        return "illiquid", (f"Pas assez échangée sur Binance ({traded} par jour, minimum "
+                            f"{p.min_volume_usd / 1e6:.0f} M$)")
+    if s["mom"] <= 0:
+        return "weak", "Tendance de fond (90 jours) négative"
+    if s["close"] <= s["prior_high"]:
+        need = _pc((gap or 0.0) / 100)
+        if gap is not None and gap <= WATCH_BAND_PCT:
+            return "watch", f"Sous surveillance : encore {need} pour casser son plus haut de 30 jours"
+        return "wait", f"Pas de cassure : il lui faut {need} pour dépasser son plus haut de 30 jours"
+    if not bull:
+        return "bear", ("Signal d'achat, mais marché baissier : le bot attend le retour de BTC "
+                        "au-dessus de sa moyenne")
+    if halted:
+        return "halted", "Signal d'achat, mais arrêt d'urgence actif"
+    return "full", "Signal d'achat, mais plafond atteint (positions, risque total ou liquidités)"
+
+
+def explain_decision(day: str, bull: bool, btc_gap: Optional[float],
+                     snap: Dict[str, Dict[str, float]], holdings: Dict[str, ts.Holding],
+                     exits: List[Tuple[str, str]], bought: List[str],
+                     notes: Dict[str, Tuple[str, str]], halted: bool, mult: float,
+                     p: ts.TrendParams) -> Dict[str, Any]:
+    """Raisonnement de la décision du jour, actif par actif : ce que le bot
+    a fait, pourquoi il n'a pas acheté les autres, et ce qu'il guette.
+    Mêmes règles que la décision elle-même (trend_strategy.entry_signal)."""
+    sold = dict(exits)
+    assets: Dict[str, Dict[str, Any]] = {}
+    for a in sorted(set(snap) | set(holdings) | set(sold)):
+        s = snap.get(a) or {}
+        close, hi = s.get("close"), s.get("prior_high")
+        gap = (hi / close - 1) * 100 if ts._finite(close, hi) and close > 0 else None
+        status, text = _explain_asset(a, s, gap, bull, holdings, sold, bought, notes, halted, p)
+        assets[a] = {"status": status, "text": text,
+                     "breakout_gap_pct": round(gap, 2) if gap is not None else None}
+    radar = sorted((a for a, x in assets.items() if x["status"] == "watch"),
+                   key=lambda a: assets[a]["breakout_gap_pct"])
+    btc = f" ({_pc(btc_gap / 100)})" if btc_gap is not None else ""
+    lines = [f"Marché haussier : BTC au-dessus de sa moyenne 150 jours{btc}, achats autorisés."
+             if bull else
+             f"Marché baissier : BTC sous sa moyenne 150 jours{btc}, aucun achat et stops "
+             f"resserrés pour protéger les gains."]
+    acts = []
+    if bought:
+        acts.append(f"{len(bought)} achat(s) : {', '.join(a.upper() for a in bought)}")
+    if sold:
+        acts.append(f"{len(sold)} vente(s) : {', '.join(a.upper() for a in sold)}")
+    if acts:
+        lines.append("Aujourd'hui : " + " ; ".join(acts) + ".")
+    elif holdings:
+        lines.append(f"Aujourd'hui : aucun changement, {len(holdings)} position(s) conservée(s).")
+    else:
+        lines.append("Aujourd'hui : aucun achat, capital à l'abri en USDT.")
+    deferred = [a.upper() for a, (st, _t) in sorted(notes.items()) if st == "deferred"]
+    if deferred:
+        lines.append(f"Ruse : achat de {', '.join(deferred)} différé (conditions d'achat "
+                     f"anormales), nouvel essai toutes les 5 min.")
+    if radar:
+        lines.append("Sous surveillance : " + ", ".join(
+            f"{a.upper()} ({_pc(assets[a]['breakout_gap_pct'] / 100)})" for a in radar[:3])
+            + " avant la cassure.")
+    if mult < 1:
+        lines.append(f"Profil prudent actif : risque par trade × {mult:g}.")
+    if halted:
+        lines.append("Arrêt d'urgence actif : aucun achat.")
+    return {"day": day, "bull": bull,
+            "btc_gap_pct": round(btc_gap, 2) if btc_gap is not None else None,
+            "lines": lines, "assets": assets, "radar": radar[:5]}
 
 
 _running = True
@@ -1870,7 +2192,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(description="TrendGuard Bot (Binance Spot)")
     ap.add_argument("cmd", choices=["run", "once", "status", "resume", "docs",
                                     "health", "replay", "set-secret",
-                                    "set-keys", "verify", "diagnose", "panel"])
+                                    "set-keys", "verify", "diagnose", "panel",
+                                    "supervise", "stop", "autostart"])
+    ap.add_argument("action", nargs="?", default="status", choices=["on", "off", "status"],
+                    help="(autostart) on = activer, off = désactiver, status = état")
     ap.add_argument("--out", default=None, help="(diagnose) fichier du rapport")
     ap.add_argument("--data", default="data", help="(replay) dossier Coin Metrics")
     ap.add_argument("--start", default="2025-06-01", help="(replay) début")
@@ -1883,7 +2208,11 @@ def main(argv: Optional[List[str]] = None) -> int:
                     help="(panel) port web")
     ap.add_argument("--demo", action="store_true", help="(panel) données fictives")
     ap.add_argument("--no-open", action="store_true", help="(panel) sans ouvrir le navigateur")
+    ap.add_argument("--login", action="store_true",
+                    help="(supervise, panel) lancé à l'ouverture de session")
     args = ap.parse_args(argv)
+    if args.login:
+        os.chdir(v29.APP_DIR)            # clé Run de Windows : dossier courant quelconque
     if args.cmd == "replay":
         res = replay(args.data, args.start, args.end, args.capital)
         m = res["metrics"]
@@ -1917,6 +2246,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         return cmd_set_secret()
     if args.cmd == "set-keys":
         return cmd_set_keys()
+    if args.cmd == "autostart":
+        return autonomy.cmd_autostart(args.action)
     try:
         gcfg = load_guard_config_from_env()
     except ValueError as e:
@@ -1924,7 +2255,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 2
     if args.cmd == "panel":
         from panel import server as panel_server
-        return panel_server.main(gcfg, args.host, args.port, args.demo, not args.no_open)
+        return panel_server.main(gcfg, args.host, args.port, args.demo,
+                                 not (args.no_open or args.login))
+    if args.cmd == "supervise":
+        return autonomy.run_supervisor(gcfg, login=args.login)
+    if args.cmd == "stop":
+        return autonomy.cmd_stop(gcfg)
     if args.cmd == "verify":
         return cmd_verify(gcfg)
     if args.cmd == "diagnose":
@@ -1968,6 +2304,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
     locks = v29.acquire_instance_locks(gcfg.lock_file, gcfg.db_file)
     bot = _build(gcfg)
+    awake: Optional[autonomy.KeepAwake] = None
     try:
         bot.logger.info(f"TrendGuard — {gcfg.run_mode.upper()}"
                         f"{' TESTNET' if gcfg.binance_testnet and gcfg.run_mode == 'live' else ''} — "
@@ -1986,15 +2323,21 @@ def main(argv: Optional[List[str]] = None) -> int:
                 bot.logger.error(f"[ONCE] cycle KO: {e}")
                 return 1
             return 0
+        if gcfg.keep_awake:
+            awake = autonomy.KeepAwake(bot.logger)
+            awake.start()
+        bot._touch_alive(force=True)
         delay = 30
         while _running and not bot.stop_requested() and not bot.boot():
             bot.logger.warning(f"[BOOT] nouvelle tentative dans {delay} s")
-            _sleep(delay, bot.stop_requested)
+            _sleep(delay, bot.waiting)
             delay = min(delay * 2, 600)
         if _running and not bot.stop_requested():
             bot.run_forever()
         return 0
     finally:
+        if awake is not None:
+            awake.stop()
         bot.store.close()
         bot.notifier.close()
         v29.release_locks(locks)

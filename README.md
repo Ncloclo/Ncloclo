@@ -103,16 +103,21 @@ la question « le bot peut-il apprendre et adopter la meilleure stratégie ? » 
 Application web locale, ouverte dans le navigateur (VS Code : « TrendGuard —
 panneau de contrôle ») :
 
-- **AUTO** démarre l'automatisation du bot, **ARRÊTER** l'arrête proprement
-  (fin du cycle en cours, état enregistré, stops Binance laissés en place). En
-  mode réel, une confirmation est demandée ;
+- **AUTO** démarre l'automatisation du bot, relancé seul s'il plante,
+  **ARRÊTER** l'arrête proprement (fin du cycle en cours, état enregistré, stops
+  Binance laissés en place) et sans relance. En mode réel, une confirmation est
+  demandée ;
+- **Ce que pense le bot** (tableau de bord) : sa décision du jour expliquée et
+  les cryptos proches d'un signal d'achat ;
 - **Graphiques** : capital, régime BTC et chaque position en temps réel ; un
   clic ouvre le détail (bougies, volume, achats et ventes, stops, zoom,
   intervalles de 15 min à 1 jour) ;
-- **Cryptos** : les 21 paires avec cours, variation, volume et courbe de 48 h,
-  filtres (détenues, bloquées) et recherche ;
-- **Positions**, **Veille**, **Journal** et **Réglages** (test des alertes,
-  thème clair ou sombre, accès depuis un téléphone).
+- **Cryptos** : les 21 paires avec cours, variation, volume, courbe de 48 h et
+  la raison du choix du bot, filtres (détenues, sous surveillance, bloquées) et
+  recherche ;
+- **Positions**, **Veille**, **Journal** et **Réglages** (démarrage avec
+  l'ordinateur, test des alertes, thème clair ou sombre, accès depuis un
+  téléphone).
 
 Le panneau lit la base du bot sans la modifier et ne passe aucun ordre
 lui-même. Sans bot ni réseau, `--demo` affiche des données fictives.
@@ -134,6 +139,50 @@ gratuit pour un usage personnel, ou Twilio). Par défaut, seules les alertes
 critiques (arrêt d'urgence, retrait officiel d'une crypto détenue, alerte forte
 de la veille) partent par e-mail et WhatsApp ; `ALERT_LEVEL=all` y ajoute le
 résumé quotidien. Un canal en panne ne ralentit jamais le trading.
+
+### Bot autonome, rusé, qui explique ses choix (`autonomy.py`)
+
+**Autonome.** Le bouton AUTO du panneau lance un superviseur (`python
+trendguard_bot.py supervise`) qui démarre le bot et le relance tout seul s'il
+s'arrête sur une erreur (attente de 10 s, puis 30 s, 1 min… jusqu'à 10 min,
+alerte au 3e plantage d'affilée) ou s'il ne donne plus signe de vie pendant 30
+min. Avec `python trendguard_bot.py autostart on` (ou l'interrupteur « Démarrer
+avec l'ordinateur » des Réglages), le bot et le panneau démarrent à chaque
+ouverture de session : clé « Run » de Windows (sans droits administrateur),
+services systemd de l'utilisateur sous Linux, LaunchAgents sous macOS. Tant que
+le bot tourne, l'ordinateur ne se met pas en veille tout seul
+(`TG_KEEP_AWAKE=false` pour l'autoriser ; l'écran peut s'éteindre, fermer le
+capot reste possible). ARRÊTER (ou `python trendguard_bot.py stop`) est
+respecté : aucune relance, même au prochain démarrage de l'ordinateur, jusqu'au
+prochain AUTO.
+
+**Rusé à l'achat, discipliné à la vente.** Avant chaque achat, le bot lit le
+carnet d'ordres de Binance. Écart achat/vente supérieur à 0,5 %
+(`TG_MAX_SPREAD`), carnet vide, ou moins de 3 fois le montant de l'achat proposé
+à moins de 1 % du prix (krach éclair, manipulation, maintenance) : l'achat est
+différé et réessayé toutes les 5 minutes pendant 6 heures
+(`TG_ENTRY_RETRY_HOURS`), puis abandonné. Un prix momentanément illisible est
+traité de la même façon, au lieu de faire perdre l'achat du jour. La taille est
+toujours recalculée au prix réel : un achat différé ne risque jamais plus de 1
+%. Les ventes, elles, ne sont jamais retardées. Le stop de clôture reste
+invisible du marché (aucun ordre posé à ce niveau) et le stop catastrophe est
+placé plus bas : une mèche qui « chasse les stops » ne fait pas sortir le bot.
+
+**Il explique ses choix.** Chaque jour, la carte « Ce que pense le bot » du
+tableau de bord résume sa décision (régime du marché, achats, ventes, cryptos
+proches d'un signal d'achat), et chaque carte de la page Cryptos dit pourquoi le
+bot détient, achète ou ignore cette crypto : pas de cassure (avec la hausse
+encore nécessaire), tendance de fond négative, trop peu échangée, bloquée par la
+veille, plafond de risque atteint. Le filtre « Sous surveillance » montre les
+candidates.
+
+Ce que le bot ne fait pas : changer seul ses règles après quelques résultats.
+Les études du dépôt ([`docs/ADAPTATION.md`](docs/ADAPTATION.md),
+[`docs/STRATEGIES.md`](docs/STRATEGIES.md)) montrent que ces « adaptations »
+font moins bien que les règles fixes sur la période qu'elles n'ont pas vue. Son
+intelligence est ailleurs : auto-diagnostic hebdomadaire de son avantage
+statistique, veille officielle Binance et avis des IA, revue hebdomadaire par
+Claude Code, qui propose les changements par PR sans jamais les appliquer seule.
 
 ### Animation du rejeu (`replay_animation.py`)
 
@@ -225,6 +274,9 @@ python trendguard_bot.py set-keys                     # clés API vérifiées pa
 python strategy_lab.py --cache data_binance           # tournoi des stratégies + méta-apprentissage
 python replay_animation.py                            # animation du bot sur les prix réels Binance
 python trendguard_bot.py panel                        # panneau de contrôle (navigateur)
+python trendguard_bot.py supervise                    # bot relancé seul en cas de plantage
+python trendguard_bot.py autostart on                 # démarrage avec l'ordinateur (off : retiré)
+python trendguard_bot.py stop                         # arrêt propre, sans relance
 python alerts.py configurer                           # alertes e-mail et WhatsApp
 ```
 
@@ -398,12 +450,13 @@ walkforward | status | resume` (voir `python v29.py docs`).
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 258 tests, simulateurs Binance Spot mono et multi-paires
+python -m pytest tests -q      # 301 tests, simulateurs Binance Spot mono et multi-paires
 ```
 
 À chaque envoi sur GitHub, `.github/workflows/checks.yml` lance ces tests, puis
-vérifie la page d'animation dans Chromium : ESLint sur le script et tests
-Playwright (`tests/web/`) sur une page d'exemple construite sans réseau.
+vérifie la page d'animation et le panneau de contrôle dans Chromium : ESLint sur
+les scripts et tests Playwright (`tests/web/`) sur une page d'exemple et le
+panneau en démonstration, sans réseau.
 
 ## Limites connues
 

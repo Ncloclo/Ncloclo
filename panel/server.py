@@ -139,6 +139,7 @@ class PanelApp:
             "vetoes": [dict(v, asset=a) for a, v in sorted((st.get("vetoes") or {}).items())],
             "watch": st.get("last_watch"),
             "alerts": self.hub.status() if self.hub is not None else [],
+            "autonomy": self.control.autonomy(),
             "lan_urls": self.lan_urls, "password": bool(self.password),
             "server_time": now.isoformat(),
         }
@@ -148,6 +149,7 @@ class PanelApp:
         universe = [b.lower() for b in self.g.universe]
         held = {h["asset"] for h in self.data.holdings(st)}
         vetoes = st.get("vetoes") or {}
+        why = (st.get("reasoning") or {}).get("assets") or {}
         try:
             tick, stale = self.market.tickers(universe)
         except Exception:
@@ -160,7 +162,10 @@ class PanelApp:
                          "price": t.get("price"), "change_pct": t.get("change_pct"),
                          "high": t.get("high"), "low": t.get("low"),
                          "volume_quote": t.get("volume_quote"), "held": a in held,
-                         "vetoed": a in vetoes, "veto_reason": (vetoes.get(a) or {}).get("reason")})
+                         "vetoed": a in vetoes, "veto_reason": (vetoes.get(a) or {}).get("reason"),
+                         "status": (why.get(a) or {}).get("status"),
+                         "why": (why.get(a) or {}).get("text"),
+                         "breakout_gap_pct": (why.get(a) or {}).get("breakout_gap_pct")})
         return {"assets": rows, "stale": stale}
 
     def candles(self, asset: str, interval: str, limit: int) -> Dict[str, Any]:
@@ -229,6 +234,8 @@ class PanelApp:
                     return 200, dict(reg, stale=stale)
                 if path == "/api/watch":
                     return 200, self.data.watch()
+                if path == "/api/reasoning":
+                    return 200, self.data.reasoning()
                 if path == "/api/log":
                     return 200, {"lines": self.data.log_tail(int(q("lines", "300")))}
             if method == "POST":
@@ -237,6 +244,9 @@ class PanelApp:
                     return 200, {"ok": ok, "message": msg}
                 if path == "/api/bot/stop":
                     ok, msg = self.control.stop()
+                    return 200, {"ok": ok, "message": msg}
+                if path == "/api/autostart":
+                    ok, msg = self.control.set_autostart(body.get("enabled") is True)
                     return 200, {"ok": ok, "message": msg}
                 if path == "/api/alerts/test":
                     if self.hub is None:
@@ -378,10 +388,21 @@ def build_app(gcfg: Any, demo: bool = False, password: str = "", loopback: bool 
                     alerts.build_notifier(), False, password, loopback, lan_urls)
 
 
+class PanelServer(ThreadingHTTPServer):
+    daemon_threads = True
+    # Windows : avec SO_REUSEADDR, un second panneau écouterait sur le même
+    # port sans erreur (requêtes réparties au hasard entre les deux). Port
+    # réservé en exclusivité : le second panneau s'arrête en le signalant.
+    allow_reuse_address = os.name != "nt"
+
+    def server_bind(self) -> None:
+        if os.name == "nt" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
 def serve(app: PanelApp, host: str, port: int) -> ThreadingHTTPServer:
-    httpd = ThreadingHTTPServer((host, port), make_handler(app))
-    httpd.daemon_threads = True
-    return httpd
+    return PanelServer((host, port), make_handler(app))
 
 
 def main(gcfg: Any, host: str = "127.0.0.1", port: int = 8765, demo: bool = False,

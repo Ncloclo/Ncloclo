@@ -12,6 +12,7 @@ import urllib.request
 
 import pytest
 
+import autonomy
 import trendguard_bot as tg
 import v29
 from panel import server as ps
@@ -73,6 +74,20 @@ def test_api_endpoints_answer(demo_server):
     assert _json(base + "/api/nimporte")[0] == 404
 
 
+def test_reasoning_and_autonomy_endpoints(demo_server):
+    base, _ = demo_server
+    r = _json(base + "/api/reasoning")[1]
+    assert r["current"]["lines"] and len(r["current"]["assets"]) == 21
+    assert r["pending"][0]["asset"] == "bch" and r["history"]
+    rows = {x["asset"]: x for x in _json(base + "/api/assets")[1]["assets"]}
+    assert rows["eth"]["status"] == "watch" and "plus haut" in rows["eth"]["why"]
+    au = _json(base + "/api/status")[1]["autonomy"]
+    assert au["supervisor"]["running"] is True and au["autostart"] is True
+    res = _json(base + "/api/autostart", method="POST", body={"enabled": False})[1]
+    assert res["ok"] and _json(base + "/api/status")[1]["autonomy"]["autostart"] is False
+    assert _json(base + "/api/autostart", method="POST", body={"enabled": True})[1]["ok"]
+
+
 def test_start_stop_and_page(demo_server):
     base, _ = demo_server
     assert _json(base + "/api/bot/stop", method="POST")[1]["ok"] is True
@@ -121,6 +136,18 @@ def test_password_required_from_the_network(tmp_path):
         httpd.server_close()
 
 
+def test_second_panel_on_the_same_port_is_refused(tmp_path):
+    # Démarrage avec l'ordinateur + lancement manuel : un seul panneau par port
+    # (sous Windows, SO_REUSEADDR laissait les deux écouter en même temps).
+    app = ps.build_app(_cfg(tmp_path), demo=True)
+    httpd = ps.serve(app, "127.0.0.1", 0)
+    try:
+        with pytest.raises(OSError):
+            ps.serve(app, "127.0.0.1", httpd.server_address[1])
+    finally:
+        httpd.server_close()
+
+
 def test_network_access_refused_without_password(tmp_path, monkeypatch, capsys):
     monkeypatch.delenv("PANEL_PASSWORD", raising=False)
     assert ps.main(_cfg(tmp_path), host="0.0.0.0", port=0, demo=True, open_browser=False) == 2
@@ -139,10 +166,14 @@ def test_control_start_stop_with_the_bot_lock(tmp_path):
     ctl = BotControl(g, popen=lambda cmd, **kw: calls.append((cmd, kw)) or Proc())
     assert ctl.state() == "stopped"
     open(g.stop_file, "w").close()                  # demande d'arrêt périmée
+    off = autonomy.sidecar(g.lock_file, ".off")
+    open(off, "w").close()                          # automatisation arrêtée auparavant
     ok, _msg = ctl.start()
     cmd = calls[0][0]
-    assert ok and cmd[-1] == "run" and cmd[-2].endswith("trendguard_bot.py")
-    assert calls[0][1]["env"]["RUN_MODE"] == "paper" and not os.path.exists(g.stop_file)
+    # AUTO lance le superviseur, qui lance le bot et le relance s'il plante.
+    assert ok and cmd[-1] == "supervise" and cmd[-2].endswith("trendguard_bot.py")
+    assert calls[0][1]["env"]["RUN_MODE"] == "paper"
+    assert not os.path.exists(g.stop_file) and not os.path.exists(off)
     assert ctl.state() == "starting" and ctl.start()[0] is False
     ctl._starting_until = 0
     lock = v29.ProcessLock(g.lock_file)             # le bot tient son verrou
@@ -151,10 +182,23 @@ def test_control_start_stop_with_the_bot_lock(tmp_path):
         assert ctl.state() == "running"
         ok, msg = ctl.stop()
         assert ok and os.path.exists(g.stop_file) and "stops" in msg
+        assert os.path.exists(off)                  # pas de relance, ni au démarrage du PC
         assert ctl.state() == "stopping"
     finally:
         lock.release()
     assert ctl.state() == "stopped" and ctl.stop()[0] is False
+    # Superviseur vivant, bot arrêté sur une erreur : relance en attente.
+    os.remove(off)
+    with open(autonomy.sidecar(g.lock_file, ".superviseur.json"), "w") as fh:
+        json.dump({"state": "waiting", "restarts": 2}, fh)
+    sup = v29.ProcessLock(autonomy.sidecar(g.lock_file, ".superviseur.lock"))
+    sup.acquire()
+    try:
+        assert ctl.state() == "restarting" and ctl.start()[0] is False
+        assert ctl.autonomy()["supervisor"]["restarts"] == 2
+        assert ctl.stop()[0] is True and ctl.state() == "stopping"
+    finally:
+        sup.release()
 
 
 def test_bot_stops_cleanly_on_request(tmp_path, logger):
@@ -212,6 +256,8 @@ def test_bot_data_reads_state_equity_and_log(tmp_path, logger):
     held = data.positions()["positions"]
     assert {p["asset"] for p in held} == set(st["paper"]["holdings"])
     assert data.log_tail(10) == [f"ligne {i}" for i in range(40, 50)]
+    why = data.reasoning()
+    assert why["current"]["day"] == st["last_decision_day"] and why["history"][0]["day"] == st["last_decision_day"]
     assert BotData(_cfg(tmp_path / "vide"), M()).state() == {}
 
 

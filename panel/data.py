@@ -26,6 +26,16 @@ def _ro(path: str) -> Optional[sqlite3.Connection]:
     return sqlite3.connect(uri, uri=True, timeout=5)
 
 
+def reasoning_view(st: Dict[str, Any]) -> Dict[str, Any]:
+    """Raisonnement du bot (décision du jour, historique, achats différés)."""
+    pending = [{"asset": a, "reason": e.get("reason"), "tries": e.get("tries"),
+                "until": e.get("until")}
+               for a, e in sorted((st.get("pending_entries") or {}).items())]
+    return {"current": st.get("reasoning"),
+            "history": list(reversed(st.get("reasoning_log") or []))[:30],
+            "pending": pending}
+
+
 def _ts(value: Any) -> Optional[int]:
     """Horodatage ISO → secondes UNIX (UTC)."""
     dt = v29._parse_iso(str(value)) if value else None
@@ -134,6 +144,9 @@ class BotData:
                 con.close()
         vetoes = [dict(v, asset=a) for a, v in sorted((state.get("vetoes") or {}).items())]
         return {"last": state.get("last_watch"), "vetoes": vetoes, "report_text": text}
+
+    def reasoning(self, state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        return reasoning_view(self.state() if state is None else state)
 
     def log_tail(self, lines: int = 300) -> List[str]:
         path = self.g.log_file

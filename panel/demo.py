@@ -10,6 +10,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Tuple
 
+from .data import reasoning_view
 from .market import INTERVALS
 
 BASE_PRICES = {"btc": 84400.0, "eth": 2690.0, "bnb": 780.0, "xrp": 0.58, "ada": 0.254,
@@ -17,6 +18,23 @@ BASE_PRICES = {"btc": 84400.0, "eth": 2690.0, "bnb": 780.0, "xrp": 0.58, "ada": 
                "xlm": 0.216, "etc": 19.2, "zec": 48.0, "dash": 31.0, "neo": 9.4, "xtz": 0.71,
                "algo": 0.19, "dot": 4.2, "uni": 8.9, "aave": 155.0, "icp": 3.2}
 HELD = ("aave", "ada", "icp", "link", "ltc", "xlm")
+# Raisonnement d'exemple : pourquoi le bot n'achète pas les autres cryptos.
+WHY = {"btc": ("wait", "Pas de cassure : il lui faut +3,8 % pour dépasser son plus haut de 30 jours", 3.8),
+       "eth": ("watch", "Sous surveillance : encore +1,9 % pour casser son plus haut de 30 jours", 1.9),
+       "bnb": ("full", "Signal d'achat, mais plafond atteint (positions, risque total ou liquidités)", None),
+       "xrp": ("weak", "Tendance de fond (90 jours) négative", 9.4),
+       "doge": ("wait", "Pas de cassure : il lui faut +12,6 % pour dépasser son plus haut de 30 jours", 12.6),
+       "trx": ("watch", "Sous surveillance : encore +4,2 % pour casser son plus haut de 30 jours", 4.2),
+       "bch": ("deferred", "Achat différé : écart achat/vente anormal (0,74 %, limite 0,50 %). "
+                           "Nouvel essai toutes les 5 min", None),
+       "etc": ("illiquid", "Pas assez échangée sur Binance (3,1 M$ par jour, minimum 5 M$)", 6.5),
+       "zec": ("wait", "Pas de cassure : il lui faut +8,1 % pour dépasser son plus haut de 30 jours", 8.1),
+       "dash": ("weak", "Tendance de fond (90 jours) négative", 15.0),
+       "neo": ("illiquid", "Pas assez échangée sur Binance (2,4 M$ par jour, minimum 5 M$)", 7.7),
+       "xtz": ("veto", "Achats bloqués par la veille : Binance retire XTZ (exemple)", None),
+       "algo": ("illiquid", "Pas assez échangée sur Binance (4,2 M$ par jour, minimum 5 M$)", 5.4),
+       "dot": ("watch", "Sous surveillance : encore +2,7 % pour casser son plus haut de 30 jours", 2.7),
+       "uni": ("wait", "Pas de cassure : il lui faut +6,3 % pour dépasser son plus haut de 30 jours", 6.3)}
 
 
 def _walk(asset: str, interval_s: int, n: int, end: int) -> List[List[float]]:
@@ -80,7 +98,42 @@ class DemoData:
                 "last_watch": {"day": "2026-09-27", "sentiment": 0.18, "providers": 3,
                                "providers_total": 4,
                                "alerts": ["Parité USDC/USDT normale (exemple)"]},
-                "trades": self.trades()}
+                "trades": self.trades(),
+                "reasoning": self._reasoning(),
+                "reasoning_log": [{"day": (datetime.now(timezone.utc) - timedelta(days=k)).date().isoformat(),
+                                   "text": "Marché haussier : BTC au-dessus de sa moyenne 150 jours (+4,1 %), "
+                                           "achats autorisés. Aujourd'hui : aucun changement, 6 position(s) "
+                                           "conservée(s)."} for k in range(6, 0, -1)],
+                "pending_entries": {"bch": {"reason": "écart achat/vente anormal (0,74 %, limite 0,50 %)",
+                                            "tries": 3, "until": time.time() + 4 * 3600}}}
+
+    def _reasoning(self) -> Dict[str, Any]:
+        assets = {}
+        for a in BASE_PRICES:
+            if a in HELD:
+                assets[a] = {"status": "held", "text": "En portefeuille : la tendance tient, stop à −9,8 % du cours",
+                             "breakout_gap_pct": None}
+            else:
+                st, text, gap = WHY.get(a, ("wait", "Pas de cassure", 10.0))
+                assets[a] = {"status": st, "text": text, "breakout_gap_pct": gap}
+        reg = self.market.regime()[0]
+        last = reg["points"][-1]
+        gap = (last["close"] / last["sma"] - 1) * 100
+        txt = f"{gap:+.1f} %".replace(".", ",")
+        first = (f"Marché haussier : BTC au-dessus de sa moyenne 150 jours ({txt}), achats autorisés."
+                 if reg["bull"] else
+                 f"Marché baissier : BTC sous sa moyenne 150 jours ({txt}), aucun achat et stops "
+                 f"resserrés pour protéger les gains.")
+        return {"day": (datetime.now(timezone.utc) - timedelta(days=1)).date().isoformat(),
+                "bull": reg["bull"], "btc_gap_pct": round(gap, 2), "radar": ["eth", "dot", "trx"],
+                "assets": assets,
+                "lines": [first,
+                          "Aujourd'hui : aucun changement, 6 position(s) conservée(s).",
+                          "Ruse : achat de BCH différé (conditions d'achat anormales), nouvel essai toutes les 5 min.",
+                          "Sous surveillance : ETH (+1,9 %), DOT (+2,7 %), TRX (+4,2 %) avant la cassure."]}
+
+    def reasoning(self, state: Any = None) -> Dict[str, Any]:
+        return reasoning_view(self.state())
 
     def equity(self, days: int = 90, max_points: int = 1500) -> List[Dict[str, float]]:
         rnd = random.Random("equity")
@@ -143,6 +196,22 @@ class DemoData:
 class DemoControl:
     def __init__(self) -> None:
         self._state = "running"
+        self._autostart = True
+
+    def autonomy(self) -> Dict[str, Any]:
+        return {"supervisor": {"running": self._state == "running", "state": "running", "restarts": 1,
+                               "last_exit": {"code": 1, "at": (datetime.now(timezone.utc)
+                                                               - timedelta(days=3)).isoformat(),
+                                             "stalled": False},
+                               "since": (datetime.now(timezone.utc) - timedelta(days=5)).isoformat(),
+                               "next_start": None},
+                "off": self._state != "running", "autostart": self._autostart, "os": "windows",
+                "keep_awake": True}
+
+    def set_autostart(self, enabled: bool) -> Tuple[bool, str]:
+        self._autostart = bool(enabled)
+        return True, ("Démarrage automatique activé (démonstration)." if enabled
+                      else "Démarrage automatique désactivé (démonstration).")
 
     def state(self) -> str:
         return self._state

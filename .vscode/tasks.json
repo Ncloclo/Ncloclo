@@ -45,6 +45,32 @@
       "problemMatcher": []
     },
     {
+      "label": "Autonomie — superviseur (bot relancé seul en cas de plantage)",
+      "type": "shell",
+      "command": "python trendguard_bot.py supervise",
+      "isBackground": true,
+      "presentation": { "panel": "dedicated" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Autonomie — démarrer avec l'ordinateur",
+      "type": "shell",
+      "command": "python trendguard_bot.py autostart on",
+      "problemMatcher": []
+    },
+    {
+      "label": "Autonomie — ne plus démarrer avec l'ordinateur",
+      "type": "shell",
+      "command": "python trendguard_bot.py autostart off",
+      "problemMatcher": []
+    },
+    {
+      "label": "Autonomie — arrêter l'automatisation",
+      "type": "shell",
+      "command": "python trendguard_bot.py stop",
+      "problemMatcher": []
+    },
+    {
       "label": "Alertes — configurer e-mail et WhatsApp (saisie masquée)",
       "type": "shell",
       "command": "python alerts.py configurer",

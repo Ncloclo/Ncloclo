@@ -44,6 +44,17 @@ const fdur = (s) => {
 };
 const fage = (s) => (s == null ? "–" : s < 90 ? `${s} s` : s < 5400 ? `${Math.round(s / 60)} min` : `${Math.round(s / 3600)} h`);
 const REASON = { STOP: "stop de clôture", EXCHANGE_STOP: "stop catastrophe", DELISTED: "retrait de la cote", STOP_LATE: "stop (rattrapage)" };
+// Raisonnement du bot, actif par actif : [classe de l'étiquette, libellé].
+const STATUS = {
+  held: ["held", "Détenue"], bought: ["up", "Achetée"], sold: ["down", "Vendue"],
+  watch: ["watch", "Sous surveillance"], full: ["watch", "Signal · plafond atteint"],
+  bear: ["warn", "Signal · marché baissier"], deferred: ["warn", "Achat différé"],
+  cancelled: ["muted", "Achat annulé"], veto: ["vetoed", "Achats bloqués"],
+  wait: ["muted", "Pas de cassure"], weak: ["muted", "Tendance faible"],
+  illiquid: ["muted", "Peu échangée"], young: ["muted", "Trop récente"],
+  nodata: ["muted", "Données insuffisantes"], halted: ["down", "Arrêt d'urgence"],
+};
+const CANDIDATE = new Set(["watch", "full", "bear", "deferred"]);
 
 // ---------- Préférences locales ----------
 const prefs = {
@@ -212,19 +223,19 @@ async function refreshStatus() {
 }
 function renderStatus() {
   const pill = $("#st-pill"), btn = $("#auto-btn");
-  const label = { running: "En marche", stopped: "Arrêté", starting: "Démarrage…", stopping: "Arrêt en cours…" }[S.state] || S.state;
+  const label = { running: "En marche", stopped: "Arrêté", starting: "Démarrage…", stopping: "Arrêt en cours…", restarting: "Relance automatique…" }[S.state] || S.state;
   pill.className = "pill " + (S.state === "running" ? "running" : S.state === "stopped" ? "stopped" : "pending");
   pill.querySelector("span").textContent = S.halted ? "Arrêt d'urgence" : label;
   const mode = $("#mode-badge");
   mode.textContent = S.demo ? "DÉMO" : S.mode === "live" ? (S.testnet ? "RÉEL · TESTNET" : "RÉEL") : "PAPER";
   mode.className = "badge " + (S.mode === "live" ? "live" : "paper");
   $("#brand-mode").textContent = S.demo ? "Démonstration" : S.mode === "live" ? "Mode réel" : "Mode paper (argent fictif)";
-  const running = S.state === "running", busy = S.state === "starting" || S.state === "stopping";
+  const running = S.state === "running" || S.state === "restarting", busy = S.state === "starting" || S.state === "stopping";
   btn.disabled = busy;
   btn.classList.toggle("is-running", running);
   btn.querySelector("use").setAttribute("href", running ? "#i-stop" : "#i-play");
   $("#auto-label").textContent = running ? "ARRÊTER" : "AUTO";
-  $("#auto-sub").textContent = busy ? label : running ? "Automatisation en marche" : "Démarrer l'automatisation";
+  $("#auto-sub").textContent = busy ? label : S.state === "restarting" ? "Relance après une erreur" : running ? "Automatisation en marche" : "Démarrer l'automatisation";
   btn.setAttribute("aria-label", running ? "Arrêter l'automatisation du bot" : "Démarrer l'automatisation du bot");
   $("#logout-btn").hidden = !S.password;
 }
@@ -242,7 +253,7 @@ $("#auto-btn").addEventListener("click", async (ev) => {
   const btn = ev.currentTarget;
   ripple(ev, btn);
   if (!S) return;
-  const running = S.state === "running";
+  const running = S.state === "running" || S.state === "restarting";
   if (!running && S.mode === "live" && !S.demo && !(await confirmLive())) return;
   btn.disabled = true;
   try {
@@ -258,7 +269,8 @@ $("#auto-btn").addEventListener("click", async (ev) => {
 let dashChart = null, dashSeries = null;
 async function renderDash() {
   if (!S) await refreshStatus();
-  const [pos, eq] = await Promise.all([api("/api/positions"), api("/api/equity?days=30")]);
+  const [pos, eq, mind] = await Promise.all([api("/api/positions"), api("/api/equity?days=30"), api("/api/reasoning")]);
+  renderMind(mind);
   countUp($("#d-equity"), S.equity, fusd);
   const sub = $("#d-equity-sub");
   if (S.equity && S.start_equity) {
@@ -315,11 +327,54 @@ async function renderDash() {
   const alerts = [];
   if (S.halted) alerts.push(["crit", `Arrêt d'urgence : ${S.halt_reason || ""}`]);
   if (S.state === "stopped") alerts.push(["warn", "Le bot est arrêté : cliquez sur AUTO pour reprendre l'automatisation."]);
+  const sup = (S.autonomy && S.autonomy.supervisor) || {};
+  if (S.state === "restarting") alerts.push(["warn", "Le bot s'est arrêté sur une erreur : relance automatique en cours."]);
+  else if (S.state === "running" && !sup.running && !S.demo) alerts.push(["warn", "Relance automatique inactive (bot lancé hors du panneau) : ARRÊTER puis AUTO pour l'activer."]);
+  if (sup.running && sup.restarts > 0 && sup.last_exit) alerts.push(["warn", `Le bot s'est relancé seul ${sup.restarts} fois (dernière erreur le ${fdate(sup.last_exit.at)}).`]);
   S.vetoes.forEach((v) => alerts.push(["crit", `${v.reason} : achats bloqués jusqu'au ${fdate(v.until)}`]));
   ((S.watch && S.watch.alerts) || []).forEach((a) => alerts.push(["warn", a]));
   if (pos.stale) alerts.push(["warn", "Cours Binance momentanément indisponibles : dernières valeurs affichées."]);
   if (!alerts.length) alerts.push(["ok", "Aucune alerte. Tout est normal."]);
   $("#d-alerts").replaceChildren(...alerts.map(([k, t]) => el("li", k, t)));
+}
+
+let mindKey = "";
+function renderMind(m) {
+  const cur = m.current;
+  const lines = cur ? cur.lines : ["Pas encore de décision : le raisonnement s'affiche après la première clôture quotidienne (00:02 UTC)."];
+  $("#d-mind-day").textContent = cur ? `bougie du ${fdate(cur.day)}` : "";
+  const key = JSON.stringify([lines, m.pending, m.history.length]);
+  if (key === mindKey) return;                // n'anime que ce qui change
+  mindKey = key;
+  $("#d-mind").replaceChildren(...lines.map((t, i) => {
+    const li = el("li", "", t);
+    li.style.animationDelay = i * 90 + "ms";
+    return li;
+  }));
+  const chip = (cls, a, text, title) => {
+    const b = el("button", "chip " + cls);
+    b.type = "button";
+    b.title = title || "";
+    b.append(el("strong", "", up(a)), el("span", "", text));
+    b.addEventListener("click", () => openDetail({ kind: "asset", asset: a }));
+    return b;
+  };
+  const chips = [
+    ...((cur && cur.radar) || []).map((a) => {
+      const x = (cur.assets && cur.assets[a]) || {};
+      return chip("watch", a, `${fpct(x.breakout_gap_pct, 1)} avant la cassure`, x.text);
+    }),
+    ...m.pending.map((p) => chip("warn", p.asset, `achat différé · essai ${p.tries}`, p.reason)),
+  ];
+  $("#d-radar").replaceChildren(...chips);
+  $("#d-radar").hidden = !chips.length;
+  const hist = m.history.length ? m.history : [{ day: "", text: "Aucun historique pour l'instant." }];
+  $("#d-mind-history").replaceChildren(...hist.map((h) => {
+    const li = el("li");
+    if (h.day) li.append(el("strong", "", fdate(h.day) + " · "));
+    li.append(document.createTextNode(h.text));
+    return li;
+  }));
 }
 
 // ---------- Graphiques en temps réel ----------
@@ -572,7 +627,8 @@ function arrangeAssets() {
   rows.forEach((r) => {
     const card = grid.querySelector(`[data-asset="${r.asset}"]`);
     if (!card) return;
-    const show = (assetFilter === "all" || (assetFilter === "held" && r.held) || (assetFilter === "vetoed" && r.vetoed))
+    const show = (assetFilter === "all" || (assetFilter === "held" && r.held) || (assetFilter === "vetoed" && r.vetoed)
+      || (assetFilter === "watch" && CANDIDATE.has(r.status)))
       && (!q || r.asset.includes(q) || r.name.toLowerCase().includes(q));
     card.hidden = !show;
     grid.append(card);
@@ -599,7 +655,7 @@ async function renderAssets() {
       svg.setAttribute("preserveAspectRatio", "none");
       const bottom = el("div", "row");
       bottom.append(el("span", "tags"), el("span", "sub vol"));
-      card.append(top, el("span", "name", r.name), el("span", "px"), svg, bottom);
+      card.append(top, el("span", "name", r.name), el("span", "px"), svg, el("p", "why"), bottom);
       const open = () => openDetail({ kind: "asset", asset: r.asset });
       card.addEventListener("click", open);
       card.addEventListener("keydown", (e) => { if (e.key === "Enter") open(); });
@@ -619,7 +675,12 @@ async function renderAssets() {
     chg.textContent = r.change_pct == null ? "–" : `${r.change_pct >= 0 ? "▲" : "▼"} ${fpct(r.change_pct)}`;
     chg.className = "chg " + ((r.change_pct || 0) >= 0 ? "up" : "down");
     const tags = card.querySelector(".tags");
-    tags.replaceChildren(...[r.held && el("span", "tag held", "Détenue"), r.vetoed && el("span", "tag vetoed", "Achats bloqués")].filter(Boolean));
+    const st = STATUS[r.status];
+    tags.replaceChildren(...[r.held && el("span", "tag held", "Détenue"), r.vetoed && el("span", "tag vetoed", "Achats bloqués"),
+      st && r.status !== "held" && r.status !== "veto" && el("span", "tag " + st[0], st[1])].filter(Boolean));
+    const why = card.querySelector(".why");
+    why.textContent = r.why || "";
+    why.hidden = !r.why;
     if (r.veto_reason) card.title = r.veto_reason;
     card.querySelector(".vol").textContent = `Vol. 24 h ${fvol(r.volume_quote)}`;
   });
@@ -707,11 +768,24 @@ $("#install-btn").addEventListener("click", async () => {
 });
 async function renderSettings() {
   if (!S) await refreshStatus();
+  const au = S.autonomy || {}, sup = au.supervisor || {}, le = sup.last_exit;
+  const sw = $("#s-autostart");
+  sw.checked = !!au.autostart;
+  sw.disabled = au.autostart == null;
+  $("#s-auto-os").textContent = { windows: "Windows", macos: "macOS", linux: "Linux" }[au.os] || "";
+  const autoRows = [
+    ["Relance après une erreur", sup.running ? "active" : "inactive : cliquez sur AUTO"],
+    ["Relances automatiques", sup.running ? String(sup.restarts || 0) : "–"],
+    ["Dernier arrêt imprévu", le && le.code !== 0 ? `${fdate(le.at)} · ${le.stalled ? "bot bloqué" : "code " + le.code}` : "aucun"],
+    ["Mise en veille du PC", au.keep_awake ? "bloquée tant que le bot tourne" : "autorisée"],
+    ["Bouton ARRÊTER", "aucune relance, même au démarrage du PC"],
+  ];
+  $("#s-auto").replaceChildren(...autoRows.flatMap(([k, v]) => [el("dt", "", k), el("dd", "", v)]));
   const dl = $("#s-bot");
   const rows = [["Mode", S.demo ? "Démonstration" : S.mode === "live" ? (S.testnet ? "Réel (testnet)" : "Réel") : "Paper (argent fictif)"],
     ["Risque par trade", `${nf(1).format(S.risk_pct)} %`], ["Positions au plus", String(S.max_positions)],
     ["Risque cumulé au plus", `${nf(0).format(S.max_total_risk_pct)} %`],
-    ["Profil prudent", S.dd_throttle.length ? S.dd_throttle.map(([t, m]) => `risque × ${m} au-delà de ${nf(0).format(t * 100)} % de baisse`).join(" ; ") : "désactivé"],
+    ["Profil prudent", S.dd_throttle.length ? S.dd_throttle.map(([t, m]) => `risque × ${nf(1).format(m)} au-delà de ${nf(0).format(t * 100)} % de baisse`).join(" ; ") : "désactivé"],
     ["Arrêt d'urgence", `baisse de ${nf(0).format(S.kill_drawdown_pct)} %`], ["Cryptos suivies", String(S.universe.length)]];
   dl.replaceChildren(...rows.flatMap(([k, v]) => [el("dt", "", k), el("dd", "", v)]));
   const list = $("#s-alerts");
@@ -745,6 +819,20 @@ async function renderSettings() {
   parts.push(el("p", "sub", "Android : menu ⋮ puis « Ajouter à l'écran d'accueil ». iPhone : Partager puis « Sur l'écran d'accueil ». Le panneau s'ouvre alors comme une application."));
   phone.replaceChildren(...parts);
 }
+$("#s-autostart").addEventListener("change", async (e) => {
+  const sw = e.currentTarget;
+  sw.disabled = true;
+  try {
+    const r = await api("/api/autostart", { body: { enabled: sw.checked } });
+    toast(r.message, r.ok ? "ok" : "err");
+    if (!r.ok) sw.checked = !sw.checked;
+  } catch (err) {
+    toast(err.message, "err");
+    sw.checked = !sw.checked;
+  }
+  sw.disabled = false;
+  await refreshStatus();
+});
 $("#logout-btn").addEventListener("click", async () => {
   try { await api("/api/logout", { body: {} }); } catch { /* déjà déconnecté */ }
   showLogin();

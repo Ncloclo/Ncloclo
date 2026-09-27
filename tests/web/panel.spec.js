@@ -19,6 +19,11 @@ test("tableau de bord et bouton AUTO", async ({ page }) => {
   await expect(page.locator("#mode-badge")).toHaveText("DÉMO");
   await expect(page.locator("#d-positions .pos-row")).toHaveCount(6);
   await expect(page.locator("#d-alerts li").first()).toBeVisible();
+  await expect(page.locator("#d-mind li")).toHaveCount(4);          // raisonnement du bot
+  await expect(page.locator("#d-radar .chip")).toHaveCount(4);      // 3 à surveiller + 1 achat différé
+  await page.locator("#d-radar .chip").first().click();
+  await expect(page.locator("#detail-title")).toHaveText("ETH/USDT");
+  await page.keyboard.press("Escape");
   const btn = page.locator("#auto-btn");
   await expect(btn).toBeEnabled();
   const before = await page.locator("#auto-label").textContent();
@@ -60,6 +65,9 @@ test("cryptos : cartes, filtre et recherche", async ({ page }) => {
   await expect(page.locator("#asset-grid .asset:visible")).toHaveCount(6);
   await page.locator('[data-filter="vetoed"]').click();
   await expect(page.locator("#asset-grid .asset:visible")).toHaveCount(1);
+  await page.locator('[data-filter="watch"]').click();              // candidats à l'achat
+  await expect(page.locator("#asset-grid .asset:visible")).toHaveCount(5);
+  await expect(page.locator('#asset-grid [data-asset="eth"] .why')).toContainText("plus haut");
   await page.locator('[data-filter="all"]').click();
   await page.locator("#asset-search").fill("cardano");
   await expect(page.locator("#asset-grid .asset:visible")).toHaveCount(1);
@@ -78,6 +86,13 @@ test("positions, veille, journal, réglages et thème", async ({ page }) => {
   await expect(page.locator("#log li").first()).toBeVisible();
   await page.locator('.tab[data-tab="settings"]').click();
   await expect(page.locator("#s-bot dt").first()).toBeVisible();
+  const sw = page.locator("#s-autostart");
+  await expect(sw).toBeChecked();
+  await page.locator("label.switch").click();                      // démarrage avec l'ordinateur
+  await expect(sw).not.toBeChecked();
+  await expect(page.locator(".toast").last()).toContainText("désactivé");
+  await page.locator("label.switch").click();
+  await expect(sw).toBeChecked();
   await page.locator('[data-theme-set="light"]').click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   expect(errors).toEqual([]);
