@@ -17,7 +17,7 @@ runtime/
 diagnostic.txt
 data_binance/
 # Animation générée (python replay_animation.py)
-rejeu_trendguard.html
+/rejeu_trendguard.html
 # Environnements virtuels
 .venv*/
 venv/
