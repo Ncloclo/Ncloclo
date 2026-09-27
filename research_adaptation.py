@@ -97,7 +97,7 @@ def run_variant(close: pd.DataFrame, volume: pd.DataFrame, pre, p: ts.TrendParam
             names, risks, chosen = list(hold), [h.risk_quote for h in hold.values()], []
             for pl in plans:
                 n2, r2 = names + [pl["asset"]], np.array(risks + [pl["risk_quote"]])
-                c = window[n2].corr().fillna(0).values
+                c = window[n2].corr().fillna(0).to_numpy(copy=True)   # pandas 3 : .values en lecture seule
                 np.fill_diagonal(c, 1.0)
                 if math.sqrt(max(float(r2 @ c @ r2), 0.0)) <= corr * equity:
                     chosen.append(pl)

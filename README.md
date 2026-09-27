@@ -277,7 +277,7 @@ walkforward | status | resume` (voir `python v29.py docs`).
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 222 tests, simulateurs Binance Spot mono et multi-paires
+python -m pytest tests -q      # 228 tests, simulateurs Binance Spot mono et multi-paires
 ```
 
 ## Limites connues

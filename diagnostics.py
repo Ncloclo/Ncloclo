@@ -378,7 +378,7 @@ def check_portfolio(holdings: List[Dict[str, Any]], close: pd.DataFrame,
     rets = np.log(close[names] / close[names].shift(1)).iloc[-90:]
     r = np.array(risks)
     if len(names) > 1:
-        c = rets.corr().fillna(0).values
+        c = rets.corr().fillna(0).to_numpy(copy=True)   # pandas 3 : .values en lecture seule
         np.fill_diagonal(c, 1.0)
         corr_risk = math.sqrt(max(float(r @ c @ r), 0.0))
         avg = float(c[np.triu_indices(len(names), 1)].mean())

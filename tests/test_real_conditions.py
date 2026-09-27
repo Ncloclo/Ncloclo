@@ -20,7 +20,9 @@ from test_trendguard import DAY, SIM_FROM, feed, make_bot, synthetic_market
 
 def test_make_binance_spot_only_long_timeout_clock_corrected():
     ex = v29.make_binance()
-    assert ex.options["fetchMarkets"] == {"types": ["spot"]}
+    # ccxt fusionne ses propres réglages (ex. loadAllOptions) : seul le type
+    # de marché demandé compte.
+    assert ex.options["fetchMarkets"]["types"] == ["spot"]
     assert ex.options["adjustForTimeDifference"] is True
     assert ex.timeout == v29.BINANCE_TIMEOUT_MS >= 30_000
     assert not ex.apiKey
