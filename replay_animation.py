@@ -36,7 +36,11 @@ import v29
 TEMPLATE = os.path.join(v29.APP_DIR, "templates", "rejeu_trendguard.html")
 DEFAULT_OUT = os.path.join(v29.APP_DIR, "rejeu_trendguard.html")
 DEFAULT_PAPER_DB = os.path.join(v29.APP_DIR, "trendguard_paper.db")
-PLACEHOLDER = "/*__DATA__*/null"
+# Gabarit en trois fichiers (structure, style, script), intégrés dans une
+# seule page à la génération : la page s'ouvre sans serveur ni fichier annexe.
+PLACEHOLDER = "/*__DATA__*/"
+CSS_TAG = '<link rel="stylesheet" href="rejeu_trendguard.css">'
+JS_TAG = '<script src="rejeu_trendguard.js"></script>'
 # Historique chargé avant le début du rejeu : indicateurs (moyenne 150 j,
 # momentum 90 j) et ancienneté minimale (250 j) déjà valides au jour 1.
 WARMUP_DAYS = 800
@@ -204,14 +208,25 @@ def read_paper_portfolio(db_file: str, close: pd.DataFrame) -> Optional[Dict[str
 
 
 def render_html(data: Dict[str, Any], template: str = TEMPLATE) -> str:
-    """Page autonome : gabarit + données du rejeu (aucun fichier externe
-    hormis les polices Google, facultatives)."""
-    with open(template, encoding="utf-8") as fh:
-        page = fh.read()
-    if page.count(PLACEHOLDER) != 1:
-        raise ValueError(f"{template} : emplacement des données introuvable")
-    payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
-    return page.replace(PLACEHOLDER, payload.replace("</", "<\\/"))
+    """Page autonome : gabarit, style et script intégrés, données du rejeu
+    dans un bloc JSON (aucun fichier externe hormis les polices Google,
+    facultatives)."""
+    def read(name: str) -> str:
+        with open(os.path.join(os.path.dirname(template), name), encoding="utf-8") as fh:
+            return fh.read()
+    page = read(os.path.basename(template))
+    css, js = read("rejeu_trendguard.css"), read("rejeu_trendguard.js")
+    for marker in (PLACEHOLDER, CSS_TAG, JS_TAG):
+        if page.count(marker) != 1:
+            raise ValueError(f"{template} : repère {marker!r} introuvable ou en double")
+    if "</style" in css.lower() or "</script" in js.lower():
+        raise ValueError("balise fermante dans le style ou le script du gabarit")
+    # « < » échappé : aucun texte des données ne peut fermer le bloc JSON ni
+    # ouvrir une balise (le JSON reste valide, < = « < »).
+    payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
+    return (page.replace(CSS_TAG, f"<style>\n{css}</style>")
+                .replace(JS_TAG, f"<script>\n{js}</script>")
+                .replace(PLACEHOLDER, payload))
 
 
 def main(argv: Optional[List[str]] = None) -> int:

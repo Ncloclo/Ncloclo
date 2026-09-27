@@ -40,15 +40,37 @@ def test_replay_matches_backtest_and_is_consistent(replay):
     assert buys == len(data["episodes"]) and sells == len(closed) == data["metrics"]["trades"]
 
 
-def test_render_html_is_a_standalone_page(replay):
-    *_, data = replay
+def _page(data, **extra):
     if not os.path.exists(ra.TEMPLATE):
         pytest.skip("gabarit absent (image Docker)")
-    page = ra.render_html(dict(data, generated="2026-09-27 12:00 UTC", paper_live=None))
+    return ra.render_html({**data, "generated": "2026-09-27 12:00 UTC",
+                           "paper_live": None, **extra})
+
+
+def _payload(page):
+    block = page.split('<script type="application/json" id="replay-data">', 1)[1]
+    return json.loads(block.split("</script>", 1)[0])
+
+
+def test_render_html_is_a_standalone_page(replay):
+    *_, data = replay
+    page = _page(data)
     assert page.startswith("<!doctype html>") and "<title>Rejeu TrendGuard</title>" in page
-    assert ra.PLACEHOLDER not in page
-    payload = page.split("const D = ", 1)[1].split(";\nconst N", 1)[0]
-    assert json.loads(payload.replace("<\\/", "</"))["dates"] == data["dates"]
+    # Style et script intégrés : rien à charger à côté de la page.
+    assert ra.PLACEHOLDER not in page and ra.CSS_TAG not in page and ra.JS_TAG not in page
+    assert "<style>" in page and '"use strict"' in page
+    assert "Content-Security-Policy" in page and "connect-src" not in page   # default-src 'none'
+    assert _payload(page)["dates"] == data["dates"]
+
+
+def test_render_html_data_cannot_inject_markup(replay):
+    """Un texte des données (nom, date…) ne peut ni fermer le bloc JSON ni
+    ajouter une balise à la page."""
+    *_, data = replay
+    evil = "</script><script>alert(1)</script><!--"
+    page = _page(data, generated=evil)
+    assert evil not in page and page.count("<script") == 2
+    assert _payload(page)["generated"] == evil
 
 
 def test_paper_portfolio_read_only(tmp_path):

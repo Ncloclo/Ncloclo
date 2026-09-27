@@ -109,6 +109,12 @@ Les prix et les décisions sont réels ; les ordres sont simulés (capital ficti
 de 10 000 USDT). Aucune clé API, aucun ordre. Options : `--start`, `--end`,
 `--capital`, `--out`, `--no-open`.
 
+La page tient en un seul fichier, sans serveur : style, script et données y
+sont intégrés. Elle ne fait aucune requête hormis les polices (politique de
+sécurité du contenu) et se pilote au clavier : Espace, ← →, Début et Fin, et
+les flèches sur un graphique pour lire chaque jour. Le gabarit est dans
+`templates/` (HTML, CSS et JavaScript séparés).
+
 ### Utilisation
 
 ```bash
@@ -296,7 +302,7 @@ walkforward | status | resume` (voir `python v29.py docs`).
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 242 tests, simulateurs Binance Spot mono et multi-paires
+python -m pytest tests -q      # 243 tests, simulateurs Binance Spot mono et multi-paires
 ```
 
 ## Limites connues
