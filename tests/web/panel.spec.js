@@ -203,7 +203,7 @@ test("graphiques en temps réel et détail d'un graphique", async ({ page }) => 
   expect(errors).toEqual([]);
 });
 
-test("cryptos : sélection auto (les 21 cochées), sélection manuelle sans case cochée", async ({ page }) => {
+test("cryptos : sélection auto (les 21 cochées), sélection manuelle (les 10 plus rentables)", async ({ page }) => {
   const errors = watchErrors(page);
   // Point de départ connu (un essai précédent a pu changer la sélection).
   await page.request.post(BASE + "/api/selection", { headers: { "X-TrendGuard": "1" }, data: { mode: "auto" } });
@@ -221,10 +221,15 @@ test("cryptos : sélection auto (les 21 cochées), sélection manuelle sans case
   await expect(page.locator("body")).not.toContainText("10 plus rentables)");
   const eth = page.locator('#asset-grid article[data-asset="eth"]');
   await expect(eth.locator(".rank")).toContainText("sur 2 ans");       // classement pour information
-  await page.locator('[data-sel="manual"]').click();                   // manuel : rien de coché
+  await page.locator('[data-sel="manual"]').click();                   // manuel : les 10 plus rentables
+  await expect(page.locator("#sel-count")).toHaveText("10 / 21");
+  await expect(page.locator("#asset-grid .pick input:checked")).toHaveCount(10);
+  await expect(page.locator('#asset-grid [data-asset="aave"] .pick input')).toBeChecked();   // N° 1
+  await expect(page.locator('#asset-grid [data-asset="algo"] .pick input')).not.toBeChecked();
+  await expect(page.locator("#sel-help")).toContainText("10 cryptos les plus rentables");
+  await page.locator('[data-sel-all="0"]').click();                    // tout décocher
   await expect(page.locator("#sel-count")).toHaveText("0 / 21");
-  await expect(page.locator("#asset-grid .pick input:checked")).toHaveCount(0);
-  await expect(page.locator("#sel-help")).toContainText("aucune n'est cochée");
+  await expect(page.locator("#sel-help")).toContainText("le bot n'achète rien");
   await eth.locator(".pick input").check();                            // acheter seulement ETH
   await expect(page.locator("#sel-count")).toHaveText("1 / 21");
   await expect(eth).not.toHaveClass(/unselected/);
@@ -232,6 +237,8 @@ test("cryptos : sélection auto (les 21 cochées), sélection manuelle sans case
   await page.locator('[data-filter="selected"]').click();
   await expect(page.locator("#asset-grid .asset:visible")).toHaveCount(1);
   await page.locator('[data-filter="all"]').click();
+  await page.locator("[data-sel-top]").click();                        // retour aux 10 plus rentables
+  await expect(page.locator("#sel-count")).toHaveText("10 / 21");
   await page.locator('[data-sel-all="1"]').click();                    // tout cocher
   await expect(page.locator("#sel-count")).toHaveText("21 / 21");
   await page.locator('[data-sel="auto"]').click();                     // retour à la sélection auto

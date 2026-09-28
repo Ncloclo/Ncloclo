@@ -1002,11 +1002,11 @@ function renderSelection(sel) {
   $("#sel-actions").hidden = sel.mode === "auto";
   $("#sel-help").textContent = sel.mode === "auto"
     ? `Sélection auto (recommandée) : le bot peut acheter les 21 cryptos, toutes cochées. ${sel.note} Le classement de chaque carte est affiché pour information.`
-    : `Sélection manuelle : cochez les cryptos que le bot peut acheter ; aucune n'est cochée au départ.${sel.active.length ? "" : " Tant qu'aucune n'est cochée, le bot n'achète rien."} Une crypto décochée déjà détenue reste gérée jusqu'à sa vente. Appliqué tout de suite aux achats en attente et à chaque décision (00:02 UTC).`;
+    : `Sélection manuelle : au départ, les ${sel.n_top} cryptos les plus rentables sur 2 ans (bénéfice des achats ET des ventes) sont cochées${sel.top.length ? ` (${sel.top.map(up).join(", ")})` : ", dès que le classement est calculé"} ; cochez ou décochez celles que le bot peut acheter.${sel.active.length ? "" : " Tant qu'aucune n'est cochée, le bot n'achète rien."} Une crypto décochée déjà détenue reste gérée jusqu'à sa vente. Pour mémoire, les 21 ont fait mieux par le passé (sélection auto).`;
 }
-async function saveSelection(mode, manual) {
+async function saveSelection(mode, manual, preset) {
   try {
-    const r = await api("/api/selection", { body: manual ? { mode, manual } : { mode } });
+    const r = await api("/api/selection", { body: preset ? { mode, preset } : manual ? { mode, manual } : { mode } });
     toast(r.mode === "auto" ? `Sélection auto : les ${r.active.length} cryptos sont achetables.` : r.active.length ? `Sélection manuelle : ${r.active.length} crypto${r.active.length > 1 ? "s" : ""} achetable${r.active.length > 1 ? "s" : ""}.` : "Sélection manuelle : aucune crypto cochée, cochez celles que le bot peut acheter.", "ok");
     ASSETS.forEach((a) => { a.selected = r.active.includes(a.asset); });
     renderSelection(r);
@@ -1028,11 +1028,17 @@ function onPick() {
 $$("[data-sel]").forEach((b) => b.addEventListener("click", () => {
   if (SEL.mode === b.dataset.sel) return;
   const auto = b.dataset.sel === "auto";
-  withLoader(auto ? "Sélection auto : les 21 cryptos…" : "Sélection manuelle : aucune crypto cochée…", async () => {
-    await saveSelection(b.dataset.sel, auto ? undefined : []);          // manuel : on part de zéro
+  withLoader(auto ? "Sélection auto : les 21 cryptos…" : "Sélection manuelle : les 10 cryptos les plus rentables…", async () => {
+    await saveSelection(b.dataset.sel, undefined, auto ? undefined : "top");   // manuel : les 10 plus rentables
     await renderAssets();
   });
 }));
+$("[data-sel-top]").addEventListener("click", () => {
+  withLoader("Sélection : les 10 cryptos les plus rentables…", async () => {
+    await saveSelection("manual", undefined, "top");
+    await renderAssets();
+  });
+});
 $$("[data-sel-all]").forEach((b) => b.addEventListener("click", () => {
   const all = b.dataset.selAll === "1";
   withLoader(all ? "Sélection : les 21 cryptos…" : "Sélection : aucune crypto…", async () => {

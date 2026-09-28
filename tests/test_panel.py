@@ -14,6 +14,7 @@ import pytest
 
 import trendguard_bot as tg
 import v29
+from panel import demo
 from panel import server as ps
 from panel.control import BotControl
 from panel.data import BotData
@@ -111,7 +112,14 @@ def test_selection_endpoint_and_sells_on_charts(demo_server):
     assert a["selection"]["mode"] == "auto" and len(a["selection"]["active"]) == 21
     assert all(r["selected"] for r in a["assets"]) and a["assets"][0]["rank"]["total_r"]
     assert "+37,2 %" in a["selection"]["note"] and "n_auto" not in a["selection"]
-    # Manuel : aucune crypto cochée au départ.
+    # Manuel : les 10 plus rentables sur 2 ans cochées au départ.
+    top = [x for x, _r, _n in demo.DEMO_RANK[:10]]
+    assert a["selection"]["top"] == top and a["selection"]["n_top"] == 10
+    r = _json(base + "/api/selection", method="POST", body={"mode": "manual", "preset": "top"})[1]
+    assert r["mode"] == "manual" and set(r["active"]) == set(top) and len(r["active"]) == 10
+    rows = {x["asset"]: x for x in _json(base + "/api/assets")[1]["assets"]}
+    assert rows["aave"]["selected"] and not rows["algo"]["selected"]
+    # Tout décocher : plus aucune crypto achetable.
     r = _json(base + "/api/selection", method="POST", body={"mode": "manual", "manual": []})[1]
     assert r["ok"] and r["mode"] == "manual" and r["active"] == []
     rows = {x["asset"]: x for x in _json(base + "/api/assets")[1]["assets"]}
@@ -244,6 +252,19 @@ def test_anticipation_and_security_endpoints(demo_server, monkeypatch):
     assert "ICP" in ans["answer"] and "probabilité" in ans["answer"]
     ans = _json(base + "/api/assistant", method="POST", body={"message": "Suis-je en sécurité ?"})[1]
     assert "protections sur" in ans["answer"] and ans["actions"][0]["href"] == "#settings"
+
+
+def test_manual_default_skips_cryptos_the_bot_cannot_buy(tmp_path):
+    """Les 10 plus rentables cochées par défaut sont achetables : une crypto
+    trop peu échangée ou bloquée par la veille est sautée."""
+    app = ps.build_app(_cfg(tmp_path), demo=True)
+    ranking = [{"asset": a, "rank": k + 1, "total_r": 20.0 - k, "trades": 5, "win_rate": 0.4,
+                "eligible": a != "btc"} for k, a in enumerate(app.g.universe[i].lower()
+                                                               for i in range(12))]
+    top = app.selection_view({"selection": {"ranking": ranking[::-1]}})["top"]
+    assert len(top) == 10 and "btc" not in top
+    assert top == [r["asset"] for r in ranking if r["asset"] != "btc"][:10]
+    assert app.selection_view({"selection": {}})["top"] == []      # classement pas encore calculé
 
 
 def test_second_panel_on_the_same_port_is_refused(tmp_path):

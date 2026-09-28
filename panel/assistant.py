@@ -527,14 +527,15 @@ def a_selection(ctx: Dict[str, Any]) -> str:
     return ("**Choisir les cryptos du bot** (page Cryptos) :\n"
             "- Sélection auto : le bot peut acheter les 21 cryptos, toutes cochées. C'est le "
             "réglage par défaut, recommandé.\n"
-            "- Sélection manuelle : aucune crypto n'est cochée au départ ; cochez celles que le bot peut "
-            "acheter (tant qu'aucune ne l'est, il n'achète rien).\n"
+            "- Sélection manuelle : au départ, les 10 cryptos les plus rentables sur 2 ans "
+            "(bénéfice des achats et des ventes) sont cochées ; cochez ou décochez les autres "
+            "(tant qu'aucune n'est cochée, le bot n'achète rien).\n"
             "- Une crypto détenue qui sort de la sélection reste gérée jusqu'à sa vente.\n"
             f"Actuellement : {mode}, {n} crypto(s) achetable(s) sur {total}.\n"
             "Pourquoi les 21 : de 2023 à 2026, elles ont rapporté +37,2 % par an, contre "
             "+15,5 % avec seulement les 10 plus rentables ; la prochaine grande tendance "
-            "vient souvent d'une crypto délaissée. L'auto-sélection des 10 a donc été "
-            "retirée.")
+            "vient souvent d'une crypto délaissée. C'est pourquoi la sélection auto, "
+            "recommandée, garde les 21.")
 
 
 def a_watch(ctx: Dict[str, Any]) -> str:

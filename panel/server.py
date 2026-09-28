@@ -191,18 +191,25 @@ class PanelApp:
     SELECTION_NOTE = ("Historique (docs/SELECTION.md) : de 2023 à 2026, +37,2 % par an avec les "
                       "21 cryptos, contre +15,5 % avec seulement les 10 plus rentables.")
 
+    MANUAL_TOP_N = 10       # sélection manuelle : les 10 plus rentables cochées au départ
+
     def selection_view(self, st: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Cryptos que le bot peut acheter : sélection auto (les 21, réglage
-        recommandé) ou sélection manuelle (cases cochées, aucune au départ)."""
+        recommandé) ou sélection manuelle (cases cochées ; au départ, les 10
+        plus rentables sur 2 ans, bénéfice des achats ET des ventes)."""
         st = self.data.state() if st is None else st
         req = self.data.selection_request()
         sel = st.get("selection") or {}
         universe = [b.lower() for b in self.g.universe]
         active = universe if req["mode"] == "auto" else req["manual"]
+        ranking = sorted(sel.get("ranking") or [], key=lambda r: r["rank"])
+        # Achetables seulement : assez échangées, assez anciennes, sans veto.
+        top = [r["asset"] for r in ranking
+               if r.get("eligible", True) and r["asset"] in universe][:self.MANUAL_TOP_N]
         return {"mode": req["mode"], "manual": req["manual"], "active": active,
-                "ranking": sel.get("ranking") or [], "day": sel.get("day"),
+                "ranking": ranking, "day": sel.get("day"),
                 "universe": len(universe), "note": self.SELECTION_NOTE,
-                "ranked": bool(sel.get("ranking"))}
+                "ranked": bool(ranking), "top": top, "n_top": self.MANUAL_TOP_N}
 
     def _last_buy(self, st: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Dernier achat du bot : le panneau l'annonce dès qu'il change."""
@@ -468,7 +475,9 @@ class PanelApp:
                     return self.chat(body)
                 if path == "/api/selection":
                     manual = body.get("manual")
-                    if not isinstance(manual, list):
+                    if body.get("preset") == "top":          # les 10 plus rentables
+                        manual = self.selection_view()["top"]
+                    elif not isinstance(manual, list):
                         manual = self.data.selection_request()["manual"]
                     self.data.save_selection(str(body.get("mode", "")), [str(a) for a in manual][:100])
                     return 200, dict(self.selection_view(), ok=True)
