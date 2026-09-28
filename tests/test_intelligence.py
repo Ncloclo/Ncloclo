@@ -9,9 +9,9 @@ from datetime import timedelta
 import ccxt
 import pytest
 
-from trendguard import trend_strategy as ts
 import trendguard_bot as tg
 from test_trendguard import DAY, SIM_FROM, feed, make_bot, run_days, synthetic_market
+from trendguard import trend_strategy as ts
 
 P = ts.TrendParams()
 

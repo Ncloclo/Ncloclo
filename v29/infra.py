@@ -22,10 +22,10 @@ from typing import Dict, List, Optional
 
 import numpy as np
 
-from .constants import _LOG_ROOT
-from .utils import _parse_iso, scrub_secrets, _utcnow, _utcnow_iso
 from .config import Config
+from .constants import _LOG_ROOT
 from .models import AdaptiveState, BotContext
+from .utils import _parse_iso, _utcnow, _utcnow_iso, scrub_secrets
 
 
 class JsonFormatter(logging.Formatter):

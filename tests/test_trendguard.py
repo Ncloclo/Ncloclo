@@ -3,18 +3,19 @@ bot ↔ backtest, exécution live sur simulateur multi-paires."""
 
 import logging
 import re
+import sys
 import time
 from datetime import datetime, timedelta, timezone
 
+import ccxt
 import numpy as np
 import pandas as pd
-import ccxt
 import pytest
 
-from trendguard import trend_strategy as ts
 import trendguard_bot as tg
 import v29
 from fake_binance import FakeBinanceMulti
+from trendguard import trend_strategy as ts
 
 DAY = timedelta(days=1)
 START = datetime(2024, 1, 1, tzinfo=timezone.utc)
@@ -405,7 +406,8 @@ def test_heartbeat_logged_once_per_interval(caplog):
 
 
 def test_set_env_var_replaces_and_keeps_file_private(tmp_path):
-    import os, stat
+    import os
+    import stat
     env = tmp_path / ".env"
     env.write_text("# BINANCE_API_SECRET=exemple\nRUN_MODE=paper\nBINANCE_API_SECRET=\n")
     tg.set_env_var(str(env), "BINANCE_API_SECRET", "S" * 64)
@@ -442,6 +444,7 @@ def test_set_secret_command_masks_input(tmp_path, monkeypatch, capsys):
 
 def test_set_panel_password_is_masked_confirmed_and_exact(tmp_path, monkeypatch, capsys):
     import getpass
+
     from dotenv import dotenv_values
     env = tmp_path / ".env"
     env.write_text("RUN_MODE=paper\n")
@@ -788,3 +791,15 @@ def test_repository_markdown_is_formatted():
     for name in names:
         text = open(os.path.join(root, name), encoding="utf-8").read().rstrip("\n")
         assert ts.format_markdown(text) == text, name
+
+
+def test_tools_share_the_single_entry_point(capsys, monkeypatch):
+    """Les outils passent par la même commande : python trendguard_bot.py watch …"""
+    monkeypatch.setattr(sys, "argv", ["trendguard_bot.py"])
+    with pytest.raises(SystemExit) as e:
+        tg.main(["watch", "--help"])
+    assert e.value.code == 0
+    out = capsys.readouterr().out
+    assert "trendguard_bot.py watch" in out and "set-key" in out
+    assert sys.argv[0] == "trendguard_bot.py"                 # rétabli après l'aide
+    assert set(tg.TOOLS) == {"alerts", "watch", "strategy", "lab", "animation"}

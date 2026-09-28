@@ -9,11 +9,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 
-from .utils import _parse_iso, _utcnow
+from .adaptive import _isnan, _row_get
 from .config import Config
 from .models import BotContext, Signal
-from .adaptive import _isnan, _row_get
-
+from .utils import _parse_iso, _utcnow
 
 _SIGNAL_REQUIRED = ("ema_fast", "ema_slow", "ema_trend", "atr", "atr_pct",
                     "adx", "plus_di", "minus_di", "bb_width", "bb_width_avg",

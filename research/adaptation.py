@@ -26,10 +26,10 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
 
+import v29
 from trendguard import diagnostics as dg
 from trendguard import trend_strategy as ts
 from trendguard.config import LIVE_UNIVERSE_DEFAULT
-import v29
 
 
 def load_binance(cache: str) -> tuple:

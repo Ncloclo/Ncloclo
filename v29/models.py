@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import enum
 import logging
-from dataclasses import dataclass, field, asdict, fields
+from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 

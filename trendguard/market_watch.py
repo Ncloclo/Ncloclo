@@ -810,6 +810,7 @@ def cmd_check(env: Optional[Dict[str, str]] = None, call: Callable[..., Tuple[st
 def cmd_set_key(name: str, env_path: Optional[str] = None,
                 ask: Optional[Callable[[str], str]] = None, out=None) -> int:
     import getpass
+
     from . import config as tgc
     out = out or sys.stdout
     p = PROVIDER_BY_NAME.get(name.lower())

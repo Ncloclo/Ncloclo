@@ -9,9 +9,9 @@ import subprocess
 
 import pytest
 
-from trendguard import autonomy
 import trendguard_bot as tg
 import v29
+from trendguard import autonomy
 
 
 def _cfg(tmp_path, **kw):

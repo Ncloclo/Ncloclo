@@ -10,10 +10,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from trendguard import autonomy
-from trendguard import trend_strategy as ts
 import trendguard_bot as tg
 from test_trendguard import SIM_FROM, make_bot, run_days, synthetic_market
+from trendguard import autonomy
+from trendguard import trend_strategy as ts
 
 P = ts.TrendParams()
 

@@ -8,9 +8,16 @@ import os
 from dataclasses import dataclass
 from typing import Dict, Tuple
 
-from .constants import APP_DIR, ExtraDataToPOAMiddleware, VERSION_MODULE, WEB3_AVAILABLE
+from .constants import APP_DIR, VERSION_MODULE, WEB3_AVAILABLE, ExtraDataToPOAMiddleware
 from .utils import (
-    _env_b, _env_f, _env_i, _env_s, _env_tuple_csv, redact_address, redact_url, _timeframe_ms,
+    _env_b,
+    _env_f,
+    _env_i,
+    _env_s,
+    _env_tuple_csv,
+    _timeframe_ms,
+    redact_address,
+    redact_url,
 )
 
 

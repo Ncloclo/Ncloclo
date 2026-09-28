@@ -15,7 +15,6 @@ import pytest
 import v29
 from conftest import make_cfg
 
-
 # ---------- Configuration ----------
 
 def test_default_config_is_valid():
@@ -68,6 +67,13 @@ def test_env_helpers(monkeypatch):
     assert v29._env_b("T_B", True) is True        # vide → défaut
     monkeypatch.setenv("T_S", "  ")
     assert v29._env_s("T_S", "paper") == "paper"  # vide → défaut
+
+
+def test_state_files_stay_next_to_the_entry_point():
+    """Base, journaux, verrous et .env restent dans le dossier du projet,
+    à côté de trendguard_bot.py, même avec le moteur rangé dans v29/."""
+    assert os.path.isfile(os.path.join(v29.APP_DIR, "trendguard_bot.py"))
+    assert os.path.dirname(v29.__file__) == os.path.join(v29.APP_DIR, "v29")
 
 
 def test_env_doc_complete_and_no_orphan():
@@ -434,8 +440,9 @@ def test_heartbeat_tick(paper_env):
 
 
 def test_fnum_values():
-    import numpy as np
     from decimal import Decimal
+
+    import numpy as np
     cases = [(None, 0.0), ("", 0.0), ("  ", 0.0), ("abc", 0.0), ("0.00100000", 0.001),
              (" 42 ", 42.0), ("-1.5e-3", -0.0015), (".5", 0.5), ("inf", 0.0),
              ("nan", 0.0), (float("nan"), 0.0), (float("inf"), 0.0), (3, 3.0),

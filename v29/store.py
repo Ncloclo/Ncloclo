@@ -12,8 +12,8 @@ import time
 from contextlib import contextmanager
 from typing import Any, Dict, Optional
 
-from .utils import _utcnow_iso
 from .models import BotContext
+from .utils import _utcnow_iso
 
 
 class Store:

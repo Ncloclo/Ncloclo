@@ -11,8 +11,8 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from trendguard import market_watch as mw
 import v29
+from trendguard import market_watch as mw
 
 from .market import Market
 

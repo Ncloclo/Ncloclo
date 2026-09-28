@@ -8,11 +8,11 @@ import os
 import ccxt
 import pytest
 
-from trendguard import replay_animation as ra
-from trendguard import trend_strategy as ts
 import trendguard_bot as tg
 import v29
 from test_trendguard import N_DAYS, SIM_FROM, synthetic_market
+from trendguard import replay_animation as ra
+from trendguard import trend_strategy as ts
 
 
 @pytest.fixture(scope="module")

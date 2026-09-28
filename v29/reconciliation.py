@@ -8,12 +8,12 @@ import logging
 import time
 from typing import List
 
-from .constants import PROTECTION_CID_PREFIXES
-from .utils import _utcnow_iso
 from .config import Config
-from .models import BotContext, BotState, halt_ctx, HaltKind, Position, ProtectionMode
-from .exchange import ExchangeAdapter, _fnum, OrderResult
+from .constants import PROTECTION_CID_PREFIXES
+from .exchange import ExchangeAdapter, OrderResult, _fnum
 from .execution import ExecutionEngine
+from .models import BotContext, BotState, HaltKind, Position, ProtectionMode, halt_ctx
+from .utils import _utcnow_iso
 
 
 def reconcile(ctx: BotContext, cfg: Config, ex: ExchangeAdapter,

@@ -16,27 +16,35 @@ import ccxt
 import numpy as np
 import pandas as pd
 
-from .constants import VERSION_MODULE
-from .utils import (
-    describe_clock, scrub_secrets, sync_exchange_clock, _today_utc, _utcnow, _utcnow_iso,
-)
+from .adaptive import AdaptiveEngine
+from .backtest import _btc_vol_mult
+from .blockchain import BlockchainAdapter, BlockchainError
 from .config import Config, dump_config_summary, load_config_from_env
-from .models import BotContext, EntryResult, halt_ctx, HaltKind, is_frozen
+from .constants import VERSION_MODULE
+from .exchange import AmbiguousOrder, ExchangeAdapter
+from .execution import ExecutionEngine
+from .indicators import compute_indicators
 from .infra import (
-    acquire_instance_locks, build_heartbeat_logger, build_logger, Heartbeat, Notifier,
+    Heartbeat,
+    Notifier,
+    acquire_instance_locks,
+    build_heartbeat_logger,
+    build_logger,
     release_locks,
 )
-from .store import Store
-from .exchange import AmbiguousOrder, ExchangeAdapter
-from .blockchain import BlockchainAdapter, BlockchainError
-from .adaptive import AdaptiveEngine
-from .indicators import compute_indicators
-from .signals import detect_regime, generate_signal
-from .risk import detect_flash_move, in_cooldown, in_flash_cooldown, RiskEngine
-from .execution import ExecutionEngine
+from .models import BotContext, EntryResult, HaltKind, halt_ctx, is_frozen
 from .reconciliation import reconcile
-from .backtest import _btc_vol_mult
-
+from .risk import RiskEngine, detect_flash_move, in_cooldown, in_flash_cooldown
+from .signals import detect_regime, generate_signal
+from .store import Store
+from .utils import (
+    _today_utc,
+    _utcnow,
+    _utcnow_iso,
+    describe_clock,
+    scrub_secrets,
+    sync_exchange_clock,
+)
 
 OHLCV_LIMIT = 1000   # EMA200 : résidu d'initialisation < 0,01 % sur 1000 barres
 

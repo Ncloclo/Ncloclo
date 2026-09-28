@@ -72,7 +72,7 @@ SECRET = (r"(cles?|keys?|secrets?|mots? de passe|password|passwd|mdp|tokens?|jet
 STOPWORDS = {"le", "la", "les", "de", "du", "des", "un", "une", "et", "pour", "mon", "ma", "mes",
              "je", "tu", "il", "que", "qui", "comment", "est", "sur", "dans", "au", "avec", "pas",
              "ne", "ce", "on", "en", "the", "to", "my", "how", "is", "and", "of", "for", "what",
-             "you", "it", "in", "on", "with", "do", "can", "a", "i", "bot", "panneau"}
+             "you", "it", "in", "with", "do", "can", "a", "i", "bot", "panneau"}
 REQUEST_RULES = (
     # Révéler une donnée d'accès.
     re.compile(r"\b(donne|montre|affiche|revele|lis|dis|envoie|copie|recupere|trouve|devine|"

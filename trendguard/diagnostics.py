@@ -38,9 +38,10 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
+import v29
+
 from . import strategy_lab as sl
 from . import trend_strategy as ts
-import v29
 
 DAY_MS = 86_400_000
 LEVELS = ("OK", "INFO", "ATTENTION", "ALERTE")

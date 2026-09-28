@@ -9,15 +9,15 @@ import math
 import os
 import threading
 import time
-from decimal import Decimal, ROUND_DOWN
+from decimal import ROUND_DOWN, Decimal
 from typing import Any, Dict, Optional, Tuple
 
-from .constants import Account, ERC20_ABI, ExtraDataToPOAMiddleware, Web3, WEB3_AVAILABLE
-from .utils import _parse_iso, redact_address, redact_url, scrub_secrets, _utcnow, _utcnow_iso
 from .config import Config
-from .models import BotContext
+from .constants import ERC20_ABI, WEB3_AVAILABLE, Account, ExtraDataToPOAMiddleware, Web3
 from .infra import Notifier
+from .models import BotContext
 from .store import Store
+from .utils import _parse_iso, _utcnow, _utcnow_iso, redact_address, redact_url, scrub_secrets
 
 
 class BlockchainError(Exception):
@@ -239,7 +239,7 @@ class BlockchainAdapter:
         signed = self.w3.eth.account.sign_transaction(
             tx, private_key=self.account.key)
         raw = (getattr(signed, "raw_transaction", None)
-               or getattr(signed, "rawTransaction"))
+               or signed.rawTransaction)
         tx_hash = self.w3.eth.send_raw_transaction(raw)
         h = tx_hash.hex() if hasattr(tx_hash, "hex") else str(tx_hash)
         return h if h.startswith("0x") else "0x" + h

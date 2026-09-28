@@ -17,7 +17,6 @@ import v29
 from . import autonomy
 from . import trend_strategy as ts
 
-
 DAY_MS = 86_400_000
 
 # Actifs du backtest encore cotés en USDT sur Binance (XMR, FTT, EOS exclus).

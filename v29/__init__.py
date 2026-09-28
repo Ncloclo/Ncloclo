@@ -94,77 +94,226 @@ commande : python -m v29 bot | backtest | walkforward | status | resume.
 
 from __future__ import annotations
 
-from .constants import (  # noqa: F401
-    Account, APP_DIR, CID_ENTRY_LIMIT, CID_ENTRY_MARKET, CID_EXIT_MARKET, CID_OCO_LIST,
-    CID_OCO_SL, CID_OCO_TP, CID_STOP, _ENV_BOOL, ENV_DOC, ERC20_ABI, ExtraDataToPOAMiddleware,
-    _LOG_ROOT, PROTECTION_CID_PREFIXES, SCHEMA_VERSION, VERSION_MODULE, Web3, WEB3_AVAILABLE,
+from .adaptive import (  # noqa: F401
+    AdaptiveEngine,
+    _isnan,
+    _row_get,
 )
-from .utils import (  # noqa: F401
-    _annualization_factor, _bars_per_day, BINANCE_TIMEOUT_MS, _cancel_client_id, _client_id,
-    clock_offset_ms, ClockSync, _dataclass_from_dict, _day_key, _dec_round,
-    describe_clock, ensure_utf8_stdio, _env_b, _env_f, _env_i, _env_s,
-    _env_tuple_csv, _get_env_logger, make_binance, make_public_binance, measure_exchange_clock,
-    _parse_iso, PUBLIC_DATA_API, PublicKlines, redact_address, redact_url, resync_clock,
-    scrub_secrets, set_clock_offset_ms, sync_exchange_clock, _TF_UNITS_MS, _timeframe_ms,
-    _today_utc, _utcnow, _utcnow_iso, _week_key, _week_start_utc,
+from .backtest import (  # noqa: F401
+    DEFAULT_WF_GRID,
+    INDICATOR_PARAMS,
+    BacktestEngine,
+    BacktestResult,
+    WalkForwardWindow,
+    _btc_vol_mult,
+    _empty_metrics,
+    _series_to_list,
+    build_bias_series,
+    build_btc_vol_mult_series,
+    compute_metrics,
+    format_report,
+    format_walkforward_report,
+    monte_carlo_trades,
+    report_sensitivity,
+    run_sensitivity,
+    walk_forward,
+    walkforward_verdict,
+)
+from .blockchain import (  # noqa: F401
+    BlockchainAdapter,
+    BlockchainError,
+    BlockchainPolicy,
+    _to_wei_exact,
+)
+from .cli import (  # noqa: F401
+    _add_data_args,
+    _backtest_cfg,
+    _load_ctx_for_cli,
+    _parse_utc_date,
+    cmd_backtest,
+    cmd_docs,
+    cmd_resume,
+    cmd_sensitivity,
+    cmd_status,
+    cmd_test,
+    cmd_walkforward,
+    cmd_wallet,
+    fetch_historical,
+    load_backtest_data,
+    main,
 )
 from .config import (  # noqa: F401
-    Config, dump_config_summary, load_config_from_env, _parse_symbol,
+    Config,
+    _parse_symbol,
+    dump_config_summary,
+    load_config_from_env,
 )
-from .models import (  # noqa: F401
-    AdaptiveState, AUTO_CLEARABLE_HALTS, BlockchainState, BotContext, BotState, CancelResult,
-    clear_halt, EntryResult, Fill, halt_ctx, HaltKind, is_frozen, Portfolio, Position,
-    ProtectionMode, ProtectionSnapshot, ProtectionState, RiskState, Signal,
+from .constants import (  # noqa: F401
+    _ENV_BOOL,
+    _LOG_ROOT,
+    APP_DIR,
+    CID_ENTRY_LIMIT,
+    CID_ENTRY_MARKET,
+    CID_EXIT_MARKET,
+    CID_OCO_LIST,
+    CID_OCO_SL,
+    CID_OCO_TP,
+    CID_STOP,
+    ENV_DOC,
+    ERC20_ABI,
+    PROTECTION_CID_PREFIXES,
+    SCHEMA_VERSION,
+    VERSION_MODULE,
+    WEB3_AVAILABLE,
+    Account,
+    ExtraDataToPOAMiddleware,
+    Web3,
+)
+from .exchange import (  # noqa: F401
+    _NUMERIC_STR,
+    _ORDER_STATUS_MAP,
+    AmbiguousOrder,
+    ExchangeAdapter,
+    MarketRules,
+    OrderResult,
+    _fnum,
+)
+from .execution import (  # noqa: F401
+    _LEG_REASON,
+    ExecutionEngine,
+    _update_extremes,
+    update_extremes,
+)
+from .indicators import (  # noqa: F401
+    adx_calc,
+    atr_calc,
+    bollinger,
+    compute_indicators,
+    ema,
+    macd_calc,
+    obv_calc,
+    rsi,
+    vwap_calc,
 )
 from .infra import (  # noqa: F401
-    acquire_instance_locks, build_heartbeat_logger, build_logger, Console, Heartbeat,
-    JsonFormatter, Notifier, ProcessLock, release_locks,
+    Console,
+    Heartbeat,
+    JsonFormatter,
+    Notifier,
+    ProcessLock,
+    acquire_instance_locks,
+    build_heartbeat_logger,
+    build_logger,
+    release_locks,
+)
+from .models import (  # noqa: F401
+    AUTO_CLEARABLE_HALTS,
+    AdaptiveState,
+    BlockchainState,
+    BotContext,
+    BotState,
+    CancelResult,
+    EntryResult,
+    Fill,
+    HaltKind,
+    Portfolio,
+    Position,
+    ProtectionMode,
+    ProtectionSnapshot,
+    ProtectionState,
+    RiskState,
+    Signal,
+    clear_halt,
+    halt_ctx,
+    is_frozen,
+)
+from .reconciliation import (  # noqa: F401
+    _recover_position,
+    reconcile,
+)
+from .risk import (  # noqa: F401
+    RR_BY_MODULE,
+    RiskEngine,
+    break_even_stop,
+    detect_flash_move,
+    in_cooldown,
+    in_flash_cooldown,
+    record_closed_trade,
+    trailing_stop,
+)
+from .runner import (  # noqa: F401
+    OHLCV_LIMIT,
+    BotRunner,
+    _btc_annual_vol,
+    _btc_bias,
+    _cached_bias,
+    _compute_subsystems,
+    _handle_stop,
+    _htf_bias,
+    _init_benchmark,
+    _send_daily_report,
+    install_signal_handlers,
+    run_bot,
+)
+from .signals import (  # noqa: F401
+    _SIGNAL_REQUIRED,
+    _above_vwap,
+    _assign_tier,
+    _essential_breakout,
+    _essential_pullback,
+    _essential_range,
+    _essential_trend,
+    _module_enabled,
+    _score_breakout,
+    _score_pullback,
+    _score_range,
+    _score_trend,
+    adaptive_rsi_bounds,
+    detect_regime,
+    generate_signal,
+    generate_signal_from_rows,
+    min_signal_bars,
+    module_enabled,
 )
 from .store import (  # noqa: F401
     Store,
 )
-from .exchange import (  # noqa: F401
-    AmbiguousOrder, ExchangeAdapter, _fnum, MarketRules, _NUMERIC_STR, _ORDER_STATUS_MAP,
-    OrderResult,
-)
-from .blockchain import (  # noqa: F401
-    BlockchainAdapter, BlockchainError, BlockchainPolicy, _to_wei_exact,
-)
-from .adaptive import (  # noqa: F401
-    AdaptiveEngine, _isnan, _row_get,
-)
-from .indicators import (  # noqa: F401
-    adx_calc, atr_calc, bollinger, compute_indicators, ema, macd_calc, obv_calc, rsi, vwap_calc,
-)
-from .signals import (  # noqa: F401
-    _above_vwap, adaptive_rsi_bounds, _assign_tier, detect_regime, _essential_breakout,
-    _essential_pullback, _essential_range, _essential_trend, generate_signal,
-    generate_signal_from_rows, min_signal_bars, _module_enabled, module_enabled, _score_breakout,
-    _score_pullback, _score_range, _score_trend, _SIGNAL_REQUIRED,
-)
-from .risk import (  # noqa: F401
-    break_even_stop, detect_flash_move, in_cooldown, in_flash_cooldown, record_closed_trade,
-    RiskEngine, RR_BY_MODULE, trailing_stop,
-)
-from .execution import (  # noqa: F401
-    ExecutionEngine, _LEG_REASON, _update_extremes, update_extremes,
-)
-from .reconciliation import (  # noqa: F401
-    reconcile, _recover_position,
-)
-from .backtest import (  # noqa: F401
-    BacktestEngine, BacktestResult, _btc_vol_mult, build_bias_series, build_btc_vol_mult_series,
-    compute_metrics, DEFAULT_WF_GRID, _empty_metrics, format_report, format_walkforward_report,
-    INDICATOR_PARAMS, monte_carlo_trades, report_sensitivity, run_sensitivity, _series_to_list,
-    walk_forward, walkforward_verdict, WalkForwardWindow,
-)
-from .runner import (  # noqa: F401
-    BotRunner, _btc_annual_vol, _btc_bias, _cached_bias, _compute_subsystems, _handle_stop,
-    _htf_bias, _init_benchmark, install_signal_handlers, OHLCV_LIMIT, run_bot, 
-    _send_daily_report,
-)
-from .cli import (  # noqa: F401
-    _add_data_args, _backtest_cfg, cmd_backtest, cmd_docs, cmd_resume, cmd_sensitivity,
-    cmd_status, cmd_test, cmd_walkforward, cmd_wallet, fetch_historical, load_backtest_data,
-    _load_ctx_for_cli, main, _parse_utc_date,
+from .utils import (  # noqa: F401
+    _TF_UNITS_MS,
+    BINANCE_TIMEOUT_MS,
+    PUBLIC_DATA_API,
+    ClockSync,
+    PublicKlines,
+    _annualization_factor,
+    _bars_per_day,
+    _cancel_client_id,
+    _client_id,
+    _dataclass_from_dict,
+    _day_key,
+    _dec_round,
+    _env_b,
+    _env_f,
+    _env_i,
+    _env_s,
+    _env_tuple_csv,
+    _get_env_logger,
+    _parse_iso,
+    _timeframe_ms,
+    _today_utc,
+    _utcnow,
+    _utcnow_iso,
+    _week_key,
+    _week_start_utc,
+    clock_offset_ms,
+    describe_clock,
+    ensure_utf8_stdio,
+    make_binance,
+    make_public_binance,
+    measure_exchange_clock,
+    redact_address,
+    redact_url,
+    resync_clock,
+    scrub_secrets,
+    set_clock_offset_ms,
+    sync_exchange_clock,
 )

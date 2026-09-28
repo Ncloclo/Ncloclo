@@ -38,7 +38,7 @@ from __future__ import annotations
 
 import itertools
 import time
-from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import ccxt

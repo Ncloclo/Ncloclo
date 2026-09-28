@@ -8,7 +8,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from . import trend_strategy as ts
 
-
 EXIT_WHY = {"STOP": "clôture sous son stop suiveur, la tendance s'essouffle",
             "STOP_LATE": "stop franchi pendant l'arrêt du bot",
             "DELISTED": "plus cotée sur Binance", "DELISTED_LATE": "plus cotée sur Binance",

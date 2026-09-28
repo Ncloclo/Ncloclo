@@ -16,17 +16,23 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-from .constants import _LOG_ROOT
-from .utils import _annualization_factor, _timeframe_ms
-from .config import Config
-from .models import BotContext, BotState, Position, Signal
 from .adaptive import AdaptiveEngine, _isnan
+from .config import Config
+from .constants import _LOG_ROOT
 from .indicators import compute_indicators
-from .signals import generate_signal_from_rows, min_signal_bars
+from .models import BotContext, BotState, Position, Signal
 from .risk import (
-    break_even_stop, detect_flash_move, in_cooldown, in_flash_cooldown, record_closed_trade,
-    RiskEngine, RR_BY_MODULE, trailing_stop,
+    RR_BY_MODULE,
+    RiskEngine,
+    break_even_stop,
+    detect_flash_move,
+    in_cooldown,
+    in_flash_cooldown,
+    record_closed_trade,
+    trailing_stop,
 )
+from .signals import generate_signal_from_rows, min_signal_bars
+from .utils import _annualization_factor, _timeframe_ms
 
 
 def compute_metrics(equity_curve: List[float],

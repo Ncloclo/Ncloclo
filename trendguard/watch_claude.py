@@ -22,7 +22,7 @@ def ask_claude(system: str, prompt: str, schema: Dict[str, Any], api_key: str,
     ou une réponse tronquée, et les exceptions du SDK sur une erreur d'API
     (clé refusée, modèle inconnu, quota…)."""
     if client_factory is None:
-        import anthropic                     # optionnel : pip install anthropic
+        import anthropic  # optionnel : pip install anthropic
         client = anthropic.Anthropic(api_key=api_key, timeout=timeout, max_retries=2)
     else:
         client = client_factory(api_key, timeout)

@@ -9,12 +9,11 @@ from datetime import timedelta
 import ccxt
 import pytest
 
-from trendguard import diagnostics as dg
-from trendguard import trend_strategy as ts
 import trendguard_bot as tg
 import v29
-from test_trendguard import (DAY, N_DAYS, SIM_FROM, feed, make_bot,
-                             synthetic_market)
+from test_trendguard import DAY, N_DAYS, SIM_FROM, feed, make_bot, synthetic_market
+from trendguard import diagnostics as dg
+from trendguard import trend_strategy as ts
 
 
 @pytest.fixture

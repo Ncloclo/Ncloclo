@@ -17,8 +17,8 @@ import pandas as pd
 import v29
 
 from . import trend_strategy as ts
-from .config import DAY_MS, GuardConfig
 from .bot import TrendGuardBot
+from .config import DAY_MS, GuardConfig
 
 
 class HistoricalExchange:

@@ -10,17 +10,17 @@ import os
 import re
 import time
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_DOWN, ROUND_UP
+from decimal import ROUND_DOWN, ROUND_UP, Decimal
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import ccxt
 import numpy as np
 import pandas as pd
 
-from .constants import CID_OCO_LIST, CID_OCO_SL, CID_OCO_TP
-from .utils import _client_id, _dec_round, make_binance, resync_clock
 from .config import Config
+from .constants import CID_OCO_LIST, CID_OCO_SL, CID_OCO_TP
 from .models import BotContext
+from .utils import _client_id, _dec_round, make_binance, resync_clock
 
 
 class AmbiguousOrder(Exception):

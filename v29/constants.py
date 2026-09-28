@@ -7,7 +7,6 @@ from __future__ import annotations
 import os
 from typing import Dict
 
-
 VERSION_MODULE = "V29.6"
 # Les fichiers d'état par défaut sont placés à côté du programme (et non
 # dans le dossier courant) : un lancement depuis un autre dossier retrouve
@@ -17,8 +16,8 @@ SCHEMA_VERSION = 11
 
 # Dépendances optionnelles : wallet EVM (web3) et fichier .env (python-dotenv).
 try:
-    from web3 import Web3
     from eth_account import Account
+    from web3 import Web3
     try:
         from web3.middleware import ExtraDataToPOAMiddleware
     except ImportError:

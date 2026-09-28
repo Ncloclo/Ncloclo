@@ -304,6 +304,7 @@ def cmd_configure(env_path: Optional[str] = None, read: Callable[[str], str] = i
                   secret: Optional[Callable[[str], str]] = None, out=None) -> int:
     """Saisie guidée ; les mots de passe et clés ne s'affichent pas."""
     import getpass
+
     from . import config as tgc
     out = out or sys.stdout
     secret = secret or getpass.getpass

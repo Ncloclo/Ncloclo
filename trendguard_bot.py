@@ -43,20 +43,41 @@ from __future__ import annotations
 
 import sys
 
-from trendguard.config import (
-    build_guard_logger, DAY_MS, ENV_FILE, ExchangeTimeFormatter, GuardConfig,
-    LIVE_UNIVERSE_DEFAULT, load_guard_config_from_env, parse_dd_throttle, set_env_var, TG_ENV_DOC,
-)
-from trendguard.bot import DecisionDeferred, last_closed_day, _sleep, Slot, _stop, TrendGuardBot
-from trendguard.selection import read_selection, write_selection
-from trendguard.explain import EXIT_WHY, _explain_asset, explain_decision, _pc, WATCH_BAND_PCT
-from trendguard.replay import HistoricalExchange, replay
+from trendguard.bot import DecisionDeferred, Slot, TrendGuardBot, _sleep, _stop, last_closed_day
 from trendguard.cli import (
-    _auth_hint, _build, check_api_keys, clean_api_secret, cmd_diagnose, cmd_set_keys,
-    cmd_set_panel_password, cmd_set_secret, cmd_verify, cmd_verify_public, _forbid_orders,
-    health_check, main, MIN_LIVE_CAPITAL, _ORDER_METHODS, panel_password_problem, TOOLS,
+    _ORDER_METHODS,
+    MIN_LIVE_CAPITAL,
+    TOOLS,
+    _auth_hint,
+    _build,
+    _forbid_orders,
+    check_api_keys,
+    clean_api_secret,
+    cmd_diagnose,
+    cmd_set_keys,
+    cmd_set_panel_password,
+    cmd_set_secret,
+    cmd_verify,
+    cmd_verify_public,
+    health_check,
+    main,
+    panel_password_problem,
 )
-
+from trendguard.config import (
+    DAY_MS,
+    ENV_FILE,
+    LIVE_UNIVERSE_DEFAULT,
+    TG_ENV_DOC,
+    ExchangeTimeFormatter,
+    GuardConfig,
+    build_guard_logger,
+    load_guard_config_from_env,
+    parse_dd_throttle,
+    set_env_var,
+)
+from trendguard.explain import EXIT_WHY, WATCH_BAND_PCT, _explain_asset, _pc, explain_decision
+from trendguard.replay import HistoricalExchange, replay
+from trendguard.selection import read_selection, write_selection
 
 if __name__ == "__main__":
     sys.exit(main())

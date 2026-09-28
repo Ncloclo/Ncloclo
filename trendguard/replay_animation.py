@@ -28,12 +28,13 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
+import v29
+
 from . import diagnostics as dg
 from . import trend_strategy as ts
 from .bot import TrendGuardBot
 from .config import GuardConfig, load_guard_config_from_env
 from .replay import HistoricalExchange
-import v29
 
 TEMPLATE = os.path.join(v29.APP_DIR, "templates", "rejeu_trendguard.html")
 DEFAULT_OUT = os.path.join(v29.APP_DIR, "rejeu_trendguard.html")

@@ -23,8 +23,8 @@ from . import diagnostics as dg
 from . import market_watch as mw
 from . import trend_strategy as ts
 from .config import DAY_MS, GuardConfig
-from .selection import read_selection
 from .explain import explain_decision
+from .selection import read_selection
 
 
 @dataclass

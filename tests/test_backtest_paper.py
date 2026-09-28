@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 import v29
-from conftest import build_env, fresh_closed, buy_signal
+from conftest import build_env, buy_signal, fresh_closed
 from fake_binance import FakeBinance
 
 

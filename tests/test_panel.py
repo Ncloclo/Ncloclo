@@ -12,7 +12,6 @@ import urllib.request
 
 import pytest
 
-from trendguard import autonomy
 import trendguard_bot as tg
 import v29
 from panel import server as ps
@@ -20,6 +19,7 @@ from panel.control import BotControl
 from panel.data import BotData
 from panel.market import Market
 from test_trendguard import SIM_FROM, make_bot, run_days, synthetic_market
+from trendguard import autonomy
 
 
 def _cfg(tmp_path, **kw):

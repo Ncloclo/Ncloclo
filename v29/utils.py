@@ -12,15 +12,14 @@ import sys
 import time
 import uuid
 from dataclasses import dataclass, fields
-from datetime import datetime, timezone, timedelta
-from decimal import Decimal, InvalidOperation, ROUND_DOWN, ROUND_UP
+from datetime import datetime, timedelta, timezone
+from decimal import ROUND_DOWN, ROUND_UP, Decimal, InvalidOperation
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from urllib.parse import urlparse, urlunparse
 
 import ccxt
 
 from .constants import _ENV_BOOL, _LOG_ROOT
-
 
 #
 # Conventions d'unités :

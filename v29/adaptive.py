@@ -11,9 +11,9 @@ from typing import Any, Optional
 import numpy as np
 import pandas as pd
 
-from .utils import _timeframe_ms
 from .config import Config
 from .models import AdaptiveState, BotContext
+from .utils import _timeframe_ms
 
 
 def _row_get(row: Any, key: str, default: Any = None) -> Any:

@@ -22,8 +22,8 @@ import sys
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from trendguard import autonomy
 import v29
+from trendguard import autonomy
 
 BOT_SCRIPT = autonomy.BOT_SCRIPT
 START_GRACE_SEC = 20        # démarrage en cours : le verrou n'est pas sondé

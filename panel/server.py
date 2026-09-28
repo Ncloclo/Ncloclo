@@ -31,6 +31,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
+from trendguard import anticipation
 from trendguard import market_watch as mw
 
 from .assistant import AIHelper, Assistant
@@ -39,8 +40,6 @@ from .data import BotData, _ts
 from .demo import DemoControl, DemoData, DemoMarket, DemoNews
 from .market import INTERVALS, Market
 from .news import NewsHub
-
-from trendguard import anticipation
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 LOOPBACK = {"127.0.0.1", "localhost", "::1"}

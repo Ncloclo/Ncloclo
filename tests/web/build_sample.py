@@ -11,8 +11,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path[:0] = [ROOT, os.path.dirname(HERE)]
 
-from trendguard import replay_animation as ra  # noqa: E402
 from test_trendguard import SIM_FROM, synthetic_market  # noqa: E402
+from trendguard import replay_animation as ra  # noqa: E402
 
 OUT = os.path.join(HERE, ".out", "sample.html")
 

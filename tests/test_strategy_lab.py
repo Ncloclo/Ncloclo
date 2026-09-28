@@ -7,10 +7,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from test_trendguard import SIM_FROM, synthetic_market
 from trendguard import diagnostics as dg
 from trendguard import strategy_lab as sl
 from trendguard import trend_strategy as ts
-from test_trendguard import SIM_FROM, synthetic_market
 
 
 @pytest.fixture(scope="module")

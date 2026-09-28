@@ -9,14 +9,14 @@ from datetime import datetime, timedelta, timezone
 import ccxt
 import pytest
 
-from trendguard import diagnostics as dg
-from trendguard import trend_strategy as ts
 import trendguard_bot as tg
-from trendguard import bot as tgbot, cli as tgcli
 import v29
 from conftest import open_live_position
 from test_trendguard import DAY, SIM_FROM, feed, make_bot, synthetic_market
-
+from trendguard import bot as tgbot
+from trendguard import cli as tgcli
+from trendguard import diagnostics as dg
+from trendguard import trend_strategy as ts
 
 # ---------- Client Binance ----------
 

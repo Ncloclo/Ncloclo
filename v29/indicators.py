@@ -9,8 +9,8 @@ import math
 import numpy as np
 import pandas as pd
 
-from .utils import _annualization_factor, _bars_per_day
 from .config import Config
+from .utils import _annualization_factor, _bars_per_day
 
 
 def ema(series: pd.Series, span: int) -> pd.Series:
