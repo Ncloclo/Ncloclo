@@ -92,7 +92,9 @@ test("assistant : réponses, garde-fou de sécurité, actions", async ({ page })
   expect(posts.join(" ")).not.toContain(fake);
   await page.locator("#chat-input").fill("Connecter mon téléphone");
   await page.locator("#chat-input").press("Enter");
-  await page.locator("#chat-log .msg-actions .chip").last().click();
+  const phone = page.locator("#chat-log .msg.bot").last();
+  await expect(phone).toContainText("Tailscale");                   // réponse arrivée
+  await phone.locator(".msg-actions .chip", { hasText: "Réglages" }).click();
   await expect(page).toHaveURL(/#settings$/);
   await page.keyboard.press("Escape");
   await expect(chat).toBeHidden();
