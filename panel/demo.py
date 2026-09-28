@@ -10,7 +10,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Tuple
 
-from .data import reasoning_view
+from .data import merge_buys, reasoning_view
 from .market import INTERVALS
 
 BASE_PRICES = {"btc": 84400.0, "eth": 2690.0, "bnb": 780.0, "xrp": 0.58, "ada": 0.254,
@@ -165,6 +165,9 @@ class DemoData:
                      r=round((px - r["entry"]) * r["qty"] / r["risk"], 2),
                      stop_dist_pct=round((px - r["stop"]) / px * 100, 2))
         return {"positions": rows, "stale": False}
+
+    def buys(self, state: Any = None) -> List[Dict[str, Any]]:
+        return merge_buys(self.state(), self.holdings())
 
     def trades(self, state: Any = None) -> List[Dict[str, Any]]:
         now = datetime.now(timezone.utc)

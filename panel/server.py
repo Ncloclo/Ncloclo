@@ -137,6 +137,7 @@ class PanelApp:
             "halted": bool(st.get("halted")), "halt_reason": st.get("halt_reason"),
             "regime_bull": st.get("last_regime_bull"), "risk_mult": st.get("risk_mult", 1.0),
             "last_decision_day": st.get("last_decision_day"),
+            "last_buy": self._last_buy(st),
             "next_decision_s": int((nxt - now).total_seconds()),
             "last_cycle_age_s": int(time.time() - float(last_cycle)) if last_cycle else None,
             "positions": len(self.data.holdings(st)), "max_positions": p.max_positions,
@@ -151,6 +152,15 @@ class PanelApp:
             "lan_urls": self.lan_urls, "password": bool(self.password),
             "server_time": now.isoformat(),
         }
+
+    def _last_buy(self, st: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Dernier achat du bot : le panneau l'annonce dès qu'il change."""
+        buys = self.data.buys(st)
+        if not buys:
+            return None
+        b = buys[-1]
+        return {"asset": b["asset"], "date": b["date"], "price": b["price"],
+                "cost": b.get("cost"), "note": b.get("note"), "count": len(buys)}
 
     def assets(self) -> Dict[str, Any]:
         st = self.data.state()
@@ -231,24 +241,28 @@ class PanelApp:
             return t if t0 <= t <= t1 else None
 
         st = self.data.state()
-        markers = []
-        for tr in self.data.trades(st):
-            if tr.get("asset") != asset:
-                continue
-            for when, kind, price in ((tr.get("entry_date"), "buy", tr.get("entry")),
-                                      (tr.get("date"), "sell", tr.get("exit"))):
-                t = snap(when)
-                if t is not None:
-                    markers.append({"t": t, "type": kind, "price": price,
-                                    "text": "Achat" if kind == "buy" else f"Vente {tr.get('r', 0):+.2f} R"})
         position = None
         for h in self.data.holdings(st):
             if h["asset"] == asset:
                 position = {k: h.get(k) for k in ("entry", "stop", "disaster", "qty", "risk", "entry_date")}
-                t = snap(h.get("entry_date"))
-                if t is not None:
-                    markers.append({"t": t, "type": "buy", "price": h["entry"], "text": "Achat (en cours)"})
-        markers.sort(key=lambda m: m["t"])
+        current = _ts((position or {}).get("entry_date"))
+        # Tous les achats du bot sur cette crypto (journal en temps réel), puis
+        # ses ventes (trades clos).
+        markers = []
+        for b in self.data.buys(st):
+            t = snap(b["date"]) if b["asset"] == asset else None
+            if t is not None:
+                live = current is not None and abs(b["t"] - current) < 1800
+                markers.append({"t": t, "type": "buy", "price": b["price"], "qty": b.get("qty"),
+                                "cost": b.get("cost"), "date": b["date"],
+                                "text": "Achat en cours" if live else "Achat"})
+        for tr in self.data.trades(st):
+            t = snap(tr.get("date")) if tr.get("asset") == asset else None
+            if t is not None:
+                r = f"{float(tr.get('r') or 0):+.2f}".replace(".", ",")
+                markers.append({"t": t, "type": "sell", "price": tr.get("exit"),
+                                "date": tr.get("date"), "text": f"Vente {r} R"})
+        markers.sort(key=lambda m: (m["t"], m["type"] != "buy"))
         return {"asset": asset, "interval": interval, "candles": rows, "stale": stale,
                 "position": position, "markers": markers}
 
@@ -264,7 +278,11 @@ class PanelApp:
                 if path == "/api/status":
                     return 200, self.status()
                 if path == "/api/equity":
-                    return 200, {"points": self.data.equity(days=int(q("days", "90")))}
+                    pts = self.data.equity(days=int(q("days", "90")))
+                    since = pts[0]["t"] if pts else 0
+                    buys = [{"t": b["t"], "asset": b["asset"], "price": b["price"]}
+                            for b in self.data.buys() if b["t"] >= since]
+                    return 200, {"points": pts, "buys": buys}
                 if path == "/api/positions":
                     return 200, self.data.positions()
                 if path == "/api/trades":

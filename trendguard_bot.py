@@ -464,15 +464,37 @@ class TrendGuardBot:
             f"[TRADE] {trade['asset'].upper()} {trade['reason']} "
             f"pnl={trade['pnl']:+.2f} {self.g.quote} R={trade['r']:+.2f}")
 
-    def _harvest_live_trade(self, s: Slot, n_before: int, reason: str) -> None:
+    BUYS_KEPT = 500
+
+    def _record_buy(self, a: str, when: datetime, price: float, qty: float, cost: float,
+                    risk: float, note: str = "") -> None:
+        """Journal des achats, écrit à l'instant de l'achat : le panneau les
+        affiche en temps réel sur les graphiques (marqueurs « Achat »)."""
+        buys = self.state.setdefault("buys", [])
+        buys.append({"asset": a, "date": when.isoformat(), "price": float(price),
+                     "qty": float(qty), "cost": float(cost), "risk": float(risk),
+                     "mode": self.g.run_mode, "note": note})
+        self.state["buys"] = buys[-self.BUYS_KEPT:]
+
+    def _harvest_live_trade(self, s: Slot, n_before: int, reason: str,
+                            opened_at: Optional[str] = None, buy_price: float = 0.0) -> None:
         pf = s.ctx.portfolio
         if pf.stats_wins + pf.stats_losses > n_before and pf.last_trades:
             t = pf.last_trades[-1]
-            self._record_trade({"asset": s.base.lower(),
-                                "date": self._now.isoformat(),
-                                "pnl": float(t.get("pnl", 0.0)),
-                                "r": float(t.get("r", 0.0)),
-                                "reason": t.get("reason") or reason})
+            trade = {"asset": s.base.lower(), "date": self._now.isoformat(),
+                     "pnl": float(t.get("pnl", 0.0)), "r": float(t.get("r", 0.0)),
+                     "reason": t.get("reason") or reason}
+            entry = float(t.get("entry_price") or buy_price or 0.0)
+            exit_px = float(t.get("exit_price") or 0.0)
+            if entry:
+                trade["entry"] = entry
+            if exit_px:
+                trade["exit"] = exit_px
+            opened = v29._parse_iso(opened_at) if opened_at else None
+            if opened:
+                trade["entry_date"] = opened.isoformat()
+                trade["days"] = (self._now - opened).days
+            self._record_trade(trade)
 
     def _log_equity(self, equity: float, cash: float) -> None:
         """Point d'historique du capital pour les graphiques du panneau, au
@@ -763,6 +785,7 @@ class TrendGuardBot:
             if not (s.ctx.position.in_position or s.ctx.pending_order):
                 continue
             before = self._closed_count(s)
+            opened, bought = s.ctx.position.opened_at, s.ctx.position.buy_price
             try:
                 s.eng.resolve_pending(s.ctx)
                 if s.ctx.position.in_position:
@@ -774,7 +797,7 @@ class TrendGuardBot:
             except Exception as e:
                 self.logger.exception(f"[PROT] {s.symbol} : {e}")
             finally:
-                self._harvest_live_trade(s, before, "EXCHANGE_STOP")
+                self._harvest_live_trade(s, before, "EXCHANGE_STOP", opened, bought)
                 self._save_slot(s)
 
     def _maintain_paper(self) -> None:
@@ -1096,9 +1119,10 @@ class TrendGuardBot:
         if s is None or not s.ctx.position.in_position:
             return
         before = self._closed_count(s)
+        opened, bought = s.ctx.position.opened_at, s.ctx.position.buy_price
         ref = s.ex.get_ticker()["bid"]
         s.eng.close_position(s.ctx, f"TREND_{reason}", ref)
-        self._harvest_live_trade(s, before, reason)
+        self._harvest_live_trade(s, before, reason, opened, bought)
         self._save_slot(s)
 
     def _raise_exchange_stops(self, holdings: Dict[str, ts.Holding],
@@ -1287,7 +1311,7 @@ class TrendGuardBot:
         if anomaly:
             self._defer_entry(plan, equity, now, anomaly)
             return None
-        self._pending().pop(a, None)
+        deferred = self._pending().pop(a, None) is not None
         if abs(drift) > 0.01:
             self.logger.info(
                 f"[ENTRY] {a.upper()} : prix {px_now:.6g} ({drift * 100:+.1f} % "
@@ -1309,6 +1333,8 @@ class TrendGuardBot:
                 f"[ENTRY] {a.upper()} qty={plan['qty']:.6f} @ "
                 f"{plan['entry']:.6f} stop={plan['stop']:.6f} "
                 f"risque={plan['risk_quote']:.2f} {self.g.quote}")
+            self._record_buy(a, now, plan["entry"], plan["qty"], plan["cost"],
+                             plan["risk_quote"], "différé" if deferred else "")
             return plan
         res = s.eng.enter_planned(
             s.ctx, plan["qty"], plan["exec_price"], sl_abs=disaster,
@@ -1321,6 +1347,10 @@ class TrendGuardBot:
         if res == v29.EntryResult.OPENED:
             s.ctx.position.highest_close = plan["ref_price"]
             s.ctx.position.soft_stop = plan["stop"]
+            p = s.ctx.position
+            self._record_buy(a, now, p.buy_price or plan["exec_price"], p.amount_held or plan["qty"],
+                             (p.cost_basis or p.buy_price) * (p.amount_held or plan["qty"]),
+                             plan["risk_quote"], "différé" if deferred else "")
         self._save_slot(s)
         return plan if res == v29.EntryResult.OPENED else None
 

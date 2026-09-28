@@ -36,6 +36,34 @@ def reasoning_view(st: Dict[str, Any]) -> Dict[str, Any]:
             "pending": pending}
 
 
+def merge_buys(state: Dict[str, Any], holdings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Tous les achats du bot, du plus ancien au plus récent : journal des
+    achats (écrit par le bot à l'instant de chaque achat), complété par les
+    trades clos et les positions ouvertes pour les achats plus anciens.
+    Un même achat vu deux fois (à moins de 30 min d'écart) n'est gardé
+    qu'une fois."""
+    out: List[Dict[str, Any]] = []
+
+    def add(asset: Any, date: Any, price: Any, qty: Any = None, cost: Any = None,
+            note: str = "") -> None:
+        t = _ts(date)
+        if t is None or not asset or not price:
+            return
+        if any(b["asset"] == asset and abs(b["t"] - t) < 1800 for b in out):
+            return
+        out.append({"asset": asset, "date": date, "t": t, "price": float(price),
+                    "qty": qty, "cost": cost, "note": note})
+    for b in state.get("buys") or []:
+        add(b.get("asset"), b.get("date"), b.get("price"), b.get("qty"), b.get("cost"),
+            b.get("note") or "")
+    for h in holdings:
+        add(h.get("asset"), h.get("entry_date"), h.get("entry"), h.get("qty"), h.get("cost"))
+    for tr in state.get("trades") or []:
+        add(tr.get("asset"), tr.get("entry_date"), tr.get("entry"))
+    out.sort(key=lambda b: b["t"])
+    return out
+
+
 def _ts(value: Any) -> Optional[int]:
     """Horodatage ISO → secondes UNIX (UTC)."""
     dt = v29._parse_iso(str(value)) if value else None
@@ -122,6 +150,10 @@ class BotData:
                 r["r"] = round((px - r["entry"]) * r["qty"] / r["risk"], 2) if r["risk"] else None
                 r["stop_dist_pct"] = round((px - r["stop"]) / px * 100, 2)
         return {"positions": rows, "stale": stale}
+
+    def buys(self, state: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        state = self.state() if state is None else state
+        return merge_buys(state, self.holdings(state))
 
     def trades(self, state: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         state = self.state() if state is None else state

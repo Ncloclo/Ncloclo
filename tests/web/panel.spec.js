@@ -157,6 +157,27 @@ test("temps de chargement : 3 s entre rubriques et sélections, réflexion de Ra
   expect(errors).toEqual([]);
 });
 
+test("achat en temps réel : annonce et flèches sur les graphiques", async ({ page }) => {
+  const errors = watchErrors(page);
+  let n = 0;
+  await page.route("**/api/status", async (route) => {
+    const res = await route.fetch();
+    const json = await res.json();
+    n += 1;
+    if (n > 2) json.last_buy = { asset: "dot", date: "2099-01-01T00:00:00+00:00", price: 4.2, cost: 950, count: 99 };
+    await route.fulfill({ response: res, json });
+  });
+  await page.goto(BASE + "/#charts");
+  const cards = page.locator("#chart-grid .chart-card");
+  await expect(cards.first().locator(".legend")).toContainText("Achats du bot");
+  await expect(cards.nth(2).locator(".legend")).toContainText("Achats du bot");
+  await expect(page.locator(".toast", { hasText: "Achat en temps réel : DOT" })).toBeVisible({ timeout: 20_000 });
+  await cards.nth(2).click();
+  await expect(page.locator("#detail-stats")).toContainText("Achats du bot visibles");
+  await expect(page.locator("#detail-stats")).toContainText("Dernier achat");
+  expect(errors).toEqual([]);
+});
+
 test("graphiques en temps réel et détail d'un graphique", async ({ page }) => {
   const errors = watchErrors(page);
   await page.goto(BASE + "/#charts");

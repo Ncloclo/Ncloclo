@@ -234,6 +234,8 @@ svg { width: 20px; height: 20px; fill: currentColor; flex: none; }
 .chart-card { cursor: pointer; display: grid; gap: 8px; transition: transform .25s var(--ease), box-shadow .25s, border-color .25s; animation: card-in .5s var(--ease) both; }
 .chart-card:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: var(--border-2); }
 @keyframes card-in { from { opacity: 0; transform: translateY(14px) scale(.98); } }
+.chart-card.new-buy { animation: buy-flash 3s var(--ease); }
+@keyframes buy-flash { 0%, 45% { box-shadow: 0 0 0 3px var(--up), 0 0 28px color-mix(in srgb, var(--up) 45%, transparent); } }
 .chart-card .head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .chart-card .val { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .chart-box { height: 200px; position: relative; min-width: 0; }

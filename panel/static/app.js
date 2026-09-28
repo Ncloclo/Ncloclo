@@ -190,6 +190,33 @@ const uniq = (pts) => {                 // temps strictement croissants
   return out;
 };
 const candleData = (rows) => uniq(rows.map((r) => ({ time: r[0], open: r[1], high: r[2], low: r[3], close: r[4] })));
+// Achats et ventes du bot : flèches sur les bougies, au prix payé.
+const tradeMarkers = (list, c) => (list || []).map((m) => ({
+  time: m.t, position: m.type === "buy" ? "belowBar" : "aboveBar", color: m.type === "buy" ? c.up : c.down,
+  shape: m.type === "buy" ? "arrowUp" : "arrowDown",
+  text: m.type === "buy" && m.price != null ? `${m.text} ${fpx(m.price)}` : m.text,
+}));
+// Achats sur la courbe du capital : chacun sur le point le plus proche.
+function buyMarkersOn(points, buys, c, withText = true) {
+  const out = [];
+  if (!points.length) return out;
+  let j = 0;
+  (buys || []).forEach((b) => {
+    while (j < points.length - 1 && points[j + 1].time <= b.t) j++;
+    const next = points[j + 1];
+    const near = next && next.time - b.t < b.t - points[j].time ? next : points[j];
+    out.push({ time: near.time, position: "belowBar", color: c.up, shape: "arrowUp", text: withText ? up(b.asset) : "" });
+  });
+  return out.sort((a, b) => a.time - b.time);
+}
+// Graphique d'une position : intervalle choisi pour que l'achat soit visible.
+function gridInterval(p) {
+  const age = p.entry_date ? Math.max(0, (Date.now() - Date.parse(p.entry_date)) / 3600e3) : 0;
+  if (!isFinite(age) || age <= 60) return ["1h", 72, "1 h"];
+  if (age <= 24 * 12) return ["4h", Math.min(500, Math.ceil(age / 4) + 30), "4 h"];
+  return ["1d", Math.min(500, Math.ceil(age / 24) + 20), "1 jour"];
+}
+
 function addPositionLines(series, pos) {
   if (!pos || !LWC) return [];
   const c = COLORS(), lines = [];
@@ -251,10 +278,29 @@ async function refreshStatus() {
     statusErr = false;
     nextDecisionAt = Date.now() + S.next_decision_s * 1000;
     renderStatus();
+    checkNewBuy();
   } catch (e) {
     statusErr = true;
     if (e.message !== "connexion requise") $("#updated").textContent = "Panneau injoignable";
   }
+}
+// Achat en temps réel : annonce, puis graphiques redessinés avec sa flèche.
+let lastBuyKey = null;
+function checkNewBuy() {
+  const b = S.last_buy, key = b ? `${b.asset}|${b.date}` : "";
+  if (lastBuyKey !== null && key && key !== lastBuyKey) {
+    toast(`🟢 Achat en temps réel : ${up(b.asset)} à ${fpx(b.price)} USDT${b.cost ? ` (${fusd(b.cost)})` : ""}`, "ok");
+    if (["dash", "charts", "positions", "assets"].includes(current)) {
+      refreshTab(true).then(() => {
+        const g = gridCharts.get("asset:" + b.asset);
+        if (!g) return;
+        g.card.classList.remove("new-buy");
+        void g.card.offsetWidth;
+        g.card.classList.add("new-buy");
+      });
+    }
+  }
+  lastBuyKey = key;
 }
 function renderStatus() {
   const pill = $("#st-pill"), btn = $("#auto-btn");
@@ -320,7 +366,9 @@ async function renderDash() {
     dashSeries = dashChart.addAreaSeries({ lineColor: c.accent, topColor: c.accent + "55", bottomColor: c.accent + "05", lineWidth: 2, priceLineVisible: false });
   }
   if (dashSeries) {
-    dashSeries.setData(uniq(eq.points.map((p) => ({ time: p.t, value: p.v }))));
+    const pts = uniq(eq.points.map((p) => ({ time: p.t, value: p.v })));
+    dashSeries.setData(pts);
+    dashSeries.setMarkers(buyMarkersOn(pts, eq.buys, COLORS(), false));
     dashChart.timeScale().fitContent();
   }
   countUp($("#d-pos"), S.positions, (v) => `${Math.round(v)} / ${S.max_positions}`);
@@ -591,10 +639,10 @@ async function renderCharts() {
   const [eq, reg, pos] = await Promise.all([api("/api/equity?days=90"), api("/api/regime"), api("/api/positions")]);
   const c = COLORS();
   const specs = [
-    { id: "equity", kind: "equity", title: "Capital du bot", legend: [[c.accent, "Capital (USDT)"], [c.muted, "Capital de départ", true]] },
+    { id: "equity", kind: "equity", title: "Capital du bot", legend: [[c.accent, "Capital (USDT)"], [c.muted, "Capital de départ", true], [c.up, "▲ Achats du bot"]] },
     { id: "regime", kind: "regime", title: `Régime BTC · moyenne ${reg.sma} jours`, legend: [[c.ink, "BTC (clôture)"], [c.sma, `Moyenne ${reg.sma} j`]] },
-    ...pos.positions.map((p) => ({ id: "asset:" + p.asset, kind: "asset", asset: p.asset, title: `${up(p.asset)}/USDT · 1 h`, pos: p,
-      legend: [[c.up, "Bougies"], [c.accent, "Entrée", true], [c.down, "Stop de clôture"], [c.down, "Stop catastrophe", true]] })),
+    ...pos.positions.map((p) => ({ id: "asset:" + p.asset, kind: "asset", asset: p.asset, title: `${up(p.asset)}/USDT · ${gridInterval(p)[2]}`, pos: p,
+      legend: [[c.up, "Bougies"], [c.up, "▲ Achats du bot"], [c.accent, "Entrée", true], [c.down, "Stop de clôture"], [c.down, "Stop catastrophe", true]] })),
   ];
   const grid = $("#chart-grid");
   const ids = specs.map((s) => s.id).join("|");
@@ -644,7 +692,9 @@ async function renderCharts() {
   };
   const ge = gridCharts.get("equity");
   if (ge && ge.series[0]) {
-    ge.series[0].setData(uniq(eq.points.map((p) => ({ time: p.t, value: p.v }))));
+    const pts = uniq(eq.points.map((p) => ({ time: p.t, value: p.v })));
+    ge.series[0].setData(pts);
+    ge.series[0].setMarkers(buyMarkersOn(pts, eq.buys, c));
     ge.chart.timeScale().fitContent();
   }
   const last = eq.points[eq.points.length - 1];
@@ -659,8 +709,10 @@ async function renderCharts() {
   await Promise.all(pos.positions.map(async (p) => {
     const g = gridCharts.get("asset:" + p.asset);
     if (!g || !g.series[0]) return;
-    const d = await api(`/api/candles?asset=${p.asset}&interval=1h&limit=72`);
+    const [iv, lim] = gridInterval(p);
+    const d = await api(`/api/candles?asset=${p.asset}&interval=${iv}&limit=${lim}`);
     g.series[0].setData(candleData(d.candles));
+    g.series[0].setMarkers(tradeMarkers(d.markers, c));
     g.lines.forEach((l) => g.series[0].removePriceLine(l));
     g.lines = addPositionLines(g.series[0], d.position);
     g.chart.timeScale().fitContent();
@@ -707,10 +759,10 @@ function openDetail(spec) {
     const vol = D.chart.addHistogramSeries({ priceFormat: { type: "volume" }, priceScaleId: "", color: c.muted + "66" });
     vol.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
     D.series.push(vol);
-    legend($("#detail-legend"), [[c.up, "Hausse"], [c.down, "Baisse"], [c.accent, "Entrée", true], [c.down, "Stop de clôture"], [c.down, "Stop catastrophe", true], [c.muted, "Volume"]]);
+    legend($("#detail-legend"), [[c.up, "Hausse"], [c.down, "Baisse"], [c.up, "▲ Achats du bot"], [c.down, "▼ Ventes"], [c.accent, "Entrée", true], [c.down, "Stop de clôture"], [c.down, "Stop catastrophe", true], [c.muted, "Volume"]]);
   } else if (spec.kind === "equity") {
     D.series.push(D.chart.addBaselineSeries({ baseValue: { type: "price", price: 0 }, topLineColor: c.up, topFillColor1: c.up + "44", topFillColor2: c.up + "05", bottomLineColor: c.down, bottomFillColor1: c.down + "05", bottomFillColor2: c.down + "44", lineWidth: 2 }));
-    legend($("#detail-legend"), [[c.up, "Au-dessus du départ"], [c.down, "En dessous du départ"]]);
+    legend($("#detail-legend"), [[c.up, "Au-dessus du départ"], [c.down, "En dessous du départ"], [c.up, "▲ Achats du bot"]]);
   } else {
     D.series.push(D.chart.addLineSeries({ color: c.ink, lineWidth: 2 }));
     D.series.push(D.chart.addLineSeries({ color: c.sma, lineWidth: 2, crosshairMarkerVisible: false }));
@@ -742,7 +794,7 @@ async function loadDetail() {
       const cd = candleData(d.candles);
       D.series[0].setData(cd);
       D.series[1].setData(uniq(d.candles.map((r) => ({ time: r[0], value: r[5], color: (r[4] >= r[1] ? c.up : c.down) + "55" }))));
-      D.series[0].setMarkers(d.markers.map((m) => ({ time: m.t, position: m.type === "buy" ? "belowBar" : "aboveBar", color: m.type === "buy" ? c.up : c.down, shape: m.type === "buy" ? "arrowUp" : "arrowDown", text: m.text })));
+      D.series[0].setMarkers(tradeMarkers(d.markers, c));
       D.lines.forEach((l) => D.series[0].removePriceLine(l));
       D.lines = addPositionLines(D.series[0], d.position);
       const lastC = cd[cd.length - 1], first = cd[0];
@@ -755,6 +807,9 @@ async function loadDetail() {
           ["Résultat", fpct(px ? (px / p.entry - 1) * 100 : null), px >= p.entry ? "up" : "down"],
           ["En R (≈)", fR(px && p.risk ? (px - p.entry) * p.qty / p.risk : null)], ["Achat le", fdate(p.entry_date)]);
       } else rows.push(["Position", "aucune"]);
+      const buys = d.markers.filter((m) => m.type === "buy");
+      rows.push(["Achats du bot visibles", String(buys.length)]);
+      if (buys.length) rows.push(["Dernier achat", `${fdate(buys[buys.length - 1].date)} à ${fpx(buys[buys.length - 1].price)}`]);
       if (d.stale) rows.push(["Données", "en retard (réseau)", "warn"]);
       stats(rows);
     } else if (spec.kind === "equity") {
@@ -764,6 +819,7 @@ async function loadDetail() {
       const start = pts.length ? pts[0].value : 0;
       D.series[0].applyOptions({ baseValue: { type: "price", price: start } });
       D.series[0].setData(pts);
+      D.series[0].setMarkers(buyMarkersOn(pts, eq.buys, c));
       const last = pts[pts.length - 1], hi = Math.max(...pts.map((p) => p.value));
       D.lastText = last ? `Capital : ${fusd(last.value)}` : "";
       stats([["Capital", fusd(last && last.value)], ["Au départ de la courbe", fusd(start)],

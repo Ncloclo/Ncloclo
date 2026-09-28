@@ -116,6 +116,7 @@ def test_abnormal_order_book_defers_the_entry_then_buys(logger):
     _cycle(bot, fb, close, day_i, 11)
     assert set(bot.state["paper"]["holdings"]) == bought and not bot.state["pending_entries"]
     assert bot.state["reasoning"]["assets"][a]["status"] == "bought"
+    assert {b["asset"]: b["note"] for b in bot.state["buys"]}[a] == "différé"
     # Même risque que l'achat immédiat du bot de référence.
     h = bot.state["paper"]["holdings"][a]
     assert h["risk_quote"] <= bot.state["last_equity"] * P.risk_pct * 1.0001
@@ -169,6 +170,33 @@ def test_new_decision_replaces_yesterdays_deferred_entries(logger):
     del fb.fetch_order_book                              # retour au carnet normal du simulateur
     _cycle(bot, fb, close, day_i + 1, 5)                 # clôture suivante : nouvelle décision
     assert not bot.state.get("pending_entries")
+
+
+def test_every_purchase_is_logged_when_it_happens(logger):
+    close, volume = synthetic_market()
+    bot, fb = make_bot("paper", close, logger)
+    assert bot.boot()
+    run_days(bot, fb, close, volume, SIM_FROM, SIM_FROM + 150)
+    buys = bot.state["buys"]
+    assert buys and all(b["mode"] == "paper" and b["qty"] > 0 and b["cost"] > 0 for b in buys)
+    for a, h in bot.state["paper"]["holdings"].items():
+        assert any(b["asset"] == a and b["date"] == h["entry_date"]
+                   and b["price"] == pytest.approx(h["entry"]) for b in buys)
+    for tr in bot.state["trades"]:                           # achats déjà revendus aussi
+        assert any(b["asset"] == tr["asset"] and b["date"] == tr["entry_date"] for b in buys)
+
+
+def test_live_trades_keep_their_purchase_date_and_price(logger):
+    close, volume = synthetic_market()
+    bot, fb = make_bot("live", close, logger)
+    assert bot.boot()
+    run_days(bot, fb, close, volume, SIM_FROM, SIM_FROM + 200)
+    trades = bot.state["trades"]
+    assert trades
+    for t in trades:
+        assert t["entry_date"] and t["entry"] > 0 and t["exit"] > 0
+    assert len(bot.state["buys"]) >= len(trades)
+    assert all(b["mode"] == "live" for b in bot.state["buys"])
 
 
 def test_invalid_ruse_settings_are_refused():

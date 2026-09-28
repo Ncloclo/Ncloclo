@@ -133,7 +133,11 @@ panneau de contrôle ») :
   les cryptos proches d'un signal d'achat ;
 - **Graphiques** : capital, régime BTC et chaque position en temps réel ; un
   clic ouvre le détail (bougies, volume, achats et ventes, stops, zoom,
-  intervalles de 15 min à 1 jour) ;
+  intervalles de 15 min à 1 jour). Tous les achats du bot sont marqués d'une
+  flèche ▲ au prix payé, sur le graphique de la crypto (intervalle choisi pour
+  que l'achat reste visible) et sur la courbe du capital ; les ventes d'une
+  flèche ▼. Le bot inscrit chaque achat à l'instant où il a lieu : le panneau
+  l'annonce aussitôt (« Achat en temps réel ») et redessine les graphiques ;
 - **Cryptos** : les 21 paires avec cours, variation, volume, courbe de 48 h et
   la raison du choix du bot, filtres (détenues, surveillées, bloquées) et
   recherche ;
@@ -481,7 +485,7 @@ walkforward | status | resume` (voir `python v29.py docs`).
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 357 tests, simulateurs Binance Spot mono et multi-paires
+python -m pytest tests -q      # 360 tests, simulateurs Binance Spot mono et multi-paires
 ```
 
 À chaque envoi sur GitHub, `.github/workflows/checks.yml` lance ces tests, puis

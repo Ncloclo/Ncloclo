@@ -92,6 +92,18 @@ def test_assistant_endpoint_guard_and_rate_limit(demo_server):
     assert codes[-1] == 429                              # 20 questions par minute au plus
 
 
+def test_bot_purchases_are_on_the_charts(demo_server):
+    base, _ = demo_server
+    c = _json(base + "/api/candles?asset=aave&interval=4h&limit=100")[1]
+    buys = [m for m in c["markers"] if m["type"] == "buy"]
+    assert buys and buys[-1]["text"] == "Achat en cours" and buys[-1]["price"] > 0
+    assert buys[-1]["t"] % (4 * 3600) == 0                  # sur la bougie de l'achat
+    eq = _json(base + "/api/equity?days=30")[1]
+    assert eq["buys"] and all(b["t"] >= eq["points"][0]["t"] for b in eq["buys"])
+    last = _json(base + "/api/status")[1]["last_buy"]
+    assert last["asset"] and last["price"] > 0 and last["count"] >= 6
+
+
 def test_news_endpoint(demo_server):
     base, _ = demo_server
     code, n = _json(base + "/api/news")
@@ -285,6 +297,9 @@ def test_bot_data_reads_state_equity_and_log(tmp_path, logger):
     held = data.positions()["positions"]
     assert {p["asset"] for p in held} == set(st["paper"]["holdings"])
     assert data.log_tail(10) == [f"ligne {i}" for i in range(40, 50)]
+    buys = data.buys()
+    assert {b["asset"] for b in buys} >= set(st["paper"]["holdings"])
+    assert [b["t"] for b in buys] == sorted(b["t"] for b in buys)
     why = data.reasoning()
     assert why["current"]["day"] == st["last_decision_day"] and why["history"][0]["day"] == st["last_decision_day"]
     assert BotData(_cfg(tmp_path / "vide"), M()).state() == {}
