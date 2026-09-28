@@ -80,7 +80,8 @@
       "type": "debugpy",
       "request": "launch",
       "noDebug": true,
-      "program": "${workspaceFolder}/replay_animation.py",
+      "program": "${workspaceFolder}/trendguard_bot.py",
+      "args": ["animation"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "envFile": "${workspaceFolder}/.env"
@@ -110,8 +111,8 @@
       "name": "Recherche — régénérer le rapport",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/trend_strategy.py",
-      "args": ["research", "--data", "data", "--out", "docs/TRENDGUARD_REPORT.md"],
+      "program": "${workspaceFolder}/trendguard_bot.py",
+      "args": ["strategy", "research", "--data", "data", "--out", "docs/TRENDGUARD_REPORT.md"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "preLaunchTask": "Télécharger les données de recherche"
@@ -120,8 +121,8 @@
       "name": "Laboratoire — tournoi des stratégies (données Binance)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/strategy_lab.py",
-      "args": ["--cache", "data_binance", "--out", "docs/STRATEGIES.md"],
+      "program": "${workspaceFolder}/trendguard_bot.py",
+      "args": ["lab", "--cache", "data_binance", "--out", "docs/STRATEGIES.md"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal"
     },

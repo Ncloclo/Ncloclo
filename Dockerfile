@@ -9,9 +9,13 @@ WORKDIR /app
 COPY requirements-docker.txt .
 RUN pip install --no-cache-dir -r requirements-docker.txt
 
-# Tous les modules : le bot importe diagnostics.py, qui importe strategy_lab.py.
-COPY *.py ./
+# Tout le code : point d'entrée, paquets du bot, du moteur d'exécution, du
+# panneau et des études (research/, vérifiées par les tests ci-dessous).
+COPY trendguard_bot.py ./
+COPY trendguard ./trendguard
+COPY v29 ./v29
 COPY panel ./panel
+COPY research ./research
 COPY tests ./tests
 # L'image ne se construit pas si un seul test échoue.
 RUN python -m pytest tests -q -p no:cacheprovider

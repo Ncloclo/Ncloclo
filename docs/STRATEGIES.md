@@ -1,6 +1,6 @@
 # Laboratoire de stratégies — le bot peut-il « apprendre la meilleure stratégie » ?
 
-Étude reproductible : `python strategy_lab.py --cache data_binance`
+Étude reproductible : `python trendguard_bot.py lab --cache data_binance`
 (`--cm data` ajoute les données Coin Metrics, qui incluent des actifs
 effondrés). Frais 0,1 % et slippage 0,1 % par côté, 1 % du capital risqué
 par trade, mêmes plafonds de portefeuille pour toutes les stratégies.

@@ -1,5 +1,9 @@
 # Audit expert du code TrendGuard — 28 septembre 2026
 
+> Depuis cet audit, le code a été rangé par rôle : les fichiers cités ici
+> sont dans `trendguard/` et `research/`, et `v29.py` est devenu le paquet
+> `v29/` (voir [`ARCHITECTURE.md`](ARCHITECTURE.md)).
+
 Audit complet du dépôt (commit `022f8d5`) : architecture, sécurité, risque
 financier, fiabilité en exploitation et qualité du code. Méthode : lecture du
 code critique (exécution des ordres, risque, panneau, autonomie, assistant),
@@ -176,7 +180,7 @@ tard).
 | 6 | Encadrer les actualités comme données non fiables pour l'IA de Rachelle (S4) | Code | fait |
 | 7 | Audit des dépendances (`pip-audit`) dans les contrôles GitHub | Code | fait : aucune faille connue au 28/09/2026 |
 | 8 | Service `panneau` dans `docker-compose.yml` (O5) | Code | reporté : dans Docker, AUTO et ARRÊTER doivent piloter un autre conteneur, relancé seul par Docker ; à concevoir avec le passage sur serveur (O1) |
-| 9 | Séparer `v29.py` en modules et archiver l'ancien bot V29 ; un seul moteur de backtest paramétrable | Chantier plus long, sans urgence | ouvert |
+| 9 | Séparer `v29.py` en modules et archiver l'ancien bot V29 ; un seul moteur de backtest paramétrable | Chantier plus long, sans urgence | en partie : `v29.py` découpé en 17 modules (paquet `v29/`), code rangé par rôle (`docs/ARCHITECTURE.md`) ; bot V29 et moteur de backtest unique : ouverts |
 | 10 | Pour un fonctionnement 24 h/24 : serveur allumé en permanence ou ouverture de session automatique (O1) | Vous | ouvert |
 | 11 | Avant le réel : `verify`, puis quelques jours de testnet (R5) | Vous, le moment venu | ouvert |
 

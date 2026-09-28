@@ -12,7 +12,7 @@ import urllib.request
 
 import pytest
 
-import autonomy
+from trendguard import autonomy
 import trendguard_bot as tg
 import v29
 from panel import server as ps

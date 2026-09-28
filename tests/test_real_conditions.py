@@ -6,11 +6,13 @@ import io
 import time
 from datetime import datetime, timedelta, timezone
 
+import ccxt
 import pytest
 
-import diagnostics as dg
-import trend_strategy as ts
+from trendguard import diagnostics as dg
+from trendguard import trend_strategy as ts
 import trendguard_bot as tg
+from trendguard import bot as tgbot, cli as tgcli
 import v29
 from conftest import open_live_position
 from test_trendguard import DAY, SIM_FROM, feed, make_bot, synthetic_market
@@ -34,7 +36,7 @@ def test_make_binance_spot_only_long_timeout_clock_corrected():
 def test_resync_clock_is_safe():
     class Down:
         def fetch_time(self):
-            raise v29.ccxt.NetworkError("timeout")
+            raise ccxt.NetworkError("timeout")
     v29.set_clock_offset_ms(1234)
     assert v29.resync_clock(Down()) is None
     assert v29.resync_clock(object()) is None
@@ -82,7 +84,7 @@ def test_sync_puts_bot_and_signed_orders_on_binance_time():
     from fake_binance import FakeBinance
     fb = FakeBinance()
     fb.server_offset_ms = 90_000                 # PC en retard de 90 s
-    with pytest.raises(v29.ccxt.InvalidNonce):
+    with pytest.raises(ccxt.InvalidNonce):
         fb._check_timestamp()                     # avant : ordres refusés
     sync = v29.sync_exchange_clock(fb)
     assert sync.offset_ms == pytest.approx(90_000, abs=200)
@@ -111,7 +113,7 @@ def test_persistent_clock_error_rejects_cleanly(live_env):
     env.fb.server_offset_ms = 20_000
 
     def down():
-        raise v29.ccxt.NetworkError("timeout")
+        raise ccxt.NetworkError("timeout")
     env.fb.fetch_time = down                     # recalage impossible
     res = open_live_position(env)
     assert res != v29.EntryResult.OPENED
@@ -254,7 +256,7 @@ def test_verify_without_keys_falls_back_to_public(monkeypatch, logger):
     monkeypatch.delenv("BINANCE_API_KEY", raising=False)
     monkeypatch.delenv("BINANCE_API_SECRET", raising=False)
     called = {}
-    monkeypatch.setattr(tg, "cmd_verify_public",
+    monkeypatch.setattr(tgcli, "cmd_verify_public",
                         lambda g, now=None, out=None: called.setdefault("ok", 0))
     out = io.StringIO()
     assert tg.cmd_verify(bot.g, out=out) == 0
@@ -271,7 +273,7 @@ def _flaky_ohlcv(fb, symbol, failures):
     def fetch(sym, timeframe="1d", since=None, limit=500):
         if sym == symbol and left["n"] > 0:
             left["n"] -= 1
-            raise v29.ccxt.RequestTimeout("binance GET klines timeout")
+            raise ccxt.RequestTimeout("binance GET klines timeout")
         return real(sym, timeframe, since, limit)
     fb.fetch_ohlcv = fetch
     return left
@@ -360,7 +362,7 @@ def test_one_pair_network_error_does_not_block_other_protections(logger):
 
     def ticker(sym):
         if sym == broken.symbol:
-            raise v29.ccxt.RequestTimeout("timeout")
+            raise ccxt.RequestTimeout("timeout")
         return real_ticker(sym)
     fb.fetch_ticker = ticker
     crash = other.ctx.position.sl_price * 0.97               # krach sur l'autre paire
@@ -414,7 +416,7 @@ def test_network_outage_defers_quickly_without_waiting_every_pair(logger):
 
     def down(sym, timeframe="1d", since=None, limit=500):
         calls.append(sym)
-        raise v29.ccxt.RequestTimeout("timeout")
+        raise ccxt.RequestTimeout("timeout")
     fb.fetch_ohlcv = down
     d = close.index[SIM_FROM]
     bot.run_cycle(now=d.to_pydatetime() + DAY + timedelta(minutes=5))
@@ -437,14 +439,14 @@ def test_stalled_cycle_dumps_thread_stacks(logger, tmp_path, monkeypatch):
         calls["n"] += 1
         if calls["n"] == 2:
             time.sleep(1.0)                      # blocage simulé
-            tg._running = False
+            tgbot._running = False
     monkeypatch.setattr(bot, "run_cycle", cycle)
-    monkeypatch.setattr(tg, "_sleep", lambda s, should_stop=None: None)
-    tg._running = True
+    monkeypatch.setattr(tgbot, "_sleep", lambda s, should_stop=None: None)
+    tgbot._running = True
     try:
         bot.run_forever()
     finally:
-        tg._running = True
+        tgbot._running = True
     dump = (tmp_path / "tg.log.blocage.txt").read_text(encoding="utf-8")
     assert "Timeout" in dump and "cycle" in dump and calls["n"] == 2
 
@@ -467,14 +469,14 @@ class _Account:
 
     def fetch_balance(self):
         if self.down is True or (self.down == "real" and not self.testnet):
-            raise v29.ccxt.RequestTimeout("timeout")
+            raise ccxt.RequestTimeout("timeout")
         right_env = self.testnet == (self.env == "testnet")
         if self.key == KEY and right_env:
             if self.secret != SECRET:
-                raise v29.ccxt.AuthenticationError(
+                raise ccxt.AuthenticationError(
                     'binance {"code":-1022,"msg":"Signature for this request is not valid."}')
             return {"total": {}}
-        raise v29.ccxt.AuthenticationError(
+        raise ccxt.AuthenticationError(
             'binance {"code":-2015,"msg":"Invalid API-key, IP, or permissions for '
             'action, request ip: 41.202.1.2"}')
 
@@ -549,7 +551,7 @@ def test_key_commands_write_the_env_file_the_bot_reads(monkeypatch):
         assert inspect.signature(fn).parameters["env_path"].default == tg.ENV_FILE
     monkeypatch.setenv("RUN_MODE", "live")          # live sans confirmation : invalide
     monkeypatch.delenv("LIVE_TRADING_CONFIRMATION", raising=False)
-    monkeypatch.setattr(tg, "cmd_set_keys", lambda: 0)
+    monkeypatch.setattr(tgcli, "cmd_set_keys", lambda: 0)
     assert tg.main(["set-keys"]) == 0
 
 

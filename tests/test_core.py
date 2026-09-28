@@ -3,6 +3,7 @@ persistance, utilitaires."""
 
 import logging
 import math
+import os
 import re
 import time
 from datetime import timedelta
@@ -70,7 +71,9 @@ def test_env_helpers(monkeypatch):
 
 
 def test_env_doc_complete_and_no_orphan():
-    src = open(v29.__file__, encoding="utf-8").read()
+    pkg = os.path.dirname(v29.__file__)
+    src = "".join(open(os.path.join(pkg, f), encoding="utf-8").read()
+                  for f in sorted(os.listdir(pkg)) if f.endswith(".py"))
     pattern = r'(?:os\.environ\.get|_env_[a-z]+|_env_tuple_csv)\(\s*"([A-Z0-9_]+)"'
     used = set(re.findall(pattern, src))
     documented = set(v29.ENV_DOC)

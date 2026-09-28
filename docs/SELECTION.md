@@ -1,6 +1,6 @@
 # TrendGuard — quelles cryptos trader, et quand vendre ?
 
-Étude reproductible : `python research_selection.py --cache data_binance`
+Étude reproductible : `python -m research.selection --cache data_binance`
 (données journalières Binance des 21 paires du bot, frais 0,1 % et glissement
 0,1 % par côté, 1 % du capital risqué par achat).
 

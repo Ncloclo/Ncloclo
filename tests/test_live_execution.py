@@ -3,6 +3,7 @@ Chaque test verrouille la correction d'un défaut du diagnostic V29.5."""
 
 import logging
 import time
+from datetime import timedelta
 
 import ccxt
 import pytest
@@ -113,7 +114,7 @@ def test_time_exit_closes_without_typeerror(live_env):
     env = live_env
     open_live_position(env)
     p = env.ctx.position
-    p.opened_at = (v29._utcnow() - v29.timedelta(hours=49)).isoformat()
+    p.opened_at = (v29._utcnow() - timedelta(hours=49)).isoformat()
     env.fb.set_price(p.buy_price * 0.995)
     assert env.eng.should_time_exit(env.ctx, env.fb.last)
     assert env.eng.execute_time_exit(env.ctx, env.fb.last)

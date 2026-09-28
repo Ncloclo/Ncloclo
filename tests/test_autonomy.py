@@ -9,7 +9,7 @@ import subprocess
 
 import pytest
 
-import autonomy
+from trendguard import autonomy
 import trendguard_bot as tg
 import v29
 

@@ -1,5 +1,24 @@
 {
   "python.testing.pytestEnabled": true,
   "python.testing.pytestArgs": ["tests"],
-  "python.envFile": "${workspaceFolder}/.env"
+  "python.envFile": "${workspaceFolder}/.env",
+  // Explorateur : le code seulement. Les fichiers de fonctionnement du bot
+  // (base, journaux, verrous, choix du panneau) restent sur le disque, masqués ici.
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/.pytest_cache": true,
+    "**/.ruff_cache": true,
+    "*.db": true,
+    "*.db-shm": true,
+    "*.db-wal": true,
+    "*.db.lock": true,
+    "*.lock": true,
+    "*.alive": true,
+    "*.log": true,
+    "*.log.*.txt": true,
+    "*.selection.json": true,
+    "*.superviseur.json": true,
+    "test-results": true,
+    "node_modules": true
+  }
 }

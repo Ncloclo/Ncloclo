@@ -1,0 +1,27 @@
+# Règles communes du code (docs/ARCHITECTURE.md), vérifiées par ruff sur
+# GitHub à chaque envoi et en local : python -m ruff check .
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["data", "data_binance", "node_modules", "test-results"]
+
+[tool.ruff.lint]
+# E/W : erreurs de style courantes ; F : noms inconnus, imports inutilisés ;
+# I : ordre des imports ; B : pièges fréquents de Python.
+select = ["E", "W", "F", "I", "B"]
+ignore = [
+    "E501",   # longueur des lignes : repère de 100 colonnes, sans blocage (messages, URL)
+    "E741",   # variable « l » tolérée dans les calculs courts
+    "B007",   # variable de boucle inutilisée : lisibilité de certaines boucles
+    "B904",   # « raise … from » : le message d'origine est déjà repris
+    "B905",   # zip() sans strict : séries de même longueur par construction
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Points d'entrée qui ré-exportent tous les noms de leur paquet.
+"trendguard_bot.py" = ["F401"]
+"v29/__init__.py" = ["F401"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["trendguard", "v29", "panel", "research",
+                     "conftest", "fake_binance", "test_trendguard"]

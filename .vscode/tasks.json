@@ -11,7 +11,7 @@
     {
       "label": "Télécharger les données de recherche",
       "type": "shell",
-      "command": "python trend_strategy.py download --data data",
+      "command": "python trendguard_bot.py strategy download --data data",
       "problemMatcher": []
     },
     {
@@ -88,33 +88,33 @@
     {
       "label": "Alertes — configurer e-mail et WhatsApp (saisie masquée)",
       "type": "shell",
-      "command": "python alerts.py configurer",
+      "command": "python trendguard_bot.py alerts configurer",
       "presentation": { "focus": true, "panel": "dedicated" },
       "problemMatcher": []
     },
     {
       "label": "Alertes — envoyer un message de test",
       "type": "shell",
-      "command": "python alerts.py tester",
+      "command": "python trendguard_bot.py alerts tester",
       "problemMatcher": []
     },
     {
       "label": "Veille IA — enregistrer une clé d'IA (saisie masquée)",
       "type": "shell",
-      "command": "python market_watch.py set-key ${input:veilleIA}",
+      "command": "python trendguard_bot.py watch set-key ${input:veilleIA}",
       "presentation": { "focus": true, "panel": "dedicated" },
       "problemMatcher": []
     },
     {
       "label": "Veille IA — tester les IA configurées",
       "type": "shell",
-      "command": "python market_watch.py check",
+      "command": "python trendguard_bot.py watch check",
       "problemMatcher": []
     },
     {
       "label": "Veille IA — rapport du jour",
       "type": "shell",
-      "command": "python market_watch.py",
+      "command": "python trendguard_bot.py watch",
       "problemMatcher": []
     },
     {

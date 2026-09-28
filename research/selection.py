@@ -13,7 +13,7 @@ aujourd'hui, frais 0,1 % et glissement 0,1 % par côté) :
 2. Vendre dès qu'un gain donné est atteint (prise de bénéfice) fait-il
    mieux que laisser courir le gain jusqu'au stop suiveur ?
 
-  python research_selection.py --cache data_binance --out docs/SELECTION.md
+  python -m research.selection --cache data_binance --out docs/SELECTION.md
 """
 
 from __future__ import annotations
@@ -26,8 +26,8 @@ from typing import Any, Dict, List, Optional, Set
 import numpy as np
 import pandas as pd
 
-import research_adaptation as ra
-import trend_strategy as ts
+from research import adaptation as ra
+from trendguard import trend_strategy as ts
 
 
 def run(close: pd.DataFrame, pre, records, p: ts.TrendParams, start: str, end: str,
@@ -147,7 +147,7 @@ def report(close: pd.DataFrame, volume: pd.DataFrame) -> str:
     lines = [
         "# TrendGuard — quelles cryptos trader, et quand vendre ?",
         "",
-        "Étude reproductible : `python research_selection.py --cache data_binance` "
+        "Étude reproductible : `python -m research.selection --cache data_binance` "
         f"(données journalières Binance des {len(close.columns)} paires du bot, frais 0,1 % "
         "et glissement 0,1 % par côté, 1 % du capital risqué par achat).",
         "",

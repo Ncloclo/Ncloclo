@@ -63,8 +63,7 @@ def test_holder_identity_readable_while_locked_real_os(tmp_path):
     détenteur reste lisible par un autre process pendant le verrouillage."""
     path = tmp_path / "bot.lock"
     code = textwrap.dedent(f"""
-        import sys; sys.path.insert(0, {os.path.dirname(os.path.dirname(os.path.abspath(v29.__file__)))!r})
-        sys.path.insert(0, {os.path.dirname(os.path.abspath(v29.__file__))!r})
+        import sys; sys.path.insert(0, {ROOT!r})
         import v29
         try:
             v29.ProcessLock({str(path)!r}).acquire()

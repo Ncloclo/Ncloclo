@@ -10,9 +10,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import diagnostics as dg
-import market_watch as mw
-import watch_claude
+from trendguard import diagnostics as dg
+from trendguard import market_watch as mw
+from trendguard import watch_claude
 from test_trendguard import DAY, N_DAYS, SIM_FROM, feed, make_bot, synthetic_market
 
 NOW = datetime(2026, 9, 27, 0, 5, tzinfo=timezone.utc)

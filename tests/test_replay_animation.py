@@ -5,10 +5,11 @@ import json
 import logging
 import os
 
+import ccxt
 import pytest
 
-import replay_animation as ra
-import trend_strategy as ts
+from trendguard import replay_animation as ra
+from trendguard import trend_strategy as ts
 import trendguard_bot as tg
 import v29
 from test_trendguard import N_DAYS, SIM_FROM, synthetic_market
@@ -124,12 +125,12 @@ def test_public_klines_fetch_time_and_network_error():
 
     class Down:
         def fetch_time(self):
-            raise v29.ccxt.NetworkError("data-api.binance.vision injoignable")
+            raise ccxt.NetworkError("data-api.binance.vision injoignable")
 
         def publicGetKlines(self, params):
-            raise v29.ccxt.NetworkError("data-api.binance.vision injoignable")
+            raise ccxt.NetworkError("data-api.binance.vision injoignable")
 
-    with pytest.raises(v29.ccxt.NetworkError):
+    with pytest.raises(ccxt.NetworkError):
         ra.PublicKlines(Down()).fetch_time()
-    with pytest.raises(v29.ccxt.NetworkError):
+    with pytest.raises(ccxt.NetworkError):
         ra.PublicKlines(Down()).fetch_ohlcv("BTC/USDT")

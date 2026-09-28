@@ -1164,7 +1164,7 @@ async function renderWatch() {
     ...((last && last.alerts) || []).map((a) => ["warn", a])];
   if (!items.length) items.push(["ok", "Aucune alerte."]);
   $("#w-list").replaceChildren(...items.map(([k, t]) => el("li", k, t)));
-  $("#w-report").textContent = w.report_text || "Aucun rapport : la veille tourne chaque jour avec le bot (python market_watch.py pour un rapport immédiat).";
+  $("#w-report").textContent = w.report_text || "Aucun rapport : la veille tourne chaque jour avec le bot (python trendguard_bot.py watch pour un rapport immédiat).";
 }
 
 // ---------- Journal ----------

@@ -10,10 +10,27 @@ sécurisé :
 
 | | **TrendGuard** (recommandée) | V29.6 intraday |
 | --- | --- | --- |
-| Fichiers | `trend_strategy.py`, `trendguard_bot.py` | `v29.py` |
+| Code | `trendguard_bot.py` et paquet `trendguard/` | paquet `v29/` (`python -m v29`) |
 | Style | Suivi de tendance, portefeuille multi-actifs, journalier | Signaux multi-modules, une paire, 1 h |
 | Validation | Données réelles 2018→2026, hors échantillon, walk-forward | Aucun avantage démontré |
 | Risque | 1 % du capital par trade | 1 % par trade |
+
+## Organisation du code
+
+Une seule commande à retenir : `python trendguard_bot.py <commande>` (liste
+complète : `python trendguard_bot.py --help`). Le code est rangé par rôle ;
+détail module par module dans [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+| Dossier | Contenu |
+| --- | --- |
+| `trendguard_bot.py` | point d'entrée unique : bot, panneau, outils |
+| `trendguard/` | le bot TrendGuard : stratégie, décision, anticipation, autonomie, alertes, veille, diagnostic |
+| `v29/` | moteur d'exécution Binance commun (ordres, stops, base, verrou) et bot V29.6 |
+| `panel/` | panneau de contrôle : serveur local, Rachelle, interface web |
+| `research/` | études reproductibles (adaptation, sélection des cryptos) |
+| `tests/` | tests Python et tests dans le navigateur |
+| `docs/` | rapports, études, audit, revues hebdomadaires |
+| `templates/` | gabarit de la page d'animation du rejeu |
 
 ## TrendGuard
 
@@ -83,8 +100,8 @@ de baisse). Il réduit la pire baisse de −33,6 % à −24,2 % sur 2023-2026, p
 ### Sélection des cryptos et prise de bénéfice ([`docs/SELECTION.md`](docs/SELECTION.md))
 
 Le bot achète ET vend : chaque position est revendue quand la clôture passe sous
-son stop suiveur, qui monte avec le prix et verrouille le gain. `python
-research_selection.py --cache data_binance` compare, avec le protocole habituel
+son stop suiveur, qui monte avec le prix et verrouille le gain. `python -m
+research.selection --cache data_binance` compare, avec le protocole habituel
 (choix sur 2018-2022, vérification sur 2023 → aujourd'hui), le bot sur ses 21
 cryptos, l'auto-sélection des 10 (ou 14) plus rentables, et trois prises de
 bénéfice fixes (+3 R, +5 R, moitié à +3 R). Aucune ne bat la référence sur les
@@ -94,8 +111,9 @@ l'appui.
 
 ### Laboratoire de stratégies ([`docs/STRATEGIES.md`](docs/STRATEGIES.md))
 
-`python strategy_lab.py --cache data_binance` répond, sur les données Binance, à
-la question « le bot peut-il apprendre et adopter la meilleure stratégie ? » :
+`python trendguard_bot.py lab --cache data_binance` répond, sur les données
+Binance, à la question « le bot peut-il apprendre et adopter la meilleure
+stratégie ? » :
 
 - **Tournoi de 7 stratégies** définies à l'avance : trois horizons de suivi de
   tendance, deux filtres de régime, une rotation de momentum et un retour à la
@@ -201,15 +219,16 @@ panneau s'ouvre comme une application. Il n'y a pas de fichier APK : il
 faudrait publier le panneau sur Internet en HTTPS, ce qui exposerait la
 commande du bot.
 
-### Alertes par e-mail et WhatsApp (`alerts.py`)
+### Alertes par e-mail et WhatsApp (`trendguard/alerts.py`)
 
-`python alerts.py configurer` (saisie masquée des mots de passe) puis `python
-alerts.py tester`. Les alertes partent sur Telegram, par e-mail (SMTP, par
-exemple Gmail avec un mot de passe d'application) et sur WhatsApp (CallMeBot,
-gratuit pour un usage personnel, ou Twilio). Par défaut, seules les alertes
-critiques (arrêt d'urgence, retrait officiel d'une crypto détenue, alerte forte
-de la veille) partent par e-mail et WhatsApp ; `ALERT_LEVEL=all` y ajoute le
-résumé quotidien. Un canal en panne ne ralentit jamais le trading.
+`python trendguard_bot.py alerts configurer` (saisie masquée des mots de passe)
+puis `python trendguard_bot.py alerts tester`. Les alertes partent sur Telegram,
+par e-mail (SMTP, par exemple Gmail avec un mot de passe d'application) et sur
+WhatsApp (CallMeBot, gratuit pour un usage personnel, ou Twilio). Par défaut,
+seules les alertes critiques (arrêt d'urgence, retrait officiel d'une crypto
+détenue, alerte forte de la veille) partent par e-mail et WhatsApp ;
+`ALERT_LEVEL=all` y ajoute le résumé quotidien. Un canal en panne ne ralentit
+jamais le trading.
 
 **Alertes d'anticipation** (`TG_ANTICIPATION=true` par défaut) : dans les 3
 heures avant la clôture de 00:00 UTC, le bot prévient une seule fois par crypto
@@ -262,10 +281,10 @@ intelligence est ailleurs : auto-diagnostic hebdomadaire de son avantage
 statistique, veille officielle Binance et avis des IA, revue hebdomadaire par
 Claude Code, qui propose les changements par PR sans jamais les appliquer seule.
 
-### Animation du rejeu (`replay_animation.py`)
+### Animation du rejeu (`trendguard/replay_animation.py`)
 
-`python replay_animation.py` rejoue le vrai bot, jour après jour, sur les
-clôtures réelles de Binance (depuis le 1er janvier 2025 par défaut), puis
+`python trendguard_bot.py animation` rejoue le vrai bot, jour après jour, sur
+les clôtures réelles de Binance (depuis le 1er janvier 2025 par défaut), puis
 ouvre une page HTML animée : le marché de chaque crypto avec les achats, les
 ventes et les stops du bot, le régime BTC, le capital face au BTC conservé, la
 décision de chaque jour étape par étape et le portefeuille paper actuel du bot.
@@ -286,7 +305,7 @@ Activation unique sur GitHub : Settings ▸ Pages ▸ Source : « GitHub Actions
 La section du portefeuille paper n'y figure pas : la base du bot reste sur ce
 PC.
 
-### Veille de marché par IA (`market_watch.py`)
+### Veille de marché par IA (`trendguard/market_watch.py`)
 
 Chaque jour, pendant que le bot tourne :
 
@@ -311,10 +330,10 @@ le journal (`[VEILLE]`), part sur Telegram en cas d'alerte et apparaît dans
 `diagnose`.
 
 ```bash
-python market_watch.py set-key claude    # clé d'IA en saisie masquée
-python market_watch.py check             # teste chaque IA configurée
-python market_watch.py                   # rapport du jour
-python market_watch.py --no-ai           # sans IA (mots-clés seulement)
+python trendguard_bot.py watch set-key claude   # clé d'IA en saisie masquée
+python trendguard_bot.py watch check            # teste chaque IA configurée
+python trendguard_bot.py watch                  # rapport du jour
+python trendguard_bot.py watch --no-ai          # sans IA (mots-clés seulement)
 ```
 
 Sans clé d'IA, la veille fonctionne quand même : annonces officielles et
@@ -340,24 +359,24 @@ Binance). Réglages de l'agent : <https://claude.ai/code/routines>.
 
 ```bash
 pip install -r requirements.txt
-python trend_strategy.py download --data data        # historique Coin Metrics
-python trend_strategy.py research --data data         # régénère le rapport
-python trendguard_bot.py docs                         # variables d'environnement
-RUN_MODE=paper python trendguard_bot.py run           # paper, prix réels Binance
-python trendguard_bot.py replay --data data --start 2025-06-01   # paper rejoué sur l'historique réel
-python trendguard_bot.py status                       # état du portefeuille
-python trendguard_bot.py diagnose                     # auto-diagnostic complet (lecture seule)
-python trendguard_bot.py verify                       # sans clé : test réel des ordres du jour, sans envoi
-python trendguard_bot.py set-keys                     # clés API vérifiées par Binance, saisie masquée
-python strategy_lab.py --cache data_binance           # tournoi des stratégies + méta-apprentissage
-python research_selection.py --cache data_binance     # auto-sélection et prise de bénéfice
-python replay_animation.py                            # animation du bot sur les prix réels Binance
-python trendguard_bot.py panel                        # panneau de contrôle (navigateur)
-python trendguard_bot.py set-panel-password           # accès depuis un téléphone (saisie masquée)
-python trendguard_bot.py supervise                    # bot relancé seul en cas de plantage
-python trendguard_bot.py autostart on                 # démarrage avec l'ordinateur (off : retiré)
-python trendguard_bot.py stop                         # arrêt propre, sans relance
-python alerts.py configurer                           # alertes e-mail et WhatsApp
+python trendguard_bot.py strategy download --data data          # historique Coin Metrics
+python trendguard_bot.py strategy research --data data          # régénère le rapport
+python trendguard_bot.py docs                                   # variables d'environnement
+RUN_MODE=paper python trendguard_bot.py run                     # paper, prix réels Binance
+python trendguard_bot.py replay --data data --start 2025-06-01  # paper rejoué sur l'historique réel
+python trendguard_bot.py status                                 # état du portefeuille
+python trendguard_bot.py diagnose                               # auto-diagnostic complet (lecture seule)
+python trendguard_bot.py verify                                 # sans clé : test réel des ordres du jour, sans envoi
+python trendguard_bot.py set-keys                               # clés API vérifiées par Binance, saisie masquée
+python trendguard_bot.py lab --cache data_binance               # tournoi des stratégies + méta-apprentissage
+python -m research.selection --cache data_binance               # auto-sélection et prise de bénéfice
+python trendguard_bot.py animation                              # animation du bot sur les prix réels Binance
+python trendguard_bot.py panel                                  # panneau de contrôle (navigateur)
+python trendguard_bot.py set-panel-password                     # accès depuis un téléphone (saisie masquée)
+python trendguard_bot.py supervise                              # bot relancé seul en cas de plantage
+python trendguard_bot.py autostart on                           # démarrage avec l'ordinateur (off : retiré)
+python trendguard_bot.py stop                                   # arrêt propre, sans relance
+python trendguard_bot.py alerts configurer                      # alertes e-mail et WhatsApp
 ```
 
 ### Dans VS Code
@@ -510,7 +529,7 @@ docker compose up -d --build      # construit l'image (tests inclus) et démarre
   le bot utilise environ 230 Mo), situé dans un pays où Binance n'est pas
   restreint. Binance refuse notamment les adresses IP des États-Unis.
 
-## Moteur d'exécution (commun, `v29.py`)
+## Moteur d'exécution (commun, paquet `v29/`)
 
 - Une position live n'est jamais laissée sans protection exchange : la
   protection est revérifiée à chaque cycle, avec un stop logiciel en dernier
@@ -524,8 +543,11 @@ docker compose up -d --build      # construit l'image (tests inclus) et démarre
   sont pris en compte.
 - La reconciliation au boot est *fail-closed*.
 
-Le bot V29.6 intraday reste disponible : `python v29.py bot | backtest |
-walkforward | status | resume` (voir `python v29.py docs`).
+Chaque section de l'ancien `v29.py` est devenue un module du paquet `v29/`
+(configuration, base, adaptateur Binance, exécution, backtest…) ; `import v29`
+donne accès à tous les noms, comme avant. Le bot V29.6 intraday reste
+disponible : `python -m v29 bot | backtest | walkforward | status | resume`
+(voir `python -m v29 docs`).
 
 ## Tests
 

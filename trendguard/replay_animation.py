@@ -8,8 +8,8 @@ mêmes tailles qu'en fonctionnement. Seuls les ordres sont simulés (capital
 fictif). La page montre le marché, le régime BTC, les achats, les ventes,
 les stops, le capital et le portefeuille paper actuel du bot.
 
-  python replay_animation.py                      # 2025-01-01 → dernière clôture
-  python replay_animation.py --start 2024-06-01 --out rejeu.html --no-open
+  python trendguard_bot.py animation                      # 2025-01-01 → dernière clôture
+  python trendguard_bot.py animation --start 2024-06-01 --out rejeu.html --no-open
 
 Aucune clé API, aucun ordre : uniquement des données publiques Binance.
 """
@@ -28,9 +28,11 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
-import diagnostics as dg
-import trend_strategy as ts
-import trendguard_bot as tg
+from . import diagnostics as dg
+from . import trend_strategy as ts
+from .bot import TrendGuardBot
+from .config import GuardConfig, load_guard_config_from_env
+from .replay import HistoricalExchange
 import v29
 
 TEMPLATE = os.path.join(v29.APP_DIR, "templates", "rejeu_trendguard.html")
@@ -75,7 +77,7 @@ def build_replay(close: pd.DataFrame, volume: pd.DataFrame, start: str,
                  capital: float = 10_000.0,
                  params: Optional[ts.TrendParams] = None,
                  end: Optional[str] = None) -> Dict[str, Any]:
-    """Rejoue le bot paper jour après jour (tg.HistoricalExchange : aucune
+    """Rejoue le bot paper jour après jour (HistoricalExchange : aucune
     bougie future visible) et enregistre, pour chaque jour, le capital, le
     régime, les ordres, les signaux et le stop de chaque position."""
     p = params or ts.TrendParams()
@@ -83,8 +85,8 @@ def build_replay(close: pd.DataFrame, volume: pd.DataFrame, start: str,
     days = days[close["btc"].reindex(days).notna().values]
     if len(days) == 0:
         raise ValueError("Aucune clôture BTC sur la période demandée.")
-    hx = tg.HistoricalExchange(close, volume)
-    g = tg.GuardConfig(run_mode="paper", universe=tuple(a.upper() for a in close.columns),
+    hx = HistoricalExchange(close, volume)
+    g = GuardConfig(run_mode="paper", universe=tuple(a.upper() for a in close.columns),
                        params=p, paper_capital=capital, db_file=":memory:",
                        log_file=os.devnull, lock_file=os.devnull,
                        auto_diagnose_days=0, heartbeat_min=0)
@@ -92,7 +94,7 @@ def build_replay(close: pd.DataFrame, volume: pd.DataFrame, start: str,
     lg.handlers[:] = [logging.NullHandler()]
     lg.propagate = False
     store = v29.Store(":memory:", lg)
-    bot = tg.TrendGuardBot(g, lg, hx, store, v29.Notifier("", "", logger=lg))
+    bot = TrendGuardBot(g, lg, hx, store, v29.Notifier("", "", logger=lg))
     bot.sleep = lambda s: None
     hx.set_now(days[0].to_pydatetime() + timedelta(days=1, minutes=5))
     if not bot.boot():
@@ -188,7 +190,7 @@ def read_paper_portfolio(db_file: str, close: pd.DataFrame) -> Optional[Dict[str
     con = sqlite3.connect(f"file:{db_file}?mode=ro", uri=True)
     try:
         row = con.execute("SELECT value FROM kv WHERE key=?",
-                          (tg.TrendGuardBot.STATE_KEY,)).fetchone()
+                          (TrendGuardBot.STATE_KEY,)).fetchone()
     except sqlite3.Error:
         return None
     finally:
@@ -245,7 +247,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--no-open", action="store_true", help="ne pas ouvrir le navigateur")
     args = ap.parse_args(argv)
     try:
-        g = tg.load_guard_config_from_env()          # univers et paramètres du bot
+        g = load_guard_config_from_env()          # univers et paramètres du bot
     except ValueError as e:
         print(f"Configuration invalide : {e}", file=sys.stderr)
         return 2

@@ -11,7 +11,7 @@ sur les données Binance des paires tradées par le bot :
 Protocole : sélection sur 2018-2022 (IS), vérification 2023 → aujourd'hui
 (OOS). Une adaptation n'est adoptée par défaut que si elle gagne sur les DEUX.
 
-  python research_adaptation.py --cache data_binance
+  python -m research.adaptation --cache data_binance
 """
 
 from __future__ import annotations
@@ -26,15 +26,15 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
 
-import diagnostics as dg
-import trend_strategy as ts
-import trendguard_bot as tg
+from trendguard import diagnostics as dg
+from trendguard import trend_strategy as ts
+from trendguard.config import LIVE_UNIVERSE_DEFAULT
 import v29
 
 
 def load_binance(cache: str) -> tuple:
     """Clôtures/volumes Binance, mis en cache au format Coin Metrics."""
-    bases = [a.lower() for a in tg.LIVE_UNIVERSE_DEFAULT]
+    bases = [a.lower() for a in LIVE_UNIVERSE_DEFAULT]
     if not all(os.path.exists(os.path.join(cache, f"{a}.csv")) for a in bases):
         os.makedirs(cache, exist_ok=True)
         # Données publiques (data-api.binance.vision) : accessibles partout,

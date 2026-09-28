@@ -23,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-import market_watch as mw
+from trendguard import market_watch as mw
 
 UA = "Mozilla/5.0 (compatible; TrendGuard-panneau/1.0; +https://github.com/Ncloclo/Ncloclo)"
 MAX_BYTES = 3_000_000

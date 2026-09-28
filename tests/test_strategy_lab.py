@@ -7,9 +7,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import diagnostics as dg
-import strategy_lab as sl
-import trend_strategy as ts
+from trendguard import diagnostics as dg
+from trendguard import strategy_lab as sl
+from trendguard import trend_strategy as ts
 from test_trendguard import SIM_FROM, synthetic_market
 
 
@@ -160,5 +160,5 @@ def test_alternatives_warning_when_reference_collapses(market, monkeypatch):
     board = board.sort_values("sharpe", ascending=False).reset_index(drop=True)
     monkeypatch.setattr(sl, "tournament_recent", lambda lab, days=730: board)
     out = dg.check_alternatives(close, volume, ts.TrendParams())
-    assert out[-1].level == "ATTENTION" and "strategy_lab" in out[-1].reco
+    assert out[-1].level == "ATTENTION" and "trendguard_bot.py lab" in out[-1].reco
     logging.getLogger("x").debug(out)

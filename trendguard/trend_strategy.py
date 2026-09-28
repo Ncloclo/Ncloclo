@@ -26,8 +26,8 @@ par le backtest et le bot live (trendguard_bot.py) : ce qui est validé est
 exactement ce qui est exécuté.
 
 CLI :
-  python trend_strategy.py download --data data/
-  python trend_strategy.py research --data data/ --out docs/TRENDGUARD_REPORT.md
+  python trendguard_bot.py strategy download --data data/
+  python trendguard_bot.py strategy research --data data/ --out docs/TRENDGUARD_REPORT.md
 """
 
 from __future__ import annotations

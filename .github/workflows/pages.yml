@@ -12,12 +12,10 @@ on:
   push:
     branches: [claude/v29-5-hybrid-bot-fz9gvm]
     paths:
-      - replay_animation.py
-      - templates/**
       - trendguard_bot.py
-      - trend_strategy.py
-      - diagnostics.py
-      - v29.py
+      - trendguard/**
+      - v29/**
+      - templates/**
       - requirements-docker.txt
       - .github/workflows/pages.yml
 
@@ -47,7 +45,7 @@ jobs:
       - name: Rejeu du bot sur les prix réels Binance
         run: |
           mkdir -p site
-          python replay_animation.py --no-open --out site/index.html
+          python trendguard_bot.py animation --no-open --out site/index.html
       - uses: actions/upload-pages-artifact@v4
         with:
           path: site

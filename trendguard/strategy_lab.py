@@ -16,7 +16,7 @@ Trois questions, un protocole unique (choix sur 2018-2022, vérification sur
   3. Probabilité de succès par horizon : sur 1, 3, 6, 12, 24, 36 mois,
      combien de fenêtres historiques finissent en gain ?
 
-  python strategy_lab.py --cache data_binance --out docs/STRATEGIES.md
+  python trendguard_bot.py lab --cache data_binance --out docs/STRATEGIES.md
 
 Les fonctions `tournament_recent` et `horizon_success` sont aussi utilisées
 par l'auto-diagnostic (diagnostics.py) : le bot réévalue les alternatives
@@ -36,7 +36,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-import trend_strategy as ts
+from . import trend_strategy as ts
 
 IS_PERIOD = ("2018-01-01", "2022-12-31")
 OOS_START = "2023-01-01"
@@ -556,7 +556,7 @@ def lab_report(close: pd.DataFrame, volume: pd.DataFrame, source: str,
 
 INTRO = """# Laboratoire de stratégies — le bot peut-il « apprendre la meilleure stratégie » ?
 
-Étude reproductible : `python strategy_lab.py --cache data_binance`
+Étude reproductible : `python trendguard_bot.py lab --cache data_binance`
 (`--cm data` ajoute les données Coin Metrics, qui incluent des actifs
 effondrés). Frais 0,1 % et slippage 0,1 % par côté, 1 % du capital risqué
 par trade, mêmes plafonds de portefeuille pour toutes les stratégies.
@@ -594,7 +594,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                     help="dossier Coin Metrics (optionnel, actifs effondrés inclus)")
     ap.add_argument("--out", default="docs/STRATEGIES.md")
     args = ap.parse_args(argv)
-    import research_adaptation as ra
+    from research import adaptation as ra
     parts = [INTRO]
     close, volume = ra.load_binance(args.cache)
     parts.append(lab_report(close, volume, "Binance, paires tradées par le bot"))

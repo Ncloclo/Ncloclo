@@ -394,7 +394,7 @@ def run_supervisor(gcfg: Any, login: bool = False, logger: Optional[logging.Logg
         return 0
     own_notify = notify is None
     if own_notify:
-        import alerts
+        from . import alerts
         notify = alerts.build_notifier(log)
     sup = Supervisor(gcfg, log, notify, **kw)
 

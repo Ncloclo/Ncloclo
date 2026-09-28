@@ -1,6 +1,6 @@
 # TrendGuard — le bot peut-il « apprendre et s'adapter » ?
 
-Étude reproductible : `python research_adaptation.py --cache data_binance`
+Étude reproductible : `python -m research.adaptation --cache data_binance`
 (données journalières Binance des 21 paires du bot, frais 0,1 % et slippage
 0,1 % par côté).
 

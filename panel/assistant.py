@@ -27,7 +27,7 @@ import re
 import unicodedata
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-import market_watch as mw
+from trendguard import market_watch as mw
 
 NAME = "Rachelle"
 WELCOME = (f"Je suis {NAME}, ravie de vous accueillir. Comment puis-je vous aider "
@@ -300,8 +300,8 @@ def a_phone_setup(ctx: Dict[str, Any]) -> str:
         "ou « Installer l'application ».\n"
         "- iPhone (Safari) : bouton Partager puis « Sur l'écran d'accueil ».\n"
         "- L'icône TrendGuard s'ouvre alors en plein écran, avec la barre d'onglets en bas.\n"
-        "- Alertes sur le téléphone : WhatsApp ou e-mail avec python alerts.py configurer "
-        "(sur le PC), puis python alerts.py tester.\n"
+        "- Alertes sur le téléphone : WhatsApp ou e-mail avec python trendguard_bot.py alerts configurer "
+        "(sur le PC), puis python trendguard_bot.py alerts tester.\n"
         "Il n'y a pas de fichier APK : il faudrait publier le panneau sur Internet, ce qui "
         "mettrait le bot en danger.")
 
@@ -479,8 +479,8 @@ def a_security(ctx: Dict[str, Any]) -> str:
 
 
 def a_alerts(ctx: Dict[str, Any]) -> str:
-    return ("**Alertes** : Telegram, e-mail et WhatsApp. Sur le PC : python alerts.py "
-            "configurer (saisie masquée), puis python alerts.py tester, ou le bouton « Tester » "
+    return ("**Alertes** : Telegram, e-mail et WhatsApp. Sur le PC : python trendguard_bot.py alerts "
+            "configurer (saisie masquée), puis python trendguard_bot.py alerts tester, ou le bouton « Tester » "
             "dans Réglages. Par défaut, seules les alertes critiques partent par e-mail et "
             "WhatsApp (ALERT_LEVEL=all pour tout recevoir).")
 

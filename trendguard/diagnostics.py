@@ -38,8 +38,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-import strategy_lab as sl
-import trend_strategy as ts
+from . import strategy_lab as sl
+from . import trend_strategy as ts
 import v29
 
 DAY_MS = 86_400_000
@@ -502,7 +502,7 @@ def check_alternatives(close: pd.DataFrame, volume: pd.DataFrame,
     if ref.sharpe < 0 and strong >= len(board) // 2 + 1:
         out.append(Finding(S, "ATTENTION", f"TrendGuard négative sur {days // 365} ans "
                            f"alors que {strong} alternatives sont nettement positives",
-                           "Relancer l'étude complète (python strategy_lab.py) avant "
+                           "Relancer l'étude complète (python trendguard_bot.py lab) avant "
                            "toute décision : changer de stratégie sur ce seul classement "
                            "a fait moins bien historiquement (docs/STRATEGIES.md)."))
     else:
@@ -528,7 +528,7 @@ def check_watch(state: Dict[str, Any], held: List[str],
     last = state.get("last_watch")
     if not last:
         out.append(Finding(S, "INFO", "Veille par IA pas encore exécutée (quotidienne quand le "
-                           "bot tourne ; clés d'IA : python market_watch.py set-key <ia>)"))
+                           "bot tourne ; clés d'IA : python trendguard_bot.py watch set-key <ia>)"))
         return out
     n, tot = last.get("providers", 0), last.get("providers_total", 0)
     who = f"{n}/{tot} IA" if tot else "mots-clés seulement (aucune IA configurée)"
@@ -537,7 +537,7 @@ def check_watch(state: Dict[str, Any], held: List[str],
                        + ("".join(f"\n      • {t}" for t in last.get("alerts") or []))))
     if tot and n == 0:
         out.append(Finding(S, "ATTENTION", "Aucune IA n'a répondu à la dernière veille",
-                           "Vérifier les clés et les modèles : python market_watch.py check."))
+                           "Vérifier les clés et les modèles : python trendguard_bot.py watch check."))
     return out
 
 

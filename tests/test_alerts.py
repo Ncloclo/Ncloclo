@@ -3,7 +3,7 @@ sans jamais bloquer ni faire échouer le bot."""
 
 import io
 
-import alerts
+from trendguard import alerts
 
 
 class FakeSMTP:

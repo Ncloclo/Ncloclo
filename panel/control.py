@@ -22,7 +22,7 @@ import sys
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-import autonomy
+from trendguard import autonomy
 import v29
 
 BOT_SCRIPT = autonomy.BOT_SCRIPT

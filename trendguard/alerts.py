@@ -11,8 +11,8 @@ L'envoi se fait dans un fil dédié : un serveur de messagerie lent ne
 retarde jamais une action de trading, et une panne d'un canal n'empêche
 pas les autres.
 
-  python alerts.py configurer     # saisie guidée (mots de passe masqués)
-  python alerts.py tester         # message de test sur chaque canal
+  python trendguard_bot.py alerts configurer     # saisie guidée (mots de passe masqués)
+  python trendguard_bot.py alerts tester         # message de test sur chaque canal
 
 Variables (.env) :
   E-mail   : SMTP_HOST, SMTP_PORT (587 = STARTTLS, 465 = SSL), SMTP_USER,
@@ -275,7 +275,7 @@ class AlertHub:
                     return True, ""
                 except Exception as e:
                     return False, v29.scrub_secrets(f"{type(e).__name__}: {e}", ch.secrets)[:200]
-        return False, f"{name} n'est pas configuré (python alerts.py configurer)"
+        return False, f"{name} n'est pas configuré (python trendguard_bot.py alerts configurer)"
 
     def close(self, timeout: float = 5.0) -> None:
         if self._thread is not None:
@@ -304,10 +304,10 @@ def cmd_configure(env_path: Optional[str] = None, read: Callable[[str], str] = i
                   secret: Optional[Callable[[str], str]] = None, out=None) -> int:
     """Saisie guidée ; les mots de passe et clés ne s'affichent pas."""
     import getpass
-    import trendguard_bot as tg
+    from . import config as tgc
     out = out or sys.stdout
     secret = secret or getpass.getpass
-    path = env_path or tg.ENV_FILE
+    path = env_path or tgc.ENV_FILE
     say = lambda m="": print(m, file=out)       # noqa: E731
     values: Dict[str, str] = {}
     try:
@@ -342,9 +342,9 @@ def cmd_configure(env_path: Optional[str] = None, read: Callable[[str], str] = i
         say("\nAnnulé. Rien n'a été modifié.")
         return 1
     for k, v in values.items():
-        tg.set_env_var(path, k, v)
+        tgc.set_env_var(path, k, v)
         os.environ[k] = v
-    say(f"✅ Réglages enregistrés dans {path}. Test : python alerts.py tester")
+    say(f"✅ Réglages enregistrés dans {path}. Test : python trendguard_bot.py alerts tester")
     return 0
 
 
@@ -371,7 +371,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return cmd_configure()
     if cmd == "tester":
         return cmd_test()
-    print("Usage : python alerts.py configurer | tester")
+    print("Usage : python trendguard_bot.py alerts configurer | tester")
     return 2
 
 

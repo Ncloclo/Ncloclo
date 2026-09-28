@@ -24,6 +24,10 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-docker.txt
       - run: pip install -r requirements-docker.txt
+      - name: Style, imports et erreurs courantes (ruff, pyproject.toml)
+        run: |
+          pip install ruff
+          ruff check --output-format=github .
       - run: python -m pytest tests -q -p no:cacheprovider
       - name: Failles connues dans les dépendances (pip-audit)
         run: |

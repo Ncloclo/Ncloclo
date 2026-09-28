@@ -1,4 +1,4 @@
-// Rejeu TrendGuard : animation de la page produite par replay_animation.py.
+// Rejeu TrendGuard : animation de la page produite par trendguard/replay_animation.py.
 // Données : bloc JSON #replay-data (JSON.parse, plus rapide qu'un littéral JS
 // pour ~300 Ko). Tout texte issu des données passe par textContent.
 (() => {
@@ -11,7 +11,7 @@ try {
 } catch {
   const p = document.createElement("p");
   p.className = "alert";
-  p.textContent = "Données du rejeu absentes : générez la page avec « python replay_animation.py ».";
+  p.textContent = "Données du rejeu absentes : générez la page avec « python trendguard_bot.py animation ».";
   $("app").replaceChildren(p);
   return;
 }

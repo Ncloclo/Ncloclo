@@ -23,10 +23,10 @@ Sécurité : les textes collectés (presse, web) sont des données, jamais des
 instructions. Une IA ne peut ni passer d'ordre, ni poser un veto : un
 message manipulateur publié sur un forum n'a aucun effet sur le trading.
 
-  python market_watch.py                  # rapport du jour (lecture seule)
-  python market_watch.py --no-ai          # sans IA (mots-clés seulement)
-  python market_watch.py check            # teste chaque IA configurée
-  python market_watch.py set-key openai   # clé API en saisie masquée
+  python trendguard_bot.py watch                  # rapport du jour (lecture seule)
+  python trendguard_bot.py watch --no-ai          # sans IA (mots-clés seulement)
+  python trendguard_bot.py watch check            # teste chaque IA configurée
+  python trendguard_bot.py watch set-key openai   # clé API en saisie masquée
 """
 
 from __future__ import annotations
@@ -546,7 +546,7 @@ def call_provider(p: Provider, key: str, model: str, system: str, prompt: str,
     """(texte de la réponse, URL consultées par l'IA si elle cherche sur le web)."""
     if p.name == "claude":
         if claude is None:
-            from watch_claude import ask_claude as claude
+            from .watch_claude import ask_claude as claude
         return claude(system, prompt, SCHEMA, key, model), set()
     resp = post(p.url, {"model": model, "messages": [{"role": "system", "content": system},
                                                      {"role": "user", "content": prompt}]},
@@ -792,7 +792,7 @@ def cmd_check(env: Optional[Dict[str, str]] = None, call: Callable[..., Tuple[st
     out = out or sys.stdout
     providers = configured(env)
     if not providers:
-        print("Aucune clé d'IA dans .env (python market_watch.py set-key <ia>).", file=out)
+        print("Aucune clé d'IA dans .env (python trendguard_bot.py watch set-key <ia>).", file=out)
         print("IA possibles : " + ", ".join(p.name for p in PROVIDERS), file=out)
         return 1
     system = "Réponds uniquement par un objet JSON."
@@ -810,7 +810,7 @@ def cmd_check(env: Optional[Dict[str, str]] = None, call: Callable[..., Tuple[st
 def cmd_set_key(name: str, env_path: Optional[str] = None,
                 ask: Optional[Callable[[str], str]] = None, out=None) -> int:
     import getpass
-    import trendguard_bot as tg
+    from . import config as tgc
     out = out or sys.stdout
     p = PROVIDER_BY_NAME.get(name.lower())
     if p is None:
@@ -825,8 +825,8 @@ def cmd_set_key(name: str, env_path: Optional[str] = None,
     if len(key) < 16 or re.search(r"\s", key):
         print("❌ Clé refusée : format inattendu. Rien n'a été modifié.", file=out)
         return 1
-    tg.set_env_var(env_path or tg.ENV_FILE, p.key_env, key)
-    print(f"✅ Clé {p.label} enregistrée ({p.key_env}). Test : python market_watch.py check", file=out)
+    tgc.set_env_var(env_path or tgc.ENV_FILE, p.key_env, key)
+    print(f"✅ Clé {p.label} enregistrée ({p.key_env}). Test : python trendguard_bot.py watch check", file=out)
     return 0
 
 
@@ -842,8 +842,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         return cmd_check()
     if args.cmd == "set-key":
         return cmd_set_key(args.provider or "")
-    import trendguard_bot as tg
-    g = tg.load_guard_config_from_env()
+    from . import config as tgc
+    g = tgc.load_guard_config_from_env()
     held: List[str] = []
     paper_db = g.db_file
     if os.path.exists(paper_db):

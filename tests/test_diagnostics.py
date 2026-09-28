@@ -6,10 +6,11 @@ import logging
 from contextlib import redirect_stdout
 from datetime import timedelta
 
+import ccxt
 import pytest
 
-import diagnostics as dg
-import trend_strategy as ts
+from trendguard import diagnostics as dg
+from trendguard import trend_strategy as ts
 import trendguard_bot as tg
 import v29
 from test_trendguard import (DAY, N_DAYS, SIM_FROM, feed, make_bot,
@@ -109,7 +110,7 @@ def test_fetch_retries_transient_errors():
         def fetch_ohlcv(self, sym, tf, since=None, limit=1000):
             calls["n"] += 1
             if calls["n"] < 3:
-                raise v29.ccxt.RequestTimeout("timeout")
+                raise ccxt.RequestTimeout("timeout")
             return [[since, 1, 1, 1, 1, 1]]
     out = dg._fetch_retry(Flaky(), "X/USDT", 0, sleep=lambda s: None)
     assert out and calls["n"] == 3

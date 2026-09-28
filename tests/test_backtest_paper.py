@@ -2,6 +2,7 @@
 paper (barrières, time-exit, boucle complète)."""
 
 import time
+from datetime import timedelta
 
 import numpy as np
 import pandas as pd
@@ -39,7 +40,8 @@ def forced_signals(monkeypatch):
             return v29.Signal("BUY", "TREND_UP", "trend", "A", 60, None)
         return v29.Signal("NONE", "UNCLEAR", "", "", 0, "no_module")
 
-    monkeypatch.setattr(v29, "generate_signal_from_rows", fake)
+    for mod in (v29.signals, v29.backtest):
+        monkeypatch.setattr(mod, "generate_signal_from_rows", fake)
     return orig
 
 
@@ -157,7 +159,7 @@ def test_paper_time_exit(paper_env):
     env.eng.enter(env.ctx, fresh_closed(env.cfg), buy_signal(), 0.10,
                   int(time.time() * 1000), 1000.0)
     p = env.ctx.position
-    p.opened_at = (v29._utcnow() - v29.timedelta(hours=49)).isoformat()
+    p.opened_at = (v29._utcnow() - timedelta(hours=49)).isoformat()
     assert env.eng.execute_time_exit(env.ctx, 0.0995)
     assert not env.ctx.position.in_position
 
@@ -200,7 +202,7 @@ def test_paper_bot_loop_opens_and_closes(monkeypatch, logger):
     runner = v29.BotRunner(env.cfg, logger, env.ex, env.store,
                            v29.Notifier("", "", logger=logger), env.risk,
                            env.eng, v29.AdaptiveEngine(env.cfg, logger))
-    monkeypatch.setattr(v29, "generate_signal",
+    monkeypatch.setattr(v29.runner, "generate_signal",
                         lambda *a, **k: v29.Signal("BUY", "TREND_UP", "trend",
                                                    "A", 60, None))
     assert runner.boot()
@@ -225,7 +227,7 @@ def test_live_bot_boot_and_cycle(monkeypatch, logger):
     runner = v29.BotRunner(env.cfg, logger, env.ex, env.store,
                            v29.Notifier("", "", logger=logger), env.risk,
                            env.eng, v29.AdaptiveEngine(env.cfg, logger))
-    monkeypatch.setattr(v29, "generate_signal",
+    monkeypatch.setattr(v29.runner, "generate_signal",
                         lambda *a, **k: v29.Signal("BUY", "TREND_UP", "trend",
                                                    "A", 60, None))
     assert runner.boot()                         # self-test via order/test

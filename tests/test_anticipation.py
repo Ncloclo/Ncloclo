@@ -9,8 +9,8 @@ from datetime import timedelta
 import pandas as pd
 import pytest
 
-import anticipation as an
-import trend_strategy as ts
+from trendguard import anticipation as an
+from trendguard import trend_strategy as ts
 from test_trendguard import DAY, SIM_FROM, make_bot, run_days, synthetic_market
 
 P = ts.TrendParams()

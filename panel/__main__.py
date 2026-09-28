@@ -2,6 +2,6 @@
 
 import sys
 
-import trendguard_bot as tg
+from trendguard.cli import main
 
-sys.exit(tg.main(["panel"] + sys.argv[1:]))
+sys.exit(main(["panel"] + sys.argv[1:]))

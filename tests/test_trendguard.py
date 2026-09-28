@@ -3,13 +3,15 @@ bot ↔ backtest, exécution live sur simulateur multi-paires."""
 
 import logging
 import re
+import time
 from datetime import datetime, timedelta, timezone
 
 import numpy as np
 import pandas as pd
+import ccxt
 import pytest
 
-import trend_strategy as ts
+from trendguard import trend_strategy as ts
 import trendguard_bot as tg
 import v29
 from fake_binance import FakeBinanceMulti
@@ -323,9 +325,11 @@ def test_tg_env_doc_complete():
     # Variables lues par le bot, ses alertes (alerts.py) et son panneau.
     import os
     root = os.path.dirname(os.path.abspath(tg.__file__))
+    files = [os.path.join("trendguard", f + ".py") for f in (
+        "config", "bot", "selection", "explain", "replay", "cli", "alerts")]
     src = "".join(open(os.path.join(root, f), encoding="utf-8").read()
-                  for f in ("trendguard_bot.py", "alerts.py", os.path.join("panel", "server.py"),
-                            os.path.join("panel", "assistant.py")))
+                  for f in files + [os.path.join("panel", "server.py"),
+                                    os.path.join("panel", "assistant.py")])
     used = set(re.findall(
         r'(?:os\.environ\.get\(|_env_[a-z]+\(|_env\(env,|env\.get\()\s*"([A-Z0-9_]+)"', src))
     assert used - set(tg.TG_ENV_DOC) == set()
@@ -355,7 +359,7 @@ def test_boot_without_network_fails_cleanly(logger):
     bot, fb = make_bot("paper", close, logger)
 
     def down():
-        raise v29.ccxt.NetworkError("binance GET exchangeInfo")
+        raise ccxt.NetworkError("binance GET exchangeInfo")
     fb.load_markets = down
     assert bot.boot() is False
 
@@ -367,14 +371,14 @@ def test_health_check(tmp_path, logger, monkeypatch):
                        lock_file="/dev/null")
     assert tg.health_check(g, 600) == 1            # aucun cycle encore
     store = v29.Store(db, logger)
-    state = {"last_cycle_ts": v29.time.time(), "halted": False,
+    state = {"last_cycle_ts": time.time(), "halted": False,
              "last_decision_day": "2026-09-25"}
     store.set_kv(tg.TrendGuardBot.STATE_KEY, state)
     assert tg.health_check(g, 600) == 0
     state["last_cycle_ts"] -= 3600                 # bot bloqué depuis 1 h
     store.set_kv(tg.TrendGuardBot.STATE_KEY, state)
     assert tg.health_check(g, 600) == 1
-    state.update(last_cycle_ts=v29.time.time(), halted=True, halt_reason="DD")
+    state.update(last_cycle_ts=time.time(), halted=True, halt_reason="DD")
     store.set_kv(tg.TrendGuardBot.STATE_KEY, state)
     assert tg.health_check(g, 600) == 1
     store.close()
@@ -385,7 +389,7 @@ def test_cycle_records_heartbeat(logger):
     bot, fb = make_bot("paper", close, logger)
     assert bot.boot()
     run_days(bot, fb, close, volume, SIM_FROM, SIM_FROM + 1)
-    assert abs(bot.state["last_cycle_ts"] - v29.time.time()) < 60
+    assert abs(bot.state["last_cycle_ts"] - time.time()) < 60
 
 
 def test_heartbeat_logged_once_per_interval(caplog):
@@ -517,7 +521,7 @@ def test_verify_reports_rejected_key(logger):
     bot, fb = make_bot("paper", close, logger)
 
     def refused(params=None):
-        raise v29.ccxt.AuthenticationError(
+        raise ccxt.AuthenticationError(
             'binance {"code":-2015,"msg":"Invalid API-key, IP, or permissions for action."}')
     fb.sapi_get_account_apirestrictions = refused
     rc, text = _verify(bot, fb, close, volume)
@@ -570,7 +574,7 @@ def test_verify_explains_missing_trading_permission(logger):
     fb.restrictions["enableSpotAndMarginTrading"] = False
 
     def refused(params):
-        raise v29.ccxt.AuthenticationError(
+        raise ccxt.AuthenticationError(
             'binance {"code":-2015,"msg":"Invalid API-key, IP, or permissions for action."}')
     for f in fb.fakes.values():
         f.privatePostOrderTest = refused
@@ -776,7 +780,8 @@ def test_repository_markdown_is_formatted():
     import os
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     docs = ["README.md"] + [os.path.join("docs", n) for n in (
-        "TRENDGUARD_REPORT.md", "ADAPTATION.md", "STRATEGIES.md", "SELECTION.md", "AUDIT.md")]
+        "TRENDGUARD_REPORT.md", "ADAPTATION.md", "STRATEGIES.md", "SELECTION.md", "AUDIT.md",
+        "ARCHITECTURE.md")]
     names = [n for n in docs if os.path.exists(os.path.join(root, n))]
     if not names:
         pytest.skip("documentation absente (image Docker)")

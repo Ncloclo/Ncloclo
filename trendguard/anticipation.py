@@ -29,7 +29,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 import pandas as pd
 
-import trend_strategy as ts
+from . import trend_strategy as ts
 
 SQRT_PI_2 = math.sqrt(math.pi / 2)     # |Δ| moyen → écart-type (loi normale)
 

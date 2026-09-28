@@ -10,8 +10,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import autonomy
-import trend_strategy as ts
+from trendguard import autonomy
+from trendguard import trend_strategy as ts
 import trendguard_bot as tg
 from test_trendguard import SIM_FROM, make_bot, run_days, synthetic_market
 
@@ -125,7 +125,7 @@ def test_selection_file_roundtrip_and_validation(tmp_path):
 
 
 def test_research_study_runs_on_a_small_market():
-    import research_selection as rs
+    from research import selection as rs
     close, volume = synthetic_market()
     pre = ts.precompute(close, volume, P)
     rec = ts.asset_track_records(pre[0], pre[1], P)

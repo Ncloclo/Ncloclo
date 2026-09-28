@@ -31,7 +31,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
-import market_watch as mw
+from trendguard import market_watch as mw
 
 from .assistant import AIHelper, Assistant
 from .control import BotControl
@@ -40,7 +40,7 @@ from .demo import DemoControl, DemoData, DemoMarket, DemoNews
 from .market import INTERVALS, Market
 from .news import NewsHub
 
-import anticipation
+from trendguard import anticipation
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 LOOPBACK = {"127.0.0.1", "localhost", "::1"}
@@ -348,7 +348,7 @@ class PanelApp:
         chans = [c for c in (self.hub.status() if self.hub is not None else []) if c.get("enabled")]
         add("Alertes", bool(chans) if not self.demo else True,
             ", ".join(c["label"] for c in chans) if chans else
-            ("démonstration" if self.demo else "aucune : python alerts.py configurer"))
+            ("démonstration" if self.demo else "aucune : python trendguard_bot.py alerts configurer"))
         add("Garde-fou de Rachelle", True, "secrets masqués, demandes sensibles refusées")
         ok = sum(1 for c in checks if c["ok"] is True)
         warn = sum(1 for c in checks if c["ok"] is False)
@@ -633,7 +633,7 @@ def build_app(gcfg: Any, demo: bool = False, password: str = "", loopback: bool 
         market = DemoMarket()
         return PanelApp(gcfg, DemoData(market), market, DemoControl(), None, True,
                         password, loopback, lan_urls, news=DemoNews())
-    import alerts
+    from trendguard import alerts
     market = Market(quote=gcfg.quote)
     return PanelApp(gcfg, BotData(gcfg, market), market, BotControl(gcfg),
                     alerts.build_notifier(), False, password, loopback, lan_urls,

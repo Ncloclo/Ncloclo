@@ -11,7 +11,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-import market_watch as mw
+from trendguard import market_watch as mw
 import v29
 
 from .market import Market
@@ -152,12 +152,12 @@ class BotData:
         return {"positions": rows, "stale": stale}
 
     def selection_request(self) -> Dict[str, Any]:
-        import trendguard_bot as tg
-        return tg.read_selection(self.g)
+        from trendguard.selection import read_selection
+        return read_selection(self.g)
 
     def save_selection(self, mode: str, manual: List[str]) -> Dict[str, Any]:
-        import trendguard_bot as tg
-        return tg.write_selection(self.g, mode, manual)
+        from trendguard.selection import write_selection
+        return write_selection(self.g, mode, manual)
 
     def buys(self, state: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         state = self.state() if state is None else state
