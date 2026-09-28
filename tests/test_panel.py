@@ -139,6 +139,8 @@ def test_foreign_pages_and_hosts_are_refused(demo_server):
     # « DNS rebinding » : un nom de domaine qui pointe vers ce PC.
     code, _h, _b = _req(base + "/api/status", headers={"Host": "evil.example"})
     assert code == 421
+    # Requête démesurée : refusée sans être lue.
+    assert _req(base + "/api/assistant", method="POST", body={"message": "x" * 40_000})[0] == 413
     # Aucun fichier hors de panel/static.
     for path in ("/../trendguard_bot.py", "/..%2f..%2fv29.py", "/static/../../.env"):
         assert _req(base + path)[0] == 404

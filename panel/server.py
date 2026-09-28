@@ -378,14 +378,24 @@ def make_handler(app: PanelApp):
         do_HEAD = do_GET
 
         def do_POST(self) -> None:
+            # Corps lu AVANT toute réponse, même un refus : un corps non lu fait
+            # couper la connexion par Windows (le navigateur ne verrait pas
+            # la réponse). Taille bornée ; au-delà, connexion fermée.
+            try:
+                length = max(0, int(self.headers.get("Content-Length") or 0))
+            except ValueError:
+                length = 0
+            if length > 32_000:
+                self.close_connection = True
+                return self._json(413, {"error": "requête trop volumineuse"})
+            raw = self.rfile.read(length) if length else b""
             if not self._host_ok():
                 return self._json(421, {"error": "hôte refusé"})
             if not self._same_origin():
                 return self._json(403, {"error": "requête refusée (origine)"})
             url = urlparse(self.path)
             try:
-                length = min(int(self.headers.get("Content-Length") or 0), 32_000)
-                body = json.loads(self.rfile.read(length) or b"{}") if length else {}
+                body = json.loads(raw or b"{}")
                 if not isinstance(body, dict):
                     body = {}
             except (ValueError, json.JSONDecodeError):
