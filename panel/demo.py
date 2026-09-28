@@ -81,9 +81,18 @@ class DemoMarket:
         return {"points": pts, "bull": pts[-1]["close"] > pts[-1]["sma"], "sma": sma}, False
 
 
+# Classement d'exemple (bénéfice de la stratégie sur 2 ans, en R).
+DEMO_RANK = (("aave", 14.2, 9), ("link", 11.8, 8), ("ada", 10.4, 10), ("icp", 9.1, 7),
+             ("eth", 8.3, 9), ("xlm", 7.6, 8), ("ltc", 6.9, 9), ("bnb", 6.1, 7), ("dot", 5.2, 8),
+             ("btc", 4.8, 6), ("trx", 3.9, 7), ("doge", 2.7, 9), ("uni", 1.8, 8), ("bch", 0.9, 7),
+             ("xrp", -0.4, 8), ("zec", -1.1, 6), ("dash", -1.9, 7), ("etc", -2.3, 6),
+             ("xtz", -2.8, 5), ("neo", -3.4, 6), ("algo", -4.0, 7))
+
+
 class DemoData:
     def __init__(self, market: DemoMarket):
         self.market = market
+        self._sel = {"mode": "manual", "manual": list(BASE_PRICES)}
         now = datetime.now(timezone.utc)
         self._entry = {a: (now - timedelta(days=2 + i)).isoformat() for i, a in enumerate(HELD)}
 
@@ -105,7 +114,21 @@ class DemoData:
                                            "achats autorisés. Aujourd'hui : aucun changement, 6 position(s) "
                                            "conservée(s)."} for k in range(6, 0, -1)],
                 "pending_entries": {"bch": {"reason": "écart achat/vente anormal (0,74 %, limite 0,50 %)",
-                                            "tries": 3, "until": time.time() + 4 * 3600}}}
+                                            "tries": 3, "until": time.time() + 4 * 3600}},
+                "selection": {"mode": self._sel["mode"], "day": "2026-09-27",
+                              "auto": [a for a, _r, _n in DEMO_RANK[:10]],
+                              "ranking": [{"asset": a, "rank": k + 1, "total_r": r, "trades": n,
+                                           "win_rate": 0.45, "eligible": True}
+                                          for k, (a, r, n) in enumerate(DEMO_RANK)]}}
+
+    def selection_request(self) -> Dict[str, Any]:
+        return dict(self._sel, saved=True)
+
+    def save_selection(self, mode: str, manual: List[str]) -> Dict[str, Any]:
+        if mode not in ("auto", "manual") or any(a not in BASE_PRICES for a in manual):
+            raise ValueError("sélection invalide")
+        self._sel = {"mode": mode, "manual": [a for a in BASE_PRICES if a in manual]}
+        return self.selection_request()
 
     def _reasoning(self) -> Dict[str, Any]:
         assets = {}

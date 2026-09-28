@@ -407,6 +407,48 @@ def a_autonomy(ctx: Dict[str, Any]) -> str:
             "respecté : aucune relance, même au redémarrage, jusqu'au prochain AUTO.")
 
 
+def _px(v: Any) -> str:
+    try:
+        a = abs(float(v))
+    except (TypeError, ValueError):
+        return "–"
+    return _num(v, 0 if a >= 1000 else 2 if a >= 1 else 4 if a >= 0.1 else 5)
+
+
+def a_sell(ctx: Dict[str, Any]) -> str:
+    lines = ["**Le bot vend aussi, automatiquement** : chaque achat est revendu quand la "
+             "clôture du jour passe sous son stop suiveur. Ce stop monte avec le prix et ne "
+             "redescend jamais : le gain est verrouillé au fur et à mesure, et la vente a lieu "
+             "quand la tendance s'essouffle. Un stop catastrophe posé chez Binance protège "
+             "d'un krach entre deux clôtures."]
+    for p in ((ctx.get("positions") or {}).get("positions") or [])[:8]:
+        if not p.get("entry") or not p.get("stop"):
+            continue
+        locked = p["stop"] / p["entry"] - 1
+        lines.append(f"- {p['asset'].upper()} : vente si clôture sous {_px(p['stop'])} ; "
+                     f"{'gain' if locked >= 0 else 'perte'} verrouillé(e) à {_pc(locked * 100)}.")
+    lines.append("Vendre plus tôt, à un gain fixe, a fait moins bien dans le passé : +0,45 à "
+                 "+0,54 R par trade contre +0,70 R en laissant courir le gain "
+                 "(docs/SELECTION.md). Les ventes apparaissent en ▼ rouge sur les graphiques.")
+    return "\n".join(lines)
+
+
+def a_selection(ctx: Dict[str, Any]) -> str:
+    sel = (ctx.get("status") or {}).get("selection") or {}
+    n, total = len(sel.get("active") or []), sel.get("universe") or 21
+    mode = "auto-sélection" if sel.get("mode") == "auto" else "sélection manuelle"
+    return ("**Choisir les cryptos du bot** (page Cryptos) :\n"
+            "- Sélection manuelle : cochez ou décochez chaque crypto ; le bot n'achète que "
+            "les cryptos cochées.\n"
+            "- Auto-sélection : le bot choisit chaque jour les 10 cryptos qui ont le plus "
+            "rapporté avec sa stratégie (achats et ventes) sur 2 ans.\n"
+            "- Une crypto détenue qui sort de la sélection reste gérée jusqu'à sa vente.\n"
+            f"Actuellement : {mode}, {n} crypto(s) achetable(s) sur {total}.\n"
+            "Bon à savoir : de 2023 à 2026, les 10 plus rentables ont rapporté +15,5 % par an, "
+            "contre +37,2 % avec les 21 cryptos : la prochaine grande tendance vient souvent "
+            "d'une crypto délaissée.")
+
+
 def a_watch(ctx: Dict[str, Any]) -> str:
     return ("**Veille** : chaque jour, le bot lit les annonces officielles de Binance (une "
             "crypto que Binance retire n'est plus achetée) et, si des IA sont configurées, "
@@ -483,6 +525,13 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
      [{"label": "Veille", "href": "#watch"}]),
     ("advice", ("dois je", "acheter", "vendre", "investir", "conseil", "prediction", "prevision",
                 "va monter", "va baisser", "meilleure crypto", "quoi acheter"), a_advice, []),
+    ("sell", ("vend", "vendre", "vente", "ventes", "vendu", "benefice", "benefices", "profit",
+              "profits", "prise de benefice", "prendre des benefices", "gain", "gains",
+              "encaisser", "take profit", "quand vend"), a_sell,
+     [{"label": "Positions et ventes", "href": "#positions"}]),
+    ("selection", ("selection", "selectionner", "cocher", "decocher", "auto selection",
+                   "choisir les cryptos", "10 cryptos", "plus rentables", "rentable", "rentables",
+                   "cryptos du bot"), a_selection, [{"label": "Cryptos ▸ sélection", "href": "#assets"}]),
     ("stop", ("stop", "stop loss", "stop suiveur", "stop catastrophe", "trailing"), _gloss("stop"), []),
     ("breakout", ("cassure", "breakout", "plus haut"), _gloss("breakout"), []),
     ("regime", ("regime", "moyenne 150", "moyenne mobile", "haussier", "baissier"),

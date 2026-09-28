@@ -138,6 +138,8 @@ class PanelApp:
             "regime_bull": st.get("last_regime_bull"), "risk_mult": st.get("risk_mult", 1.0),
             "last_decision_day": st.get("last_decision_day"),
             "last_buy": self._last_buy(st),
+            "selection": {k: v for k, v in self.selection_view(st).items()
+                          if k in ("mode", "active", "universe")},
             "next_decision_s": int((nxt - now).total_seconds()),
             "last_cycle_age_s": int(time.time() - float(last_cycle)) if last_cycle else None,
             "positions": len(self.data.holdings(st)), "max_positions": p.max_positions,
@@ -152,6 +154,26 @@ class PanelApp:
             "lan_urls": self.lan_urls, "password": bool(self.password),
             "server_time": now.isoformat(),
         }
+
+    SELECTION_NOTE = ("Historique (docs/SELECTION.md) : de 2023 à 2026, +15,5 % par an avec les "
+                      "10 plus rentables, contre +37,2 % par an avec les 21 cryptos.")
+
+    def selection_view(self, st: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Cryptos que le bot peut acheter : auto-sélection (classement du
+        bot) ou sélection manuelle (cases cochées)."""
+        st = self.data.state() if st is None else st
+        req = self.data.selection_request()
+        sel = st.get("selection") or {}
+        universe = [b.lower() for b in self.g.universe]
+        auto = list(sel.get("auto") or [])
+        if req["mode"] == "auto":
+            active = auto or universe
+        else:
+            active = req["manual"]
+        return {"mode": req["mode"], "manual": req["manual"], "active": active, "auto": auto,
+                "ranking": sel.get("ranking") or [], "day": sel.get("day"),
+                "n_auto": 10, "universe": len(universe), "note": self.SELECTION_NOTE,
+                "ranked": bool(sel.get("ranking"))}
 
     def _last_buy(self, st: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Dernier achat du bot : le panneau l'annonce dès qu'il change."""
@@ -168,6 +190,9 @@ class PanelApp:
         held = {h["asset"] for h in self.data.holdings(st)}
         vetoes = st.get("vetoes") or {}
         why = (st.get("reasoning") or {}).get("assets") or {}
+        sel = self.selection_view(st)
+        active = set(sel["active"])
+        ranks = {r["asset"]: r for r in sel["ranking"]}
         try:
             tick, stale = self.market.tickers(universe)
         except Exception:
@@ -183,8 +208,9 @@ class PanelApp:
                          "vetoed": a in vetoes, "veto_reason": (vetoes.get(a) or {}).get("reason"),
                          "status": (why.get(a) or {}).get("status"),
                          "why": (why.get(a) or {}).get("text"),
-                         "breakout_gap_pct": (why.get(a) or {}).get("breakout_gap_pct")})
-        return {"assets": rows, "stale": stale}
+                         "breakout_gap_pct": (why.get(a) or {}).get("breakout_gap_pct"),
+                         "selected": a in active, "rank": ranks.get(a)})
+        return {"assets": rows, "stale": stale, "selection": sel}
 
     def news_view(self) -> Dict[str, Any]:
         """Actualités et marchés, avec les cryptos du bot (hausses et baisses
@@ -210,7 +236,7 @@ class PanelApp:
         """Données PUBLIQUES transmises à l'assistant : aucune clé, aucun
         mot de passe, rien du fichier .env."""
         return {"status": self.status(), "news": self.news_view(),
-                "reasoning": self.data.reasoning()}
+                "reasoning": self.data.reasoning(), "positions": self.data.positions()}
 
     def chat(self, body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
         now = time.time()
@@ -280,9 +306,14 @@ class PanelApp:
                 if path == "/api/equity":
                     pts = self.data.equity(days=int(q("days", "90")))
                     since = pts[0]["t"] if pts else 0
+                    st = self.data.state()
                     buys = [{"t": b["t"], "asset": b["asset"], "price": b["price"]}
-                            for b in self.data.buys() if b["t"] >= since]
-                    return 200, {"points": pts, "buys": buys}
+                            for b in self.data.buys(st) if b["t"] >= since]
+                    sells = [{"t": t, "asset": tr["asset"], "price": tr.get("exit"), "r": tr.get("r")}
+                             for tr in self.data.trades(st)
+                             if (t := _ts(tr.get("date"))) is not None and t >= since]
+                    sells.sort(key=lambda x: x["t"])
+                    return 200, {"points": pts, "buys": buys, "sells": sells}
                 if path == "/api/positions":
                     return 200, self.data.positions()
                 if path == "/api/trades":
@@ -294,7 +325,13 @@ class PanelApp:
                                              int(q("limit", "300")))
                 if path == "/api/regime":
                     reg, stale = self.market.regime(self.g.params.regime_sma)
-                    return 200, dict(reg, stale=stale)
+                    marks = []
+                    if reg.get("points"):
+                        # Achats et ventes de BTC par le bot, sur la bougie du jour.
+                        c = self.candles("btc", "1d", len(reg["points"]))
+                        t0 = reg["points"][0]["t"]
+                        marks = [m for m in c["markers"] if m["t"] >= t0]
+                    return 200, dict(reg, stale=stale, markers=marks)
                 if path == "/api/watch":
                     return 200, self.data.watch()
                 if path == "/api/reasoning":
@@ -314,6 +351,12 @@ class PanelApp:
                     return 200, {"ok": ok, "message": msg}
                 if path == "/api/assistant":
                     return self.chat(body)
+                if path == "/api/selection":
+                    manual = body.get("manual")
+                    if not isinstance(manual, list):
+                        manual = self.data.selection_request()["manual"]
+                    self.data.save_selection(str(body.get("mode", "")), [str(a) for a in manual][:100])
+                    return 200, dict(self.selection_view(), ok=True)
                 if path == "/api/autostart":
                     ok, msg = self.control.set_autostart(body.get("enabled") is True)
                     return 200, {"ok": ok, "message": msg}

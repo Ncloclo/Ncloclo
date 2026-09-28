@@ -168,9 +168,22 @@
 
       <!-- Cryptos -->
       <section class="page" id="page-assets" data-title="Cryptos suivies">
+        <div class="card sel-card" id="sel-card">
+          <div class="card-head"><h2>Cryptos que le bot peut acheter</h2><strong class="sel-count" id="sel-count">—</strong></div>
+          <div class="seg sel-mode" role="group" aria-label="Mode de sélection des cryptos">
+            <button type="button" data-sel="auto" aria-pressed="false">🤖 Auto-sélection (10 plus rentables)</button>
+            <button type="button" data-sel="manual" aria-pressed="false">✋ Sélection manuelle</button>
+          </div>
+          <p class="sel-help" id="sel-help"></p>
+          <div class="sel-actions" id="sel-actions">
+            <button class="btn small ghost" type="button" data-sel-all="1">Tout cocher (recommandé)</button>
+            <button class="btn small ghost" type="button" data-sel-all="0">Tout décocher</button>
+          </div>
+        </div>
         <div class="toolbar">
           <div class="seg" role="group" aria-label="Filtrer">
             <button type="button" data-filter="all" aria-pressed="true">Toutes</button>
+            <button type="button" data-filter="selected" aria-pressed="false">Sélectionnées</button>
             <button type="button" data-filter="held" aria-pressed="false">Détenues</button>
             <button type="button" data-filter="watch" aria-pressed="false" title="Cryptos proches d'un signal d'achat">Surveillées</button>
             <button type="button" data-filter="vetoed" aria-pressed="false">Bloquées</button>

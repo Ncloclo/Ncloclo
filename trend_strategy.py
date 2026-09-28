@@ -337,6 +337,103 @@ def reprice_entry(plan: Dict[str, Any], price: float, equity: float,
 
 
 # ══════════════════════════════════════════════════════════════════════
+# SÉLECTION DES CRYPTOS : BÉNÉFICE DE LA STRATÉGIE SUR CHACUNE
+# ══════════════════════════════════════════════════════════════════════
+
+def asset_track_records(cols: Dict[str, Dict[str, np.ndarray]], reg: np.ndarray,
+                        p: TrendParams, hi: Optional[int] = None
+                        ) -> Dict[str, List[Dict[str, Any]]]:
+    """Trades de la stratégie sur chaque crypto SEULE (sans plafond de
+    portefeuille), avec exactement les règles d'achat et de vente du bot,
+    jusqu'au jour d'indice `hi` exclu. Chaque trade : indices d'achat et de
+    vente (None si encore ouvert), résultat en R (frais compris). Un trade
+    encore ouvert est évalué au dernier cours."""
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    for a, c in cols.items():
+        n = len(c["close"]) if hi is None else hi
+        trades: List[Dict[str, Any]] = []
+        hold: Dict[str, Holding] = {}
+        last = None
+        for i in range(n):
+            s = {k: c[k][i] for k in c}
+            if not _finite(s["close"]):
+                continue                       # jour sans cotation : rien ne bouge
+            last = (i, s["close"])
+            bull = bool(reg[i])
+            if hold and update_positions(hold, {a: s}, bull, p):
+                h = hold.pop(a)
+                r = (s["close"] * (1 - p.fee - p.slippage) - h.cost) / h.risk_quote
+                trades.append({"entry_i": h.entry_date, "exit_i": i, "r": r,
+                               "cost": h.cost, "unit": h.risk_quote})
+            if not hold and bull and entry_signal(s, p):
+                entry = s["close"] * (1 + p.slippage)
+                stop = initial_stop(s["close"], s["vol"], p)
+                unit = entry * (1 + p.fee) - stop * (1 - p.fee - p.slippage)
+                if stop > 0 and unit > 0:
+                    hold[a] = Holding(a, 1.0, entry, stop, s["close"], i, unit,
+                                      entry * (1 + p.fee))
+        if hold and last is not None:
+            h = hold[a]
+            r = (last[1] * (1 - p.fee - p.slippage) - h.cost) / h.risk_quote
+            trades.append({"entry_i": h.entry_date, "exit_i": None, "r": r,
+                           "cost": h.cost, "unit": h.risk_quote})
+        out[a] = trades
+    return out
+
+
+def selection_scores(records: Dict[str, List[Dict[str, Any]]], index: pd.Index,
+                     end_i: int, days: int = 730,
+                     closes: Optional[Dict[str, np.ndarray]] = None,
+                     p: Optional[TrendParams] = None) -> Dict[str, Dict[str, float]]:
+    """Bénéfice de chaque crypto sur les `days` derniers jours (jusqu'à
+    end_i inclus) : somme des R des trades vendus dans la fenêtre, plus le
+    trade en cours. Achats ET ventes comptent : seul un cycle complet (ou
+    en cours) rapporte. Aucun regard vers le futur : un trade vendu après
+    end_i est ignoré ; le trade « en cours » n'existe que si les trades ont
+    été calculés jusqu'à end_i (asset_track_records(..., hi=end_i + 1))."""
+    start = index[end_i] - pd.Timedelta(days=days)
+    lo = int(index.searchsorted(start))
+    out = {}
+    for a, trades in records.items():
+        rs = []
+        for t in trades:
+            if t["entry_i"] > end_i:
+                continue
+            if t["exit_i"] is not None and t["exit_i"] <= end_i:
+                if t["exit_i"] >= lo:
+                    rs.append(t["r"])                 # achat puis vente dans la fenêtre
+            elif closes is not None and p is not None:
+                # Étude historique : trade ouvert à end_i, évalué au cours de
+                # ce jour-là (et non à sa vente future).
+                px = closes[a][end_i]
+                if _finite(px):
+                    rs.append((px * (1 - p.fee - p.slippage) - t["cost"]) / t["unit"])
+            elif t["exit_i"] is None:
+                rs.append(t["r"])                     # en cours, évalué au dernier cours
+        out[a] = {"total_r": float(sum(rs)), "trades": len(rs),
+                  "win_rate": (sum(r > 0 for r in rs) / len(rs)) if rs else 0.0}
+    return out
+
+
+def rank_selection(scores: Dict[str, Dict[str, float]], eligible: List[str], n: int = 10,
+                   keep: Optional[List[str]] = None, hysteresis: int = 3) -> List[str]:
+    """Les `n` cryptos les plus rentables parmi `eligible`. Une crypto déjà
+    sélectionnée ne sort que si elle recule au-delà du rang n + hysteresis :
+    la sélection ne change pas pour un écart minime."""
+    order = sorted(eligible, key=lambda a: (-scores.get(a, {}).get("total_r", 0.0),
+                                            -scores.get(a, {}).get("trades", 0), a))
+    rank = {a: k for k, a in enumerate(order)}
+    chosen = [a for a in (keep or []) if a in rank and rank[a] < n + hysteresis]
+    chosen = sorted(chosen, key=lambda a: rank[a])[:n]
+    for a in order:
+        if len(chosen) >= n:
+            break
+        if a not in chosen:
+            chosen.append(a)
+    return sorted(chosen, key=lambda a: rank[a])
+
+
+# ══════════════════════════════════════════════════════════════════════
 # BACKTEST DE PORTEFEUILLE
 # ══════════════════════════════════════════════════════════════════════
 

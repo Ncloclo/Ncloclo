@@ -197,16 +197,16 @@ const tradeMarkers = (list, c) => (list || []).map((m) => ({
   text: m.type === "buy" && m.price != null ? `${m.text} ${fpx(m.price)}` : m.text,
 }));
 // Achats sur la courbe du capital : chacun sur le point le plus proche.
-function buyMarkersOn(points, buys, c, withText = true) {
+function buyMarkersOn(points, buys, c, withText = true, sells = []) {
   const out = [];
   if (!points.length) return out;
-  let j = 0;
-  (buys || []).forEach((b) => {
-    while (j < points.length - 1 && points[j + 1].time <= b.t) j++;
-    const next = points[j + 1];
-    const near = next && next.time - b.t < b.t - points[j].time ? next : points[j];
-    out.push({ time: near.time, position: "belowBar", color: c.up, shape: "arrowUp", text: withText ? up(b.asset) : "" });
-  });
+  const nearest = (t) => {
+    let lo = 0, hi = points.length - 1;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (points[mid].time < t) lo = mid + 1; else hi = mid; }
+    return lo > 0 && t - points[lo - 1].time < points[lo].time - t ? points[lo - 1] : points[lo];
+  };
+  (buys || []).forEach((b) => out.push({ time: nearest(b.t).time, position: "belowBar", color: c.up, shape: "arrowUp", text: withText ? up(b.asset) : "" }));
+  (sells || []).forEach((s) => out.push({ time: nearest(s.t).time, position: "aboveBar", color: c.down, shape: "arrowDown", text: withText ? `${up(s.asset)} ${fR(s.r)}` : "" }));
   return out.sort((a, b) => a.time - b.time);
 }
 // Graphique d'une position : intervalle choisi pour que l'achat soit visible.
@@ -224,7 +224,7 @@ function addPositionLines(series, pos) {
     if (price != null) lines.push(series.createPriceLine({ price, color, lineWidth: 2, lineStyle: style, axisLabelVisible: true, title }));
   };
   add(pos.entry, c.accent, LWC.LineStyle.Dashed, "Entrée");
-  add(pos.stop, c.down, LWC.LineStyle.Solid, "Stop");
+  add(pos.stop, c.down, LWC.LineStyle.Solid, "Vente si <");
   add(pos.disaster, c.down, LWC.LineStyle.Dotted, "Catastrophe");
   // L'échelle automatique suit les bougies seulement : l'élargir pour que
   // l'entrée et les stops (souvent 10 % plus bas) restent visibles.
@@ -368,7 +368,7 @@ async function renderDash() {
   if (dashSeries) {
     const pts = uniq(eq.points.map((p) => ({ time: p.t, value: p.v })));
     dashSeries.setData(pts);
-    dashSeries.setMarkers(buyMarkersOn(pts, eq.buys, COLORS(), false));
+    dashSeries.setMarkers(buyMarkersOn(pts, eq.buys, COLORS(), false, eq.sells));
     dashChart.timeScale().fitContent();
   }
   countUp($("#d-pos"), S.positions, (v) => `${Math.round(v)} / ${S.max_positions}`);
@@ -636,13 +636,20 @@ $("#news-search").addEventListener("input", () => renderNewsList());
 // ---------- Graphiques en temps réel ----------
 const gridCharts = new Map();       // id → { chart, series, lines }
 async function renderCharts() {
-  const [eq, reg, pos] = await Promise.all([api("/api/equity?days=90"), api("/api/regime"), api("/api/positions")]);
+  const [eq, reg, pos, tr] = await Promise.all([api("/api/equity?days=90"), api("/api/regime"), api("/api/positions"), api("/api/trades")]);
   const c = COLORS();
+  const held = new Set(pos.positions.map((p) => p.asset));
+  const month = Date.now() - 30 * 86400e3, soldSeen = new Set();
+  const sold = tr.trades.filter((t) => t.entry_date && Date.parse(t.date) >= month && !held.has(t.asset)
+    && !soldSeen.has(t.asset) && soldSeen.add(t.asset));
   const specs = [
-    { id: "equity", kind: "equity", title: "Capital du bot", legend: [[c.accent, "Capital (USDT)"], [c.muted, "Capital de départ", true], [c.up, "▲ Achats du bot"]] },
+    { id: "equity", kind: "equity", title: "Capital du bot", legend: [[c.accent, "Capital (USDT)"], [c.muted, "Capital de départ", true], [c.up, "▲ Achats du bot"], [c.down, "▼ Ventes du bot"]] },
     { id: "regime", kind: "regime", title: `Régime BTC · moyenne ${reg.sma} jours`, legend: [[c.ink, "BTC (clôture)"], [c.sma, `Moyenne ${reg.sma} j`]] },
     ...pos.positions.map((p) => ({ id: "asset:" + p.asset, kind: "asset", asset: p.asset, title: `${up(p.asset)}/USDT · ${gridInterval(p)[2]}`, pos: p,
-      legend: [[c.up, "Bougies"], [c.up, "▲ Achats du bot"], [c.accent, "Entrée", true], [c.down, "Stop de clôture"], [c.down, "Stop catastrophe", true]] })),
+      legend: [[c.up, "Bougies"], [c.up, "▲ Achats du bot"], [c.accent, "Entrée", true], [c.down, "Stop de clôture (vente)"], [c.down, "Stop catastrophe", true]] })),
+    ...sold.map((t) => ({ id: "sold:" + t.asset, kind: "asset", asset: t.asset, sold: t,
+      title: `${up(t.asset)}/USDT · vendue · ${gridInterval({ entry_date: t.entry_date })[2]}`,
+      legend: [[c.up, "▲ Achat du bot"], [c.down, "▼ Vente du bot"]] })),
   ];
   const grid = $("#chart-grid");
   const ids = specs.map((s) => s.id).join("|");
@@ -694,7 +701,7 @@ async function renderCharts() {
   if (ge && ge.series[0]) {
     const pts = uniq(eq.points.map((p) => ({ time: p.t, value: p.v })));
     ge.series[0].setData(pts);
-    ge.series[0].setMarkers(buyMarkersOn(pts, eq.buys, c));
+    ge.series[0].setMarkers(buyMarkersOn(pts, eq.buys, c, true, eq.sells));
     ge.chart.timeScale().fitContent();
   }
   const last = eq.points[eq.points.length - 1];
@@ -703,9 +710,20 @@ async function renderCharts() {
   if (gr && gr.series.length) {
     gr.series[0].setData(uniq(reg.points.map((p) => ({ time: p.t, value: p.close }))));
     gr.series[1].setData(uniq(reg.points.map((p) => ({ time: p.t, value: p.sma }))));
+    gr.series[0].setMarkers(tradeMarkers(reg.markers, c));
     gr.chart.timeScale().fitContent();
   }
   setVal("regime", reg.bull ? "Haussier" : "Baissier", reg.bull ? "up" : "down");
+  await Promise.all(sold.map(async (t) => {
+    const g = gridCharts.get("sold:" + t.asset);
+    if (!g || !g.series[0]) return;
+    const [iv, lim] = gridInterval({ entry_date: t.entry_date });
+    const d = await api(`/api/candles?asset=${t.asset}&interval=${iv}&limit=${lim}`);
+    g.series[0].setData(candleData(d.candles));
+    g.series[0].setMarkers(tradeMarkers(d.markers, c));
+    g.chart.timeScale().fitContent();
+    setVal("sold:" + t.asset, `${fR(t.r)} · ${fdate(t.date)}`, (t.r || 0) >= 0 ? "up" : "down");
+  }));
   await Promise.all(pos.positions.map(async (p) => {
     const g = gridCharts.get("asset:" + p.asset);
     if (!g || !g.series[0]) return;
@@ -762,7 +780,7 @@ function openDetail(spec) {
     legend($("#detail-legend"), [[c.up, "Hausse"], [c.down, "Baisse"], [c.up, "▲ Achats du bot"], [c.down, "▼ Ventes"], [c.accent, "Entrée", true], [c.down, "Stop de clôture"], [c.down, "Stop catastrophe", true], [c.muted, "Volume"]]);
   } else if (spec.kind === "equity") {
     D.series.push(D.chart.addBaselineSeries({ baseValue: { type: "price", price: 0 }, topLineColor: c.up, topFillColor1: c.up + "44", topFillColor2: c.up + "05", bottomLineColor: c.down, bottomFillColor1: c.down + "05", bottomFillColor2: c.down + "44", lineWidth: 2 }));
-    legend($("#detail-legend"), [[c.up, "Au-dessus du départ"], [c.down, "En dessous du départ"], [c.up, "▲ Achats du bot"]]);
+    legend($("#detail-legend"), [[c.up, "Au-dessus du départ"], [c.down, "En dessous du départ"], [c.up, "▲ Achats du bot"], [c.down, "▼ Ventes du bot"]]);
   } else {
     D.series.push(D.chart.addLineSeries({ color: c.ink, lineWidth: 2 }));
     D.series.push(D.chart.addLineSeries({ color: c.sma, lineWidth: 2, crosshairMarkerVisible: false }));
@@ -819,7 +837,7 @@ async function loadDetail() {
       const start = pts.length ? pts[0].value : 0;
       D.series[0].applyOptions({ baseValue: { type: "price", price: start } });
       D.series[0].setData(pts);
-      D.series[0].setMarkers(buyMarkersOn(pts, eq.buys, c));
+      D.series[0].setMarkers(buyMarkersOn(pts, eq.buys, c, true, eq.sells));
       const last = pts[pts.length - 1], hi = Math.max(...pts.map((p) => p.value));
       D.lastText = last ? `Capital : ${fusd(last.value)}` : "";
       stats([["Capital", fusd(last && last.value)], ["Au départ de la courbe", fusd(start)],
@@ -830,6 +848,7 @@ async function loadDetail() {
       if (!D || D.spec !== spec) return;
       D.series[0].setData(uniq(reg.points.map((p) => ({ time: p.t, value: p.close }))));
       D.series[1].setData(uniq(reg.points.map((p) => ({ time: p.t, value: p.sma }))));
+      D.series[0].setMarkers(tradeMarkers(reg.markers, c));
       const l = reg.points[reg.points.length - 1];
       D.lastText = l ? `BTC ${fpx(l.close)}` : "";
       stats([["BTC", fpx(l && l.close)], [`Moyenne ${reg.sma} j`, fpx(l && l.sma)], ["Écart", fpct(l ? (l.close / l.sma - 1) * 100 : null), reg.bull ? "up" : "down"], ["Régime", reg.bull ? "Haussier : achats autorisés" : "Baissier : aucun achat", reg.bull ? "up" : "down"]]);
@@ -854,13 +873,15 @@ async function drawSpark(card) {
     try {
       const d = await api(`/api/candles?asset=${a}&interval=1h&limit=48`);
       closes = d.candles.map((r) => r[4]);
-      sparkCache.set(a, { t: Date.now(), v: closes });
+      const times = d.candles.map((r) => r[0]);
+      const marks = d.markers.map((m) => ({ i: times.indexOf(m.t), type: m.type })).filter((m) => m.i >= 0);
+      sparkCache.set(a, { t: Date.now(), v: closes, m: marks });
     } catch { return; }
   }
   const svg = card.querySelector(".spark");
-  if (svg) fillSpark(svg, closes);
+  if (svg) fillSpark(svg, closes, (sparkCache.get(a) || {}).m || []);
 }
-function fillSpark(svg, closes) {
+function fillSpark(svg, closes, marks = []) {
   if (closes.length < 2) return;
   const lo = Math.min(...closes), hi = Math.max(...closes), w = 200, h = 42;
   const pts = closes.map((v, i) => [i * w / (closes.length - 1), h - 3 - (hi > lo ? (v - lo) / (hi - lo) : 0.5) * (h - 6)]);
@@ -877,6 +898,15 @@ function fillSpark(svg, closes) {
   line.setAttribute("stroke-width", "2");
   line.setAttribute("vector-effect", "non-scaling-stroke");
   svg.replaceChildren(area, line);
+  // Achats (▲ vert) et ventes (▼ rouge) du bot sur la période affichée.
+  marks.forEach((m) => {
+    const [x, y] = pts[m.i];
+    const tri = document.createElementNS(ns, "path");
+    tri.setAttribute("d", m.type === "buy" ? `M${x} ${y + 3} l-5 8 h10 z` : `M${x} ${y - 3} l-5 -8 h10 z`);
+    tri.setAttribute("fill", m.type === "buy" ? "var(--up)" : "var(--down)");
+    tri.setAttribute("class", "spark-mark " + m.type);
+    svg.append(tri);
+  });
 }
 $$("[data-filter]").forEach((b) => b.addEventListener("click", () => {
   assetFilter = b.dataset.filter;
@@ -897,15 +927,62 @@ function arrangeAssets() {
     const card = grid.querySelector(`[data-asset="${r.asset}"]`);
     if (!card) return;
     const show = (assetFilter === "all" || (assetFilter === "held" && r.held) || (assetFilter === "vetoed" && r.vetoed)
+      || (assetFilter === "selected" && r.selected)
       || (assetFilter === "watch" && CANDIDATE.has(r.status)))
       && (!q || r.asset.includes(q) || r.name.toLowerCase().includes(q));
     card.hidden = !show;
     grid.append(card);
   });
 }
+let SEL = { mode: "manual", active: [] };
+function renderSelection(sel) {
+  SEL = sel;
+  $$("[data-sel]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.sel === sel.mode)));
+  $("#sel-count").textContent = `${sel.active.length} / ${sel.universe}`;
+  $("#sel-actions").hidden = sel.mode === "auto";
+  $("#sel-help").textContent = sel.mode === "auto"
+    ? `Chaque jour, le bot choisit les 10 cryptos qui ont le plus rapporté avec sa stratégie (achats ET ventes) sur les 2 dernières années${sel.ranked ? "" : " — classement calculé à la prochaine décision"}. ${sel.note} Une crypto détenue qui sort de la sélection reste gérée jusqu'à sa vente.`
+    : "Cochez les cryptos que le bot peut acheter. Recommandé : les 21 (meilleur résultat historique). Une crypto décochée déjà détenue reste gérée jusqu'à sa vente. Appliqué tout de suite aux achats en attente et à chaque décision (00:02 UTC).";
+}
+async function saveSelection(mode, manual) {
+  try {
+    const r = await api("/api/selection", { body: manual ? { mode, manual } : { mode } });
+    toast(r.mode === "auto" ? `Auto-sélection activée : ${r.active.length} cryptos achetables.` : `Sélection manuelle : ${r.active.length} crypto${r.active.length > 1 ? "s" : ""} achetable${r.active.length > 1 ? "s" : ""}.`, "ok");
+    ASSETS.forEach((a) => { a.selected = r.active.includes(a.asset); });
+    renderSelection(r);
+    return r;
+  } catch (e) {
+    toast(`Sélection non enregistrée : ${e.message}`, "err");
+    return null;
+  }
+}
+let pickTimer = 0;
+function onPick() {
+  clearTimeout(pickTimer);
+  pickTimer = setTimeout(async () => {
+    const manual = $$("#asset-grid .pick input").filter((b) => b.checked).map((b) => b.dataset.asset);
+    await saveSelection("manual", manual);
+    renderAssets().catch(() => {});
+  }, 400);
+}
+$$("[data-sel]").forEach((b) => b.addEventListener("click", () => {
+  if (SEL.mode === b.dataset.sel) return;
+  withLoader(b.dataset.sel === "auto" ? "Auto-sélection des 10 cryptos les plus rentables…" : "Sélection manuelle…", async () => {
+    await saveSelection(b.dataset.sel);
+    await renderAssets();
+  });
+}));
+$$("[data-sel-all]").forEach((b) => b.addEventListener("click", () => {
+  const all = b.dataset.selAll === "1";
+  withLoader(all ? "Sélection : les 21 cryptos…" : "Sélection : aucune crypto…", async () => {
+    await saveSelection("manual", all ? ASSETS.map((a) => a.asset) : []);
+    await renderAssets();
+  });
+}));
 async function renderAssets() {
   const d = await api("/api/assets");
   ASSETS = d.assets;
+  renderSelection(d.selection);
   const grid = $("#asset-grid");
   d.assets.forEach((r, k) => {
     let card = grid.querySelector(`[data-asset="${r.asset}"]`);
@@ -924,7 +1001,16 @@ async function renderAssets() {
       svg.setAttribute("preserveAspectRatio", "none");
       const bottom = el("div", "row");
       bottom.append(el("span", "tags"), el("span", "sub vol"));
-      card.append(top, el("span", "name", r.name), el("span", "px"), svg, el("p", "why"), bottom);
+      const pick = el("label", "pick");
+      const box = el("input");
+      box.type = "checkbox";
+      box.dataset.asset = r.asset;
+      box.setAttribute("aria-label", `${up(r.asset)} : le bot peut l'acheter`);
+      pick.append(box, el("span", "", "Achetable"));
+      pick.addEventListener("click", (e) => e.stopPropagation());
+      pick.addEventListener("keydown", (e) => e.stopPropagation());
+      box.addEventListener("change", () => onPick());
+      card.append(top, el("span", "name", r.name), pick, el("span", "px"), svg, el("p", "rank"), el("p", "why"), bottom);
       const open = () => openDetail({ kind: "asset", asset: r.asset });
       card.addEventListener("click", open);
       card.addEventListener("keydown", (e) => { if (e.key === "Enter") open(); });
@@ -950,6 +1036,13 @@ async function renderAssets() {
     const why = card.querySelector(".why");
     why.textContent = r.why || "";
     why.hidden = !r.why;
+    const box = card.querySelector(".pick input");
+    box.checked = !!r.selected;
+    box.disabled = SEL.mode === "auto";
+    card.classList.toggle("unselected", !r.selected);
+    const rk = card.querySelector(".rank");
+    rk.textContent = r.rank ? `N° ${r.rank.rank} sur 2 ans : ${fR(r.rank.total_r)} en ${r.rank.trades} trade${r.rank.trades > 1 ? "s" : ""} (achats et ventes)` : "";
+    rk.hidden = !r.rank;
     if (r.veto_reason) card.title = r.veto_reason;
     card.querySelector(".vol").textContent = `Vol. 24 h ${fvol(r.volume_quote)}`;
   });
@@ -984,9 +1077,12 @@ function table(node, head, rows, onRow) {
 async function renderPositions() {
   const [pos, tr] = await Promise.all([api("/api/positions"), api("/api/trades")]);
   const open = (a) => openDetail({ kind: "asset", asset: a });
-  table($("#p-table"), ["Crypto", "Achat le", "Prix d'achat", "Cours", "Stop", "Écart au stop", "Résultat", "En R (≈)"],
-    pos.positions.map((p) => ({ key: p.asset, cells: [up(p.asset), fdate(p.entry_date), fpx(p.entry), fpx(p.price), fpx(p.stop), fpct(p.stop_dist_pct, 1), fpct(p.pnl_pct), fR(p.r)],
-      cls: { 6: (p.pnl_pct || 0) >= 0 ? "up" : "down", 7: (p.r || 0) >= 0 ? "up" : "down" } })), open);
+  table($("#p-table"), ["Crypto", "Achat le", "Prix d'achat", "Cours", "Vente auto si clôture <", "Gain verrouillé", "Écart à la vente", "Résultat", "En R (≈)"],
+    pos.positions.map((p) => {
+      const locked = p.entry ? (p.stop / p.entry - 1) * 100 : null;
+      return { key: p.asset, cells: [up(p.asset), fdate(p.entry_date), fpx(p.entry), fpx(p.price), fpx(p.stop), fpct(locked, 1), fpct(p.stop_dist_pct, 1), fpct(p.pnl_pct), fR(p.r)],
+        cls: { 5: (locked || 0) >= 0 ? "up" : "down", 7: (p.pnl_pct || 0) >= 0 ? "up" : "down", 8: (p.r || 0) >= 0 ? "up" : "down" } };
+    }), open);
   $("#p-sub").textContent = `${pos.positions.length} / ${S ? S.max_positions : 8}`;
   const trades = tr.trades;
   const wins = trades.filter((t) => t.pnl > 0).length;

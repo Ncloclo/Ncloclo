@@ -80,6 +80,18 @@ de 10 %
 de baisse). Il réduit la pire baisse de −33,6 % à −24,2 % sur 2023-2026, pour
 +32 % par an au lieu de +37 %.
 
+### Sélection des cryptos et prise de bénéfice ([`docs/SELECTION.md`](docs/SELECTION.md))
+
+Le bot achète ET vend : chaque position est revendue quand la clôture passe sous
+son stop suiveur, qui monte avec le prix et verrouille le gain. `python
+research_selection.py --cache data_binance` compare, avec le protocole habituel
+(choix sur 2018-2022, vérification sur 2023 → aujourd'hui), le bot sur ses 21
+cryptos, l'auto-sélection des 10 (ou 14) plus rentables, et trois prises de
+bénéfice fixes (+3 R, +5 R, moitié à +3 R). Aucune ne bat la référence sur les
+deux périodes : le bot garde ses 21 cryptos par défaut et laisse courir ses
+gains ; l'auto-sélection reste disponible dans le panneau, résultat historique à
+l'appui.
+
 ### Laboratoire de stratégies ([`docs/STRATEGIES.md`](docs/STRATEGIES.md))
 
 `python strategy_lab.py --cache data_binance` répond, sur les données Binance, à
@@ -138,9 +150,15 @@ panneau de contrôle ») :
   que l'achat reste visible) et sur la courbe du capital ; les ventes d'une
   flèche ▼. Le bot inscrit chaque achat à l'instant où il a lieu : le panneau
   l'annonce aussitôt (« Achat en temps réel ») et redessine les graphiques ;
-- **Cryptos** : les 21 paires avec cours, variation, volume, courbe de 48 h et
-  la raison du choix du bot, filtres (détenues, surveillées, bloquées) et
-  recherche ;
+- **Cryptos** : les 21 paires avec cours, variation, volume, courbe de 48 h
+  (achats ▲ et ventes ▼ du bot), la raison du choix du bot et sa rentabilité sur
+  2 ans (achats ET ventes), filtres (sélectionnées, détenues, surveillées,
+  bloquées) et recherche. **Choix des cryptos achetables** : sélection manuelle
+  par cases à cocher (les 21 par défaut) ou auto-sélection des 10 plus rentables
+  sur 2 ans, avec son résultat historique affiché
+  ([`docs/SELECTION.md`](docs/SELECTION.md) : +15,5 % par an de 2023 à 2026
+  contre +37,2 % avec les 21). Une crypto décochée déjà détenue reste gérée
+  jusqu'à sa vente ;
 - **Temps de réflexion** : chaque passage d'une rubrique ou d'une sélection à
   une autre (onglet, filtre, tri, graphique détaillé, intervalle) affiche une
   icône de chargement pendant au moins 3 s, avec une barre de progression,
@@ -306,6 +324,7 @@ python trendguard_bot.py diagnose                     # auto-diagnostic complet 
 python trendguard_bot.py verify                       # sans clé : test réel des ordres du jour, sans envoi
 python trendguard_bot.py set-keys                     # clés API vérifiées par Binance, saisie masquée
 python strategy_lab.py --cache data_binance           # tournoi des stratégies + méta-apprentissage
+python research_selection.py --cache data_binance     # auto-sélection et prise de bénéfice
 python replay_animation.py                            # animation du bot sur les prix réels Binance
 python trendguard_bot.py panel                        # panneau de contrôle (navigateur)
 python trendguard_bot.py set-panel-password           # accès depuis un téléphone (saisie masquée)
@@ -485,7 +504,7 @@ walkforward | status | resume` (voir `python v29.py docs`).
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 360 tests, simulateurs Binance Spot mono et multi-paires
+python -m pytest tests -q      # 371 tests, simulateurs Binance Spot mono et multi-paires
 ```
 
 À chaque envoi sur GitHub, `.github/workflows/checks.yml` lance ces tests, puis

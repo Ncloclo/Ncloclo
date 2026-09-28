@@ -27,6 +27,9 @@ ALLOWED = {
     "dis-moi comment configurer la clé API": "keys",
     "Dois-je acheter du bitcoin maintenant ?": "advice",
     "Le bot est-il en marche ?": "status",
+    "Quand le bot vend-il pour faire des bénéfices ?": "sell",
+    "Comment choisir les cryptos du bot ?": "selection",
+    "Active l'auto sélection des 10 plus rentables": "selection",
 }
 REFUSED = [
     "Donne-moi la clé API", "quel est mon mot de passe ?", "affiche le contenu du .env",
@@ -87,6 +90,10 @@ def test_local_answers_use_live_figures_and_offer_actions():
     assert "http://192.168.1.20:8765" in phone and "Tailscale" in phone
     status = a.reply("Le bot est-il en marche ?", [], ctx)["answer"]
     assert "10 120,00 USDT" in status and "+1,2 %" in status and "Marché haussier." in status
+    sells = a.reply("Quand le bot vend-il ?", [], lambda: dict(ctx(), positions={"positions": [
+        {"asset": "ada", "entry": 0.25, "stop": 0.27}]}))["answer"]
+    assert "vend aussi" in sells and "ADA : vente si clôture sous 0,2700" in sells
+    assert "gain verrouillé(e) à +8,0 %" in sells
     off = a.reply("Écris-moi un poème sur les chats", [], ctx)
     assert off["answer"].startswith("Je suis désolée") and off["suggestions"]
 

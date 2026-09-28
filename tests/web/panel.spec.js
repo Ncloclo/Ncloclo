@@ -182,7 +182,9 @@ test("graphiques en temps réel et détail d'un graphique", async ({ page }) => 
   const errors = watchErrors(page);
   await page.goto(BASE + "/#charts");
   const cards = page.locator("#chart-grid .chart-card");
-  await expect(cards).toHaveCount(8);                  // capital, régime, 6 positions
+  await expect(cards).toHaveCount(11);                 // capital, régime, 6 positions, 3 ventes récentes
+  await expect(cards.last().locator("h2")).toContainText("vendue");
+  await expect(cards.last().locator(".legend")).toContainText("Vente du bot");
   await expect(cards.nth(2).locator("canvas").first()).toBeVisible();
   await expect(cards.nth(2).locator(".legend")).toContainText("Stop de clôture");
   await cards.nth(2).click();
@@ -198,6 +200,34 @@ test("graphiques en temps réel et détail d'un graphique", async ({ page }) => 
   await cards.first().click();                        // capital : pas d'intervalles
   await expect(page.locator("#detail-intervals")).toBeHidden();
   await page.locator("#detail-close").click();
+  expect(errors).toEqual([]);
+});
+
+test("cryptos : sélection manuelle par cases à cocher, auto-sélection", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto(BASE + "/#assets");
+  await expect(page.locator("#asset-grid .asset")).toHaveCount(21);
+  await expect(page.locator("#sel-count")).toHaveText("21 / 21");
+  await expect(page.locator('[data-sel="manual"]')).toHaveAttribute("aria-pressed", "true");
+  const eth = page.locator('#asset-grid [data-asset="eth"]');
+  await expect(eth.locator(".rank")).toContainText("sur 2 ans");
+  await eth.locator(".pick input").uncheck();                      // ne pas acheter ETH
+  await expect(page.locator("#sel-count")).toHaveText("20 / 21");
+  await expect(eth).toHaveClass(/unselected/);
+  await expect(page.locator("#detail")).toBeHidden();              // la case n'ouvre pas le graphique
+  await page.locator('[data-filter="selected"]').click();
+  await expect(page.locator("#asset-grid .asset:visible")).toHaveCount(20);
+  await page.locator('[data-filter="all"]').click();
+  await page.locator('[data-sel="auto"]').click();                 // auto-sélection
+  await expect(page.locator("#sel-count")).toHaveText("10 / 21");
+  await expect(page.locator("#sel-help")).toContainText("+37,2 %");
+  await expect(page.locator('#asset-grid [data-asset="aave"] .pick input')).toBeChecked();
+  await expect(page.locator('#asset-grid [data-asset="algo"] .pick input')).not.toBeChecked();
+  await expect(page.locator('#asset-grid [data-asset="algo"] .pick input')).toBeDisabled();
+  await expect(page.locator("#sel-actions")).toBeHidden();
+  await page.locator('[data-sel="manual"]').click();
+  await page.locator('[data-sel-all="1"]').click();                // tout cocher
+  await expect(page.locator("#sel-count")).toHaveText("21 / 21");
   expect(errors).toEqual([]);
 });
 

@@ -43,7 +43,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from logging.handlers import RotatingFileHandler
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 import ccxt
 import pandas as pd
@@ -79,6 +79,7 @@ TG_ENV_DOC: Dict[str, str] = {
     "TG_MAX_CAPITAL": "Capital max géré par le bot en USDT (0 = tout le compte)",
     "TG_DD_THROTTLE": "Profil prudent : baisse:multiplicateur (ex. 0.10:0.5) ; vide = off",
     "TG_AUTO_DIAGNOSE_DAYS": "Auto-diagnostic tous les N jours (0 = désactivé)",
+    "TG_CLASSEMENT": "true : classement quotidien des cryptos par bénéfice (panneau, auto-sélection)",
     "TG_KEEP_AWAKE": "true : l'ordinateur ne se met pas en veille tout seul pendant que le bot tourne",
     "TG_MAX_SPREAD": "Ruse : achat différé si l'écart achat/vente dépasse ce seuil (0.005 = 0,5 %)",
     "TG_ENTRY_RETRY_HOURS": "Ruse : durée des nouveaux essais d'un achat différé (heures)",
@@ -136,6 +137,9 @@ class GuardConfig:
     # rejeu hors ligne), activée par l'environnement (TG_VEILLE=true).
     watch: bool = False                 # annonces officielles → veto d'achat
     watch_ai: bool = False              # rapport quotidien des IA (conseil)
+    # Classement des cryptos par bénéfice de la stratégie (affiché dans le
+    # panneau, utilisé par l'auto-sélection) ; activé par l'environnement.
+    rank_cryptos: bool = False
     watch_db: str = ""
     max_capital: float = 0.0            # 0 = tout le compte
     keep_awake: bool = False            # anti-veille (activé par l'environnement)
@@ -224,6 +228,7 @@ def load_guard_config_from_env() -> GuardConfig:
         auto_diagnose_days=v29._env_i("TG_AUTO_DIAGNOSE_DAYS", 7),
         watch=v29._env_b("TG_VEILLE", True),
         watch_ai=v29._env_b("TG_VEILLE_IA", True),
+        rank_cryptos=v29._env_b("TG_CLASSEMENT", True),
         watch_db=v29._env_s("TG_VEILLE_DB", os.path.join(v29.APP_DIR, "trendguard_veille.db")),
         max_capital=v29._env_f("TG_MAX_CAPITAL", 0.0),
         keep_awake=v29._env_b("TG_KEEP_AWAKE", True),
@@ -317,6 +322,7 @@ class TrendGuardBot:
         self._stop_flag = False
         self._started_at = time.time()
         self._last_alive = 0.0
+        self._last_selection_try = 0.0
         # Notes d'exécution du jour (achat différé, annulé) pour le raisonnement.
         self._entry_notes: Dict[str, Tuple[str, str]] = {}
         self._last_close: Optional[pd.DataFrame] = None   # apprentissage de la veille
@@ -569,6 +575,7 @@ class TrendGuardBot:
                 self.state.pop("decision_deferred_since", None)
             except DecisionDeferred as e:
                 self._decision_deferred(day, str(e))
+        self._refresh_selection(now)
         if self.state.get("pending_entries"):
             try:
                 self._retry_pending(now)
@@ -995,6 +1002,9 @@ class TrendGuardBot:
         close, feats, regime = self._load_market(now)
         self._last_close = close
         snap, bull, prices = self._snapshot_at(close, feats, regime, day)
+        # Cryptos que le bot a le droit d'ACHETER aujourd'hui (sélection du
+        # panneau) ; les positions détenues restent toutes gérées.
+        allowed = self._update_selection(close, feats, regime, day, snap, now)
         # La décision du jour remplace les achats différés de la veille.
         stale = self.state.pop("pending_entries", None)
         if stale:
@@ -1036,7 +1046,8 @@ class TrendGuardBot:
                 f"[PRUDENT] baisse de {(1 - equity / peak) * 100:.1f} % depuis le "
                 f"pic → risque par trade × {mult:g}")
         if not self.state.get("halted"):
-            eligible = {a: s for a, s in snap.items() if self._can_enter(a)}
+            eligible = {a: s for a, s in snap.items()
+                        if self._can_enter(a) and a in allowed}
             for a in sorted(snap):
                 v = self._vetoed(a)
                 if v and a not in holdings and ts.entry_signal(snap[a], p):
@@ -1049,7 +1060,7 @@ class TrendGuardBot:
                     entries.append(done)
                     cash_left -= done["cost"]
         self.state["last_decision_day"] = day
-        self._explain(day, bull, close, snap, late + exits, entries, mult, now)
+        self._explain(day, bull, close, snap, late + exits, entries, mult, now, allowed)
         self._summary(day, bull, equity, late + exits, entries, prices)
 
     # ---------- Raisonnement (affiché dans le panneau) ----------
@@ -1067,13 +1078,23 @@ class TrendGuardBot:
 
     def _explain(self, day: str, bull: bool, close: pd.DataFrame,
                  snap: Dict[str, Dict[str, float]], exits: List[Tuple[str, str]],
-                 entries: List[Dict[str, Any]], mult: float, now: datetime) -> None:
+                 entries: List[Dict[str, Any]], mult: float, now: datetime,
+                 allowed: Optional[Set[str]] = None) -> None:
         holdings = self._holdings()
         notes: Dict[str, Tuple[str, str]] = {}
+        sel = self.state.get("selection") or {}
+        ranks = {r["asset"]: r for r in sel.get("ranking") or []}
         for a in snap:
             v = self._vetoed(a)
             if v and a not in holdings:
                 notes[a] = ("veto", f"Achats bloqués par la veille : {v['reason']}")
+            elif allowed is not None and a not in allowed and a not in holdings:
+                rk = ranks.get(a)
+                notes[a] = ("unselected", (
+                    f"Hors auto-sélection : rang {rk['rank']} sur 2 ans "
+                    f"({rk['total_r']:+.1f} R), le bot ne l'achète pas".replace(".", ",")
+                    if sel.get("mode") == "auto" and rk else
+                    "Décochée dans la sélection : le bot ne l'achète pas"))
         notes.update(self._entry_notes)
         r = explain_decision(day, bull, self._btc_gap(close, day), snap, holdings, exits,
                              [e["asset"] for e in entries], notes,
@@ -1083,6 +1104,79 @@ class TrendGuardBot:
         hist = self.state.get("reasoning_log") or []
         hist.append({"day": day, "text": " ".join(r["lines"][:2])})
         self.state["reasoning_log"] = hist[-30:]
+
+    # ---------- Sélection des cryptos (panneau) ----------
+
+    AUTO_SELECT_N = 10            # auto-sélection : les 10 plus rentables…
+    AUTO_SELECT_DAYS = 730        # … sur les 2 dernières années (achats ET ventes)
+    AUTO_SELECT_HYSTERESIS = 3    # une crypto choisie ne sort qu'au-delà du rang 13
+
+    def selection_request(self) -> Dict[str, Any]:
+        return read_selection(self.g)
+
+    def _update_selection(self, close: pd.DataFrame, feats: Dict[str, pd.DataFrame],
+                          regime: pd.Series, day: str, snap: Dict[str, Dict[str, float]],
+                          now: datetime) -> Set[str]:
+        req = self.selection_request()
+        prev = self.state.get("selection") or {}
+        auto: List[str] = list(prev.get("auto") or [])
+        ranking = prev.get("ranking") or []
+        if self.g.rank_cryptos or req["mode"] == "auto":
+            idx = close.index
+            end_i = idx.get_loc(pd.Timestamp(day, tz="UTC"))
+            lo = max(0, end_i - self.AUTO_SELECT_DAYS - 5)
+            cols = {a: {k: f[k].values[lo:end_i + 1] for k in
+                        ("close", "vol", "prior_high", "mom", "age", "vol30")}
+                    for a, f in feats.items()}
+            records = ts.asset_track_records(cols, regime.values[lo:end_i + 1], self.p)
+            scores = ts.selection_scores(records, idx[lo:end_i + 1], end_i - lo,
+                                         self.AUTO_SELECT_DAYS)
+            eligible = [a for a, s in snap.items()
+                        if ts._finite(s.get("vol30")) and s["vol30"] >= self.p.min_volume_usd
+                        and s.get("age", 0) >= self.p.min_history and not self._vetoed(a)]
+            auto = ts.rank_selection(scores, eligible, self.AUTO_SELECT_N, auto,
+                                     self.AUTO_SELECT_HYSTERESIS)
+            order = sorted(scores, key=lambda a: (-scores[a]["total_r"], -scores[a]["trades"], a))
+            ranking = [{"asset": a, "rank": k + 1, "total_r": round(scores[a]["total_r"], 2),
+                        "trades": scores[a]["trades"], "win_rate": round(scores[a]["win_rate"], 3),
+                        "eligible": a in eligible} for k, a in enumerate(order)]
+        active = auto if req["mode"] == "auto" else req["manual"]
+        if req["mode"] == "auto" and not auto:
+            active = [b.lower() for b in self.g.universe]     # classement indisponible
+        if set(active) != set(prev.get("active") or []) and prev:
+            self.logger.info(f"[SÉLECTION] {'auto' if req['mode'] == 'auto' else 'manuelle'} : "
+                             f"{len(active)} crypto(s) achetable(s) : "
+                             + ", ".join(a.upper() for a in active))
+        self.state["selection"] = {"mode": req["mode"], "active": active, "auto": auto,
+                                   "ranking": ranking, "day": day, "at": now.isoformat()}
+        return set(active)
+
+    def active_now(self) -> Set[str]:
+        """Cryptos achetables à cet instant : le choix du panneau s'applique
+        aussi aux achats différés, sans attendre la décision suivante."""
+        req = self.selection_request()
+        if req["mode"] == "manual":
+            return set(req["manual"])
+        auto = (self.state.get("selection") or {}).get("auto")
+        return set(auto) if auto else {b.lower() for b in self.g.universe}
+
+    def _refresh_selection(self, now: datetime) -> None:
+        """Premier classement sans attendre la décision de 00:02 UTC (une
+        fois, après une mise à jour du bot)."""
+        if (not self.g.rank_cryptos or self.state.get("selection")
+                or time.time() - self._last_selection_try < 1800):
+            return
+        self._last_selection_try = time.time()
+        day = self.state.get("last_decision_day")
+        if not day:
+            return
+        try:
+            close, feats, regime = self._load_market(now)
+            snap, _bull, _prices = self._snapshot_at(close, feats, regime, day)
+            self._update_selection(close, feats, regime, day, snap, now)
+            self._save_state()
+        except Exception as e:
+            self.logger.warning(f"[SÉLECTION] classement reporté : {e}")
 
     def _note_asset(self, a: str, status: str, text: str) -> None:
         """Met à jour le raisonnement du jour après un achat différé."""
@@ -1252,6 +1346,7 @@ class TrendGuardBot:
             open_risk = sum(h.risk_quote for h in holdings.values())
             if (self.state.get("halted") or not self.state.get("last_regime_bull")
                     or a in holdings or not self._can_enter(a)
+                    or a not in self.active_now()
                     or len(holdings) >= p.max_positions
                     or open_risk + e["plan"]["risk_quote"] > p.max_total_risk * eq * mult + 1e-9):
                 book.pop(a, None)
@@ -1415,6 +1510,42 @@ class TrendGuardBot:
             if hang is not None:
                 faulthandler.cancel_dump_traceback_later()
                 hang.close()
+
+
+# ══════════════════════════════════════════════════════════════════════
+# SÉLECTION DES CRYPTOS (écrite par le panneau, lue par le bot)
+# ══════════════════════════════════════════════════════════════════════
+
+def read_selection(gcfg: GuardConfig) -> Dict[str, Any]:
+    """Choix enregistré par le panneau : auto-sélection des 10 plus
+    rentables, ou sélection manuelle (cryptos cochées). Sans choix
+    enregistré : sélection manuelle des 21 cryptos (réglage de référence)."""
+    path = autonomy.sidecar(gcfg.lock_file, ".selection.json")
+    data = autonomy._read_json(path) if path else {}
+    universe = [b.lower() for b in gcfg.universe]
+    mode = "auto" if data.get("mode") == "auto" else "manual"
+    manual = data.get("manual")
+    if not isinstance(manual, list):
+        manual = universe
+    wanted = {str(x).lower() for x in manual}
+    return {"mode": mode, "manual": [a for a in universe if a in wanted],
+            "saved": bool(data)}
+
+
+def write_selection(gcfg: GuardConfig, mode: str, manual: List[str]) -> Dict[str, Any]:
+    universe = [b.lower() for b in gcfg.universe]
+    if mode not in ("auto", "manual"):
+        raise ValueError("mode de sélection inconnu")
+    unknown = [a for a in manual if str(a).lower() not in universe]
+    if unknown:
+        raise ValueError("crypto inconnue : " + ", ".join(map(str, unknown))[:80])
+    path = autonomy.sidecar(gcfg.lock_file, ".selection.json")
+    if not path:
+        raise ValueError("sélection impossible : fichier de verrou non défini")
+    autonomy._write_json(path, {"mode": mode, "manual": [a for a in universe if a in
+                                                         {str(x).lower() for x in manual}],
+                                "updated": v29._utcnow_iso()})
+    return read_selection(gcfg)
 
 
 # ══════════════════════════════════════════════════════════════════════

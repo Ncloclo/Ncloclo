@@ -151,6 +151,14 @@ class BotData:
                 r["stop_dist_pct"] = round((px - r["stop"]) / px * 100, 2)
         return {"positions": rows, "stale": stale}
 
+    def selection_request(self) -> Dict[str, Any]:
+        import trendguard_bot as tg
+        return tg.read_selection(self.g)
+
+    def save_selection(self, mode: str, manual: List[str]) -> Dict[str, Any]:
+        import trendguard_bot as tg
+        return tg.write_selection(self.g, mode, manual)
+
     def buys(self, state: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         state = self.state() if state is None else state
         return merge_buys(state, self.holdings(state))

@@ -104,6 +104,25 @@ def test_bot_purchases_are_on_the_charts(demo_server):
     assert last["asset"] and last["price"] > 0 and last["count"] >= 6
 
 
+def test_selection_endpoint_and_sells_on_charts(demo_server):
+    base, _ = demo_server
+    a = _json(base + "/api/assets")[1]
+    assert a["selection"]["mode"] == "manual" and len(a["selection"]["active"]) == 21
+    assert all(r["selected"] for r in a["assets"]) and a["assets"][0]["rank"]["total_r"]
+    r = _json(base + "/api/selection", method="POST", body={"mode": "auto"})[1]
+    assert r["ok"] and r["mode"] == "auto" and len(r["active"]) == 10 and "15,5 %" in r["note"]
+    rows = {x["asset"]: x for x in _json(base + "/api/assets")[1]["assets"]}
+    assert rows["aave"]["selected"] and not rows["algo"]["selected"]
+    r = _json(base + "/api/selection", method="POST", body={"mode": "manual", "manual": ["btc", "eth"]})[1]
+    assert r["active"] == ["btc", "eth"]
+    assert _json(base + "/api/status")[1]["selection"]["active"] == ["btc", "eth"]
+    assert _json(base + "/api/selection", method="POST", body={"mode": "manual", "manual": ["zzz"]})[0] == 400
+    eq = _json(base + "/api/equity?days=60")[1]
+    assert eq["sells"] and eq["sells"][0]["r"] is not None       # ventes sur la courbe du capital
+    reg = _json(base + "/api/regime")[1]
+    assert {m["type"] for m in reg["markers"]} == {"buy", "sell"}  # achat et vente de BTC
+
+
 def test_news_endpoint(demo_server):
     base, _ = demo_server
     code, n = _json(base + "/api/news")
