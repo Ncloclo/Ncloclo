@@ -11,6 +11,7 @@ import pytest
 import v29
 from conftest import build_env, buy_signal, fresh_closed
 from fake_binance import FakeBinance
+from v29 import intraday as v29i
 
 
 def synthetic_ohlcv(n=3000, seed=7, drift=0.0003, vol=0.01, tf_ms=3_600_000,
@@ -31,7 +32,7 @@ def synthetic_ohlcv(n=3000, seed=7, drift=0.0003, vol=0.01, tf_ms=3_600_000,
 def forced_signals(monkeypatch):
     """Signal BUY toutes les 40 barres (quand à plat) pour exercer le moteur
     indépendamment de la stratégie."""
-    orig = v29.generate_signal_from_rows
+    orig = v29i.generate_signal_from_rows
 
     def fake(c, p, n_bars, htf, btc, ctx, cfg, atr_min_pct=None, now=None):
         if htf == "DOWN":
@@ -40,15 +41,15 @@ def forced_signals(monkeypatch):
             return v29.Signal("BUY", "TREND_UP", "trend", "A", 60, None)
         return v29.Signal("NONE", "UNCLEAR", "", "", 0, "no_module")
 
-    for mod in (v29.signals, v29.backtest):
+    for mod in (v29i.signals, v29i.backtest):
         monkeypatch.setattr(mod, "generate_signal_from_rows", fake)
     return orig
 
 
 def test_backtest_accounting_identity(forced_signals):
     cfg = v29.Config(last_trades_per_module=3)
-    df = v29.compute_indicators(synthetic_ohlcv(), cfg)
-    res = v29.BacktestEngine(cfg, 1000.0).run(df)
+    df = v29i.compute_indicators(synthetic_ohlcv(), cfg)
+    res = v29i.BacktestEngine(cfg, 1000.0).run(df)
     assert res.num_trades > 10
     # Aucun trade tronqué (V29.5 : métriques sur les 50 derniers/module).
     assert res.num_trades == len(res.trades) > cfg.last_trades_per_module
@@ -63,8 +64,8 @@ def test_backtest_accounting_identity(forced_signals):
 
 def test_backtest_r_multiples_are_bounded(forced_signals):
     cfg = v29.Config()
-    df = v29.compute_indicators(synthetic_ohlcv(seed=3), cfg)
-    res = v29.BacktestEngine(cfg).run(df)
+    df = v29i.compute_indicators(synthetic_ohlcv(seed=3), cfg)
+    res = v29i.BacktestEngine(cfg).run(df)
     sl_exits = [t["r"] for t in res.trades if t["reason"] == "BARRIER_SL"
                 and t["legs"] == 1]
     # Un stop touché vaut ≈ -1R (frais/slippage inclus) ; un stop remonté au
@@ -75,10 +76,10 @@ def test_backtest_r_multiples_are_bounded(forced_signals):
 
 def test_backtest_uses_break_even_and_trailing(forced_signals):
     df = synthetic_ohlcv(seed=11, drift=0.0008)
-    a = v29.BacktestEngine(v29.Config(trail_atr_mult=1.5)).run(
-        v29.compute_indicators(df, v29.Config()))
-    b = v29.BacktestEngine(v29.Config(trail_atr_mult=3.0)).run(
-        v29.compute_indicators(df, v29.Config()))
+    a = v29i.BacktestEngine(v29.Config(trail_atr_mult=1.5)).run(
+        v29i.compute_indicators(df, v29.Config()))
+    b = v29i.BacktestEngine(v29.Config(trail_atr_mult=3.0)).run(
+        v29i.compute_indicators(df, v29.Config()))
     # V29.5 : BE/trailing ignorés par le backtest → sensibilité « STABLE ».
     assert [t["pnl"] for t in a.trades] != [t["pnl"] for t in b.trades]
 
@@ -91,7 +92,7 @@ def test_bias_series_has_no_lookahead():
         htf_rows.append({"ts": int(chunk["ts"].iloc[0]),
                          "close": float(chunk["close"].iloc[-1])})
     htf = pd.DataFrame(htf_rows)
-    s = v29.build_bias_series(ltf["ts"], htf, 20, 0.005, 0.005, "4h")
+    s = v29i.build_bias_series(ltf["ts"], htf, 20, 0.005, 0.005, "4h")
     # Contrôle indépendant : pour chaque barre LTF, biais recalculé avec les
     # seules barres HTF clôturées à son ouverture.
     ema = htf["close"].ewm(span=20, adjust=False).mean()
@@ -108,23 +109,23 @@ def test_bias_series_has_no_lookahead():
 
 def test_walk_forward_optimises_in_sample(forced_signals):
     cfg = v29.Config()
-    df = v29.compute_indicators(synthetic_ohlcv(n=6000), cfg)
-    windows = v29.walk_forward(df, cfg, is_months=2, oos_months=1,
+    df = v29i.compute_indicators(synthetic_ohlcv(n=6000), cfg)
+    windows = v29i.walk_forward(df, cfg, is_months=2, oos_months=1,
                                step_months=2,
                                param_grid={"trail_atr_mult": [1.5, 2.5]},
                                min_is_trades=3)
     assert windows
     assert all("trail_atr_mult" in w.params for w in windows)
-    assert v29.walkforward_verdict(windows)
+    assert v29i.walkforward_verdict(windows)
 
 
 def test_sensitivity_runs(forced_signals):
     cfg = v29.Config()
     df = synthetic_ohlcv(n=2500)
-    out = v29.run_sensitivity(df, cfg, {"trail_atr_mult": [1.5, 2.5],
+    out = v29i.run_sensitivity(df, cfg, {"trail_atr_mult": [1.5, 2.5],
                                         "atr_period": [10, 14]})
     assert len(out) == 4 and "error" not in out.columns
-    assert "Sharpe" in v29.report_sensitivity(out)
+    assert "Sharpe" in v29i.report_sensitivity(out)
 
 
 # ---------- Paper ----------
@@ -199,10 +200,10 @@ def test_paper_bot_loop_opens_and_closes(monkeypatch, logger):
     _feed(fb)
     env = build_env("paper", fb=fb, logger=logger, htf_bias_enabled=False,
                     btc_bias_enabled=False)
-    runner = v29.BotRunner(env.cfg, logger, env.ex, env.store,
+    runner = v29i.BotRunner(env.cfg, logger, env.ex, env.store,
                            v29.Notifier("", "", logger=logger), env.risk,
-                           env.eng, v29.AdaptiveEngine(env.cfg, logger))
-    monkeypatch.setattr(v29.runner, "generate_signal",
+                           env.eng, v29i.AdaptiveEngine(env.cfg, logger))
+    monkeypatch.setattr(v29i.runner, "generate_signal",
                         lambda *a, **k: v29.Signal("BUY", "TREND_UP", "trend",
                                                    "A", 60, None))
     assert runner.boot()
@@ -224,10 +225,10 @@ def test_live_bot_boot_and_cycle(monkeypatch, logger):
     _feed(fb)
     env = build_env("live", fb=fb, logger=logger, htf_bias_enabled=False,
                     btc_bias_enabled=False)
-    runner = v29.BotRunner(env.cfg, logger, env.ex, env.store,
+    runner = v29i.BotRunner(env.cfg, logger, env.ex, env.store,
                            v29.Notifier("", "", logger=logger), env.risk,
-                           env.eng, v29.AdaptiveEngine(env.cfg, logger))
-    monkeypatch.setattr(v29.runner, "generate_signal",
+                           env.eng, v29i.AdaptiveEngine(env.cfg, logger))
+    monkeypatch.setattr(v29i.runner, "generate_signal",
                         lambda *a, **k: v29.Signal("BUY", "TREND_UP", "trend",
                                                    "A", 60, None))
     assert runner.boot()                         # self-test via order/test
@@ -245,9 +246,9 @@ def test_live_bot_boot_and_cycle(monkeypatch, logger):
 
 def test_monte_carlo_distribution(forced_signals):
     cfg = v29.Config()
-    df = v29.compute_indicators(synthetic_ohlcv(seed=4), cfg)
-    res = v29.BacktestEngine(cfg).run(df)
-    mc = v29.monte_carlo_trades(res.trades, n_sims=500)
+    df = v29i.compute_indicators(synthetic_ohlcv(seed=4), cfg)
+    res = v29i.BacktestEngine(cfg).run(df)
+    mc = v29i.monte_carlo_trades(res.trades, n_sims=500)
     assert mc is not None
     assert mc["ret_p5"] <= mc["ret_p50"] <= mc["ret_p95"]
     assert 0 <= mc["dd_p50"] <= mc["dd_p95"] <= 100

@@ -42,7 +42,7 @@ import sys
 import textwrap
 import urllib.request
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 import numpy as np
 import pandas as pd
@@ -200,6 +200,29 @@ def initial_stop(close: float, vol: float, p: TrendParams) -> float:
     return close - p.init_stop_atr * vol
 
 
+def entry_levels(close: float, vol: float, p: TrendParams) -> Tuple[float, float, float]:
+    """Prix d'achat (glissement compris), stop initial, et risque par unité
+    achetée entre les deux (frais et glissement compris)."""
+    entry = close * (1 + p.slippage)
+    stop = initial_stop(close, vol, p)
+    return entry, stop, entry * (1 + p.fee) - stop * (1 - p.fee - p.slippage)
+
+
+def size_position(entry: float, unit_risk: float, risk_quote: float, equity: float,
+                  cash: float, p: TrendParams) -> Optional[Tuple[float, float]]:
+    """(quantité, coût) pour risquer `risk_quote` jusqu'au stop, sous le
+    plafond par position et le cash disponible ; None sous 10 USDT. Seul
+    calcul de taille du dépôt : bot, backtest, études et laboratoire."""
+    qty = min(risk_quote / unit_risk, p.max_position_pct * equity / entry)
+    cost = qty * entry * (1 + p.fee)
+    if cost > cash:
+        qty = cash / (entry * (1 + p.fee))
+        cost = qty * entry * (1 + p.fee)
+    if qty * entry < 10:
+        return None
+    return qty, cost
+
+
 def trailing_stop(highest_close: float, vol: float, p: TrendParams,
                   bull_regime: bool = True) -> float:
     k = p.trail_atr
@@ -279,21 +302,13 @@ def plan_entries(holdings: Dict[str, Holding],
         risk_quote = p.risk_pct * equity * risk_mult
         if open_risk + risk_quote > p.max_total_risk * equity * risk_mult + 1e-9:
             break
-        entry = s["close"] * (1 + p.slippage)
-        stop = initial_stop(s["close"], s["vol"], p)
-        if stop <= 0:
+        entry, stop, unit_risk = entry_levels(s["close"], s["vol"], p)
+        if stop <= 0 or unit_risk <= 0:
             continue
-        unit_risk = entry * (1 + p.fee) - stop * (1 - p.fee - p.slippage)
-        if unit_risk <= 0:
+        sized = size_position(entry, unit_risk, risk_quote, equity, cash, p)
+        if sized is None:
             continue
-        qty = min(risk_quote / unit_risk,
-                  p.max_position_pct * equity / entry)
-        cost = qty * entry * (1 + p.fee)
-        if cost > cash:
-            qty = cash / (entry * (1 + p.fee))
-            cost = qty * entry * (1 + p.fee)
-        if qty * entry < 10:
-            continue
+        qty, cost = sized
         real_risk = qty * unit_risk
         plans.append({"asset": a, "qty": qty, "ref_price": s["close"],
                       "entry": entry, "stop": stop, "vol": s["vol"],
@@ -321,14 +336,10 @@ def reprice_entry(plan: Dict[str, Any], price: float, equity: float,
     unit_risk = entry * (1 + p.fee) - stop * (1 - p.fee - p.slippage)
     if unit_risk <= 0:
         return None
-    qty = min(plan["risk_quote"] / unit_risk,
-              p.max_position_pct * equity / entry)
-    cost = qty * entry * (1 + p.fee)
-    if cost > cash:
-        qty = cash / (entry * (1 + p.fee))
-        cost = qty * entry * (1 + p.fee)
-    if qty * entry < 10:
+    sized = size_position(entry, unit_risk, plan["risk_quote"], equity, cash, p)
+    if sized is None:
         return None
+    qty, cost = sized
     out = dict(plan)
     out.update({"qty": qty, "entry": entry, "exec_price": price, "cost": cost,
                 "risk_quote": qty * unit_risk, "unit_risk": unit_risk})
@@ -365,9 +376,7 @@ def asset_track_records(cols: Dict[str, Dict[str, np.ndarray]], reg: np.ndarray,
                 trades.append({"entry_i": h.entry_date, "exit_i": i, "r": r,
                                "cost": h.cost, "unit": h.risk_quote})
             if not hold and bull and entry_signal(s, p):
-                entry = s["close"] * (1 + p.slippage)
-                stop = initial_stop(s["close"], s["vol"], p)
-                unit = entry * (1 + p.fee) - stop * (1 - p.fee - p.slippage)
+                entry, stop, unit = entry_levels(s["close"], s["vol"], p)
                 if stop > 0 and unit > 0:
                     hold[a] = Holding(a, 1.0, entry, stop, s["close"], i, unit,
                                       entry * (1 + p.fee))
@@ -437,6 +446,23 @@ def rank_selection(scores: Dict[str, Dict[str, float]], eligible: List[str], n: 
 # ══════════════════════════════════════════════════════════════════════
 
 @dataclass
+class BacktestHooks:
+    """Variantes étudiées sur LA boucle de backtest (research/, laboratoire).
+    Sans crochet, la boucle est exactement celle du bot."""
+    # Plafond du multiplicateur de risque selon les trades déjà clos
+    # (None = pas de plafond ce jour-là).
+    risk_cap: Optional[Callable[[List[Dict[str, Any]]], Optional[float]]] = None
+    # Cryptos achetables ce jour-là : (indice du jour, instantané) → instantané.
+    choose: Optional[Callable[[int, Dict[str, Dict[str, float]]],
+                              Dict[str, Dict[str, float]]]] = None
+    # Filtre des achats prévus : (indice du jour, achats, positions, capital).
+    filter_plans: Optional[Callable[[int, List[Dict[str, Any]], Dict[str, Holding], float],
+                                    List[Dict[str, Any]]]] = None
+    # Prise de bénéfice : (gain en R qui déclenche la vente, part vendue).
+    take_profit: Optional[Tuple[float, float]] = None
+
+
+@dataclass
 class PortfolioResult:
     equity: pd.Series
     trades: List[Dict[str, Any]]
@@ -459,12 +485,19 @@ def precompute(close: pd.DataFrame, volume: pd.DataFrame, p: TrendParams,
     return cols, reg
 
 
-def backtest(close: pd.DataFrame, volume: pd.DataFrame, p: TrendParams,
+def backtest(close: pd.DataFrame, volume: Optional[pd.DataFrame], p: TrendParams,
              start: str, end: str, capital: float = 10_000.0,
              universe: Optional[List[str]] = None,
              pre: Optional[Tuple[Dict[str, Dict[str, np.ndarray]],
-                                 np.ndarray]] = None) -> PortfolioResult:
+                                 np.ndarray]] = None,
+             hooks: Optional[BacktestHooks] = None) -> PortfolioResult:
+    """LA boucle de backtest du dépôt : mêmes fonctions que le bot
+    (update_positions, plan_entries), évaluation à la clôture, frais et
+    glissement. Les études et le laboratoire passent leurs variantes par
+    `hooks` au lieu de recopier la boucle. `volume` peut manquer si `pre`
+    (indicateurs précalculés) est fourni."""
     p.validate()
+    hooks = hooks or BacktestHooks()
     cols, reg = pre if pre is not None else precompute(close, volume, p,
                                                         universe)
     if universe:
@@ -476,32 +509,66 @@ def backtest(close: pd.DataFrame, volume: pd.DataFrame, p: TrendParams,
     cash = peak = capital
     holdings: Dict[str, Holding] = {}
     last_px: Dict[str, float] = {}
+    realized: Dict[str, float] = {}      # gains encaissés par une prise de bénéfice partielle
+    took: Set[str] = set()
     trades: List[Dict[str, Any]] = []
     eq_hist, expo_hist = [], []
+
+    def close_trade(a: str, px: float, d: Any, reason: str) -> None:
+        nonlocal cash
+        h = holdings.pop(a)
+        proceeds = h.qty * px * (1 - cost_out)
+        cash += proceeds
+        pnl = proceeds - h.cost + realized.pop(a, 0.0)
+        took.discard(a)
+        trades.append({"asset": a, "entry_date": h.entry_date,
+                       "exit_date": d, "entry": h.entry, "exit": px,
+                       "pnl": pnl, "r": pnl / h.risk_quote,
+                       "days": (d - h.entry_date).days,
+                       "reason": reason})
+
     for i in range(lo, hi):
         d = index[i]
         snap = {a: {k: c[k][i] for k in c} for a, c in cols.items()}
         bull = bool(reg[i])
         for a, reason in update_positions(holdings, snap, bull, p):
-            h = holdings.pop(a)
             px = snap[a]["close"]
             if reason == "DELISTED" or not _finite(px):
-                px = last_px.get(a, h.entry) * 0.5   # retrait : décote 50 %
-            proceeds = h.qty * px * (1 - cost_out)
-            cash += proceeds
-            pnl = proceeds - h.cost
-            trades.append({"asset": a, "entry_date": h.entry_date,
-                           "exit_date": d, "entry": h.entry, "exit": px,
-                           "pnl": pnl, "r": pnl / h.risk_quote,
-                           "days": (d - h.entry_date).days,
-                           "reason": reason})
+                px = last_px.get(a, holdings[a].entry) * 0.5   # retrait : décote 50 %
+            close_trade(a, px, d, reason)
+        if hooks.take_profit is not None:
+            tp_r, tp_frac = hooks.take_profit
+            for a in list(holdings):
+                h, px = holdings[a], snap[a]["close"]
+                if a in took or not _finite(px):
+                    continue
+                unit = h.risk_quote / h.qty          # risque initial par unité
+                if px * (1 - cost_out) - h.cost / h.qty >= tp_r * unit:
+                    if tp_frac >= 1:
+                        close_trade(a, px, d, "TP")
+                    else:
+                        q = h.qty * tp_frac
+                        proceeds = q * px * (1 - cost_out)
+                        cash += proceeds
+                        realized[a] = realized.get(a, 0.0) + proceeds - h.cost * tp_frac
+                        h.qty -= q
+                        h.cost *= (1 - tp_frac)
+                        took.add(a)
         for a in holdings:
             last_px[a] = snap[a]["close"]
         mtm = sum(h.qty * snap[a]["close"] for a, h in holdings.items())
         equity = cash + mtm
         peak = max(peak, equity)
-        for plan in plan_entries(holdings, snap, bull, equity, cash, p,
-                                 risk_multiplier(equity, peak, p)):
+        mult = risk_multiplier(equity, peak, p)
+        if hooks.risk_cap is not None:
+            cap = hooks.risk_cap(trades)
+            if cap is not None:
+                mult = min(mult, cap)
+        eligible = snap if hooks.choose is None else hooks.choose(i, snap)
+        plans = plan_entries(holdings, eligible, bull, equity, cash, p, mult)
+        if hooks.filter_plans is not None:
+            plans = hooks.filter_plans(i, plans, holdings, equity)
+        for plan in plans:
             a = plan["asset"]
             cash -= plan["cost"]
             holdings[a] = Holding(a, plan["qty"], plan["entry"], plan["stop"],

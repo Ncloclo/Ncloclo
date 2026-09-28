@@ -180,7 +180,7 @@ tard).
 | 6 | Encadrer les actualités comme données non fiables pour l'IA de Rachelle (S4) | Code | fait |
 | 7 | Audit des dépendances (`pip-audit`) dans les contrôles GitHub | Code | fait : aucune faille connue au 28/09/2026 |
 | 8 | Service `panneau` dans `docker-compose.yml` (O5) | Code | reporté : dans Docker, AUTO et ARRÊTER doivent piloter un autre conteneur, relancé seul par Docker ; à concevoir avec le passage sur serveur (O1) |
-| 9 | Séparer `v29.py` en modules et archiver l'ancien bot V29 ; un seul moteur de backtest paramétrable | Chantier plus long, sans urgence | en partie : `v29.py` découpé en 17 modules (paquet `v29/`), code rangé par rôle (`docs/ARCHITECTURE.md`) ; bot V29 et moteur de backtest unique : ouverts |
+| 9 | Séparer `v29.py` en modules et archiver l'ancien bot V29 ; un seul moteur de backtest paramétrable | Chantier plus long, sans urgence | fait : moteur seul dans `v29/`, ancien bot rangé dans `v29/intraday/` ; une seule boucle de backtest (`ts.backtest` et ses crochets), rapports des études identiques à l'octet près (`docs/ARCHITECTURE.md`) |
 | 10 | Pour un fonctionnement 24 h/24 : serveur allumé en permanence ou ouverture de session automatique (O1) | Vous | ouvert |
 | 11 | Avant le réel : `verify`, puis quelques jours de testnet (R5) | Vous, le moment venu | ouvert |
 

@@ -8,7 +8,7 @@ import os
 from dataclasses import dataclass
 from typing import Dict, Tuple
 
-from .constants import APP_DIR, VERSION_MODULE, WEB3_AVAILABLE, ExtraDataToPOAMiddleware
+from .constants import APP_DIR, VERSION_MODULE
 from .utils import (
     _env_b,
     _env_f,
@@ -275,6 +275,8 @@ class Config:
             if not self.use_oco and not self.stop_only_protection:
                 raise ValueError("LIVE refusé: use_oco=true requis.")
         if self.blockchain_enabled:
+            # Wallet EVM : partie de l'ancien bot V29 (v29/intraday/).
+            from .intraday.blockchain import WEB3_AVAILABLE, ExtraDataToPOAMiddleware
             if not WEB3_AVAILABLE:
                 raise ValueError("blockchain_enabled=true mais web3 absent.")
             if not self.blockchain_rpc_url:

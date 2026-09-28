@@ -1,6 +1,7 @@
 """Ligne de commande du bot V29 (python -m v29 …).
 
-Partie du moteur V29 (paquet v29, anciennement v29.py).
+Partie de l'ancien bot V29.6 (v29/intraday/), rangé à part du moteur
+d'exécution que TrendGuard utilise.
 """
 from __future__ import annotations
 
@@ -15,6 +16,12 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
+from ..config import Config, _parse_symbol, load_config_from_env
+from ..constants import _LOG_ROOT, APP_DIR, ENV_DOC, VERSION_MODULE
+from ..infra import acquire_instance_locks, build_logger, release_locks
+from ..models import BotContext, BotState, Position, clear_halt
+from ..store import Store
+from ..utils import _timeframe_ms, ensure_utf8_stdio, make_binance, redact_address, redact_url
 from .backtest import (
     BacktestEngine,
     build_bias_series,
@@ -27,15 +34,9 @@ from .backtest import (
     walk_forward,
 )
 from .blockchain import BlockchainAdapter, BlockchainError
-from .config import Config, _parse_symbol, load_config_from_env
-from .constants import _LOG_ROOT, APP_DIR, ENV_DOC, VERSION_MODULE
 from .indicators import compute_indicators
-from .infra import acquire_instance_locks, build_logger, release_locks
-from .models import BotContext, BotState, Position, clear_halt
 from .runner import run_bot
 from .signals import min_signal_bars
-from .store import Store
-from .utils import _timeframe_ms, ensure_utf8_stdio, make_binance, redact_address, redact_url
 
 
 def _parse_utc_date(s: str) -> datetime:

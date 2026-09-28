@@ -3,7 +3,7 @@ status, resume, docs…)."""
 
 import sys
 
-from .cli import main
+from .intraday.cli import main
 
 try:
     main()

@@ -91,9 +91,12 @@ def simulate(close: pd.DataFrame, feats: Dict[str, Dict[str, np.ndarray]],
              entry_fn: Callable, exit_fn: Callable, rank_fn: Callable,
              entry_day: Optional[Callable] = None, capital: float = 10_000.0
              ) -> Tuple[pd.Series, List[Dict[str, Any]]]:
-    """Portefeuille évalué à la clôture, comme ts.backtest : sorties, puis
-    entrées classées par rank_fn, 1 % de risque jusqu'au stop initial
-    (3 × vol), frais + slippage, plafonds de positions et de risque."""
+    """Stratégies aux règles d'entrée et de sortie DIFFÉRENTES de
+    TrendGuard (rotation, retour à la moyenne) ; les variantes de TrendGuard
+    passent par ts.backtest. Portefeuille évalué à la clôture : sorties, puis
+    entrées classées par rank_fn, 1 % de risque jusqu'au stop initial,
+    frais + glissement, plafonds de positions et de risque, taille calculée
+    par ts.size_position comme pour le bot."""
     idx = close.index
     lo = idx.searchsorted(pd.Timestamp(start, tz="UTC"))
     hi = idx.searchsorted(pd.Timestamp(end, tz="UTC"), side="right")
@@ -138,20 +141,13 @@ def simulate(close: pd.DataFrame, feats: Dict[str, Dict[str, np.ndarray]],
                 risk_quote = p.risk_pct * equity
                 if open_risk + risk_quote > p.max_total_risk * equity + 1e-9:
                     break
-                entry = s["close"] * (1 + p.slippage)
-                stop = ts.initial_stop(s["close"], s["vol"], p)
-                if stop <= 0:
+                entry, stop, unit = ts.entry_levels(s["close"], s["vol"], p)
+                if stop <= 0 or unit <= 0:
                     continue
-                unit = entry * (1 + p.fee) - stop * (1 - p.fee - p.slippage)
-                if unit <= 0:
+                sized = ts.size_position(entry, unit, risk_quote, equity, cash, p)
+                if sized is None:
                     continue
-                qty = min(risk_quote / unit, p.max_position_pct * equity / entry)
-                cost = qty * entry * (1 + p.fee)
-                if cost > cash:
-                    qty = cash / (entry * (1 + p.fee))
-                    cost = qty * entry * (1 + p.fee)
-                if qty * entry < 10:
-                    continue
+                qty, cost = sized
                 cash -= cost
                 hold[a] = {"qty": qty, "entry": entry, "stop": stop,
                            "high": s["close"], "date": d, "risk": qty * unit,

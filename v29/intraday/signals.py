@@ -1,6 +1,7 @@
 """Signaux d'entrée du bot V29.
 
-Partie du moteur V29 (paquet v29, anciennement v29.py).
+Partie de l'ancien bot V29.6 (v29/intraday/), rangé à part du moteur
+d'exécution que TrendGuard utilise.
 """
 from __future__ import annotations
 
@@ -9,10 +10,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 
-from .adaptive import _isnan, _row_get
-from .config import Config
-from .models import BotContext, Signal
-from .utils import _parse_iso, _utcnow
+from ..config import Config
+from ..models import BotContext, Signal
+from ..utils import _isnan, _parse_iso, _row_get, _utcnow
 
 _SIGNAL_REQUIRED = ("ema_fast", "ema_slow", "ema_trend", "atr", "atr_pct",
                     "adx", "plus_di", "minus_di", "bb_width", "bb_width_avg",

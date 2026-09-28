@@ -1,6 +1,7 @@
 """Boucle du bot V29.
 
-Partie du moteur V29 (paquet v29, anciennement v29.py).
+Partie de l'ancien bot V29.6 (v29/intraday/), rangé à part du moteur
+d'exécution que TrendGuard utilise.
 """
 from __future__ import annotations
 
@@ -16,15 +17,11 @@ import ccxt
 import numpy as np
 import pandas as pd
 
-from .adaptive import AdaptiveEngine
-from .backtest import _btc_vol_mult
-from .blockchain import BlockchainAdapter, BlockchainError
-from .config import Config, dump_config_summary, load_config_from_env
-from .constants import VERSION_MODULE
-from .exchange import AmbiguousOrder, ExchangeAdapter
-from .execution import ExecutionEngine
-from .indicators import compute_indicators
-from .infra import (
+from ..config import Config, dump_config_summary, load_config_from_env
+from ..constants import VERSION_MODULE
+from ..exchange import AmbiguousOrder, ExchangeAdapter
+from ..execution import ExecutionEngine
+from ..infra import (
     Heartbeat,
     Notifier,
     acquire_instance_locks,
@@ -32,12 +29,11 @@ from .infra import (
     build_logger,
     release_locks,
 )
-from .models import BotContext, EntryResult, HaltKind, halt_ctx, is_frozen
-from .reconciliation import reconcile
-from .risk import RiskEngine, detect_flash_move, in_cooldown, in_flash_cooldown
-from .signals import detect_regime, generate_signal
-from .store import Store
-from .utils import (
+from ..models import BotContext, EntryResult, HaltKind, halt_ctx, is_frozen
+from ..reconciliation import reconcile
+from ..risk import RiskEngine, detect_flash_move, in_cooldown, in_flash_cooldown
+from ..store import Store
+from ..utils import (
     _today_utc,
     _utcnow,
     _utcnow_iso,
@@ -45,6 +41,11 @@ from .utils import (
     scrub_secrets,
     sync_exchange_clock,
 )
+from .adaptive import AdaptiveEngine
+from .backtest import _btc_vol_mult
+from .blockchain import BlockchainAdapter, BlockchainError
+from .indicators import compute_indicators
+from .signals import detect_regime, generate_signal
 
 OHLCV_LIMIT = 1000   # EMA200 : résidu d'initialisation < 0,01 % sur 1000 barres
 

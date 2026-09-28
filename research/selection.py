@@ -21,11 +21,12 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from typing import Any, Dict, List, Optional, Set
+from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
 
+import v29
 from research import adaptation as ra
 from trendguard import trend_strategy as ts
 
@@ -34,77 +35,27 @@ def run(close: pd.DataFrame, pre, records, p: ts.TrendParams, start: str, end: s
         top: Optional[int] = None, days: int = 730, hysteresis: int = 3,
         tp_r: Optional[float] = None, tp_frac: float = 1.0,
         capital: float = 10_000.0) -> Dict[str, float]:
-    cols, reg = pre
+    """La boucle de backtest du bot (ts.backtest), avec auto-sélection des
+    `top` plus rentables et/ou prise de bénéfice à `tp_r` R."""
+    cols, _reg = pre
     idx = close.index
     closes = {a: c["close"] for a, c in cols.items()}
-    lo = idx.searchsorted(pd.Timestamp(start, tz="UTC"))
-    hi = idx.searchsorted(pd.Timestamp(end, tz="UTC"), side="right")
-    cost_out = p.fee + p.slippage
-    cash = peak = capital
-    hold: Dict[str, ts.Holding] = {}
-    realized: Dict[str, float] = {}
-    took: Set[str] = set()
-    last_px: Dict[str, float] = {}
-    trades: List[Dict[str, Any]] = []
-    eq_hist = []
     chosen: List[str] = []
-    for i in range(lo, hi):
-        d = idx[i]
-        snap = {a: {k: c[k][i] for k in c} for a, c in cols.items()}
-        bull = bool(reg[i])
 
-        def close_trade(a: str, px: float) -> None:
-            nonlocal cash
-            h = hold.pop(a)
-            proceeds = h.qty * px * (1 - cost_out)
-            cash += proceeds
-            pnl = proceeds - h.cost + realized.pop(a, 0.0)
-            took.discard(a)
-            trades.append({"r": pnl / h.risk_quote, "pnl": pnl})
-        for a, reason in ts.update_positions(hold, snap, bull, p):
-            px = snap[a]["close"]
-            if reason == "DELISTED" or not ts._finite(px):
-                px = last_px.get(a, hold[a].entry) * 0.5
-            close_trade(a, px)
-        if tp_r is not None:
-            for a in list(hold):
-                h, px = hold[a], snap[a]["close"]
-                if a in took or not ts._finite(px):
-                    continue
-                unit = h.risk_quote / h.qty          # risque initial par unité
-                if px * (1 - cost_out) - h.cost / h.qty >= tp_r * unit:
-                    if tp_frac >= 1:
-                        close_trade(a, px)
-                    else:
-                        q = h.qty * tp_frac
-                        proceeds = q * px * (1 - cost_out)
-                        cash += proceeds
-                        realized[a] = realized.get(a, 0.0) + proceeds - h.cost * tp_frac
-                        h.qty -= q
-                        h.cost *= (1 - tp_frac)
-                        took.add(a)
-        for a in hold:
-            last_px[a] = snap[a]["close"]
-        equity = cash + sum(h.qty * snap[a]["close"] for a, h in hold.items())
-        peak = max(peak, equity)
-        eligible = snap
-        if top:
-            ok = [a for a, s in snap.items()
-                  if ts._finite(s["vol30"]) and s["vol30"] >= p.min_volume_usd
-                  and s["age"] >= p.min_history]
-            scores = ts.selection_scores(records, idx, i, days, closes, p)
-            chosen = ts.rank_selection(scores, ok, top, chosen, hysteresis)
-            eligible = {a: snap[a] for a in chosen}
-        for pl in ts.plan_entries(hold, eligible, bull, equity, cash, p,
-                                  ts.risk_multiplier(equity, peak, p)):
-            a = pl["asset"]
-            cash -= pl["cost"]
-            hold[a] = ts.Holding(a, pl["qty"], pl["entry"], pl["stop"], pl["ref_price"], d,
-                                 pl["risk_quote"], pl["cost"])
-            last_px[a] = pl["ref_price"]
-        eq_hist.append(cash + sum(h.qty * snap[a]["close"] for a, h in hold.items()))
-    eq = pd.Series(eq_hist, index=idx[lo:hi])
-    m = ts.compute_metrics(eq, trades)
+    def choose(i: int, snap: Dict[str, Dict[str, float]]) -> Dict[str, Dict[str, float]]:
+        nonlocal chosen
+        ok = [a for a, s in snap.items()
+              if ts._finite(s["vol30"]) and s["vol30"] >= p.min_volume_usd
+              and s["age"] >= p.min_history]
+        scores = ts.selection_scores(records, idx, i, days, closes, p)
+        chosen = ts.rank_selection(scores, ok, top, chosen, hysteresis)
+        return {a: snap[a] for a in chosen}
+
+    res = ts.backtest(close, None, p, start, end, capital, pre=pre, hooks=ts.BacktestHooks(
+        choose=choose if top else None,
+        take_profit=(tp_r, tp_frac) if tp_r is not None else None))
+    trades = res.trades
+    m = dict(res.metrics)
     m["n_trades"] = len(trades)
     m["win_pct"] = 100.0 * np.mean([t["r"] > 0 for t in trades]) if trades else 0.0
     m["avg_r"] = float(np.mean([t["r"] for t in trades])) if trades else 0.0
@@ -201,6 +152,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--cache", default="data_binance")
     ap.add_argument("--out", default="docs/SELECTION.md")
     args = ap.parse_args(argv)
+    v29.ensure_utf8_stdio()
     close, volume = ra.load_binance(args.cache)
     text = report(close, volume)
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)

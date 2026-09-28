@@ -14,23 +14,7 @@ VERSION_MODULE = "V29.6"
 APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCHEMA_VERSION = 11
 
-# Dépendances optionnelles : wallet EVM (web3) et fichier .env (python-dotenv).
-try:
-    from eth_account import Account
-    from web3 import Web3
-    try:
-        from web3.middleware import ExtraDataToPOAMiddleware
-    except ImportError:
-        try:
-            from web3.middleware import geth_poa_middleware as ExtraDataToPOAMiddleware
-        except ImportError:
-            ExtraDataToPOAMiddleware = None
-    WEB3_AVAILABLE = True
-except ImportError:
-    Web3 = None
-    Account = None
-    WEB3_AVAILABLE = False
-    ExtraDataToPOAMiddleware = None
+# Fichier .env (python-dotenv), à côté du programme.
 
 try:
     from dotenv import load_dotenv
@@ -52,17 +36,6 @@ CID_OCO_SL = "QS"
 CID_STOP = "QB"
 PROTECTION_CID_PREFIXES = (CID_OCO_LIST, CID_OCO_TP, CID_OCO_SL, CID_STOP)
 
-ERC20_ABI = [
-    {"constant": True, "inputs": [{"name": "_owner", "type": "address"}],
-     "name": "balanceOf", "outputs": [{"name": "balance", "type": "uint256"}],
-     "type": "function"},
-    {"constant": False, "inputs": [{"name": "_to", "type": "address"},
-                                     {"name": "_value", "type": "uint256"}],
-     "name": "transfer", "outputs": [{"name": "success", "type": "bool"}],
-     "type": "function"},
-    {"constant": True, "inputs": [], "name": "decimals",
-     "outputs": [{"name": "", "type": "uint8"}], "type": "function"},
-]
 
 ENV_DOC: Dict[str, str] = {
     "SYMBOL": "Paire CEX (ex: TRX/USDT)",

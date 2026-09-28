@@ -10,7 +10,7 @@ sécurisé :
 
 | | **TrendGuard** (recommandée) | V29.6 intraday |
 | --- | --- | --- |
-| Code | `trendguard_bot.py` et paquet `trendguard/` | paquet `v29/` (`python -m v29`) |
+| Code | `trendguard_bot.py` et paquet `trendguard/` | `v29/intraday/` (`python -m v29`), rangé à part |
 | Style | Suivi de tendance, portefeuille multi-actifs, journalier | Signaux multi-modules, une paire, 1 h |
 | Validation | Données réelles 2018→2026, hors échantillon, walk-forward | Aucun avantage démontré |
 | Risque | 1 % du capital par trade | 1 % par trade |
@@ -543,11 +543,11 @@ docker compose up -d --build      # construit l'image (tests inclus) et démarre
   sont pris en compte.
 - La reconciliation au boot est *fail-closed*.
 
-Chaque section de l'ancien `v29.py` est devenue un module du paquet `v29/`
-(configuration, base, adaptateur Binance, exécution, backtest…) ; `import v29`
-donne accès à tous les noms, comme avant. Le bot V29.6 intraday reste
-disponible : `python -m v29 bot | backtest | walkforward | status | resume`
-(voir `python -m v29 docs`).
+Le paquet `v29/` ne contient plus que ce moteur (configuration, base,
+adaptateur Binance, risque, exécution, réconciliation). L'ancien bot V29.6
+intraday est rangé à part dans `v29/intraday/`, chargé seulement quand on s'en
+sert : `python -m v29 bot | backtest | walkforward | status | resume` (voir
+`python -m v29 docs`).
 
 ## Tests
 

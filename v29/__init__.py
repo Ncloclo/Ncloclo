@@ -68,80 +68,30 @@ Blockchain / sécurité
   - Secrets (URL RPC, clés) retirés des messages d'erreur.
 
 ════════════════════════════════════════════════════════════════════════
-ORGANISATION DU PAQUET (une section de l'ancien v29.py = un module)
+ORGANISATION DU PAQUET
 ════════════════════════════════════════════════════════════════════════
-  v29/constants.py          Constantes, chemins, dépendances optionnelles et documentation des variables d'environnement
-  v29/utils.py              Utilitaires : environnement, secrets masqués, arrondis, heure de Binance, client Binance
-  v29/config.py             Configuration du bot V29 (variables d'environnement)
-  v29/models.py             Types partagés : positions, portefeuille, états, contexte du bot
-  v29/infra.py              Infrastructure : journaux, alertes Telegram, verrou d'instance, console, heartbeat
-  v29/store.py              Base SQLite : état, trades, intentions d'ordres, courbe du capital
-  v29/exchange.py           Adaptateur Binance Spot : ordres, soldes, règles de marché
-  v29/blockchain.py         Wallet EVM (optionnel)
-  v29/adaptive.py           Moteur adaptatif du bot V29
-  v29/indicators.py         Indicateurs techniques
-  v29/signals.py            Signaux d'entrée du bot V29
-  v29/risk.py               Risque : taille des positions, disjoncteurs, stops
-  v29/execution.py          Moteur d'exécution : entrées, protections, sorties (commun à TrendGuard)
-  v29/reconciliation.py     Réconciliation au démarrage avec l'exchange
-  v29/backtest.py           Métriques, backtest, walk-forward et sensibilité du bot V29
-  v29/runner.py             Boucle du bot V29
-  v29/cli.py                Ligne de commande du bot V29 (python -m v29 …)
+Moteur d'exécution (utilisé par TrendGuard) :
+  v29/constants.py         constantes, dossier du programme, fichier .env
+  v29/utils.py             environnement, secrets masqués, heure de Binance
+  v29/config.py            configuration par paire
+  v29/models.py            positions, portefeuille, contexte
+  v29/infra.py             journaux, alertes Telegram, verrou d'instance
+  v29/store.py             base SQLite : état, trades, intentions d'ordres
+  v29/exchange.py          adaptateur Binance Spot
+  v29/risk.py              taille des positions, disjoncteurs, stops
+  v29/execution.py         entrées, protections, sorties
+  v29/reconciliation.py    réconciliation au démarrage
 
-`import v29` donne accès à tous les noms, comme avant ; ligne de
-commande : python -m v29 bot | backtest | walkforward | status | resume.
+Ancien bot V29.6 intraday, rangé à part (v29/intraday/, chargé seulement
+s'il est utilisé) : signaux, indicateurs, moteur adaptatif, wallet EVM,
+backtest, boucle et ligne de commande (python -m v29 bot | backtest | …).
+
+`import v29` donne accès à tous les noms du moteur ; l'ancien bot :
+`from v29 import intraday`.
 """
 
 from __future__ import annotations
 
-from .adaptive import (  # noqa: F401
-    AdaptiveEngine,
-    _isnan,
-    _row_get,
-)
-from .backtest import (  # noqa: F401
-    DEFAULT_WF_GRID,
-    INDICATOR_PARAMS,
-    BacktestEngine,
-    BacktestResult,
-    WalkForwardWindow,
-    _btc_vol_mult,
-    _empty_metrics,
-    _series_to_list,
-    build_bias_series,
-    build_btc_vol_mult_series,
-    compute_metrics,
-    format_report,
-    format_walkforward_report,
-    monte_carlo_trades,
-    report_sensitivity,
-    run_sensitivity,
-    walk_forward,
-    walkforward_verdict,
-)
-from .blockchain import (  # noqa: F401
-    BlockchainAdapter,
-    BlockchainError,
-    BlockchainPolicy,
-    _to_wei_exact,
-)
-from .cli import (  # noqa: F401
-    _add_data_args,
-    _backtest_cfg,
-    _load_ctx_for_cli,
-    _parse_utc_date,
-    cmd_backtest,
-    cmd_docs,
-    cmd_resume,
-    cmd_sensitivity,
-    cmd_status,
-    cmd_test,
-    cmd_walkforward,
-    cmd_wallet,
-    fetch_historical,
-    load_backtest_data,
-    main,
-)
 from .config import (  # noqa: F401
     Config,
     _parse_symbol,
@@ -160,14 +110,9 @@ from .constants import (  # noqa: F401
     CID_OCO_TP,
     CID_STOP,
     ENV_DOC,
-    ERC20_ABI,
     PROTECTION_CID_PREFIXES,
     SCHEMA_VERSION,
     VERSION_MODULE,
-    WEB3_AVAILABLE,
-    Account,
-    ExtraDataToPOAMiddleware,
-    Web3,
 )
 from .exchange import (  # noqa: F401
     _NUMERIC_STR,
@@ -183,17 +128,6 @@ from .execution import (  # noqa: F401
     ExecutionEngine,
     _update_extremes,
     update_extremes,
-)
-from .indicators import (  # noqa: F401
-    adx_calc,
-    atr_calc,
-    bollinger,
-    compute_indicators,
-    ema,
-    macd_calc,
-    obv_calc,
-    rsi,
-    vwap_calc,
 )
 from .infra import (  # noqa: F401
     Console,
@@ -241,40 +175,6 @@ from .risk import (  # noqa: F401
     record_closed_trade,
     trailing_stop,
 )
-from .runner import (  # noqa: F401
-    OHLCV_LIMIT,
-    BotRunner,
-    _btc_annual_vol,
-    _btc_bias,
-    _cached_bias,
-    _compute_subsystems,
-    _handle_stop,
-    _htf_bias,
-    _init_benchmark,
-    _send_daily_report,
-    install_signal_handlers,
-    run_bot,
-)
-from .signals import (  # noqa: F401
-    _SIGNAL_REQUIRED,
-    _above_vwap,
-    _assign_tier,
-    _essential_breakout,
-    _essential_pullback,
-    _essential_range,
-    _essential_trend,
-    _module_enabled,
-    _score_breakout,
-    _score_pullback,
-    _score_range,
-    _score_trend,
-    adaptive_rsi_bounds,
-    detect_regime,
-    generate_signal,
-    generate_signal_from_rows,
-    min_signal_bars,
-    module_enabled,
-)
 from .store import (  # noqa: F401
     Store,
 )
@@ -297,7 +197,9 @@ from .utils import (  # noqa: F401
     _env_s,
     _env_tuple_csv,
     _get_env_logger,
+    _isnan,
     _parse_iso,
+    _row_get,
     _timeframe_ms,
     _today_utc,
     _utcnow,

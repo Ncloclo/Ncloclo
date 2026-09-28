@@ -10,8 +10,9 @@ import pytest
 
 import v29
 from conftest import make_cfg
+from v29 import intraday as v29i
 
-pytestmark = pytest.mark.skipif(not v29.WEB3_AVAILABLE, reason="web3 absent")
+pytestmark = pytest.mark.skipif(not v29i.WEB3_AVAILABLE, reason="web3 absent")
 
 ADDR = "0x" + "11" * 20
 DEST = "0x" + "22" * 20
@@ -75,7 +76,7 @@ def make_adapter(**cfg_kw):
                    "https://rpc.example/v3/SECRETKEY9999",
                    blockchain_dry_run=False, blockchain_whitelist=(DEST,),
                    **cfg_kw)
-    ba = v29.BlockchainAdapter.__new__(v29.BlockchainAdapter)
+    ba = v29i.BlockchainAdapter.__new__(v29i.BlockchainAdapter)
     ba.cfg = cfg
     ba.logger = logging.getLogger("test.chain")
     ba.store = None
@@ -92,7 +93,7 @@ def make_adapter(**cfg_kw):
     ba._token_contract = None
     ba._eip1559_supported = True
     ba._secrets = [cfg.blockchain_rpc_url]
-    ba.policy = v29.BlockchainPolicy(cfg, ADDR, ba.logger)
+    ba.policy = v29i.BlockchainPolicy(cfg, ADDR, ba.logger)
     return ba
 
 
@@ -116,7 +117,7 @@ def test_nonce_resync_does_not_skip():
 def test_nonce_unavailable_fails_closed_and_scrubbed():
     ba = make_adapter()
     ba.w3.eth.fail_count = True
-    with pytest.raises(v29.BlockchainError) as ei:
+    with pytest.raises(v29i.BlockchainError) as ei:
         ba._acquire_nonce()
     assert "SECRETKEY9999" not in str(ei.value)
 
@@ -172,29 +173,29 @@ def test_pending_guard_and_address_validation_order():
     ba = make_adapter()
     ctx = v29.BotContext()
     ctx.blockchain.last_pending_tx_hash = "0xdead"
-    with pytest.raises(v29.BlockchainError, match="Adresse invalide"):
+    with pytest.raises(v29i.BlockchainError, match="Adresse invalide"):
         ba.send_native("pas-une-adresse", 0.001, ctx)
-    with pytest.raises(v29.BlockchainError, match="Pending"):
+    with pytest.raises(v29i.BlockchainError, match="Pending"):
         ba.send_native(DEST, 0.001, ctx)
 
 
 def test_whitelist_and_value_cap():
     ba = make_adapter()
-    with pytest.raises(v29.BlockchainError, match="non autorisée"):
+    with pytest.raises(v29i.BlockchainError, match="non autorisée"):
         ba.policy.guard_tx("0x" + "44" * 20, 0.001)
-    with pytest.raises(v29.BlockchainError, match="max"):
+    with pytest.raises(v29i.BlockchainError, match="max"):
         ba.policy.guard_tx(DEST, 1.0)
 
 
 def test_live_send_without_ctx_refused():
     ba = make_adapter()
-    with pytest.raises(v29.BlockchainError, match="sans contexte"):
+    with pytest.raises(v29i.BlockchainError, match="sans contexte"):
         ba.send_native(DEST, 0.001, None)
 
 
 def test_exact_wei_conversion():
-    assert v29._to_wei_exact(0.1) == 10 ** 17
-    assert v29._to_wei_exact(1.000001, 6) == 1_000_001
+    assert v29i._to_wei_exact(0.1) == 10 ** 17
+    assert v29i._to_wei_exact(1.000001, 6) == 1_000_001
 
 
 def test_encode_transfer_compat():
@@ -209,4 +210,4 @@ def test_encode_transfer_compat():
     class Contract:
         functions = Functions()
 
-    assert v29.BlockchainAdapter._encode_transfer(Contract(), DEST, 5) == "0xa9059cbb"
+    assert v29i.BlockchainAdapter._encode_transfer(Contract(), DEST, 5) == "0xa9059cbb"

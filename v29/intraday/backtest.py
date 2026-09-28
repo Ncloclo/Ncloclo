@@ -1,6 +1,7 @@
 """Métriques, backtest, walk-forward et sensibilité du bot V29.
 
-Partie du moteur V29 (paquet v29, anciennement v29.py).
+Partie de l'ancien bot V29.6 (v29/intraday/), rangé à part du moteur
+d'exécution que TrendGuard utilise.
 """
 from __future__ import annotations
 
@@ -16,12 +17,10 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-from .adaptive import AdaptiveEngine, _isnan
-from .config import Config
-from .constants import _LOG_ROOT
-from .indicators import compute_indicators
-from .models import BotContext, BotState, Position, Signal
-from .risk import (
+from ..config import Config
+from ..constants import _LOG_ROOT
+from ..models import BotContext, BotState, Position, Signal
+from ..risk import (
     RR_BY_MODULE,
     RiskEngine,
     break_even_stop,
@@ -31,8 +30,10 @@ from .risk import (
     record_closed_trade,
     trailing_stop,
 )
+from ..utils import _annualization_factor, _isnan, _timeframe_ms
+from .adaptive import AdaptiveEngine
+from .indicators import compute_indicators
 from .signals import generate_signal_from_rows, min_signal_bars
-from .utils import _annualization_factor, _timeframe_ms
 
 
 def compute_metrics(equity_curve: List[float],

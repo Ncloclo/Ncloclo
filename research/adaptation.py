@@ -56,41 +56,18 @@ def run_variant(close: pd.DataFrame, volume: pd.DataFrame, pre, p: ts.TrendParam
                 start: str, end: str, perf: Optional[tuple] = None,
                 corr: Optional[float] = None, daily: Optional[int] = None,
                 capital: float = 10_000.0) -> Dict[str, float]:
-    """Backtest de trend_strategy (même logique) + adaptations optionnelles
+    """La boucle de backtest du bot (ts.backtest) + adaptations optionnelles
     perf / corr / daily. L'adaptation `dd` passe par p.dd_throttle."""
-    cols, reg = pre
-    idx = close.index
     logret = np.log(close / close.shift(1))
-    lo = idx.searchsorted(pd.Timestamp(start, tz="UTC"))
-    hi = idx.searchsorted(pd.Timestamp(end, tz="UTC"), side="right")
-    cost_out = p.fee + p.slippage
-    cash = peak = capital
-    hold: Dict[str, ts.Holding] = {}
-    last_px: Dict[str, float] = {}
-    trades: List[Dict[str, Any]] = []
-    eq_hist = []
-    for i in range(lo, hi):
-        d = idx[i]
-        snap = {a: {k: c[k][i] for k in c} for a, c in cols.items()}
-        bull = bool(reg[i])
-        for a, reason in ts.update_positions(hold, snap, bull, p):
-            h = hold.pop(a)
-            px = snap[a]["close"]
-            if reason == "DELISTED" or not ts._finite(px):
-                px = last_px.get(a, h.entry) * 0.5
-            proceeds = h.qty * px * (1 - cost_out)
-            cash += proceeds
-            trades.append({"r": (proceeds - h.cost) / h.risk_quote,
-                           "pnl": proceeds - h.cost})
-        for a in hold:
-            last_px[a] = snap[a]["close"]
-        equity = cash + sum(h.qty * snap[a]["close"] for a, h in hold.items())
-        peak = max(peak, equity)
-        mult = ts.risk_multiplier(equity, peak, p)
+
+    def risk_cap(trades: List[Dict[str, Any]]) -> Optional[float]:
         if perf and len(trades) >= perf[0] and \
                 np.mean([t["r"] for t in trades[-perf[0]:]]) < 0:
-            mult = min(mult, perf[1])
-        plans = ts.plan_entries(hold, snap, bull, equity, cash, p, mult)
+            return perf[1]
+        return None
+
+    def filter_plans(i: int, plans: List[Dict[str, Any]], hold: Dict[str, ts.Holding],
+                     equity: float) -> List[Dict[str, Any]]:
         if daily:
             plans = plans[:daily]
         if corr and plans:
@@ -104,15 +81,13 @@ def run_variant(close: pd.DataFrame, volume: pd.DataFrame, pre, p: ts.TrendParam
                     chosen.append(pl)
                     names, risks = n2, list(r2)
             plans = chosen
-        for pl in plans:
-            a = pl["asset"]
-            cash -= pl["cost"]
-            hold[a] = ts.Holding(a, pl["qty"], pl["entry"], pl["stop"],
-                                 pl["ref_price"], d, pl["risk_quote"], pl["cost"])
-            last_px[a] = pl["ref_price"]
-        eq_hist.append(cash + sum(h.qty * snap[a]["close"] for a, h in hold.items()))
-    eq = pd.Series(eq_hist, index=idx[lo:hi])
-    m = ts.compute_metrics(eq, trades)
+        return plans
+
+    res = ts.backtest(close, volume, p, start, end, capital, pre=pre,
+                      hooks=ts.BacktestHooks(risk_cap=risk_cap if perf else None,
+                                             filter_plans=filter_plans if (daily or corr) else None))
+    eq = res.equity
+    m = dict(res.metrics)
     monthly = eq.resample("ME").last().pct_change().dropna()
     m["worst_month_pct"] = float(monthly.min() * 100)
     return m
@@ -122,6 +97,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(description="Étude d'adaptation TrendGuard")
     ap.add_argument("--cache", default="data_binance")
     args = ap.parse_args(argv)
+    v29.ensure_utf8_stdio()
     close, volume = load_binance(args.cache)
     base = ts.TrendParams()
     pre = ts.precompute(close, volume, base)

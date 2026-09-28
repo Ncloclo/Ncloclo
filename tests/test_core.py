@@ -14,6 +14,7 @@ import pytest
 
 import v29
 from conftest import make_cfg
+from v29 import intraday as v29i
 
 # ---------- Configuration ----------
 
@@ -43,7 +44,7 @@ def test_live_requires_confirmation():
         v29.Config(run_mode="live", enable_live_trading=True)
 
 
-@pytest.mark.skipif(not v29.WEB3_AVAILABLE, reason="web3 absent")
+@pytest.mark.skipif(not v29i.WEB3_AVAILABLE, reason="web3 absent")
 def test_sweep_target_must_be_whitelisted():
     with pytest.raises(ValueError, match="WHITELIST"):
         v29.Config(blockchain_enabled=True, blockchain_rpc_url="http://x",
@@ -76,10 +77,22 @@ def test_state_files_stay_next_to_the_entry_point():
     assert os.path.dirname(v29.__file__) == os.path.join(v29.APP_DIR, "v29")
 
 
+def test_old_v29_bot_is_kept_apart_from_the_engine():
+    """Le moteur d'exécution (import v29) ne charge ni l'ancien bot V29.6
+    ni web3 : ils ne servent qu'à « python -m v29 » et à leurs tests."""
+    import subprocess
+    import sys
+    code = "import sys, v29; print('v29.intraday' in sys.modules, 'web3' in sys.modules)"
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                         cwd=v29.APP_DIR, timeout=120).stdout.split()
+    assert out == ["False", "False"]
+    assert v29.ExecutionEngine and v29i.BotRunner and v29i.BacktestEngine
+
+
 def test_env_doc_complete_and_no_orphan():
     pkg = os.path.dirname(v29.__file__)
-    src = "".join(open(os.path.join(pkg, f), encoding="utf-8").read()
-                  for f in sorted(os.listdir(pkg)) if f.endswith(".py"))
+    src = "".join(open(os.path.join(d, f), encoding="utf-8").read()
+                  for d, _s, files in os.walk(pkg) for f in sorted(files) if f.endswith(".py"))
     pattern = r'(?:os\.environ\.get|_env_[a-z]+|_env_tuple_csv)\(\s*"([A-Z0-9_]+)"'
     used = set(re.findall(pattern, src))
     documented = set(v29.ENV_DOC)
@@ -252,7 +265,7 @@ def test_record_closed_trade_stats_and_cooldown():
 def test_adaptive_consec_direction():
     """V29.5 : Sharpe négatif → PLUS de pertes tolérées (inversé)."""
     cfg = v29.Config()
-    eng = v29.AdaptiveEngine(cfg, logging.getLogger("t"))
+    eng = v29i.AdaptiveEngine(cfg, logging.getLogger("t"))
     bad = v29.BotContext()
     bad.portfolio.last_trades = [{"r": -1.0}] * 12 + [{"r": 0.5}] * 8
     eng.update(bad, None)
@@ -265,7 +278,7 @@ def test_adaptive_consec_direction():
 
 def test_adaptive_freshness_bootstrap_and_tightening():
     cfg = v29.Config()
-    eng = v29.AdaptiveEngine(cfg, logging.getLogger("t"))
+    eng = v29i.AdaptiveEngine(cfg, logging.getLogger("t"))
     ctx = v29.BotContext()
     eng.update(ctx, None)
     assert ctx.adaptive.current_freshness_min == cfg.adaptive_freshness_max
@@ -287,11 +300,11 @@ def test_essential_range_filters():
     c = {"close": 0.95, "rsi": 28.0, "bb_lower": 0.96, "vol_ratio": 3.5,
          "atr_pct": 0.01, "open": 0.96}
     p = {"close": 0.94}
-    assert v29._essential_range(c, p, cfg) == (False, "vol_too_high")
+    assert v29i._essential_range(c, p, cfg) == (False, "vol_too_high")
     c2 = dict(c, vol_ratio=1.2, atr_pct=0.001)
-    assert v29._essential_range(c2, p, cfg) == (False, "atr_too_low")
+    assert v29i._essential_range(c2, p, cfg) == (False, "atr_too_low")
     c3 = dict(c, vol_ratio=1.2)
-    assert v29._essential_range(c3, p, cfg) == (True, None)
+    assert v29i._essential_range(c3, p, cfg) == (True, None)
 
 
 def test_indicators_are_causal():
@@ -301,8 +314,8 @@ def test_indicators_are_causal():
     df = pd.DataFrame({"ts": np.arange(600) * 3_600_000, "open": close,
                        "high": close * 1.005, "low": close * 0.995,
                        "close": close, "volume": rng.uniform(1, 2, 600)})
-    full = v29.compute_indicators(df, cfg)
-    part = v29.compute_indicators(df.iloc[:400], cfg)
+    full = v29i.compute_indicators(df, cfg)
+    part = v29i.compute_indicators(df.iloc[:400], cfg)
     cols = ["ema_trend", "rsi", "atr", "adx", "bb_upper", "realized_vol",
             "atr_rank", "vwap_24", "obv_slope"]
     a = full.iloc[399][cols].astype(float).values
@@ -317,7 +330,7 @@ def test_realized_vol_uses_timeframe():
     df = pd.DataFrame({"ts": np.arange(800) * 900_000, "open": close,
                        "high": close, "low": close, "close": close,
                        "volume": 1.0})
-    out = v29.compute_indicators(df, cfg15)
+    out = v29i.compute_indicators(df, cfg15)
     expected = 0.002 * math.sqrt(v29._annualization_factor("15m"))
     assert abs(out["realized_vol"].iloc[-200:].mean() / expected - 1) < 0.2
 
@@ -435,7 +448,7 @@ def test_heartbeat_tick(paper_env):
                                 sl_price=0.097, tp_price=0.1075, amount_held=100,
                                 opened_at=v29._utcnow_iso(), module="trend", tier="A")
     out = hb.tick(ctx, "TREND_UP", 1023.4, 0.101, ctx.adaptive, 1000.0,
-                  subsystems=v29._compute_subsystems(ctx, None))
+                  subsystems=v29i._compute_subsystems(ctx, None))
     assert "LONG trend/A" in out and "PROT=NONE" in out
 
 

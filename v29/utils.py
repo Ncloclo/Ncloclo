@@ -18,6 +18,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from urllib.parse import urlparse, urlunparse
 
 import ccxt
+import pandas as pd
 
 from .constants import _ENV_BOOL, _LOG_ROOT
 
@@ -413,3 +414,17 @@ def describe_clock(offset_ms: float, uncertainty_ms: Optional[float] = None) -> 
     if uncertainty_ms is not None:
         txt += f" (± {uncertainty_ms / 1000:.1f} s)".replace(".", ",")
     return txt
+
+def _row_get(row: Any, key: str, default: Any = None) -> Any:
+    try:
+        v = row[key]
+    except (KeyError, IndexError, TypeError):
+        return default
+    return v
+
+
+def _isnan(x: Any) -> bool:
+    try:
+        return x is None or bool(pd.isna(x))
+    except (TypeError, ValueError):
+        return False

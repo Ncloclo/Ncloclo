@@ -1,6 +1,7 @@
 """Moteur adaptatif du bot V29.
 
-Partie du moteur V29 (paquet v29, anciennement v29.py).
+Partie de l'ancien bot V29.6 (v29/intraday/), rangé à part du moteur
+d'exécution que TrendGuard utilise.
 """
 from __future__ import annotations
 
@@ -9,26 +10,10 @@ import time
 from typing import Any, Optional
 
 import numpy as np
-import pandas as pd
 
-from .config import Config
-from .models import AdaptiveState, BotContext
-from .utils import _timeframe_ms
-
-
-def _row_get(row: Any, key: str, default: Any = None) -> Any:
-    try:
-        v = row[key]
-    except (KeyError, IndexError, TypeError):
-        return default
-    return v
-
-
-def _isnan(x: Any) -> bool:
-    try:
-        return x is None or bool(pd.isna(x))
-    except (TypeError, ValueError):
-        return False
+from ..config import Config
+from ..models import AdaptiveState, BotContext
+from ..utils import _isnan, _row_get, _timeframe_ms
 
 
 class AdaptiveEngine:

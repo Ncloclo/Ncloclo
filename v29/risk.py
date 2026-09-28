@@ -12,10 +12,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from .adaptive import _isnan, _row_get
 from .config import Config
 from .models import BotContext, HaltKind, Position, clear_halt, halt_ctx
-from .utils import _day_key, _parse_iso, _timeframe_ms, _utcnow, _week_key
+from .utils import _day_key, _isnan, _parse_iso, _row_get, _timeframe_ms, _utcnow, _week_key
 
 RR_BY_MODULE = {"trend": 2.5, "pullback": 2.0, "breakout": 2.0, "range": 1.5}
 

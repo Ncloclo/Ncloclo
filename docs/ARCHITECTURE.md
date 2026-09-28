@@ -28,7 +28,7 @@ clé « Démarrer avec l'ordinateur » et les tâches VS Code ne changent pas.
 | --- | --- |
 | `trendguard_bot.py` | point d'entrée unique ; ré-exporte les noms du paquet `trendguard` |
 | `trendguard/` | le bot TrendGuard |
-| `v29/` | moteur d'exécution Binance commun et ancien bot V29.6 |
+| `v29/` | moteur d'exécution Binance (ordres, stops, base, verrou) ; ancien bot V29.6 rangé dans `v29/intraday/` |
 | `panel/` | panneau de contrôle (serveur local et interface web) |
 | `research/` | études reproductibles, lecture seule |
 | `tests/` | tests Python (`pytest`) et navigateur (`tests/web/`, Playwright) |
@@ -62,28 +62,55 @@ sont jamais envoyés sur GitHub. VS Code les masque dans l'explorateur
 
 ## Le paquet `v29/`
 
-Chaque section de l'ancien fichier `v29.py` (7 483 lignes) est devenue un
-module. Les sections ne dépendent que des sections précédentes, dans cet ordre :
+L'ancien fichier `v29.py` (7 483 lignes) mélangeait le moteur d'exécution
+utilisé par TrendGuard et l'ancien bot V29.6 intraday. Ils sont maintenant
+séparés : `v29/` ne contient que le moteur, et l'ancien bot est rangé dans
+`v29/intraday/`, chargé seulement quand on s'en sert.
 
-| Module | Rôle |
+| Moteur (`v29/`) | Rôle |
 | --- | --- |
-| `constants.py` | constantes, dossier du programme, dépendances optionnelles, `.env` |
+| `constants.py` | constantes, dossier du programme, fichier `.env` |
 | `utils.py` | variables d'environnement, secrets masqués, heure de Binance, client Binance |
-| `config.py` | configuration du bot V29 |
+| `config.py` | configuration par paire |
 | `models.py` | types partagés : positions, portefeuille, contexte |
 | `infra.py` | journaux, alertes Telegram, verrou d'instance, heartbeat |
 | `store.py` | base SQLite : état, trades, intentions d'ordres |
 | `exchange.py` | adaptateur Binance Spot : ordres, soldes, règles de marché |
-| `blockchain.py` | wallet EVM (optionnel) |
-| `adaptive.py`, `indicators.py`, `signals.py` | moteur adaptatif, indicateurs et signaux du bot V29 |
 | `risk.py` | taille des positions, disjoncteurs, stops |
-| `execution.py` | moteur d'exécution : entrées, protections, sorties (utilisé par TrendGuard) |
+| `execution.py` | moteur d'exécution : entrées, protections, sorties |
 | `reconciliation.py` | réconciliation avec Binance au démarrage |
-| `backtest.py` | métriques, backtest, walk-forward du bot V29 |
-| `runner.py`, `cli.py` | boucle et ligne de commande du bot V29 (`python -m v29`) |
 
-`import v29` donne toujours accès à tous ces noms (`v29.Store`,
-`v29.ExecutionEngine`…).
+| Ancien bot (`v29/intraday/`) | Rôle |
+| --- | --- |
+| `adaptive.py`, `indicators.py`, `signals.py` | moteur adaptatif, indicateurs et signaux |
+| `blockchain.py` | wallet EVM (optionnel, avec web3) |
+| `backtest.py` | métriques, backtest, walk-forward du bot V29 |
+| `runner.py`, `cli.py` | boucle et ligne de commande (`python -m v29`) |
+
+`import v29` donne accès à tous les noms du moteur (`v29.Store`,
+`v29.ExecutionEngine`…) sans charger l'ancien bot ni web3 ; l'ancien bot :
+`from v29 import intraday`. Un test le vérifie.
+
+## Une seule boucle de backtest
+
+`trendguard/trend_strategy.py` contient LA boucle de backtest (`backtest`),
+avec les mêmes fonctions que le bot (`update_positions`, `plan_entries`) et
+une seule formule de taille de position (`entry_levels`, `size_position`).
+Les études la réutilisent avec des crochets (`BacktestHooks`) au lieu de la
+recopier :
+
+| Étude | Crochet utilisé |
+| --- | --- |
+| profil prudent, espérance récente, corrélation, entrées par jour (`research/adaptation.py`) | `risk_cap`, `filter_plans` |
+| auto-sélection des plus rentables, prise de bénéfice (`research/selection.py`) | `choose`, `take_profit` |
+| variantes de tendance et de régime (`trendguard/strategy_lab.py`) | paramètres et régime |
+
+Seules les deux stratégies aux règles différentes du laboratoire (rotation,
+retour à la moyenne) ont leur simulateur (`strategy_lab.simulate`), qui
+calcule la taille des positions avec la même formule. Une correction faite
+dans la boucle vaut ainsi pour le bot, le backtest et toutes les études :
+les trois rapports régénérés après cette unification sont identiques, à
+l'octet près.
 
 ## Dépendances
 
@@ -93,7 +120,8 @@ panel ─────► trendguard ──► v29
 trendguard_bot.py ─► trendguard
 ```
 
-- `v29` ne connaît ni TrendGuard ni le panneau.
+- `v29` ne connaît ni TrendGuard ni le panneau ; son moteur ne dépend pas
+  de l'ancien bot (`v29/intraday/`).
 - Dans `trendguard`, `config.py`, `selection.py` et `explain.py` ne
   dépendent pas du bot ; `bot.py` s'appuie sur eux, sur la stratégie,
   l'anticipation, la veille et le diagnostic ; `cli.py` assemble le tout et

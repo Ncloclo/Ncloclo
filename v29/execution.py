@@ -13,7 +13,6 @@ from typing import Any, Dict, List, Optional, Tuple
 import ccxt
 import pandas as pd
 
-from .adaptive import _isnan, _row_get
 from .config import Config
 from .constants import (
     CID_ENTRY_LIMIT,
@@ -44,7 +43,7 @@ from .models import (
 )
 from .risk import RR_BY_MODULE, RiskEngine, break_even_stop, record_closed_trade, trailing_stop
 from .store import Store
-from .utils import _parse_iso, _utcnow, _utcnow_iso
+from .utils import _isnan, _parse_iso, _row_get, _utcnow, _utcnow_iso
 
 #
 # Invariants :

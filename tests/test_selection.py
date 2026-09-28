@@ -136,3 +136,39 @@ def test_research_study_runs_on_a_small_market():
     for m in (ref, top, tp):
         assert np.isfinite(m["cagr_pct"]) and m["n_trades"] > 0
     assert isinstance(close.index, pd.DatetimeIndex)
+
+
+def test_one_backtest_loop_for_the_bot_and_every_study():
+    """Les études passent leurs variantes à ts.backtest (crochets) au lieu
+    de recopier la boucle : sans crochet, résultat identique au centime."""
+    close, volume = synthetic_market()
+    pre = ts.precompute(close, volume, P)
+    start, end = str(close.index[260].date()), str(close.index[-1].date())
+    ref = ts.backtest(close, volume, P, start, end, pre=pre)
+    same = ts.backtest(close, None, P, start, end, pre=pre, hooks=ts.BacktestHooks())
+    assert same.equity.equals(ref.equity) and same.trades == ref.trades
+    # Prise de bénéfice : la moitié vendue à +1 R, le reste suit le stop.
+    tp = ts.backtest(close, None, P, start, end, pre=pre,
+                     hooks=ts.BacktestHooks(take_profit=(1.0, 0.5)))
+    assert tp.trades and len(tp.trades) == len(ref.trades)
+    assert not tp.equity.equals(ref.equity)
+    # Aucun achat permis : capital intact, aucun trade.
+    none = ts.backtest(close, None, P, start, end, pre=pre,
+                       hooks=ts.BacktestHooks(choose=lambda i, snap: {}))
+    assert none.trades == [] and none.equity.iloc[-1] == 10_000.0
+    # Plafond de risque à 0 : aucun achat non plus.
+    capped = ts.backtest(close, None, P, start, end, pre=pre,
+                         hooks=ts.BacktestHooks(risk_cap=lambda trades: 0.0))
+    assert capped.trades == []
+
+
+def test_one_position_size_for_bot_backtest_and_lab():
+    """Une seule formule de taille : risque visé jusqu'au stop, plafond par
+    position, cash disponible, minimum de 10 USDT."""
+    entry, stop, unit = ts.entry_levels(100.0, 5.0, P)
+    assert entry == 100.0 * (1 + P.slippage) and stop == ts.initial_stop(100.0, 5.0, P)
+    qty, cost = ts.size_position(entry, unit, 100.0, 10_000.0, 10_000.0, P)
+    assert qty * unit == pytest.approx(100.0)                  # 1 % de 10 000 USDT
+    qty2, cost2 = ts.size_position(entry, unit, 100.0, 10_000.0, 50.0, P)
+    assert cost2 == pytest.approx(50.0) and qty2 < qty          # limité par le cash
+    assert ts.size_position(entry, unit, 100.0, 10_000.0, 5.0, P) is None   # < 10 USDT

@@ -1,6 +1,7 @@
 """Wallet EVM (optionnel).
 
-Partie du moteur V29 (paquet v29, anciennement v29.py).
+Partie de l'ancien bot V29.6 (v29/intraday/), rangé à part du moteur
+d'exécution que TrendGuard utilise.
 """
 from __future__ import annotations
 
@@ -12,12 +13,42 @@ import time
 from decimal import ROUND_DOWN, Decimal
 from typing import Any, Dict, Optional, Tuple
 
-from .config import Config
-from .constants import ERC20_ABI, WEB3_AVAILABLE, Account, ExtraDataToPOAMiddleware, Web3
-from .infra import Notifier
-from .models import BotContext
-from .store import Store
-from .utils import _parse_iso, _utcnow, _utcnow_iso, redact_address, redact_url, scrub_secrets
+from ..config import Config
+from ..infra import Notifier
+from ..models import BotContext
+from ..store import Store
+from ..utils import _parse_iso, _utcnow, _utcnow_iso, redact_address, redact_url, scrub_secrets
+
+# Dépendance optionnelle : wallet EVM (web3).
+try:
+    from eth_account import Account
+    from web3 import Web3
+    try:
+        from web3.middleware import ExtraDataToPOAMiddleware
+    except ImportError:
+        try:
+            from web3.middleware import geth_poa_middleware as ExtraDataToPOAMiddleware
+        except ImportError:
+            ExtraDataToPOAMiddleware = None
+    WEB3_AVAILABLE = True
+except ImportError:
+    Web3 = None
+    Account = None
+    WEB3_AVAILABLE = False
+    ExtraDataToPOAMiddleware = None
+
+ERC20_ABI = [
+    {"constant": True, "inputs": [{"name": "_owner", "type": "address"}],
+     "name": "balanceOf", "outputs": [{"name": "balance", "type": "uint256"}],
+     "type": "function"},
+    {"constant": False, "inputs": [{"name": "_to", "type": "address"},
+                                     {"name": "_value", "type": "uint256"}],
+     "name": "transfer", "outputs": [{"name": "success", "type": "bool"}],
+     "type": "function"},
+    {"constant": True, "inputs": [], "name": "decimals",
+     "outputs": [{"name": "", "type": "uint8"}], "type": "function"},
+]
+
 
 
 class BlockchainError(Exception):

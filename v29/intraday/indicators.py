@@ -1,6 +1,7 @@
 """Indicateurs techniques.
 
-Partie du moteur V29 (paquet v29, anciennement v29.py).
+Partie de l'ancien bot V29.6 (v29/intraday/), rangé à part du moteur
+d'exécution que TrendGuard utilise.
 """
 from __future__ import annotations
 
@@ -9,8 +10,8 @@ import math
 import numpy as np
 import pandas as pd
 
-from .config import Config
-from .utils import _annualization_factor, _bars_per_day
+from ..config import Config
+from ..utils import _annualization_factor, _bars_per_day
 
 
 def ema(series: pd.Series, span: int) -> pd.Series:
