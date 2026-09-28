@@ -139,6 +139,39 @@ def test_thin_book_and_expiry_abandon_the_entry(logger):
     assert bot.state["reasoning"]["assets"][a]["status"] == "cancelled"
 
 
+def test_retry_pending_reprices_against_todays_equity_not_the_stale_one(logger):
+    """Un achat différé rejoué doit être jugé (plafond de risque, taille) sur
+    le capital réel du moment, pas sur celui mémorisé au moment du report :
+    entre-temps, une autre position a pu clôturer sur son stop."""
+    close, volume = synthetic_market()
+    day_i, bought = _first_entry_day(close, volume, logger)
+    bot, fb = _bot_until(close, volume, logger, day_i)
+    wide = {"on": True}
+
+    def book(symbol, limit=20):
+        f = fb._f(symbol)
+        k = 0.01 if wide["on"] else 0.0001            # écart 2 % : carnet anormal
+        return {"bids": [[f.last * (1 - k), 1e9]], "asks": [[f.last * (1 + k), 1e9]]}
+    fb.fetch_order_book = book
+    _cycle(bot, fb, close, day_i, 5)                  # achat différé (carnet anormal)
+    a = sorted(bought)[0]
+    pend = bot.state["pending_entries"]
+    assert a in pend
+    pend[a]["equity"] = 1e9                           # capital mémorisé désormais périmé
+    pend[a]["next"] = 0.0                             # prêt à réessayer immédiatement
+    seen = {}
+
+    def fake_execute(plan, equity, now_, cash):
+        seen["equity"] = equity
+        return None
+    bot._execute_entry = fake_execute
+    now = close.index[day_i].to_pydatetime() + DAY + timedelta(minutes=8)
+    bot._retry_pending(now)
+    real_equity, _ = bot._equity_and_cash({})
+    assert seen["equity"] == pytest.approx(real_equity)
+    assert seen["equity"] != pytest.approx(1e9)
+
+
 def test_price_outage_defers_instead_of_losing_the_entry(logger):
     close, volume = synthetic_market()
     day_i, bought = _first_entry_day(close, volume, logger)
