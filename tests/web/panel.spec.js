@@ -205,11 +205,14 @@ test("graphiques en temps réel et détail d'un graphique", async ({ page }) => 
 
 test("cryptos : sélection manuelle par cases à cocher, auto-sélection", async ({ page }) => {
   const errors = watchErrors(page);
+  // Point de départ connu (un essai précédent a pu changer la sélection).
+  const st = await (await page.request.get(BASE + "/api/status")).json();
+  await page.request.post(BASE + "/api/selection", { headers: { "X-TrendGuard": "1" }, data: { mode: "manual", manual: st.universe } });
   await page.goto(BASE + "/#assets");
   await expect(page.locator("#asset-grid .asset")).toHaveCount(21);
   await expect(page.locator("#sel-count")).toHaveText("21 / 21");
   await expect(page.locator('[data-sel="manual"]')).toHaveAttribute("aria-pressed", "true");
-  const eth = page.locator('#asset-grid [data-asset="eth"]');
+  const eth = page.locator('#asset-grid article[data-asset="eth"]');
   await expect(eth.locator(".rank")).toContainText("sur 2 ans");
   await eth.locator(".pick input").uncheck();                      // ne pas acheter ETH
   await expect(page.locator("#sel-count")).toHaveText("20 / 21");

@@ -960,7 +960,7 @@ let pickTimer = 0;
 function onPick() {
   clearTimeout(pickTimer);
   pickTimer = setTimeout(async () => {
-    const manual = $$("#asset-grid .pick input").filter((b) => b.checked).map((b) => b.dataset.asset);
+    const manual = $$("#asset-grid .pick input").filter((b) => b.checked).map((b) => b.dataset.pick);
     await saveSelection("manual", manual);
     renderAssets().catch(() => {});
   }, 400);
@@ -1004,7 +1004,7 @@ async function renderAssets() {
       const pick = el("label", "pick");
       const box = el("input");
       box.type = "checkbox";
-      box.dataset.asset = r.asset;
+      box.dataset.pick = r.asset;
       box.setAttribute("aria-label", `${up(r.asset)} : le bot peut l'acheter`);
       pick.append(box, el("span", "", "Achetable"));
       pick.addEventListener("click", (e) => e.stopPropagation());
