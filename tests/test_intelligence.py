@@ -172,6 +172,48 @@ def test_retry_pending_reprices_against_todays_equity_not_the_stale_one(logger):
     assert seen["equity"] != pytest.approx(1e9)
 
 
+def test_retry_values_open_positions_at_their_current_price(logger):
+    """Capital du nouvel essai = liquidités + positions au cours du moment
+    (et non à leur prix d'achat)."""
+    close, volume = synthetic_market()
+    day_i, bought = _first_entry_day(close, volume, logger)
+    bot, fb = _bot_until(close, volume, logger, day_i)
+    fb.fetch_order_book = lambda symbol, limit=20: {"bids": [], "asks": []}
+    _cycle(bot, fb, close, day_i, 5)
+    a = sorted(bought)[0]
+    held = next(x for x in close.columns if x != a)
+    px = float(close[held].iloc[day_i])
+    bot.state["paper"]["holdings"][held] = {
+        "qty": 2.0, "entry": px / 2, "stop": px / 4, "high": px, "entry_date": "2024-01-01T00:00:00+00:00",
+        "risk_quote": 1.0, "cost": px, "disaster": px / 5}
+    bot.state["pending_entries"][a]["next"] = 0.0
+    seen = {}
+    bot._execute_entry = lambda plan, equity, now_, cash: seen.update(equity=equity)
+    bot._retry_pending(close.index[day_i].to_pydatetime() + DAY + timedelta(minutes=8))
+    cash = bot.state["paper"]["cash"]
+    assert seen["equity"] == pytest.approx(cash + 2.0 * px)       # au cours, pas à px / 2
+
+
+def test_deferred_entry_shows_the_latest_reason(logger):
+    close, volume = synthetic_market()
+    day_i, bought = _first_entry_day(close, volume, logger)
+    bot, fb = _bot_until(close, volume, logger, day_i)
+    fb.fetch_order_book = lambda symbol, limit=20: {"bids": [], "asks": []}
+    _cycle(bot, fb, close, day_i, 5)
+    a = sorted(bought)[0]
+    assert "carnet d'ordres vide" in bot.state["reasoning"]["assets"][a]["text"]
+    real = fb.fetch_ticker
+
+    def down(symbol):
+        if symbol == f"{a.upper()}/USDT":
+            raise ccxt.NetworkError("coupure")
+        return real(symbol)
+    fb.fetch_ticker = down
+    _cycle(bot, fb, close, day_i, 11)
+    assert "prix indisponible" in bot.state["pending_entries"][a]["reason"]
+    assert "prix indisponible" in bot.state["reasoning"]["assets"][a]["text"]
+
+
 def test_price_outage_defers_instead_of_losing_the_entry(logger):
     close, volume = synthetic_market()
     day_i, bought = _first_entry_day(close, volume, logger)

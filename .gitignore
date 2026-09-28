@@ -11,6 +11,7 @@
 *.off
 *.alive
 *.superviseur.json
+*.selection.json
 # Python
 __pycache__/
 .pytest_cache/

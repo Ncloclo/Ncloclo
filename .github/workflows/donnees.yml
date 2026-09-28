@@ -49,6 +49,8 @@ jobs:
             > out/diagnostic.log 2>&1 || true
           python strategy_lab.py --cache out/data_binance --out out/STRATEGIES.md \
             > out/laboratoire.log 2>&1 || true
+          python research_selection.py --cache out/data_binance --out out/SELECTION.md \
+            > out/selection.log 2>&1 || true
           cat > out/LISEZMOI.md <<'EOF'
           # Données de la revue hebdomadaire TrendGuard
 
@@ -58,6 +60,11 @@ jobs:
           - `veille.txt` : annonces officielles Binance, actualités, Fear & Greed.
           - `diagnostic.txt` : `trendguard_bot.py diagnose` (données publiques).
           - `STRATEGIES.md` : laboratoire des stratégies (`strategy_lab.py`).
+          - `SELECTION.md` : auto-sélection des 10 plus rentables et prises de
+            bénéfice fixes contre la référence (`research_selection.py`), à
+            comparer à `docs/SELECTION.md` : le réglage par défaut (21
+            cryptos, gain laissé courir) ne change que si une variante gagne
+            sur les deux périodes.
           - `data_binance/` : historique Binance, à passer en `--cache` pour
             tester des variantes sans réseau.
           - `*.log` : sorties complètes, en cas d'échec.

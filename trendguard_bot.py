@@ -1308,6 +1308,9 @@ class TrendGuardBot:
         if e is not None:
             e.update(reason=reason, tries=int(e.get("tries", 1)) + 1,
                      next=t + self.RETRY_EVERY_SEC)
+            # Le tableau de bord affiche la raison du DERNIER essai.
+            self._note_asset(a, "deferred", f"Achat différé : {reason}. Nouvel essai "
+                                            f"toutes les 5 min")
             return
         if self.g.entry_retry_hours <= 0:
             self.logger.warning(f"[RUSE] achat de {a.upper()} annulé : {reason}")
@@ -1322,6 +1325,18 @@ class TrendGuardBot:
         self._entry_notes[a] = ("deferred", f"Achat différé : {reason}. Nouvel essai "
                                             f"toutes les 5 min")
         self._note_asset(a, *self._entry_notes[a])
+
+    def _mark_prices(self, holdings: Dict[str, ts.Holding]) -> Dict[str, float]:
+        """Cours actuels des positions détenues (capital réel du moment) ; un
+        cours illisible est remplacé par le prix d'achat."""
+        prices: Dict[str, float] = {}
+        for a, h in holdings.items():
+            s = self.slots.get(a.upper())
+            try:
+                prices[a] = float(s.ex.get_ticker()["last"]) if s else h.entry
+            except Exception:
+                prices[a] = h.entry
+        return prices
 
     def _retry_pending(self, now: datetime) -> None:
         """Nouvel essai des achats différés, tant que la décision du jour
@@ -1341,7 +1356,7 @@ class TrendGuardBot:
                                                  f"{self.g.entry_retry_hours:g} h")
                 continue
             holdings = self._holdings()
-            eq, cash = self._equity_and_cash({})
+            eq, cash = self._equity_and_cash(self._mark_prices(holdings))
             mult = float(self.state.get("risk_mult", 1.0) or 1.0)
             open_risk = sum(h.risk_quote for h in holdings.values())
             if (self.state.get("halted") or not self.state.get("last_regime_bull")

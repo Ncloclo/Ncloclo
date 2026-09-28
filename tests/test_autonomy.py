@@ -201,6 +201,28 @@ def test_run_supervisor_login_respects_user_stop_and_single_instance(tmp_path, l
     assert st["running"] is False and st["off"] is False
 
 
+def test_simultaneous_probes_never_see_a_free_lock_as_held(tmp_path):
+    import threading
+    path = str(tmp_path / "libre.lock")
+    seen = []
+
+    def probe():
+        for _ in range(20):
+            seen.append(autonomy.lock_held(path))
+    threads = [threading.Thread(target=probe) for _ in range(6)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert seen and not any(seen)                      # personne ne tient ce verrou
+    lock = v29.ProcessLock(path)
+    lock.acquire()
+    try:
+        assert autonomy.lock_held(path) is True
+    finally:
+        lock.release()
+
+
 # ---------- Démarrage avec l'ordinateur ----------
 
 class FakeRegistry:

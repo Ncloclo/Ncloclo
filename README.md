@@ -504,7 +504,7 @@ walkforward | status | resume` (voir `python v29.py docs`).
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 371 tests, simulateurs Binance Spot mono et multi-paires
+python -m pytest tests -q      # 376 tests, simulateurs Binance Spot mono et multi-paires
 ```
 
 À chaque envoi sur GitHub, `.github/workflows/checks.yml` lance ces tests, puis

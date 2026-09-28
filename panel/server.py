@@ -98,8 +98,12 @@ class PanelApp:
 
     def new_session(self) -> str:
         token = secrets.token_urlsafe(32)
+        now = time.time()
         with self._lock:
-            self._sessions[token] = time.time() + SESSION_DAYS * 86400
+            # Sessions expirées oubliées : la mémoire ne grossit pas avec le temps.
+            for old in [k for k, exp in self._sessions.items() if exp <= now]:
+                del self._sessions[old]
+            self._sessions[token] = now + SESSION_DAYS * 86400
         return token
 
     def session_ok(self, token: Optional[str]) -> bool:

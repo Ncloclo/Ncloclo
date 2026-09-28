@@ -37,6 +37,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 from logging.handlers import RotatingFileHandler
@@ -61,17 +62,30 @@ def sidecar(lock_file: str, ext: str) -> str:
     return os.path.splitext(lock_file)[0] + ext
 
 
+_PROBE_LOCK = threading.Lock()
+
+
 def lock_held(path: str) -> bool:
-    """Le verrou est-il tenu par un process vivant ? Sonde sans attente."""
+    """Le verrou est-il tenu par un process vivant ? Sonde sans attente.
+    Deux sondes simultanées se gêneraient (l'une verrait le verrou pris par
+    l'autre) : dans un même process elles passent l'une après l'autre, et
+    un verrou vu pris est revérifié un instant plus tard (sonde d'un autre
+    process, comme le superviseur)."""
     if not path or path in (os.devnull, "/dev/null"):
         return False
-    probe = v29.ProcessLock(path)
-    try:
-        probe.acquire()
-    except SystemExit:
-        return True
-    probe.release()
-    return False
+    with _PROBE_LOCK:
+        for attempt in range(2):
+            probe = v29.ProcessLock(path)
+            try:
+                probe.acquire()
+            except SystemExit:
+                if attempt == 0:
+                    time.sleep(0.05)
+                    continue
+                return True
+            probe.release()
+            return False
+    return True
 
 
 def _touch(path: str, text: str = "") -> None:

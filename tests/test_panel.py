@@ -208,6 +208,14 @@ def test_second_panel_on_the_same_port_is_refused(tmp_path):
         httpd.server_close()
 
 
+def test_expired_sessions_are_forgotten(tmp_path):
+    app = ps.build_app(_cfg(tmp_path), demo=True, password="secret-du-panneau")
+    old = app.new_session()
+    app._sessions[old] = time.time() - 1                  # expirée
+    fresh = app.new_session()
+    assert old not in app._sessions and app.session_ok(fresh) and not app.session_ok(old)
+
+
 def test_network_access_refused_without_password(tmp_path, monkeypatch, capsys):
     monkeypatch.delenv("PANEL_PASSWORD", raising=False)
     assert ps.main(_cfg(tmp_path), host="0.0.0.0", port=0, demo=True, open_browser=False) == 2
