@@ -25,6 +25,7 @@ Commandes :
   python trendguard_bot.py stop      # arrêt propre de l'automatisation
   python trendguard_bot.py autostart on|off   # démarrage avec l'ordinateur
   python trendguard_bot.py panel     # panneau de contrôle (navigateur)
+  python trendguard_bot.py set-panel-password   # accès depuis un téléphone
 """
 
 from __future__ import annotations
@@ -106,7 +107,9 @@ TG_ENV_DOC: Dict[str, str] = {
     "TWILIO_ACCOUNT_SID": "WhatsApp Twilio : Account SID",
     "TWILIO_AUTH_TOKEN": "WhatsApp Twilio : Auth Token",
     "TWILIO_WHATSAPP_FROM": "WhatsApp Twilio : numéro expéditeur",
-    "PANEL_PASSWORD": "Panneau : mot de passe (obligatoire avec PANEL_HOST=0.0.0.0)",
+    "PANEL_PASSWORD": "Panneau : mot de passe (obligatoire avec PANEL_HOST=0.0.0.0) ; set-panel-password",
+    "PANEL_ASSISTANT_IA": "Assistant du panneau : true = réponses rédigées par l'IA de la veille si une clé existe",
+    "PANEL_ASSISTANT_MODEL": "Assistant du panneau : modèle Claude (claude-sonnet-5 par défaut)",
 }
 
 
@@ -1719,6 +1722,52 @@ def cmd_set_secret(env_path: str = ENV_FILE) -> int:
     return 0
 
 
+def panel_password_problem(pw: str) -> Optional[str]:
+    if len(pw) < 10:
+        return "10 caractères minimum"
+    if pw != pw.strip():
+        return "pas d'espace au début ni à la fin"
+    if any(c in pw for c in "'\r\n"):
+        return "l'apostrophe (') n'est pas acceptée"
+    if len(set(pw)) < 5 or pw.lower() in ("motdepasse", "password12", "1234567890", "azertyuiop"):
+        return "mot de passe trop simple"
+    return None
+
+
+def cmd_set_panel_password(env_path: str = ENV_FILE,
+                           ask: Optional[Callable[[str], str]] = None) -> int:
+    """Accès au panneau depuis un téléphone : mot de passe saisi MASQUÉ, deux
+    fois, écrit dans .env ; accès Wi-Fi (PANEL_HOST=0.0.0.0) sur demande."""
+    import getpass
+    ask = ask or input
+    print("Mot de passe du panneau (accès depuis un téléphone), 10 caractères minimum.")
+    print("(Rien ne s'affiche pendant la saisie : c'est normal.)")
+    try:
+        pw = getpass.getpass("Mot de passe : ")
+        if getpass.getpass("Confirmez : ") != pw:
+            print("❌ Les deux saisies diffèrent. Rien n'a été modifié.")
+            return 1
+        problem = panel_password_problem(pw)
+        if problem:
+            print(f"❌ Mot de passe refusé : {problem}. Rien n'a été modifié.")
+            return 1
+        answer = ask("Autoriser l'accès depuis un téléphone sur le même Wi-Fi ? (o/N) ")
+        lan = answer.strip().lower() in ("o", "oui", "y", "yes")
+    except (EOFError, KeyboardInterrupt):
+        print("\nAnnulé. Rien n'a été modifié.")
+        return 1
+    set_env_var(env_path, "PANEL_PASSWORD", f"'{pw}'")     # guillemets simples : texte exact
+    if lan:
+        set_env_var(env_path, "PANEL_HOST", "0.0.0.0")
+    print(f"✅ Mot de passe enregistré dans {env_path} (fichier privé, jamais commité).")
+    if lan:
+        print("✅ Accès Wi-Fi activé au prochain démarrage du panneau (redémarrage de "
+              "l'ordinateur). Tout de suite : python trendguard_bot.py panel --host 0.0.0.0 "
+              "--port 8766 (tâche VS Code « Panneau — accès téléphone »).")
+    print("Changer le mot de passe puis redémarrer le panneau déconnecte tous les appareils.")
+    return 0
+
+
 def _auth_hint(msg: str) -> str:
     """Traduit un refus d'authentification Binance."""
     ip = re.search(r"request ip:\s*([0-9A-Fa-f.:]+)", msg)
@@ -2193,7 +2242,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("cmd", choices=["run", "once", "status", "resume", "docs",
                                     "health", "replay", "set-secret",
                                     "set-keys", "verify", "diagnose", "panel",
-                                    "supervise", "stop", "autostart"])
+                                    "supervise", "stop", "autostart",
+                                    "set-panel-password"])
     ap.add_argument("action", nargs="?", default="status", choices=["on", "off", "status"],
                     help="(autostart) on = activer, off = désactiver, status = état")
     ap.add_argument("--out", default=None, help="(diagnose) fichier du rapport")
@@ -2248,6 +2298,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         return cmd_set_keys()
     if args.cmd == "autostart":
         return autonomy.cmd_autostart(args.action)
+    if args.cmd == "set-panel-password":
+        return cmd_set_panel_password()
     try:
         gcfg = load_guard_config_from_env()
     except ValueError as e:

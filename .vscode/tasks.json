@@ -71,6 +71,21 @@
       "problemMatcher": []
     },
     {
+      "label": "Panneau — définir le mot de passe (saisie masquée)",
+      "type": "shell",
+      "command": "python trendguard_bot.py set-panel-password",
+      "presentation": { "focus": true, "panel": "dedicated" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Panneau — accès téléphone (port 8766)",
+      "type": "shell",
+      "command": "python trendguard_bot.py panel --host 0.0.0.0 --port 8766 --no-open",
+      "isBackground": true,
+      "presentation": { "panel": "dedicated" },
+      "problemMatcher": []
+    },
+    {
       "label": "Alertes — configurer e-mail et WhatsApp (saisie masquée)",
       "type": "shell",
       "command": "python alerts.py configurer",

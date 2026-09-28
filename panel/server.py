@@ -14,6 +14,7 @@ Sécurité :
 
 from __future__ import annotations
 
+import collections
 import hmac
 import json
 import math
@@ -32,6 +33,7 @@ from urllib.parse import parse_qs, urlparse
 
 import market_watch as mw
 
+from .assistant import AIHelper, Assistant
 from .control import BotControl
 from .data import BotData, _ts
 from .demo import DemoControl, DemoData, DemoMarket, DemoNews
@@ -41,6 +43,7 @@ from .news import NewsHub
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 LOOPBACK = {"127.0.0.1", "localhost", "::1"}
 SESSION_DAYS = 30
+CHAT_PER_MINUTE = 20        # questions à l'assistant (coût d'une IA éventuelle)
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
        "img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; "
        "base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
@@ -77,10 +80,13 @@ def lan_ips() -> List[str]:
 class PanelApp:
     def __init__(self, gcfg: Any, data: Any, market: Any, control: Any, hub: Any = None,
                  demo: bool = False, password: str = "", loopback: bool = True,
-                 lan_urls: Optional[List[str]] = None, news: Any = None):
+                 lan_urls: Optional[List[str]] = None, news: Any = None,
+                 assistant: Any = None):
         self.g = gcfg
         self.data, self.market, self.control, self.hub = data, market, control, hub
         self.news = news
+        self.assistant = assistant or Assistant(None)
+        self._chat_times: collections.deque = collections.deque()
         self.demo = demo
         self.password = password
         self.loopback = loopback
@@ -190,6 +196,23 @@ class PanelApp:
         snap["held"] = held
         return snap
 
+    def assistant_context(self) -> Dict[str, Any]:
+        """Données PUBLIQUES transmises à l'assistant : aucune clé, aucun
+        mot de passe, rien du fichier .env."""
+        return {"status": self.status(), "news": self.news_view(),
+                "reasoning": self.data.reasoning()}
+
+    def chat(self, body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
+        now = time.time()
+        with self._lock:
+            while self._chat_times and now - self._chat_times[0] > 60:
+                self._chat_times.popleft()
+            if len(self._chat_times) >= CHAT_PER_MINUTE:
+                return 429, {"error": "Trop de questions d'un coup : réessayez dans une minute."}
+            self._chat_times.append(now)
+        return 200, self.assistant.reply(body.get("message"), body.get("history"),
+                                         self.assistant_context)
+
     def candles(self, asset: str, interval: str, limit: int) -> Dict[str, Any]:
         asset = asset.lower()
         if asset not in {b.lower() for b in self.g.universe}:
@@ -260,6 +283,8 @@ class PanelApp:
                     return 200, self.data.reasoning()
                 if path == "/api/news":
                     return 200, self.news_view()
+                if path == "/api/assistant":
+                    return 200, self.assistant.info()
                 if path == "/api/log":
                     return 200, {"lines": self.data.log_tail(int(q("lines", "300")))}
             if method == "POST":
@@ -269,6 +294,8 @@ class PanelApp:
                 if path == "/api/bot/stop":
                     ok, msg = self.control.stop()
                     return 200, {"ok": ok, "message": msg}
+                if path == "/api/assistant":
+                    return self.chat(body)
                 if path == "/api/autostart":
                     ok, msg = self.control.set_autostart(body.get("enabled") is True)
                     return 200, {"ok": ok, "message": msg}
@@ -357,7 +384,7 @@ def make_handler(app: PanelApp):
                 return self._json(403, {"error": "requête refusée (origine)"})
             url = urlparse(self.path)
             try:
-                length = min(int(self.headers.get("Content-Length") or 0), 10_000)
+                length = min(int(self.headers.get("Content-Length") or 0), 32_000)
                 body = json.loads(self.rfile.read(length) or b"{}") if length else {}
                 if not isinstance(body, dict):
                     body = {}
@@ -410,7 +437,8 @@ def build_app(gcfg: Any, demo: bool = False, password: str = "", loopback: bool 
     market = Market(quote=gcfg.quote)
     return PanelApp(gcfg, BotData(gcfg, market), market, BotControl(gcfg),
                     alerts.build_notifier(), False, password, loopback, lan_urls,
-                    news=NewsHub(universe=tuple(gcfg.universe)))
+                    news=NewsHub(universe=tuple(gcfg.universe)),
+                    assistant=Assistant(AIHelper()))
 
 
 class PanelServer(ThreadingHTTPServer):

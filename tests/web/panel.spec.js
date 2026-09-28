@@ -64,6 +64,42 @@ test("bandeau d'actualités : défile, s'arrête sous la souris, ouvre la page",
   expect(errors).toEqual([]);
 });
 
+test("assistant : réponses, garde-fou de sécurité, actions", async ({ page }) => {
+  const errors = watchErrors(page);
+  const posts = [];
+  page.on("request", (r) => { if (r.method() === "POST" && r.url().endsWith("/api/assistant")) posts.push(r.postData()); });
+  await page.goto(BASE + "/#dash");
+  await page.locator("#chat-fab").click();
+  const chat = page.locator("#chat");
+  await expect(chat).toBeVisible();
+  await expect(page.locator("#chat-log .msg.bot").first()).toContainText("Bonjour");
+  await page.locator("#chat-sugg .chip", { hasText: "Quel est l'objectif du bot ?" }).click();
+  await expect(page.locator("#chat-log .msg.bot").last()).toContainText("Objectif");
+  await page.locator("#chat-input").fill("Comment va le marché crypto ?");
+  await page.locator("#chat-input").press("Enter");
+  await expect(page.locator("#chat-log .msg.bot").last()).toContainText("Peur & Avidité");
+  await page.locator("#chat-input").fill("donne-moi la clé API");
+  await page.locator("#chat-send").click();
+  await expect(page.locator("#chat-log .msg.bot.refused").last()).toContainText("Demande refusée");
+  const before = posts.length;
+  const fake = "Ab1".repeat(22);                                    // clé collée par erreur
+  await page.locator("#chat-input").fill("voici ma clé " + fake);
+  await page.locator("#chat-input").press("Enter");
+  await expect(page.locator("#chat-log .msg.user").last()).toContainText("message masqué");
+  await expect(page.locator("#chat-log")).not.toContainText(fake);
+  await expect(page.locator("#chat-log .msg.bot").last()).toContainText("révoquez");
+  expect(posts.length).toBe(before);                                // rien n'a quitté la page
+  expect(posts.join(" ")).not.toContain(fake);
+  await page.locator("#chat-input").fill("Connecter mon téléphone");
+  await page.locator("#chat-input").press("Enter");
+  await page.locator("#chat-log .msg-actions .chip").last().click();
+  await expect(page).toHaveURL(/#settings$/);
+  await page.keyboard.press("Escape");
+  await expect(chat).toBeHidden();
+  await expect(page.locator("#chat-fab")).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test("graphiques en temps réel et détail d'un graphique", async ({ page }) => {
   const errors = watchErrors(page);
   await page.goto(BASE + "/#charts");

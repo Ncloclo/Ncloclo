@@ -30,6 +30,9 @@
   <symbol id="i-close" viewBox="0 0 24 24"><path d="m6.4 5 5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></symbol>
   <symbol id="i-mind" viewBox="0 0 24 24"><path d="M9 21h6v-1.6H9zm3-19a7 7 0 0 0-4 12.7V17.5h8v-2.8A7 7 0 0 0 12 2m2.6 11.4-.6.4v1.9h-4v-1.9l-.6-.4a5 5 0 1 1 5.2 0"/></symbol>
   <symbol id="i-news" viewBox="0 0 24 24"><path d="M4 4h13v4h3v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm2 2v12h11V6zm13 4v8a.5.5 0 0 0 1 0v-8zM8 8h7v4H8zm0 6h7v1.6H8zm0 2.6h5v1.4H8z"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 3h16a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H9l-5 4v-4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2m3 6.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3m5 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3m5 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M3 20.5 21.5 12 3 3.5 3 10l12 2-12 2z"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4zm-3 6h12l-1 12H7zm4 2v8h1.6v-8zm3.4 0v8H15v-8z"/></symbol>
   <symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 4h6v2H6v4H4zm10 0h6v6h-2V6h-4zM4 14h2v4h4v2H4zm14 0h2v6h-6v-2h4z"/></symbol>
 </svg>
 
@@ -258,6 +261,24 @@
     </main>
   </div>
 </div>
+
+<!-- Assistant -->
+<button class="fab" id="chat-fab" type="button" aria-controls="chat" aria-expanded="false" title="Poser une question"><svg><use href="#i-chat"/></svg><span>Assistant</span></button>
+<section class="chat" id="chat" role="dialog" aria-labelledby="chat-title" hidden>
+  <header class="chat-head">
+    <span class="chat-avatar" aria-hidden="true"><svg><use href="#i-chat"/></svg></span>
+    <div><h2 id="chat-title">Assistant TrendGuard</h2><span class="sub" id="chat-mode">Réponses intégrées au panneau</span></div>
+    <button class="icon-btn" id="chat-clear" type="button" title="Effacer la conversation" aria-label="Effacer la conversation"><svg><use href="#i-trash"/></svg></button>
+    <button class="icon-btn" id="chat-close" type="button" title="Fermer" aria-label="Fermer l'assistant"><svg><use href="#i-close"/></svg></button>
+  </header>
+  <ol class="chat-log" id="chat-log" aria-live="polite"></ol>
+  <div class="chat-sugg" id="chat-sugg" role="group" aria-label="Questions suggérées"></div>
+  <form class="chat-form" id="chat-form">
+    <textarea id="chat-input" rows="1" maxlength="1200" placeholder="Posez votre question…" aria-label="Votre question" autocomplete="off"></textarea>
+    <button class="btn" id="chat-send" type="submit" aria-label="Envoyer"><svg><use href="#i-send"/></svg></button>
+  </form>
+  <p class="chat-note">🔒 Ne tapez jamais de clé, de mot de passe ni de code ici : ils seraient masqués, jamais envoyés.</p>
+</section>
 
 <!-- Détail d'un graphique -->
 <dialog id="detail" aria-labelledby="detail-title">

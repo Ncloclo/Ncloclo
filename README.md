@@ -116,6 +116,19 @@ panneau de contrôle ») :
   Sources publiques sans clé : CoinDesk, Cointelegraph, Decrypt, Journal du
   Coin, Cryptoast, CNBC, Le Monde, Google Actualités, CoinGecko, alternative.me,
   Yahoo Finance ;
+- **Assistant** (bouton en bas à droite, sur toutes les pages) : fenêtre de
+  dialogue sur les objectifs du bot, les marchés crypto et financiers (avec les
+  chiffres du moment), le trading, la connexion et la configuration d'un
+  téléphone, l'utilisation de l'interface et l'accès au panneau. Réponses
+  intégrées, sans clé ; si une IA de la veille est configurée (Claude de
+  préférence), elle rédige les réponses dans le même périmètre
+  (`PANEL_ASSISTANT_IA=false` pour s'en passer). Garde-fou appliqué avant toute
+  réponse : une clé, un mot de passe, un code ou une phrase de récupération
+  collés sont masqués sans jamais quitter la page, avec le conseil de les
+  révoquer ; toute demande qui toucherait à la sécurité (révéler une clé ou le
+  `.env`, contourner une protection, ouvrir un port, activer les retraits,
+  déplacer des fonds) est refusée en une phrase. L'assistant ne voit que des
+  données publiques et ne peut rien modifier ;
 - **Ce que pense le bot** (tableau de bord) : sa décision du jour expliquée et
   les cryptos proches d'un signal d'achat ;
 - **Graphiques** : capital, régime BTC et chaque position en temps réel ; un
@@ -132,9 +145,11 @@ Le panneau lit la base du bot sans la modifier et ne passe aucun ordre
 lui-même. Sans bot ni réseau, `--demo` affiche des données fictives.
 
 Compatibilité : Windows, Linux et macOS (Python et un navigateur). Sur un
-téléphone Android ou un iPhone connecté au même Wi-Fi : mettre
-`PANEL_PASSWORD=…` dans `.env`, lancer `python trendguard_bot.py panel --host
-0.0.0.0`, ouvrir l'adresse affichée, puis « Ajouter à l'écran d'accueil » : le
+téléphone Android ou un iPhone connecté au même Wi-Fi : créer le mot de passe
+avec `python trendguard_bot.py set-panel-password` (saisie masquée, accès Wi-Fi
+proposé), lancer `python trendguard_bot.py panel --host 0.0.0.0` (ou redémarrer
+l'ordinateur), ouvrir l'adresse affichée, puis « Ajouter à l'écran d'accueil » :
+le
 panneau s'ouvre comme une application. Il n'y a pas de fichier APK : il
 faudrait publier le panneau sur Internet en HTTPS, ce qui exposerait la
 commande du bot.
@@ -283,6 +298,7 @@ python trendguard_bot.py set-keys                     # clés API vérifiées pa
 python strategy_lab.py --cache data_binance           # tournoi des stratégies + méta-apprentissage
 python replay_animation.py                            # animation du bot sur les prix réels Binance
 python trendguard_bot.py panel                        # panneau de contrôle (navigateur)
+python trendguard_bot.py set-panel-password           # accès depuis un téléphone (saisie masquée)
 python trendguard_bot.py supervise                    # bot relancé seul en cas de plantage
 python trendguard_bot.py autostart on                 # démarrage avec l'ordinateur (off : retiré)
 python trendguard_bot.py stop                         # arrêt propre, sans relance
@@ -459,7 +475,7 @@ walkforward | status | resume` (voir `python v29.py docs`).
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 309 tests, simulateurs Binance Spot mono et multi-paires
+python -m pytest tests -q      # 356 tests, simulateurs Binance Spot mono et multi-paires
 ```
 
 À chaque envoi sur GitHub, `.github/workflows/checks.yml` lance ces tests, puis

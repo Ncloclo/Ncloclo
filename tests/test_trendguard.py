@@ -324,7 +324,8 @@ def test_tg_env_doc_complete():
     import os
     root = os.path.dirname(os.path.abspath(tg.__file__))
     src = "".join(open(os.path.join(root, f), encoding="utf-8").read()
-                  for f in ("trendguard_bot.py", "alerts.py", os.path.join("panel", "server.py")))
+                  for f in ("trendguard_bot.py", "alerts.py", os.path.join("panel", "server.py"),
+                            os.path.join("panel", "assistant.py")))
     used = set(re.findall(
         r'(?:os\.environ\.get\(|_env_[a-z]+\(|_env\(env,|env\.get\()\s*"([A-Z0-9_]+)"', src))
     assert used - set(tg.TG_ENV_DOC) == set()
@@ -433,6 +434,25 @@ def test_set_secret_command_masks_input(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(getpass, "getpass", lambda prompt="": "trop-court")
     assert tg.cmd_set_secret(str(env)) == 1
     assert f"BINANCE_API_SECRET={secret}" in env.read_text()      # inchangé
+
+
+def test_set_panel_password_is_masked_confirmed_and_exact(tmp_path, monkeypatch, capsys):
+    import getpass
+    from dotenv import dotenv_values
+    env = tmp_path / ".env"
+    env.write_text("RUN_MODE=paper\n")
+    pw = "Mon#Pass $word 2026"
+    answers = iter([pw, pw])
+    monkeypatch.setattr(getpass, "getpass", lambda prompt="": next(answers))
+    assert tg.cmd_set_panel_password(str(env), ask=lambda q: "o") == 0
+    values = dotenv_values(env)
+    assert values["PANEL_PASSWORD"] == pw and values["PANEL_HOST"] == "0.0.0.0"
+    assert pw not in capsys.readouterr().out                     # jamais affiché
+    for first, second in (("Différent123!", "Autre12345!"), ("court1!", "court1!"),
+                          ("aaaaaaaaaaaa", "aaaaaaaaaaaa"), ("avec'apostrophe1", "avec'apostrophe1")):
+        answers = iter([first, second])
+        assert tg.cmd_set_panel_password(str(env), ask=lambda q: "n") == 1
+    assert dotenv_values(env)["PANEL_PASSWORD"] == pw            # inchangé
 
 
 def test_capital_cap_sizes_on_capped_capital(logger):

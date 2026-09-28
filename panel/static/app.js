@@ -1012,6 +1012,168 @@ $("#logout-btn").addEventListener("click", async () => {
   showLogin();
 });
 
+// ---------- Assistant (fenêtre de dialogue) ----------
+// Garde-fou côté navigateur : une clé, un mot de passe ou un code collés ne
+// quittent jamais cette page (le serveur applique le même contrôle).
+const CHAT = { history: [], loaded: false, busy: false };
+const MASK_TEXT = "🔒 Message masqué : il semblait contenir une information secrète (clé, mot de passe ou code). Il n'a pas été envoyé. Si c'était une vraie clé ou un vrai mot de passe, révoquez-le : sur Binance, « Gestion des API » → supprimer la clé, puis créez-en une nouvelle avec la saisie masquée.";
+const SECRET_RX = [
+  /\bsk-[A-Za-z0-9_-]{16,}/,
+  /\b(mot de passe|password|passwd|mdp|pin)\s*(est|=|:|is|c'est|c’est)\s*(?=\S*[\d!@#$%^&*_+=?])\S{4,}/i,
+  /\b(code|2fa|a2f|otp)\b\D{0,20}\b\d{6}\b/i,
+];
+const CHAT_STOP = new Set("le la les de du des un une et pour mon ma mes je tu il que qui comment est sur dans au avec pas ne ce on en the to my how is and of for what you it in with do can a i bot panneau".split(" "));
+function looksSecret(t) {
+  if (SECRET_RX.some((rx) => rx.test(t))) return true;
+  const long = t.split(/\s+/).map((w) => w.replace(/^["'`.,;:()[\]{}<>]+|["'`.,;:()[\]{}<>]+$/g, ""))
+    .some((w) => w.length >= 32 && !w.includes("/") && !w.includes("www.") && /^[A-Za-z0-9_\-+=]+$/.test(w) && /\d/.test(w) && /[A-Za-z]/.test(w));
+  if (long) return true;
+  const words = t.trim().split(/\s+/);
+  return [12, 15, 18, 21, 24].includes(words.length) && words.every((w) => /^[a-z]{3,8}$/.test(w)) && !words.some((w) => CHAT_STOP.has(w));
+}
+function inlineRich(node, text) {
+  text.split(/(\*\*[^*]+\*\*)/).forEach((part) => {
+    if (/^\*\*[^*]+\*\*$/.test(part)) node.append(el("strong", "", part.slice(2, -2)));
+    else if (part) node.append(document.createTextNode(part));
+  });
+  return node;
+}
+function richText(node, text) {
+  let ul = null;
+  text.split("\n").forEach((line) => {
+    if (/^- /.test(line)) {
+      if (!ul) { ul = el("ul"); node.append(ul); }
+      ul.append(inlineRich(el("li"), line.slice(2)));
+    } else {
+      ul = null;
+      if (line.trim()) node.append(inlineRich(el("p"), line));
+    }
+  });
+}
+function chatScroll() {
+  const log = $("#chat-log");
+  log.scrollTo({ top: log.scrollHeight, behavior: reduceMotion.matches ? "auto" : "smooth" });
+}
+function chatMessage(role, text, extra = {}) {
+  const li = el("li", `msg ${role}${extra.refused ? " refused" : ""}`);
+  const bubble = el("div", "bubble");
+  richText(bubble, text);
+  li.append(bubble);
+  if (extra.actions && extra.actions.length) {
+    const acts = el("div", "msg-actions");
+    extra.actions.forEach((a) => {
+      const b = el("button", "chip watch");
+      b.type = "button";
+      b.append(el("span", "", a.label + " ›"));
+      b.addEventListener("click", () => {
+        location.hash = a.href;
+        if (matchMedia("(max-width: 860px)").matches) closeChat();
+      });
+      acts.append(b);
+    });
+    li.append(acts);
+  }
+  if (role === "bot" && extra.source) {
+    li.append(el("span", "msg-src", extra.source === "local" ? "réponse intégrée au panneau"
+      : extra.source === "garde-fou" ? "garde-fou de sécurité" : `rédigé par ${extra.source}`));
+  }
+  $("#chat-log").append(li);
+  chatScroll();
+  return li;
+}
+function chatSuggestions(list) {
+  $("#chat-sugg").replaceChildren(...(list || []).map((q) => {
+    const b = el("button", "chip", q);
+    b.type = "button";
+    b.addEventListener("click", () => sendChat(q));
+    return b;
+  }));
+}
+async function openChat() {
+  const box = $("#chat");
+  box.hidden = false;
+  $("#chat-fab").setAttribute("aria-expanded", "true");
+  if (!CHAT.loaded) {
+    CHAT.loaded = true;
+    try {
+      const info = await api("/api/assistant");
+      CHAT.info = info;
+      $("#chat-mode").textContent = info.ai ? `Réponses rédigées par ${info.ai}, dans un périmètre limité` : "Réponses intégrées au panneau, sans IA externe";
+      chatMessage("bot", info.welcome);
+      chatSuggestions(info.suggestions);
+    } catch (e) {
+      CHAT.loaded = false;
+      chatMessage("bot", `Assistant indisponible : ${e.message}`);
+    }
+  }
+  $("#chat-input").focus();
+}
+function closeChat() {
+  $("#chat").hidden = true;
+  $("#chat-fab").setAttribute("aria-expanded", "false");
+  $("#chat-fab").focus();
+}
+async function sendChat(text) {
+  text = (text || "").trim();
+  if (!text || CHAT.busy) return;
+  const input = $("#chat-input");
+  input.value = "";
+  input.style.height = "";
+  if (looksSecret(text)) {                       // rien n'est envoyé
+    chatMessage("user", "🔒 •••••• (message masqué)", { refused: true });
+    chatMessage("bot", MASK_TEXT, { refused: true, source: "garde-fou" });
+    return;
+  }
+  const userLi = chatMessage("user", text);
+  const typing = el("li", "msg bot typing");
+  const dots = el("div", "bubble");
+  dots.append(el("i"), el("i"), el("i"));
+  typing.append(dots);
+  $("#chat-log").append(typing);
+  chatScroll();
+  CHAT.busy = true;
+  $("#chat-send").disabled = true;
+  try {
+    const r = await api("/api/assistant", { body: { message: text, history: CHAT.history.slice(-6) } });
+    typing.remove();
+    if (r.masked) {
+      userLi.classList.add("refused");
+      userLi.querySelector(".bubble").replaceChildren(el("p", "", "🔒 •••••• (message masqué)"));
+    }
+    chatMessage("bot", r.answer, { refused: r.refused, actions: r.actions, source: r.source });
+    if (!r.refused) {
+      CHAT.history.push({ role: "user", text }, { role: "assistant", text: r.answer });
+      CHAT.history = CHAT.history.slice(-12);
+    }
+    if (r.suggestions && r.suggestions.length) chatSuggestions(r.suggestions);
+  } catch (e) {
+    typing.remove();
+    chatMessage("bot", e.message === "connexion requise" ? "Reconnectez-vous au panneau, puis reposez la question." : `Réponse impossible : ${e.message}`);
+  } finally {
+    CHAT.busy = false;
+    $("#chat-send").disabled = false;
+  }
+}
+$("#chat-fab").addEventListener("click", openChat);
+$("#chat-close").addEventListener("click", closeChat);
+$("#chat-clear").addEventListener("click", () => {
+  CHAT.history = [];
+  $("#chat-log").replaceChildren();
+  if (CHAT.info) {
+    chatMessage("bot", CHAT.info.welcome);
+    chatSuggestions(CHAT.info.suggestions);
+  }
+});
+$("#chat-form").addEventListener("submit", (e) => { e.preventDefault(); sendChat($("#chat-input").value); });
+$("#chat-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(e.currentTarget.value); }
+});
+$("#chat-input").addEventListener("input", (e) => {
+  const t = e.currentTarget;
+  t.style.height = "";
+  t.style.height = Math.min(t.scrollHeight, 120) + "px";
+});
+
 // ---------- Connexion ----------
 function showLogin() {
   $("#login").hidden = false;
@@ -1060,7 +1222,11 @@ function tick() {
   if (current && now - lastTab > PERIOD[current] * 1000) refreshTab();
 }
 document.addEventListener("visibilitychange", () => { if (!document.hidden) { lastStatus = 0; lastTab = 0; tick(); } });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && D) closeDetail(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (D) closeDetail();
+  else if (!$("#chat").hidden) closeChat();
+});
 
 // ---------- Démarrage ----------
 applyTheme(prefs.get("theme", "auto"));
