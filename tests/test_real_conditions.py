@@ -573,6 +573,28 @@ def test_key_commands_write_the_env_file_the_bot_reads(monkeypatch):
     assert tg.main(["set-keys"]) == 0
 
 
+def test_paper_mode_never_uses_the_api_keys(monkeypatch, tmp_path):
+    """En paper, les clés du .env ne sont pas transmises à Binance : une clé
+    supprimée ou sans droit ne peut pas bloquer le démarrage du bot."""
+    monkeypatch.setenv("BINANCE_API_KEY", KEY)
+    monkeypatch.setenv("BINANCE_API_SECRET", SECRET)
+    for mode, extra, keyed in (
+            ("paper", {}, False),
+            ("live", {"enable_live_trading": True,
+                      "live_confirmation": "I_UNDERSTAND_RISK"}, True)):
+        g = tg.GuardConfig(run_mode=mode, db_file=":memory:",
+                           log_file=str(tmp_path / f"k{mode}.log"),
+                           lock_file=str(tmp_path / f"k{mode}.lock"), **extra)
+        bot = tg._build(g)
+        try:
+            assert bool(bot.exchange.apiKey) is keyed, mode
+        finally:
+            bot.store.close()
+            for h in list(bot.logger.handlers):
+                h.close()
+                bot.logger.removeHandler(h)
+
+
 def test_paper_mode_ignores_testnet_flag(monkeypatch, tmp_path):
     """BINANCE_TESTNET ne concerne que le mode réel : en paper, les prix
     viennent du vrai marché (le testnet est un marché artificiel)."""

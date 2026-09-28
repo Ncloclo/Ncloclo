@@ -38,11 +38,15 @@ from .replay import replay
 
 def _build(gcfg: GuardConfig) -> TrendGuardBot:
     logger = build_guard_logger(gcfg.log_file)
+    live = gcfg.run_mode == "live"
     # Le testnet ne sert qu'au mode réel : en paper, les prix du testnet
-    # (marché artificiel) fausseraient les décisions.
-    exchange = v29.make_binance(os.environ.get("BINANCE_API_KEY", "").strip(),
-                                os.environ.get("BINANCE_API_SECRET", "").strip(),
-                                gcfg.binance_testnet and gcfg.run_mode == "live")
+    # (marché artificiel) fausseraient les décisions. En paper, aucune
+    # requête privée : les clés ne sont pas transmises, une clé supprimée
+    # sur Binance ne peut pas empêcher le bot de démarrer.
+    exchange = v29.make_binance(
+        os.environ.get("BINANCE_API_KEY", "").strip() if live else "",
+        os.environ.get("BINANCE_API_SECRET", "").strip() if live else "",
+        gcfg.binance_testnet and live)
     store = v29.Store(gcfg.db_file, logger)
     # Telegram, e-mail et WhatsApp (alerts.py, réglages dans .env).
     notifier = alerts.build_notifier(logger)
