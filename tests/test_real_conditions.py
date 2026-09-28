@@ -520,7 +520,25 @@ def test_set_keys_network_down_and_bad_format(tmp_path):
     rc, env, text = _set_keys(tmp_path, ["1", KEY, SECRET], down=True)
     assert rc == 1 and "injoignable" in text and env == "RUN_MODE=paper\n"
     rc, env, text = _set_keys(tmp_path, ["1", "trop-court", SECRET])
-    assert rc == 1 and "64" in text
+    assert rc == 1 and "64" in text and "API Key refusée" in text
+    rc, env, text = _set_keys(tmp_path, ["1", KEY, ""])             # pas de Secret Key
+    assert rc == 1 and "Secret Key refusée" in text and "créez une nouvelle clé" in text
+
+
+def test_set_keys_refuses_a_key_pasted_at_the_account_question(tmp_path):
+    """La question du compte s'affiche à l'écran : une clé collée là est
+    refusée, la question reposée, et rien n'est enregistré."""
+    rc, env, text = _set_keys(tmp_path, [KEY, KEY, SECRET])
+    assert rc == 1 and env == "RUN_MODE=paper\n"
+    assert "Répondez seulement 1 ou 2" in text and "Ne collez pas la clé ici" in text
+    answers = iter([KEY, "2"])
+    path = tmp_path / ".env"
+    out = io.StringIO()
+    secrets = [KEY, SECRET]
+    rc = tg.cmd_set_keys(str(path), ask=lambda _p: secrets.pop(0), read=lambda _p: next(answers),
+                         factory=lambda k, s, t: _Account(k, s, t, "real"), out=out)
+    assert rc == 0 and "BINANCE_TESTNET=false" in path.read_text(encoding="utf-8")
+    assert KEY not in out.getvalue()
 
 
 def test_set_keys_reports_wrong_secret_on_the_other_account(tmp_path):

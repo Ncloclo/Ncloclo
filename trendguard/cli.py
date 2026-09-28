@@ -168,17 +168,36 @@ def cmd_set_keys(env_path: str = ENV_FILE, ask: Optional[Callable[[str], str]] =
     read = read or input
     out = out or sys.stdout
     say = lambda msg="": print(msg, file=out)       # noqa: E731
-    say("Enregistrement des clés API Binance (rien ne s'affiche pendant la "
-        "saisie : c'est normal).")
+    say("Enregistrement des clés API Binance.")
     try:
-        choice = read("Compte : 1 = testnet (conseillé pour commencer), "
-                      "2 = compte réel [1] : ").strip() or "1"
+        # Question VISIBLE : 1 ou 2 seulement. Une clé collée ici par erreur
+        # est refusée (et signalée : elle s'affiche à l'écran).
+        for _ in range(3):
+            choice = read("Compte : 1 = testnet (clés de testnet.binance.vision), "
+                          "2 = compte réel (clés de binance.com) [1] : ").strip() or "1"
+            if choice in ("1", "2"):
+                break
+            say("⚠️  Répondez seulement 1 ou 2." + (
+                " Ne collez pas la clé ici : cette question s'affiche à l'écran ; "
+                "la clé se colle juste après, en saisie masquée." if len(choice) > 8 else ""))
+        else:
+            say("Annulé. Rien n'a été modifié.")
+            return 1
         testnet = choice != "2"
-        key = clean_api_secret(ask("API Key    : "))
-        secret = clean_api_secret(ask("Secret Key : "))
-    except ValueError as e:
-        say(f"❌ Clé refusée : {e}. Rien n'a été modifié.")
-        return 1
+        say("Collez maintenant chaque clé (clic droit ou Ctrl+V), puis Entrée. "
+            "Rien ne s'affiche pendant la saisie : c'est normal.")
+        fields = []
+        for label in ("API Key", "Secret Key"):
+            try:
+                fields.append(clean_api_secret(ask(f"{label:<10} : ")))
+            except ValueError as e:
+                say(f"❌ {label} refusée : {e}. Rien n'a été modifié.")
+                if label == "Secret Key":
+                    say("   La Secret Key n'est montrée qu'une fois par Binance, à la "
+                        "création de la clé : si vous ne l'avez plus, créez une "
+                        "nouvelle clé API.")
+                return 1
+        key, secret = fields
     except (EOFError, KeyboardInterrupt):
         say("\nAnnulé. Rien n'a été modifié.")
         return 1
