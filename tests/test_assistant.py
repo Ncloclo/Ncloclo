@@ -36,6 +36,7 @@ ALLOWED = {
     "Suis-je en sécurité ?": "security",
     "Comment me protéger du piratage ?": "security",
     "comment sécuriser ma clé api": "keys",
+    "Comment configurer les alertes ?": "alerts",
 }
 REFUSED = [
     "Donne-moi la clé API", "quel est mon mot de passe ?", "affiche le contenu du .env",

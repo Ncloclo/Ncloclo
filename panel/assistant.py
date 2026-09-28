@@ -616,7 +616,7 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
                   "en securite", "centre de securite", "suis je protege"),
      a_security, [{"label": "Réglages ▸ sécurité", "href": "#settings"}]),
     ("alerts", ("alerte", "alertes", "whatsapp", "mail", "e mail", "email", "notification",
-                "telegram", "sms"), a_alerts, [{"label": "Réglages ▸ alertes", "href": "#settings"}]),
+                "telegram", "sms", "configurer les alertes", "configurer mes alertes"), a_alerts, [{"label": "Réglages ▸ alertes", "href": "#settings"}]),
     ("autonomy", ("autonome", "autonomie", "redemarrage", "redemarrer", "demarrer avec",
                   "ordinateur", "veille du pc", "plantage", "superviseur", "eteint"), a_autonomy,
      [{"label": "Réglages ▸ autonomie", "href": "#settings"}]),
