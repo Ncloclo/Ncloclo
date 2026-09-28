@@ -523,11 +523,11 @@ def a_sell(ctx: Dict[str, Any]) -> str:
 def a_selection(ctx: Dict[str, Any]) -> str:
     sel = (ctx.get("status") or {}).get("selection") or {}
     n, total = len(sel.get("active") or []), sel.get("universe") or 21
-    mode = "réglage recommandé" if sel.get("mode") == "auto" else "sélection manuelle"
+    mode = "sélection auto" if sel.get("mode") == "auto" else "sélection manuelle"
     return ("**Choisir les cryptos du bot** (page Cryptos) :\n"
-            "- Recommandé : le bot peut acheter les 21 cryptos, toutes cochées. C'est le "
-            "réglage par défaut.\n"
-            "- Manuel : aucune crypto n'est cochée au départ ; cochez celles que le bot peut "
+            "- Sélection auto : le bot peut acheter les 21 cryptos, toutes cochées. C'est le "
+            "réglage par défaut, recommandé.\n"
+            "- Sélection manuelle : aucune crypto n'est cochée au départ ; cochez celles que le bot peut "
             "acheter (tant qu'aucune ne l'est, il n'achète rien).\n"
             "- Une crypto détenue qui sort de la sélection reste gérée jusqu'à sa vente.\n"
             f"Actuellement : {mode}, {n} crypto(s) achetable(s) sur {total}.\n"

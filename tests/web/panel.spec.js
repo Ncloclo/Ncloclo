@@ -203,7 +203,7 @@ test("graphiques en temps réel et détail d'un graphique", async ({ page }) => 
   expect(errors).toEqual([]);
 });
 
-test("cryptos : réglage recommandé (les 21 cochées), manuel sans case cochée", async ({ page }) => {
+test("cryptos : sélection auto (les 21 cochées), sélection manuelle sans case cochée", async ({ page }) => {
   const errors = watchErrors(page);
   // Point de départ connu (un essai précédent a pu changer la sélection).
   await page.request.post(BASE + "/api/selection", { headers: { "X-TrendGuard": "1" }, data: { mode: "auto" } });
@@ -211,7 +211,8 @@ test("cryptos : réglage recommandé (les 21 cochées), manuel sans case cochée
   await expect(page.locator("#asset-grid .asset")).toHaveCount(21);
   await expect(page.locator("#sel-count")).toHaveText("21 / 21");
   await expect(page.locator('[data-sel="auto"]')).toHaveAttribute("aria-pressed", "true");
-  await expect(page.locator('[data-sel="auto"]')).toContainText("Recommandé : les 21 cryptos");
+  await expect(page.locator('[data-sel="auto"]')).toHaveText("Sélection auto");
+  await expect(page.locator('[data-sel="manual"]')).toHaveText("Sélection manuelle");
   await expect(page.locator('[data-sel="manual"]')).toHaveAttribute("aria-pressed", "false");
   await expect(page.locator("#sel-help")).toContainText("+37,2 %");
   await expect(page.locator("#asset-grid .pick input:checked")).toHaveCount(21);
@@ -233,7 +234,7 @@ test("cryptos : réglage recommandé (les 21 cochées), manuel sans case cochée
   await page.locator('[data-filter="all"]').click();
   await page.locator('[data-sel-all="1"]').click();                    // tout cocher
   await expect(page.locator("#sel-count")).toHaveText("21 / 21");
-  await page.locator('[data-sel="auto"]').click();                     // retour au réglage recommandé
+  await page.locator('[data-sel="auto"]').click();                     // retour à la sélection auto
   await expect(page.locator('[data-sel="auto"]')).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("#sel-count")).toHaveText("21 / 21");
   expect(errors).toEqual([]);

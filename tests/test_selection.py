@@ -1,7 +1,7 @@
 """Sélection des cryptos : classement par bénéfice de la stratégie (achats
-ET ventes, sans regard vers le futur, affiché pour information), réglage
-recommandé (les 21 cryptos) ou sélection manuelle (aucune cochée au départ),
-respectés par le bot."""
+ET ventes, sans regard vers le futur, affiché pour information), sélection
+auto (les 21 cryptos, recommandée) ou sélection manuelle (aucune cochée au
+départ), respectées par le bot."""
 
 import dataclasses
 import json
@@ -96,7 +96,7 @@ def test_manual_selection_is_respected_and_held_positions_are_kept(tmp_path, log
 
 
 def test_recommended_setting_buys_among_all_cryptos(tmp_path, logger):
-    """« Recommandé » (par défaut) : les 21 cryptos, plus d'auto-sélection des
+    """« Sélection auto » (par défaut) : les 21 cryptos, plus d'auto-sélection des
     10 plus rentables ; le classement reste affiché pour information."""
     close, volume = synthetic_market()
     bot, fb = _bot(tmp_path, close, logger, rank_cryptos=True)
@@ -111,7 +111,7 @@ def test_recommended_setting_buys_among_all_cryptos(tmp_path, logger):
 
 
 def test_manual_selection_starts_with_nothing_checked(tmp_path, logger):
-    """« Manuel » : aucune crypto cochée au départ, le bot n'achète rien ;
+    """« Sélection manuelle » : aucune crypto cochée au départ, le bot n'achète rien ;
     les positions détenues restent gérées."""
     close, volume = synthetic_market()
     bot, fb = _bot(tmp_path, close, logger)

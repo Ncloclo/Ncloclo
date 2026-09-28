@@ -107,7 +107,7 @@ def test_bot_purchases_are_on_the_charts(demo_server):
 def test_selection_endpoint_and_sells_on_charts(demo_server):
     base, _ = demo_server
     a = _json(base + "/api/assets")[1]
-    # Par défaut : réglage recommandé, les 21 cryptos cochées.
+    # Par défaut : sélection auto, les 21 cryptos cochées.
     assert a["selection"]["mode"] == "auto" and len(a["selection"]["active"]) == 21
     assert all(r["selected"] for r in a["assets"]) and a["assets"][0]["rank"]["total_r"]
     assert "+37,2 %" in a["selection"]["note"] and "n_auto" not in a["selection"]

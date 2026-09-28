@@ -192,8 +192,8 @@ class PanelApp:
                       "21 cryptos, contre +15,5 % avec seulement les 10 plus rentables.")
 
     def selection_view(self, st: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Cryptos que le bot peut acheter : réglage recommandé (« auto » :
-        les 21) ou sélection manuelle (cases cochées, aucune au départ)."""
+        """Cryptos que le bot peut acheter : sélection auto (les 21, réglage
+        recommandé) ou sélection manuelle (cases cochées, aucune au départ)."""
         st = self.data.state() if st is None else st
         req = self.data.selection_request()
         sel = st.get("selection") or {}

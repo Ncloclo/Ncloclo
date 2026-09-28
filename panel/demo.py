@@ -92,7 +92,7 @@ DEMO_RANK = (("aave", 14.2, 9), ("link", 11.8, 8), ("ada", 10.4, 10), ("icp", 9.
 class DemoData:
     def __init__(self, market: DemoMarket):
         self.market = market
-        self._sel = {"mode": "auto", "manual": []}     # réglage recommandé : les 21
+        self._sel = {"mode": "auto", "manual": []}     # sélection auto : les 21
         now = datetime.now(timezone.utc)
         self._entry = {a: (now - timedelta(days=2 + i)).isoformat() for i, a in enumerate(HELD)}
 

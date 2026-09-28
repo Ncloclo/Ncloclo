@@ -931,7 +931,7 @@ class TrendGuardBot:
 
     # Classement affiché dans la page Cryptos : bénéfice de la stratégie sur
     # chaque crypto (achats ET ventes) sur les 2 dernières années. Il informe,
-    # il ne choisit pas : le réglage recommandé achète parmi les 21 cryptos.
+    # il ne choisit pas : la sélection auto achète parmi les 21 cryptos.
     RANK_DAYS = 730
 
     def selection_request(self) -> Dict[str, Any]:
@@ -963,7 +963,7 @@ class TrendGuardBot:
         active = ([b.lower() for b in self.g.universe] if req["mode"] == "auto"
                   else req["manual"])
         if set(active) != set(prev.get("active") or []) and prev:
-            self.logger.info(f"[SÉLECTION] {'recommandée' if req['mode'] == 'auto' else 'manuelle'} : "
+            self.logger.info(f"[SÉLECTION] {'auto' if req['mode'] == 'auto' else 'manuelle'} : "
                              f"{len(active)} crypto(s) achetable(s) : "
                              + (", ".join(a.upper() for a in active) or "aucune"))
         self.state["selection"] = {"mode": req["mode"], "active": active,
