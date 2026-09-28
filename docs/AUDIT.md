@@ -123,11 +123,16 @@ périodes.
 Points faibles :
 
 - **Complexité** : 40 fonctions au-dessus du seuil « difficile à maintenir »
-  (radon D ou pire). Les plus lourdes : la ligne de commande
-  `trendguard/cli.py:main` (49), `v29.Config.__post_init__` (46), l'API du
-  panneau `PanelApp.api` (41), `cmd_verify` (40), et deux ajouts du jour,
-  `anticipation.forecast` (36) et `PanelApp.security_view` (33).
-- **`panel/static/app.js`** : environ 1 500 lignes dans un seul fichier.
+  (radon D ou pire). Les six plus lourdes ont été découpées le soir même, sans
+  changer leur comportement : la ligne de commande `main` (49 → 8),
+  `v29.Config.__post_init__` (46 → 2), l'API du panneau (41 → 9, une table
+  de routes), `cmd_verify` (40 → 11), `anticipation.forecast` (36 → 12) et
+  `security_view` (33 → 5). Il en reste 34, surtout dans le moteur d'exécution
+  (`_parse_order`, `_open_from_fill`) : on n'y touche pas sans nécessité, car
+  c'est le code qui passe les ordres réels.
+- **`panel/static/app.js`** : 1 520 lignes dans un seul fichier, découpé le
+  soir même en modules : `app.js` (les pages, 1 120 lignes), `js/core.js`,
+  `js/charts.js`, `js/assistant.js`.
 - **Ancien bot V29** : 2 870 lignes gardées pour mémoire, sans avantage
   démontré. Il est à part et n'est plus chargé par TrendGuard, mais ses tests
   et sa maintenance ont un coût.
@@ -136,13 +141,13 @@ Points faibles :
 
 | Priorité | Action | Qui | Quand |
 | --- | --- | --- | --- |
-| 1 | Configurer les alertes (Telegram, e-mail ou WhatsApp) | Vous | maintenant |
+| 1 | Configurer les alertes (Telegram, e-mail ou WhatsApp) | Vous | maintenant : fenêtre de configuration ouverte sur le PC |
 | 2 | Supprimer sur Binance les clés montrées dans la conversation ; en créer une neuve (lecture, et Trading Spot le jour du testnet), sans retrait, limitée à votre adresse IP | Vous | avant le testnet |
 | 3 | Laisser tourner en paper jusqu'à 10 à 20 trades vendus, puis comparer à l'attendu (section « Réel vs attendu » du diagnostic) | Vous et le bot | plusieurs semaines |
 | 4 | Garder le PC allumé et branché, ou passer sur un petit serveur | Vous | dès que possible |
-| 5 | Synchroniser l'horloge de Windows | Vous | quand vous voulez |
-| 6 | Découper les fonctions les plus complexes et `app.js` | Code | sans urgence |
-| 7 | Décider du sort de l'ancien bot V29 (le supprimer allégerait le dépôt) | Vous, puis code | sans urgence |
+| 5 | Synchroniser l'horloge de Windows | Vous | droits d'administrateur nécessaires : Paramètres ▸ Heure et langue ▸ Synchroniser maintenant |
+| 6 | Découper les fonctions les plus complexes et `app.js` | Code | **fait** : les six plus lourdes découpées, `app.js` en quatre modules ; un test d'horodatage fragile rendu fiable |
+| 7 | Décider du sort de l'ancien bot V29 (le supprimer allégerait le dépôt) | Code | **décidé : gardé à part.** Son moteur d'exécution est aussi celui de TrendGuard ; le supprimer obligerait à retoucher le code des ordres réels pour peu de gain |
 | 8 | Avant le réel : `verify` complet, quelques jours de testnet, au moins 100 USDT | Vous | le moment venu |
 
 Fait depuis l'audit du matin : chemins de secours des ordres réels testés (et

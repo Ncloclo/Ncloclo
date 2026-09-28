@@ -221,6 +221,18 @@ class Config:
     lock_file: str = ""
 
     def __post_init__(self):
+        # Même ordre de contrôle qu'avant le découpage : le premier réglage
+        # invalide donne toujours le même message.
+        self._check_core()
+        self._check_exits()
+        self._check_signals()
+        self._check_live()
+        if self.blockchain_enabled:
+            self._check_blockchain()
+        self._default_paths()
+
+    def _check_core(self) -> None:
+        """Mode, unités de temps, bornes de risque et de taille."""
         if self.run_mode not in {"paper", "live"}:
             raise ValueError("run_mode doit être 'paper' ou 'live'.")
         if _timeframe_ms(self.htf_timeframe) <= _timeframe_ms(self.timeframe):
@@ -238,6 +250,9 @@ class Config:
             raise ValueError("max_position_capital_pct doit être dans ]0, 1].")
         if self.external_base_reserve < 0:
             raise ValueError("external_base_reserve doit être >= 0.")
+
+    def _check_exits(self) -> None:
+        """Sorties partielles, break-even, stop limite."""
         if self.partial_exit_enabled:
             if not (0 < self.partial_exit_pct1 and 0 < self.partial_exit_pct2
                     and self.partial_exit_pct1 + self.partial_exit_pct2 < 1):
@@ -254,6 +269,9 @@ class Config:
             raise ValueError("break_even_trigger doit être > break_even_offset.")
         if not (0 < self.stop_limit_offset_pct < 0.1):
             raise ValueError("stop_limit_offset_pct doit être dans ]0, 0.1[.")
+
+    def _check_signals(self) -> None:
+        """Backtest, paliers de signal et moteur adaptatif."""
         if self.intrabar_partial_mode not in {"ohlc", "optimistic",
                                                 "conservative"}:
             raise ValueError("intrabar_partial_mode invalide.")
@@ -266,41 +284,50 @@ class Config:
             raise ValueError(
                 "adaptive_freshness_max > max_signal_age_min : "
                 "l'adaptatif ne peut que resserrer, pas desserrer.")
-        if self.run_mode == "live":
-            if not self.enable_live_trading:
-                raise ValueError("LIVE refusé: ENABLE_LIVE_TRADING=true requis.")
-            if self.live_confirmation != self.live_confirmation_required:
-                raise ValueError(
-                    "LIVE refusé: LIVE_TRADING_CONFIRMATION requis.")
-            if not self.use_oco and not self.stop_only_protection:
-                raise ValueError("LIVE refusé: use_oco=true requis.")
-        if self.blockchain_enabled:
-            # Wallet EVM : partie de l'ancien bot V29 (v29/intraday/).
-            from .intraday.blockchain import WEB3_AVAILABLE, ExtraDataToPOAMiddleware
-            if not WEB3_AVAILABLE:
-                raise ValueError("blockchain_enabled=true mais web3 absent.")
-            if not self.blockchain_rpc_url:
-                raise ValueError("blockchain_enabled=true mais RPC URL absente.")
-            if self.blockchain_chain_id <= 0:
-                raise ValueError("blockchain_chain_id invalide.")
-            if self.blockchain_max_priority_fee_gwei > self.blockchain_max_fee_gwei:
-                raise ValueError("max_priority_fee > max_fee.")
-            if self.blockchain_confirmations < 1:
-                raise ValueError("blockchain_confirmations doit être >= 1.")
-            if self.blockchain_chain.lower() in ("bsc", "polygon") \
-                    and ExtraDataToPOAMiddleware is None:
-                raise ValueError("Chaîne POA requise mais web3.py trop ancien.")
-            if self.blockchain_sweep_enabled:
-                if not self.blockchain_sweep_target:
-                    raise ValueError("sweep_enabled mais target vide.")
-                if self.blockchain_sweep_trigger_eth <= self.blockchain_sweep_keep_eth:
-                    raise ValueError(
-                        "sweep_trigger_eth doit être > sweep_keep_eth.")
-                if (self.blockchain_whitelist_enabled
-                        and self.blockchain_sweep_target.lower()
-                        not in {a.lower() for a in self.blockchain_whitelist}):
-                    raise ValueError(
-                        "BLOCKCHAIN_SWEEP_TARGET absent de BLOCKCHAIN_WHITELIST.")
+
+    def _check_live(self) -> None:
+        """Mode réel : double confirmation et protection exchange."""
+        if self.run_mode != "live":
+            return
+        if not self.enable_live_trading:
+            raise ValueError("LIVE refusé: ENABLE_LIVE_TRADING=true requis.")
+        if self.live_confirmation != self.live_confirmation_required:
+            raise ValueError(
+                "LIVE refusé: LIVE_TRADING_CONFIRMATION requis.")
+        if not self.use_oco and not self.stop_only_protection:
+            raise ValueError("LIVE refusé: use_oco=true requis.")
+
+    def _check_blockchain(self) -> None:
+        """Wallet EVM : partie de l'ancien bot V29 (v29/intraday/)."""
+        from .intraday.blockchain import WEB3_AVAILABLE, ExtraDataToPOAMiddleware
+        if not WEB3_AVAILABLE:
+            raise ValueError("blockchain_enabled=true mais web3 absent.")
+        if not self.blockchain_rpc_url:
+            raise ValueError("blockchain_enabled=true mais RPC URL absente.")
+        if self.blockchain_chain_id <= 0:
+            raise ValueError("blockchain_chain_id invalide.")
+        if self.blockchain_max_priority_fee_gwei > self.blockchain_max_fee_gwei:
+            raise ValueError("max_priority_fee > max_fee.")
+        if self.blockchain_confirmations < 1:
+            raise ValueError("blockchain_confirmations doit être >= 1.")
+        if self.blockchain_chain.lower() in ("bsc", "polygon") \
+                and ExtraDataToPOAMiddleware is None:
+            raise ValueError("Chaîne POA requise mais web3.py trop ancien.")
+        if not self.blockchain_sweep_enabled:
+            return
+        if not self.blockchain_sweep_target:
+            raise ValueError("sweep_enabled mais target vide.")
+        if self.blockchain_sweep_trigger_eth <= self.blockchain_sweep_keep_eth:
+            raise ValueError(
+                "sweep_trigger_eth doit être > sweep_keep_eth.")
+        if (self.blockchain_whitelist_enabled
+                and self.blockchain_sweep_target.lower()
+                not in {a.lower() for a in self.blockchain_whitelist}):
+            raise ValueError(
+                "BLOCKCHAIN_SWEEP_TARGET absent de BLOCKCHAIN_WHITELIST.")
+
+    def _default_paths(self) -> None:
+        """Base, journal et verrou à côté du programme si non précisés."""
         if not self.db_file:
             object.__setattr__(self, "db_file",
                                os.path.join(APP_DIR, f"v29_{self.base}_{self.quote}_{self.run_mode}.db"))

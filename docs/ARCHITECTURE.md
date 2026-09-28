@@ -60,6 +60,20 @@ sont jamais envoyés sur GitHub. VS Code les masque dans l'explorateur
 | `replay_animation.py` | page d'animation du rejeu |
 | `cli.py` | ligne de commande |
 
+## Le panneau `panel/`
+
+| Fichier | Rôle |
+| --- | --- |
+| `server.py` | serveur local : pages, API (une table de routes), sécurité, anticipation, centre de sécurité |
+| `data.py`, `market.py` | lecture de la base du bot (sans la modifier), cours publics de Binance |
+| `control.py` | bouton AUTO / ARRÊTER (superviseur), démarrage avec l'ordinateur |
+| `assistant.py`, `news.py` | Rachelle ; actualités et marchés |
+| `demo.py` | données fictives pour `--demo` et les tests |
+| `static/app.js` | les pages de l'interface (module ES) |
+| `static/js/core.js` | outils communs : formats, DOM, temps de chargement, API, notifications |
+| `static/js/charts.js` | graphiques, flèches d'achats et de ventes, niveaux d'entrée et de stop |
+| `static/js/assistant.js` | fenêtre de Rachelle, garde-fou des secrets côté navigateur |
+
 ## Le paquet `v29/`
 
 L'ancien fichier `v29.py` (7 483 lignes) mélangeait le moteur d'exécution

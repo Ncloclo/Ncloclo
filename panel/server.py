@@ -300,58 +300,82 @@ class PanelApp:
             (st.get("vetoes") or {}).keys(), bool(st.get("halted")))
         return dict(f, ready=True, stale=stale)
 
-    def security_view(self) -> Dict[str, Any]:
-        """Centre de sécurité : état des protections, sans jamais afficher
-        une clé ni un mot de passe (seulement leur présence)."""
-        st = self.data.state()
+    @staticmethod
+    def _check(label: str, ok: Optional[bool], detail: str) -> Dict[str, Any]:
+        """Une ligne du centre de sécurité : ok = True (vert), False (à
+        corriger) ou None (information)."""
+        return {"label": label, "ok": ok, "detail": detail}
+
+    def _access_checks(self) -> List[Dict[str, Any]]:
+        """Accès au panneau et essais de mot de passe ratés."""
         now = time.time()
         with self._lock:
             fails = len([t for t in self._login_failed_total if now - t < 86400])
         blocked = sum(1 for ip in list(self._login_fails) if self.login_blocked(ip))
-        checks = []
-
-        def add(label: str, ok: Optional[bool], detail: str) -> None:
-            checks.append({"label": label, "ok": ok, "detail": detail})
         if self.loopback:
-            add("Accès au panneau", True, "ce PC uniquement")
+            access = self._check("Accès au panneau", True, "ce PC uniquement")
         else:
-            add("Accès au panneau", bool(self.password),
-                "Wi-Fi, protégé par mot de passe" if self.password else "Wi-Fi SANS mot de passe")
-        add("Essais de mot de passe ratés (24 h)", fails == 0,
+            access = self._check("Accès au panneau", bool(self.password),
+                                 "Wi-Fi, protégé par mot de passe" if self.password
+                                 else "Wi-Fi SANS mot de passe")
+        return [access, self._check(
+            "Essais de mot de passe ratés (24 h)", fails == 0,
             f"{fails} essai(s) raté(s)" + (f", {blocked} adresse(s) bloquée(s) 5 min" if blocked else "")
-            + " ; blocage automatique après 5 échecs")
+            + " ; blocage automatique après 5 échecs")]
+
+    def _key_checks(self) -> List[Dict[str, Any]]:
+        """Mode, clés Binance (présence seulement) et fichier des secrets."""
         live = self.g.run_mode == "live"
-        add("Mode", None if live else True,
-            "RÉEL : de vrais ordres sont passés" if live else "paper : aucun argent réel en jeu")
         has_keys = bool(os.environ.get("BINANCE_API_KEY")) and bool(os.environ.get("BINANCE_API_SECRET"))
-        add("Clés API Binance", True if has_keys or not live else False,
-            "enregistrées dans le fichier privé .env" if has_keys else
-            ("absentes (normal en paper)" if not live else "absentes : le mode réel ne peut pas démarrer"))
-        add("Droit de retrait de la clé", None,
-            "doit rester désactivé : python trendguard_bot.py verify le contrôle auprès de Binance")
-        add("Clé partagée par erreur", None,
-            "une clé montrée dans une conversation ou une capture doit être supprimée sur Binance")
+        if has_keys:
+            keys = "enregistrées dans le fichier privé .env"
+        else:
+            keys = "absentes : le mode réel ne peut pas démarrer" if live else "absentes (normal en paper)"
         try:
             gi = os.path.join(os.path.dirname(os.path.dirname(STATIC_DIR)), ".gitignore")
             env_ok = ".env" in open(gi, encoding="utf-8").read().split()
         except OSError:
             env_ok = False
-        add("Fichier des secrets (.env)", True if env_ok else None, "privé, exclu de GitHub")
-        add("Arrêt d'urgence", not bool(st.get("halted")),
-            f"déclenché : {st.get('halt_reason')}" if st.get("halted") else
-            f"prêt, à −{self.g.kill_drawdown * 100:.0f} % depuis le plus haut"
-            + (" ; profil prudent actif" if self.g.params.dd_throttle else ""))
+        return [
+            self._check("Mode", None if live else True,
+                        "RÉEL : de vrais ordres sont passés" if live else "paper : aucun argent réel en jeu"),
+            self._check("Clés API Binance", has_keys or not live, keys),
+            self._check("Droit de retrait de la clé", None,
+                        "doit rester désactivé : python trendguard_bot.py verify le contrôle auprès de Binance"),
+            self._check("Clé partagée par erreur", None,
+                        "une clé montrée dans une conversation ou une capture doit être supprimée sur Binance"),
+            self._check("Fichier des secrets (.env)", True if env_ok else None, "privé, exclu de GitHub"),
+        ]
+
+    def _runtime_checks(self, st: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Arrêt d'urgence, relance automatique, alertes, garde-fou."""
+        if st.get("halted"):
+            halt = f"déclenché : {st.get('halt_reason')}"
+        else:
+            halt = (f"prêt, à −{self.g.kill_drawdown * 100:.0f} % depuis le plus haut"
+                    + (" ; profil prudent actif" if self.g.params.dd_throttle else ""))
         try:
             sup = self.control.autonomy().get("supervisor") or {}
         except Exception:
             sup = {}
-        add("Relance automatique", bool(sup.get("running")),
-            "active" if sup.get("running") else "inactive : cliquez sur AUTO")
         chans = [c for c in (self.hub.status() if self.hub is not None else []) if c.get("enabled")]
-        add("Alertes", bool(chans) if not self.demo else True,
-            ", ".join(c["label"] for c in chans) if chans else
-            ("démonstration" if self.demo else "aucune : python trendguard_bot.py alerts configurer"))
-        add("Garde-fou de Rachelle", True, "secrets masqués, demandes sensibles refusées")
+        if chans:
+            alerts = ", ".join(c["label"] for c in chans)
+        else:
+            alerts = "démonstration" if self.demo else "aucune : python trendguard_bot.py alerts configurer"
+        return [
+            self._check("Arrêt d'urgence", not bool(st.get("halted")), halt),
+            self._check("Relance automatique", bool(sup.get("running")),
+                        "active" if sup.get("running") else "inactive : cliquez sur AUTO"),
+            self._check("Alertes", bool(chans) or self.demo, alerts),
+            self._check("Garde-fou de Rachelle", True, "secrets masqués, demandes sensibles refusées"),
+        ]
+
+    def security_view(self) -> Dict[str, Any]:
+        """Centre de sécurité : état des protections, sans jamais afficher
+        une clé ni un mot de passe (seulement leur présence)."""
+        checks = (self._access_checks() + self._key_checks()
+                  + self._runtime_checks(self.data.state()))
         ok = sum(1 for c in checks if c["ok"] is True)
         warn = sum(1 for c in checks if c["ok"] is False)
         return {"checks": checks, "ok": ok, "warn": warn, "total": len(checks)}
@@ -412,84 +436,82 @@ class PanelApp:
 
     # ---------- Routage ----------
 
+    def _equity_view(self, days: int) -> Dict[str, Any]:
+        """Courbe du capital avec les achats et les ventes du bot."""
+        pts = self.data.equity(days=days)
+        since = pts[0]["t"] if pts else 0
+        st = self.data.state()
+        buys = [{"t": b["t"], "asset": b["asset"], "price": b["price"]}
+                for b in self.data.buys(st) if b["t"] >= since]
+        sells = [{"t": t, "asset": tr["asset"], "price": tr.get("exit"), "r": tr.get("r")}
+                 for tr in self.data.trades(st)
+                 if (t := _ts(tr.get("date"))) is not None and t >= since]
+        sells.sort(key=lambda x: x["t"])
+        return {"points": pts, "buys": buys, "sells": sells}
+
+    def _regime_view(self) -> Dict[str, Any]:
+        reg, stale = self.market.regime(self.g.params.regime_sma)
+        marks = []
+        if reg.get("points"):
+            # Achats et ventes de BTC par le bot, sur la bougie du jour.
+            c = self.candles("btc", "1d", len(reg["points"]))
+            t0 = reg["points"][0]["t"]
+            marks = [m for m in c["markers"] if m["t"] >= t0]
+        return dict(reg, stale=stale, markers=marks)
+
+    def _save_selection(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        manual = body.get("manual")
+        if body.get("preset") == "top":          # les 10 plus rentables
+            manual = self.selection_view()["top"]
+        elif not isinstance(manual, list):
+            manual = self.data.selection_request()["manual"]
+        self.data.save_selection(str(body.get("mode", "")), [str(a) for a in manual][:100])
+        return dict(self.selection_view(), ok=True)
+
+    def _test_alerts(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        if self.hub is None:
+            return {"ok": False, "message": "Alertes indisponibles en démonstration."}
+        ok, err = self.hub.test(str(body.get("channel", "")))
+        return {"ok": ok, "message": "Message de test envoyé." if ok else err}
+
     def api(self, method: str, path: str, query: Dict[str, List[str]],
             body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
+        """Routes de l'API : GET pour lire, POST pour agir (protégé par
+        l'en-tête du panneau). Chaque route renvoie (code HTTP, données)."""
         q = lambda k, d="": (query.get(k) or [d])[0]          # noqa: E731
+        reply = lambda res: {"ok": res[0], "message": res[1]}  # noqa: E731
+        get = {
+            "/api/health": lambda: {"ok": True},
+            "/api/status": self.status,
+            "/api/equity": lambda: self._equity_view(int(q("days", "90"))),
+            "/api/positions": self.data.positions,
+            "/api/trades": lambda: {"trades": self.data.trades()},
+            "/api/assets": self.assets,
+            "/api/candles": lambda: self.candles(q("asset", "btc"), q("interval", "1h"),
+                                                 int(q("limit", "300"))),
+            "/api/regime": self._regime_view,
+            "/api/watch": self.data.watch,
+            "/api/reasoning": self.data.reasoning,
+            "/api/news": self.news_view,
+            "/api/assistant": self.assistant.info,
+            "/api/anticipation": self.anticipation_view,
+            "/api/security": self.security_view,
+            "/api/log": lambda: {"lines": self.data.log_tail(int(q("lines", "300")))},
+        }
+        post = {
+            "/api/bot/start": lambda: reply(self.control.start()),
+            "/api/bot/stop": lambda: reply(self.control.stop()),
+            "/api/selection": lambda: self._save_selection(body),
+            "/api/autostart": lambda: reply(self.control.set_autostart(body.get("enabled") is True)),
+            "/api/alerts/test": lambda: self._test_alerts(body),
+        }
         try:
-            if method == "GET":
-                if path == "/api/health":
-                    return 200, {"ok": True}
-                if path == "/api/status":
-                    return 200, self.status()
-                if path == "/api/equity":
-                    pts = self.data.equity(days=int(q("days", "90")))
-                    since = pts[0]["t"] if pts else 0
-                    st = self.data.state()
-                    buys = [{"t": b["t"], "asset": b["asset"], "price": b["price"]}
-                            for b in self.data.buys(st) if b["t"] >= since]
-                    sells = [{"t": t, "asset": tr["asset"], "price": tr.get("exit"), "r": tr.get("r")}
-                             for tr in self.data.trades(st)
-                             if (t := _ts(tr.get("date"))) is not None and t >= since]
-                    sells.sort(key=lambda x: x["t"])
-                    return 200, {"points": pts, "buys": buys, "sells": sells}
-                if path == "/api/positions":
-                    return 200, self.data.positions()
-                if path == "/api/trades":
-                    return 200, {"trades": self.data.trades()}
-                if path == "/api/assets":
-                    return 200, self.assets()
-                if path == "/api/candles":
-                    return 200, self.candles(q("asset", "btc"), q("interval", "1h"),
-                                             int(q("limit", "300")))
-                if path == "/api/regime":
-                    reg, stale = self.market.regime(self.g.params.regime_sma)
-                    marks = []
-                    if reg.get("points"):
-                        # Achats et ventes de BTC par le bot, sur la bougie du jour.
-                        c = self.candles("btc", "1d", len(reg["points"]))
-                        t0 = reg["points"][0]["t"]
-                        marks = [m for m in c["markers"] if m["t"] >= t0]
-                    return 200, dict(reg, stale=stale, markers=marks)
-                if path == "/api/watch":
-                    return 200, self.data.watch()
-                if path == "/api/reasoning":
-                    return 200, self.data.reasoning()
-                if path == "/api/news":
-                    return 200, self.news_view()
-                if path == "/api/assistant":
-                    return 200, self.assistant.info()
-                if path == "/api/anticipation":
-                    return 200, self.anticipation_view()
-                if path == "/api/security":
-                    return 200, self.security_view()
-                if path == "/api/log":
-                    return 200, {"lines": self.data.log_tail(int(q("lines", "300")))}
-            if method == "POST":
-                if path == "/api/bot/start":
-                    ok, msg = self.control.start()
-                    return 200, {"ok": ok, "message": msg}
-                if path == "/api/bot/stop":
-                    ok, msg = self.control.stop()
-                    return 200, {"ok": ok, "message": msg}
-                if path == "/api/assistant":
-                    return self.chat(body)
-                if path == "/api/selection":
-                    manual = body.get("manual")
-                    if body.get("preset") == "top":          # les 10 plus rentables
-                        manual = self.selection_view()["top"]
-                    elif not isinstance(manual, list):
-                        manual = self.data.selection_request()["manual"]
-                    self.data.save_selection(str(body.get("mode", "")), [str(a) for a in manual][:100])
-                    return 200, dict(self.selection_view(), ok=True)
-                if path == "/api/autostart":
-                    ok, msg = self.control.set_autostart(body.get("enabled") is True)
-                    return 200, {"ok": ok, "message": msg}
-                if path == "/api/alerts/test":
-                    if self.hub is None:
-                        return 200, {"ok": False, "message": "Alertes indisponibles en démonstration."}
-                    ok, err = self.hub.test(str(body.get("channel", "")))
-                    return 200, {"ok": ok, "message": "Message de test envoyé." if ok else err}
-            return 404, {"error": "adresse inconnue"}
+            if method == "POST" and path == "/api/assistant":
+                return self.chat(body)                   # (code, réponse) : limite de débit
+            route = (get if method == "GET" else post if method == "POST" else {}).get(path)
+            if route is None:
+                return 404, {"error": "adresse inconnue"}
+            return 200, route()
         except ValueError as e:
             return 400, {"error": str(e)}
         except Exception as e:

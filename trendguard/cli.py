@@ -271,27 +271,10 @@ def _forbid_orders(exchange: Any) -> None:
         setattr(exchange, name, forbidden(name))
 
 
-def cmd_verify(gcfg: GuardConfig, exchange: Any = None,
-               now: Optional[datetime] = None, out=None) -> int:
-    """Vérifications SANS AUCUN ORDRE avant le passage en réel : droits de
-    la clé, soldes, validation des types d'ordres (order/test) et
-    simulation de la décision du jour. Retourne 0 si tout est prêt."""
-    out = out or sys.stdout
-    say = lambda msg="": print(msg, file=out)       # noqa: E731
-    ok = True
-    if exchange is None:
-        key = os.environ.get("BINANCE_API_KEY", "").strip()
-        secret = os.environ.get("BINANCE_API_SECRET", "").strip()
-        if not key or not secret:
-            say("ℹ️  Pas de clé API dans .env : vérification publique seulement "
-                "(droits, soldes et order/test demandent une clé ; pour les "
-                "enregistrer : python trendguard_bot.py set-keys).\n")
-            return cmd_verify_public(gcfg, now=now, out=out)
-        exchange = v29.make_binance(key, secret, gcfg.binance_testnet)
-    _forbid_orders(exchange)
-    say(f"Vérification {'TESTNET' if gcfg.binance_testnet else 'BINANCE RÉEL'} "
-        f"— aucun ordre ne sera passé")
-
+def _verify_rights(exchange: Any, say: Callable[..., None]
+                   ) -> Tuple[Optional[Dict[str, Any]], Optional[bool]]:
+    """Droits de la clé. Retourne (droits lus ou None, conforme) ; conforme
+    vaut None si Binance refuse la clé (vérification arrêtée)."""
     say("\n── 1. Droits de la clé API")
     try:
         r = exchange.sapi_get_account_apirestrictions()
@@ -299,18 +282,19 @@ def cmd_verify(gcfg: GuardConfig, exchange: Any = None,
         say(f"  ❌ Clé refusée par Binance : {_auth_hint(str(e))}")
         say("     → python trendguard_bot.py set-keys vérifie les clés auprès de "
             "Binance et corrige les clés inversées ou du mauvais compte.")
-        return 1
+        return None, None
     except Exception as e:
-        r = None
         say(f"  (lecture des droits impossible : {type(e).__name__})")
-    if r is not None:
-        withdraw = bool(r.get("enableWithdrawals"))
-        trading = bool(r.get("enableSpotAndMarginTrading"))
-        say(f"  Retrait autorisé      : {'OUI ❌ à désactiver sur Binance' if withdraw else 'non ✓'}")
-        say(f"  Trading Spot autorisé : {'oui ✓' if trading else 'NON ❌ à activer sur Binance'}")
-        say(f"  Restriction IP        : {'oui ✓' if r.get('ipRestrict') else 'non (conseillé)'}")
-        ok = ok and not withdraw and trading
+        return None, True
+    withdraw = bool(r.get("enableWithdrawals"))
+    trading = bool(r.get("enableSpotAndMarginTrading"))
+    say(f"  Retrait autorisé      : {'OUI ❌ à désactiver sur Binance' if withdraw else 'non ✓'}")
+    say(f"  Trading Spot autorisé : {'oui ✓' if trading else 'NON ❌ à activer sur Binance'}")
+    say(f"  Restriction IP        : {'oui ✓' if r.get('ipRestrict') else 'non (conseillé)'}")
+    return r, not withdraw and trading
 
+
+def _verify_balances(exchange: Any, say: Callable[..., None]) -> None:
     say("\n── 2. Soldes")
     bal = exchange.fetch_balance()
     total = {a: float(q or 0) for a, q in (bal.get("total") or {}).items()
@@ -327,29 +311,41 @@ def cmd_verify(gcfg: GuardConfig, exchange: Any = None,
         say(f"  {asset:<8} {qty:>18.8f}  ≈ {qty * px:>12,.2f} USDT")
     say(f"  Valeur totale estimée : {value:,.2f} USDT")
 
-    say("\n── 3. Validation des ordres + 4. décision du jour (simulation)")
-    live = dataclasses.replace(gcfg, run_mode="live", enable_live_trading=True,
-                               live_confirmation="I_UNDERSTAND_RISK",
-                               db_file=":memory:", log_file=os.devnull,
-                               lock_file=os.devnull)
+
+def _quiet_logger(out: Any) -> logging.Logger:
+    """Journal de la vérification : seules les causes d'échec s'affichent."""
     quiet = logging.getLogger("trendguard.verify")
-    reasons = logging.StreamHandler(out)             # affiche les causes d'échec
+    reasons = logging.StreamHandler(out)
     reasons.setLevel(logging.WARNING)
     reasons.setFormatter(logging.Formatter("  ⚠️  %(message)s"))
     quiet.handlers[:] = [reasons]
     quiet.setLevel(logging.WARNING)
     quiet.propagate = False
+    return quiet
+
+
+def _verify_decision(gcfg: GuardConfig, exchange: Any, rights: Optional[Dict[str, Any]],
+                     now: Optional[datetime], out: Any, say: Callable[..., None]
+                     ) -> Optional[Dict[str, Any]]:
+    """Démarrage du bot en réel sur la clé (order/test, aucun ordre) et
+    décision du jour simulée. None si le démarrage échoue."""
+    say("\n── 3. Validation des ordres + 4. décision du jour (simulation)")
+    live = dataclasses.replace(gcfg, run_mode="live", enable_live_trading=True,
+                               live_confirmation="I_UNDERSTAND_RISK",
+                               db_file=":memory:", log_file=os.devnull,
+                               lock_file=os.devnull)
+    quiet = _quiet_logger(out)
     store = v29.Store(":memory:", quiet)
     bot = TrendGuardBot(live, quiet, exchange, store,
                         v29.Notifier("", "", logger=quiet))
     try:
         if not bot.boot():
             say("  ❌ Démarrage impossible (causes ci-dessus).")
-            if r is not None and not r.get("enableSpotAndMarginTrading"):
+            if rights is not None and not rights.get("enableSpotAndMarginTrading"):
                 say("     → la clé n'a pas le droit de trader : Binance ▸ Gestion "
                     "des API ▸ Modifier ▸ cocher « Activer le trading Spot et sur "
                     "marge ».")
-            return 1
+            return None
         say("  Validation des types d'ordres (order/test) : OK ✓")
         now = now or v29._utcnow()
         day = last_closed_day(now, live.decision_delay_sec)
@@ -357,37 +353,72 @@ def cmd_verify(gcfg: GuardConfig, exchange: Any = None,
             snap, bull, prices = bot._market_snapshot(now, day)
         except DecisionDeferred as e:
             say(f"  ❌ Décision du jour impossible : {e}")
-            return 1
+            return None
         equity, cash = bot._equity_and_cash(prices)
-        orphans = [b for b, sl in bot.slots.items() if sl.ctx.orphan_balance]
         eligible = {a: x for a, x in snap.items() if bot._can_enter(a)}
-        plans = ts.plan_entries(bot._holdings(), eligible, bull, equity, cash,
-                                live.params)
+        return {"day": day, "bull": bull, "equity": equity, "cash": cash,
+                "orphans": [b for b, sl in bot.slots.items() if sl.ctx.orphan_balance],
+                "plans": ts.plan_entries(bot._holdings(), eligible, bull, equity, cash,
+                                         live.params)}
     finally:
         store.close()
-    say(f"  Bougie du {day} | régime BTC : "
-        f"{'HAUSSIER' if bull else 'BAISSIER (aucun achat)'}")
-    say(f"  Capital géré : {equity:,.2f} USDT | USDT disponible : {cash:,.2f}")
-    if equity < MIN_LIVE_CAPITAL:
-        ok = False
+
+
+def _report_decision(d: Dict[str, Any], say: Callable[..., None]) -> bool:
+    """Affiche la décision simulée ; False si le capital est insuffisant."""
+    say(f"  Bougie du {d['day']} | régime BTC : "
+        f"{'HAUSSIER' if d['bull'] else 'BAISSIER (aucun achat)'}")
+    say(f"  Capital géré : {d['equity']:,.2f} USDT | USDT disponible : {d['cash']:,.2f}")
+    ok = d["equity"] >= MIN_LIVE_CAPITAL
+    if not ok:
         say(f"  ❌ Capital insuffisant : Binance impose ~5 USDT minimum par ordre ; "
             f"avec 1 % de risque par trade, il faut au moins "
             f"{MIN_LIVE_CAPITAL:.0f} USDT pour que les positions dépassent ce "
             f"minimum.")
-    if orphans:
+    if d["orphans"]:
         say(f"  ⚠️  Cryptos détenues hors bot (achats bloqués sur ces paires) : "
-            f"{', '.join(orphans)}")
+            f"{', '.join(d['orphans'])}")
     spent = 0.0
-    for p in plans:
+    for p in d["plans"]:
         spent += p["cost"]
         say(f"  ↗ achat prévu {p['asset'].upper():<5} {p['qty']:.6g} ≈ "
             f"{p['cost']:,.2f} USDT | stop {p['stop']:.6g} | "
             f"risque {p['risk_quote']:.2f} USDT")
-    if plans:
-        say(f"  Total : {spent:,.2f} USDT ({spent / max(equity, 1e-9) * 100:.0f} % "
+    if d["plans"]:
+        say(f"  Total : {spent:,.2f} USDT ({spent / max(d['equity'], 1e-9) * 100:.0f} % "
             f"du capital géré)")
     else:
         say("  Aucun achat prévu aujourd'hui.")
+    return ok
+
+
+def cmd_verify(gcfg: GuardConfig, exchange: Any = None,
+               now: Optional[datetime] = None, out=None) -> int:
+    """Vérifications SANS AUCUN ORDRE avant le passage en réel : droits de
+    la clé, soldes, validation des types d'ordres (order/test) et
+    simulation de la décision du jour. Retourne 0 si tout est prêt."""
+    out = out or sys.stdout
+    say = lambda msg="": print(msg, file=out)       # noqa: E731
+    if exchange is None:
+        key = os.environ.get("BINANCE_API_KEY", "").strip()
+        secret = os.environ.get("BINANCE_API_SECRET", "").strip()
+        if not key or not secret:
+            say("ℹ️  Pas de clé API dans .env : vérification publique seulement "
+                "(droits, soldes et order/test demandent une clé ; pour les "
+                "enregistrer : python trendguard_bot.py set-keys).\n")
+            return cmd_verify_public(gcfg, now=now, out=out)
+        exchange = v29.make_binance(key, secret, gcfg.binance_testnet)
+    _forbid_orders(exchange)
+    say(f"Vérification {'TESTNET' if gcfg.binance_testnet else 'BINANCE RÉEL'} "
+        f"— aucun ordre ne sera passé")
+    rights, ok = _verify_rights(exchange, say)
+    if ok is None:
+        return 1
+    _verify_balances(exchange, say)
+    decision = _verify_decision(gcfg, exchange, rights, now, out, say)
+    if decision is None:
+        return 1
+    ok = _report_decision(decision, say) and ok
     say("\n" + ("✅ Prêt pour le mode réel." if ok else
                 "❌ À corriger avant le mode réel (voir ci-dessus)."))
     return 0 if ok else 1
@@ -625,17 +656,7 @@ TOOLS = {"alerts": ("alerts", "alertes : configurer | tester"),
          "animation": ("replay_animation", "page d'animation du rejeu")}
 
 
-def main(argv: Optional[List[str]] = None) -> int:
-    v29.ensure_utf8_stdio()
-    argv = sys.argv[1:] if argv is None else list(argv)
-    if argv and argv[0] in TOOLS:
-        tool = importlib.import_module(f"{__package__}.{TOOLS[argv[0]][0]}")
-        prog = sys.argv[0]
-        sys.argv[0] = f"{os.path.basename(prog)} {argv[0]}"     # aide : « trendguard_bot.py watch »
-        try:
-            return tool.main(argv[1:])
-        finally:
-            sys.argv[0] = prog
+def _parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         description="TrendGuard Bot (Binance Spot)",
         epilog="Outils : " + " ; ".join(f"{k} ({v[1]})" for k, v in TOOLS.items()))
@@ -660,67 +681,55 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--no-open", action="store_true", help="(panel) sans ouvrir le navigateur")
     ap.add_argument("--login", action="store_true",
                     help="(supervise, panel) lancé à l'ouverture de session")
-    args = ap.parse_args(argv)
-    if args.login:
-        os.chdir(v29.APP_DIR)            # clé Run de Windows : dossier courant quelconque
-    if args.cmd == "replay":
-        res = replay(args.data, args.start, args.end, args.capital)
-        m = res["metrics"]
-        print("\n" + "═" * 64)
-        print(f"REJEU PAPER {args.start} → {res['last_day']} (prix réels)")
-        print("═" * 64)
-        print(f"Capital : {args.capital:,.2f} → {res['equity'].iloc[-1]:,.2f} USDT "
-              f"({m['total_return_pct']:+.1f} %)")
-        print(f"Max drawdown : {m['max_dd_pct']:.1f} %  |  Sharpe : {m['sharpe']:.2f}")
-        print(f"Trades clos : {m['trades']}  |  gagnants : {m['win_rate_pct']:.0f} %"
-              f"  |  gain moy. {m['avg_win_r']:+.2f} R  |  perte moy. "
-              f"{m['avg_loss_r']:+.2f} R")
-        print(f"Régime BTC au dernier jour : "
-              f"{'HAUSSIER' if res['regime_bull'] else 'BAISSIER (aucune entrée)'}")
-        if res["holdings"]:
-            print("Positions ouvertes :")
-            for a, h in res["holdings"].items():
-                px = float(res["prices"][a])
-                print(f"  {a.upper():<5} entrée {h['entry']:.6g} → {px:.6g} "
-                      f"({(px / h['entry'] - 1) * 100:+.1f} %)  stop {h['stop']:.6g}")
-        else:
-            print("Positions ouvertes : aucune (100 % USDT)")
-        return 0
-    if args.cmd == "docs":
-        for k, v in sorted(TG_ENV_DOC.items()):
-            print(f"  {k:<28} {v}")
-        return 0
-    # Saisie des clés avant la lecture de la configuration : une autre
-    # variable invalide dans .env ne doit pas empêcher de les enregistrer.
-    if args.cmd == "set-secret":
-        return cmd_set_secret()
-    if args.cmd == "set-keys":
-        return cmd_set_keys()
-    if args.cmd == "autostart":
-        return autonomy.cmd_autostart(args.action)
-    if args.cmd == "set-panel-password":
-        return cmd_set_panel_password()
+    return ap
+
+
+def _run_tool(name: str, argv: List[str]) -> int:
+    """Outil (alerts, watch, strategy, lab, animation) avec ses options."""
+    tool = importlib.import_module(f"{__package__}.{TOOLS[name][0]}")
+    prog = sys.argv[0]
+    sys.argv[0] = f"{os.path.basename(prog)} {name}"     # aide : « trendguard_bot.py watch »
     try:
-        gcfg = load_guard_config_from_env()
-    except ValueError as e:
-        print(f"Configuration invalide : {e}", file=sys.stderr)
-        return 2
-    if args.cmd == "panel":
-        from panel import server as panel_server
-        return panel_server.main(gcfg, args.host, args.port, args.demo,
-                                 not (args.no_open or args.login))
-    if args.cmd == "supervise":
-        return autonomy.run_supervisor(gcfg, login=args.login)
-    if args.cmd == "stop":
-        return autonomy.cmd_stop(gcfg)
-    if args.cmd == "verify":
-        return cmd_verify(gcfg)
-    if args.cmd == "diagnose":
-        return cmd_diagnose(gcfg, args.out)
-    if args.cmd == "health":
-        return health_check(gcfg, v29._env_i("TG_HEALTH_MAX_AGE_SEC", 600))
+        return tool.main(argv)
+    finally:
+        sys.argv[0] = prog
+
+
+def _print_replay(args: argparse.Namespace) -> int:
+    res = replay(args.data, args.start, args.end, args.capital)
+    m = res["metrics"]
+    print("\n" + "═" * 64)
+    print(f"REJEU PAPER {args.start} → {res['last_day']} (prix réels)")
+    print("═" * 64)
+    print(f"Capital : {args.capital:,.2f} → {res['equity'].iloc[-1]:,.2f} USDT "
+          f"({m['total_return_pct']:+.1f} %)")
+    print(f"Max drawdown : {m['max_dd_pct']:.1f} %  |  Sharpe : {m['sharpe']:.2f}")
+    print(f"Trades clos : {m['trades']}  |  gagnants : {m['win_rate_pct']:.0f} %"
+          f"  |  gain moy. {m['avg_win_r']:+.2f} R  |  perte moy. "
+          f"{m['avg_loss_r']:+.2f} R")
+    print(f"Régime BTC au dernier jour : "
+          f"{'HAUSSIER' if res['regime_bull'] else 'BAISSIER (aucune entrée)'}")
+    if not res["holdings"]:
+        print("Positions ouvertes : aucune (100 % USDT)")
+        return 0
+    print("Positions ouvertes :")
+    for a, h in res["holdings"].items():
+        px = float(res["prices"][a])
+        print(f"  {a.upper():<5} entrée {h['entry']:.6g} → {px:.6g} "
+              f"({(px / h['entry'] - 1) * 100:+.1f} %)  stop {h['stop']:.6g}")
+    return 0
+
+
+def _print_docs() -> int:
+    for k, v in sorted(TG_ENV_DOC.items()):
+        print(f"  {k:<28} {v}")
+    return 0
+
+
+def _status(gcfg: GuardConfig, resume: bool) -> int:
+    """État du portefeuille ; `resume` lève aussi le kill-switch."""
     locks: List[v29.ProcessLock] = []
-    if args.cmd == "resume":
+    if resume:
         # resume modifie l'état : interdit pendant que le bot tourne (il
         # réécrirait son propre état au cycle suivant).
         try:
@@ -730,30 +739,33 @@ def main(argv: Optional[List[str]] = None) -> int:
                   f"(Docker : docker compose stop && docker compose run --rm "
                   f"trendguard resume && docker compose start).")
             return 1
-    if args.cmd in ("status", "resume"):
-        store = v29.Store(gcfg.db_file, logging.getLogger("trendguard.cli"))
-        state = store.get_kv(TrendGuardBot.STATE_KEY) or {}
-        if args.cmd == "resume":
-            state["halted"] = False
-            state["halt_reason"] = None
-            state["peak_equity"] = state.get("last_equity")
-            store.set_kv(TrendGuardBot.STATE_KEY, state)
-            print("✅ Kill-switch levé (pic d'equity réinitialisé).")
-        trades = state.get("trades", [])
-        wins = [t for t in trades if t["pnl"] > 0]
-        print(f"Dernière décision : {state.get('last_decision_day')}")
-        print(f"Equity            : {state.get('last_equity')}")
-        print(f"Pic               : {state.get('peak_equity')}")
-        print(f"Halt              : {state.get('halted')} {state.get('halt_reason') or ''}")
-        print(f"Trades clos       : {len(trades)} (gagnants {len(wins)})")
-        if trades:
-            print(f"R moyen           : {sum(t['r'] for t in trades)/len(trades):+.2f}")
-        if "paper" in state:
-            print(f"Paper cash        : {state['paper']['cash']:.2f} | positions : "
-                  f"{', '.join(a.upper() for a in state['paper']['holdings']) or '-'}")
-        store.close()
-        v29.release_locks(locks)
-        return 0
+    store = v29.Store(gcfg.db_file, logging.getLogger("trendguard.cli"))
+    state = store.get_kv(TrendGuardBot.STATE_KEY) or {}
+    if resume:
+        state["halted"] = False
+        state["halt_reason"] = None
+        state["peak_equity"] = state.get("last_equity")
+        store.set_kv(TrendGuardBot.STATE_KEY, state)
+        print("✅ Kill-switch levé (pic d'equity réinitialisé).")
+    trades = state.get("trades", [])
+    wins = [t for t in trades if t["pnl"] > 0]
+    print(f"Dernière décision : {state.get('last_decision_day')}")
+    print(f"Equity            : {state.get('last_equity')}")
+    print(f"Pic               : {state.get('peak_equity')}")
+    print(f"Halt              : {state.get('halted')} {state.get('halt_reason') or ''}")
+    print(f"Trades clos       : {len(trades)} (gagnants {len(wins)})")
+    if trades:
+        print(f"R moyen           : {sum(t['r'] for t in trades)/len(trades):+.2f}")
+    if "paper" in state:
+        print(f"Paper cash        : {state['paper']['cash']:.2f} | positions : "
+              f"{', '.join(a.upper() for a in state['paper']['holdings']) or '-'}")
+    store.close()
+    v29.release_locks(locks)
+    return 0
+
+
+def _run(gcfg: GuardConfig, once: bool) -> int:
+    """Le bot : un seul cycle (`once`) ou la boucle continue."""
     locks = v29.acquire_instance_locks(gcfg.lock_file, gcfg.db_file)
     bot = _build(gcfg)
     awake: Optional[autonomy.KeepAwake] = None
@@ -764,7 +776,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                         f"{gcfg.params.risk_pct*100:.2f} %/trade")
         signal.signal(signal.SIGINT, _bot._stop)
         signal.signal(signal.SIGTERM, _bot._stop)
-        if args.cmd == "once":
+        if once:
             if not bot.boot():
                 print("❌ Démarrage impossible (réseau / exchange) : voir le log.",
                       file=sys.stderr)
@@ -793,3 +805,45 @@ def main(argv: Optional[List[str]] = None) -> int:
         bot.store.close()
         bot.notifier.close()
         v29.release_locks(locks)
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    v29.ensure_utf8_stdio()
+    argv = sys.argv[1:] if argv is None else list(argv)
+    if argv and argv[0] in TOOLS:
+        return _run_tool(argv[0], argv[1:])
+    args = _parser().parse_args(argv)
+    if args.login:
+        os.chdir(v29.APP_DIR)            # clé Run de Windows : dossier courant quelconque
+    # Sans configuration : les clés se saisissent avant la lecture du .env
+    # (une autre variable invalide ne doit pas empêcher de les enregistrer).
+    early = {"replay": lambda: _print_replay(args), "docs": _print_docs,
+             "set-secret": lambda: cmd_set_secret(), "set-keys": lambda: cmd_set_keys(),
+             "autostart": lambda: autonomy.cmd_autostart(args.action),
+             "set-panel-password": lambda: cmd_set_panel_password()}
+    if args.cmd in early:
+        return early[args.cmd]()
+    try:
+        gcfg = load_guard_config_from_env()
+    except ValueError as e:
+        print(f"Configuration invalide : {e}", file=sys.stderr)
+        return 2
+    commands = {
+        "panel": lambda: _panel(gcfg, args),
+        "supervise": lambda: autonomy.run_supervisor(gcfg, login=args.login),
+        "stop": lambda: autonomy.cmd_stop(gcfg),
+        "verify": lambda: cmd_verify(gcfg),
+        "diagnose": lambda: cmd_diagnose(gcfg, args.out),
+        "health": lambda: health_check(gcfg, v29._env_i("TG_HEALTH_MAX_AGE_SEC", 600)),
+        "status": lambda: _status(gcfg, resume=False),
+        "resume": lambda: _status(gcfg, resume=True),
+    }
+    if args.cmd in commands:
+        return commands[args.cmd]()
+    return _run(gcfg, once=args.cmd == "once")
+
+
+def _panel(gcfg: GuardConfig, args: argparse.Namespace) -> int:
+    from panel import server as panel_server
+    return panel_server.main(gcfg, args.host, args.port, args.demo,
+                             not (args.no_open or args.login))

@@ -11,8 +11,14 @@ export default [
   js.configs.recommended,
   {
     // Scripts classiques intégrés aux pages (fonctions auto-exécutées).
-    files: ["templates/**/*.js", "panel/static/app.js"],
+    files: ["templates/**/*.js"],
     languageOptions: { ecmaVersion: "latest", sourceType: "script", globals: { ...globals.browser, LightweightCharts: "readonly" } },
+    rules: strict,
+  },
+  {
+    // Panneau : modules ES (app.js et panel/static/js/).
+    files: ["panel/static/app.js", "panel/static/js/**/*.js"],
+    languageOptions: { ecmaVersion: "latest", sourceType: "module", globals: { ...globals.browser, LightweightCharts: "readonly" } },
     rules: strict,
   },
   {

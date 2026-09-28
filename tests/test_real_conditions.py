@@ -166,17 +166,22 @@ def test_logs_are_stamped_with_binance_time(tmp_path):
     y compris pour un écart non entier : 1,7 s."""
     lg = tg.build_guard_logger(str(tmp_path / "t.log"))
     v29.set_clock_offset_ms(1700)
+    shift, margin = timedelta(milliseconds=1700), timedelta(milliseconds=20)
     stamps = []
     for _ in range(20):
+        # Heure encadrée avant/après l'écriture : le test ne dépend pas de la
+        # vitesse du PC (il échouait parfois sur une machine chargée).
+        before = datetime.now() + shift
         lg.info("repère")
-        stamps.append(datetime.now() + timedelta(milliseconds=1700))
+        stamps.append((before, datetime.now() + shift))
         time.sleep(0.013)
     for h in lg.handlers:
         h.flush()
     lines = (tmp_path / "t.log").read_text(encoding="utf-8").splitlines()
-    for line, expected in zip(lines, stamps):
+    assert len(lines) == 20
+    for line, (lo, hi) in zip(lines, stamps):
         logged = datetime.strptime(line.split(" [")[0], "%Y-%m-%d %H:%M:%S,%f")
-        assert abs((logged - expected).total_seconds()) < 0.1, line
+        assert lo - margin <= logged <= hi + margin, line
     for h in list(lg.handlers):
         h.close()
         lg.removeHandler(h)

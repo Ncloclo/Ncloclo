@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import math
 from datetime import datetime
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional
 
 import pandas as pd
 
@@ -77,19 +77,9 @@ def basis_from_market(close: pd.DataFrame, feats: Dict[str, pd.DataFrame], day: 
             "btc_threshold": thr if thr is not None and math.isfinite(thr) else None}
 
 
-def forecast(basis: Dict[str, Any], prices: Dict[str, float], holdings: List[Dict[str, Any]],
-             now: datetime, p: ts.TrendParams, equity: float, mult: float = 1.0,
-             allowed: Optional[Iterable[str]] = None, vetoed: Iterable[str] = (),
-             halted: bool = False) -> Dict[str, Any]:
-    """Anticipation de la prochaine décision avec les cours du moment.
-    holdings : [{asset, qty, entry, stop, disaster, risk, cost}]."""
-    close_at = pd.Timestamp(basis["next_close"]).to_pydatetime()
-    hours = max(0.0, (close_at - now).total_seconds() / 3600)
-    assets = basis.get("assets") or {}
-    held = {h["asset"] for h in holdings}
-    allowed = set(allowed) if allowed is not None else set(assets)
-    vetoed = set(vetoed)
-
+def _sells(assets: Dict[str, Any], prices: Dict[str, float], holdings: List[Dict[str, Any]],
+           hours: float, p: ts.TrendParams) -> List[Dict[str, Any]]:
+    """Ventes possibles : chaque position sous son stop de clôture."""
     sells = []
     for h in holdings:
         a, px, b = h["asset"], prices.get(h["asset"]), assets.get(h["asset"]) or {}
@@ -105,16 +95,73 @@ def forecast(basis: Dict[str, Any], prices: Dict[str, float], holdings: List[Dic
             "at_stop_usdt": round(h["qty"] * stop * (1 - p.fee - p.slippage) - (h.get("cost") or 0), 2),
             "given_back_usdt": round(h["qty"] * max(0.0, px - stop), 2)})
     sells.sort(key=lambda s: -s["prob"])
+    return sells
 
+
+def _regime(basis: Dict[str, Any], assets: Dict[str, Any], prices: Dict[str, float],
+            hours: float) -> Optional[Dict[str, Any]]:
+    """Niveau de BTC sous lequel le bot n'achèterait plus (None si inconnu)."""
     btc_px, thr = prices.get("btc"), basis.get("btc_threshold")
-    regime = None
-    bull_tonight = True
-    if btc_px and thr:
-        sig = sigma_to_close((assets.get("btc") or {}).get("vol") or btc_px * 0.03, hours)
-        p_bear = prob_below(btc_px, thr, sig)
-        bull_tonight = btc_px > thr
-        regime = {"price": btc_px, "threshold": thr, "dist_pct": round((thr / btc_px - 1) * 100, 2),
-                  "bull_now": bull_tonight, "prob_bear": round(p_bear, 3)}
+    if not (btc_px and thr):
+        return None
+    sig = sigma_to_close((assets.get("btc") or {}).get("vol") or btc_px * 0.03, hours)
+    return {"price": btc_px, "threshold": thr, "dist_pct": round((thr / btc_px - 1) * 100, 2),
+            "bull_now": btc_px > thr, "prob_bear": round(prob_below(btc_px, thr, sig), 3)}
+
+
+def _buy_blocks(a: str, b: Dict[str, Any], allowed: set, vetoed: set, bull: bool,
+                halted: bool, slots: int) -> List[str]:
+    """Ce qui empêcherait l'achat même si la cassure a lieu."""
+    blocked = []
+    if a not in allowed:
+        blocked.append("non sélectionnée")
+    if a in vetoed:
+        blocked.append("bloquée par la veille")
+    if not b.get("liquid"):
+        blocked.append("trop peu échangée")
+    if not bull:
+        blocked.append("marché baissier")
+    if halted:
+        blocked.append("arrêt d'urgence")
+    elif slots == 0:
+        blocked.append("plafond de risque atteint")
+    return blocked
+
+
+def _buys(assets: Dict[str, Any], prices: Dict[str, float], held: set, hours: float,
+          blocks: Callable[[str, Dict[str, Any]], List[str]]) -> List[Dict[str, Any]]:
+    """Achats possibles : il faut clôturer au-dessus du plus haut de 30 jours
+    ET du cours d'il y a 90 jours (tendance de fond positive)."""
+    buys = []
+    for a, b in assets.items():
+        px = prices.get(a)
+        if a in held or not px or not b.get("buy_trigger"):
+            continue
+        trig = max(b["buy_trigger"], b.get("mom_ref") or 0.0)
+        sig = sigma_to_close(b.get("vol") or px * 0.03, hours)
+        prob = 1.0 - prob_below(px, trig, sig)
+        dist = (trig / px - 1) * 100
+        if prob >= 0.01 or dist <= 10:
+            buys.append({"asset": a, "price": px, "trigger": trig, "dist_pct": round(dist, 2),
+                         "prob": round(prob, 3), "blocked": blocks(a, b)})
+    buys.sort(key=lambda x: (bool(x["blocked"]), -x["prob"]))
+    return buys[:12]
+
+
+def forecast(basis: Dict[str, Any], prices: Dict[str, float], holdings: List[Dict[str, Any]],
+             now: datetime, p: ts.TrendParams, equity: float, mult: float = 1.0,
+             allowed: Optional[Iterable[str]] = None, vetoed: Iterable[str] = (),
+             halted: bool = False) -> Dict[str, Any]:
+    """Anticipation de la prochaine décision avec les cours du moment.
+    holdings : [{asset, qty, entry, stop, disaster, risk, cost}]."""
+    close_at = pd.Timestamp(basis["next_close"]).to_pydatetime()
+    hours = max(0.0, (close_at - now).total_seconds() / 3600)
+    assets = basis.get("assets") or {}
+    allowed = set(allowed) if allowed is not None else set(assets)
+    vetoed = set(vetoed)
+    sells = _sells(assets, prices, holdings, hours, p)
+    regime = _regime(basis, assets, prices, hours)
+    bull_tonight = regime["bull_now"] if regime else True
 
     open_risk = sum(float(h.get("risk") or 0) for h in holdings)
     per_trade = p.risk_pct * equity * mult
@@ -123,35 +170,8 @@ def forecast(basis: Dict[str, Any], prices: Dict[str, float], holdings: List[Dic
     if per_trade > 0 and not halted:
         slots = max(0, min(p.max_positions - len(holdings),
                            int((budget - open_risk + 1e-9) // per_trade)))
-
-    buys = []
-    for a, b in assets.items():
-        px = prices.get(a)
-        if a in held or not px or not b.get("buy_trigger"):
-            continue
-        # Il faut clôturer au-dessus du plus haut de 30 jours ET du cours
-        # d'il y a 90 jours (tendance de fond positive) : le plus haut des deux.
-        trig = max(b["buy_trigger"], b.get("mom_ref") or 0.0)
-        sig = sigma_to_close(b.get("vol") or px * 0.03, hours)
-        prob = 1.0 - prob_below(px, trig, sig)
-        blocked = []
-        if a not in allowed:
-            blocked.append("non sélectionnée")
-        if a in vetoed:
-            blocked.append("bloquée par la veille")
-        if not b.get("liquid"):
-            blocked.append("trop peu échangée")
-        if not bull_tonight:
-            blocked.append("marché baissier")
-        if halted:
-            blocked.append("arrêt d'urgence")
-        elif slots == 0:
-            blocked.append("plafond de risque atteint")
-        dist = (trig / px - 1) * 100
-        if prob >= 0.01 or dist <= 10:
-            buys.append({"asset": a, "price": px, "trigger": trig, "dist_pct": round(dist, 2),
-                         "prob": round(prob, 3), "blocked": blocked})
-    buys.sort(key=lambda x: (bool(x["blocked"]), -x["prob"]))
+    buys = _buys(assets, prices, {h["asset"] for h in holdings}, hours,
+                 lambda a, b: _buy_blocks(a, b, allowed, vetoed, bull_tonight, halted, slots))
 
     stop_loss = sum(s["given_back_usdt"] for s in sells)
     risk = {"open_risk_usdt": round(open_risk, 2), "open_risk_pct": round(open_risk / equity * 100, 2) if equity else None,
@@ -160,7 +180,7 @@ def forecast(basis: Dict[str, Any], prices: Dict[str, float], holdings: List[Dic
             "all_stops_usdt": round(stop_loss, 2),
             "all_stops_pct": round(stop_loss / equity * 100, 2) if equity else None}
     out = {"hours_left": round(hours, 2), "next_close": basis["next_close"], "basis_day": basis["day"],
-           "sells": sells, "buys": buys[:12], "regime": regime, "risk": risk}
+           "sells": sells, "buys": buys, "regime": regime, "risk": risk}
     out["advice"] = advice(out)
     return out
 
