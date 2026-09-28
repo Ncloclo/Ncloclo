@@ -33,3 +33,7 @@ tests/web/.out/
 test-results/
 playwright-report/
 eslint.json
+
+# Mesure de couverture des tests (python -m coverage)
+.coverage
+htmlcov/
