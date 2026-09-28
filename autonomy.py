@@ -109,11 +109,21 @@ def _read_json(path: str) -> Dict[str, Any]:
         return {}
 
 
-def _write_json(path: str, data: Dict[str, Any]) -> None:
+def _write_json(path: str, data: Dict[str, Any], attempts: int = 10) -> None:
+    """Écriture atomique. Sous Windows, remplacer un fichier qu'un autre
+    process lit à cet instant échoue (accès refusé) : nouvel essai 10 fois,
+    toutes les 50 ms."""
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(data, fh, ensure_ascii=False)
-    os.replace(tmp, path)
+    for k in range(attempts):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if k == attempts - 1:
+                raise
+            time.sleep(0.05)
 
 
 def automation_off(gcfg: Any) -> bool:

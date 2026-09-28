@@ -40,9 +40,14 @@ from .demo import DemoControl, DemoData, DemoMarket, DemoNews
 from .market import INTERVALS, Market
 from .news import NewsHub
 
+import anticipation
+
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 LOOPBACK = {"127.0.0.1", "localhost", "::1"}
 SESSION_DAYS = 30
+LOGIN_MAX_FAILS = 5         # essais ratés tolérés par adresse…
+LOGIN_WINDOW_SEC = 600      # … sur 10 minutes,
+LOGIN_LOCK_SEC = 300        # puis 5 minutes de blocage
 CHAT_PER_MINUTE = 20        # questions à l'assistant (coût d'une IA éventuelle)
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
        "img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; "
@@ -87,6 +92,8 @@ class PanelApp:
         self.news = news
         self.assistant = assistant or Assistant(None)
         self._chat_times: collections.deque = collections.deque()
+        self._login_fails: Dict[str, List[float]] = {}
+        self._login_failed_total: List[float] = []
         self.demo = demo
         self.password = password
         self.loopback = loopback
@@ -112,6 +119,29 @@ class PanelApp:
         with self._lock:
             exp = self._sessions.get(token or "")
         return bool(exp and exp > time.time())
+
+    def login_blocked(self, ip: str) -> int:
+        """Secondes de blocage restantes pour cette adresse (0 = libre)."""
+        now = time.time()
+        with self._lock:
+            fails = [t for t in self._login_fails.get(ip, []) if now - t < LOGIN_WINDOW_SEC]
+            self._login_fails[ip] = fails
+            if len(fails) >= LOGIN_MAX_FAILS:
+                return max(0, int(fails[-1] + LOGIN_LOCK_SEC - now) + 1)
+        return 0
+
+    def login_failed(self, ip: str) -> int:
+        """Note un essai raté ; renvoie le nombre d'essais restants."""
+        now = time.time()
+        with self._lock:
+            fails = self._login_fails.setdefault(ip, [])
+            fails.append(now)
+            self._login_failed_total = [t for t in self._login_failed_total if now - t < 86400] + [now]
+            return max(0, LOGIN_MAX_FAILS - len(fails))
+
+    def login_ok(self, ip: str) -> None:
+        with self._lock:
+            self._login_fails.pop(ip, None)
 
     def drop_session(self, token: Optional[str]) -> None:
         with self._lock:
@@ -240,7 +270,89 @@ class PanelApp:
         """Données PUBLIQUES transmises à l'assistant : aucune clé, aucun
         mot de passe, rien du fichier .env."""
         return {"status": self.status(), "news": self.news_view(),
-                "reasoning": self.data.reasoning(), "positions": self.data.positions()}
+                "reasoning": self.data.reasoning(), "positions": self.data.positions(),
+                "anticipation": self.anticipation_view(), "security": self.security_view()}
+
+    def anticipation_view(self) -> Dict[str, Any]:
+        """Ce que le bot fera probablement à la prochaine clôture, avec les
+        cours du moment (anticipation.py : mêmes règles que le bot)."""
+        st = self.data.state()
+        basis = st.get("anticipation")
+        if not basis:
+            return {"ready": False}
+        universe = [b.lower() for b in self.g.universe]
+        try:
+            tick, stale = self.market.tickers(universe)
+        except Exception:
+            tick, stale = {}, True
+        prices = {a: t["price"] for a, t in tick.items() if t.get("price")}
+        equity = st.get("last_equity")
+        pts = self.data.equity(days=2)
+        if pts:
+            equity = pts[-1]["v"]
+        sel = self.selection_view(st)
+        f = anticipation.forecast(
+            basis, prices, self.data.holdings(st), datetime.now(timezone.utc), self.g.params,
+            float(equity or getattr(self.g, "paper_capital", 10_000.0)),
+            float(st.get("risk_mult", 1.0) or 1.0), sel["active"],
+            (st.get("vetoes") or {}).keys(), bool(st.get("halted")))
+        return dict(f, ready=True, stale=stale)
+
+    def security_view(self) -> Dict[str, Any]:
+        """Centre de sécurité : état des protections, sans jamais afficher
+        une clé ni un mot de passe (seulement leur présence)."""
+        st = self.data.state()
+        now = time.time()
+        with self._lock:
+            fails = len([t for t in self._login_failed_total if now - t < 86400])
+        blocked = sum(1 for ip in list(self._login_fails) if self.login_blocked(ip))
+        checks = []
+
+        def add(label: str, ok: Optional[bool], detail: str) -> None:
+            checks.append({"label": label, "ok": ok, "detail": detail})
+        if self.loopback:
+            add("Accès au panneau", True, "ce PC uniquement")
+        else:
+            add("Accès au panneau", bool(self.password),
+                "Wi-Fi, protégé par mot de passe" if self.password else "Wi-Fi SANS mot de passe")
+        add("Essais de mot de passe ratés (24 h)", fails == 0,
+            f"{fails} essai(s) raté(s)" + (f", {blocked} adresse(s) bloquée(s) 5 min" if blocked else "")
+            + " ; blocage automatique après 5 échecs")
+        live = self.g.run_mode == "live"
+        add("Mode", None if live else True,
+            "RÉEL : de vrais ordres sont passés" if live else "paper : aucun argent réel en jeu")
+        has_keys = bool(os.environ.get("BINANCE_API_KEY")) and bool(os.environ.get("BINANCE_API_SECRET"))
+        add("Clés API Binance", True if has_keys or not live else False,
+            "enregistrées dans le fichier privé .env" if has_keys else
+            ("absentes (normal en paper)" if not live else "absentes : le mode réel ne peut pas démarrer"))
+        add("Droit de retrait de la clé", None,
+            "doit rester désactivé : python trendguard_bot.py verify le contrôle auprès de Binance")
+        add("Clé partagée par erreur", None,
+            "une clé montrée dans une conversation ou une capture doit être supprimée sur Binance")
+        try:
+            gi = os.path.join(os.path.dirname(os.path.dirname(STATIC_DIR)), ".gitignore")
+            env_ok = ".env" in open(gi, encoding="utf-8").read().split()
+        except OSError:
+            env_ok = False
+        add("Fichier des secrets (.env)", True if env_ok else None, "privé, exclu de GitHub")
+        add("Arrêt d'urgence", not bool(st.get("halted")),
+            f"déclenché : {st.get('halt_reason')}" if st.get("halted") else
+            f"prêt, à −{self.g.kill_drawdown * 100:.0f} % depuis le plus haut"
+            + (" ; profil prudent actif" if self.g.params.dd_throttle else ""))
+        try:
+            sup = self.control.autonomy().get("supervisor") or {}
+        except Exception:
+            sup = {}
+        add("Relance automatique", bool(sup.get("running")),
+            "active" if sup.get("running") else "inactive : cliquez sur AUTO")
+        chans = [c for c in (self.hub.status() if self.hub is not None else []) if c.get("enabled")]
+        add("Alertes", bool(chans) if not self.demo else True,
+            ", ".join(c["label"] for c in chans) if chans else
+            ("démonstration" if self.demo else "aucune : python alerts.py configurer"))
+        add("Garde-fou de Rachelle", True, "secrets masqués, demandes sensibles refusées")
+        ok = sum(1 for c in checks if c["ok"] is True)
+        warn = sum(1 for c in checks if c["ok"] is False)
+        return {"checks": checks, "ok": ok, "warn": warn, "total": len(checks)}
 
     def chat(self, body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
         now = time.time()
@@ -344,6 +456,10 @@ class PanelApp:
                     return 200, self.news_view()
                 if path == "/api/assistant":
                     return 200, self.assistant.info()
+                if path == "/api/anticipation":
+                    return 200, self.anticipation_view()
+                if path == "/api/security":
+                    return 200, self.security_view()
                 if path == "/api/log":
                     return 200, {"lines": self.data.log_tail(int(q("lines", "300")))}
             if method == "POST":
@@ -468,13 +584,22 @@ def make_handler(app: PanelApp):
             if url.path == "/api/login":
                 if not app.password:
                     return self._json(200, {"ok": True})
+                ip = self.client_address[0]
+                wait = app.login_blocked(ip)
+                if wait:
+                    return self._json(429, {"ok": False, "error": (
+                        f"trop d'essais ratés : réessayez dans {max(1, round(wait / 60))} min")})
                 if hmac.compare_digest(str(body.get("password", "")).encode(), app.password.encode()):
+                    app.login_ok(ip)
                     token = app.new_session()
                     cookie = (f"tg_session={token}; HttpOnly; SameSite=Strict; Path=/; "
                               f"Max-Age={SESSION_DAYS * 86400}")
                     return self._json(200, {"ok": True}, {"Set-Cookie": cookie})
+                left = app.login_failed(ip)
                 time.sleep(1.0)                          # freine les essais en rafale
-                return self._json(401, {"ok": False, "error": "mot de passe incorrect"})
+                warn = ("" if left > 2 else " : accès bloqué 5 min" if not left else
+                        f" ({left} essai{'s' if left > 1 else ''} avant blocage de 5 min)")
+                return self._json(401, {"ok": False, "error": "mot de passe incorrect" + warn})
             if url.path == "/api/logout":
                 app.drop_session(self._token())
                 return self._json(200, {"ok": True},

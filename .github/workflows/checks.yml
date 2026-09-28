@@ -25,6 +25,10 @@ jobs:
           cache-dependency-path: requirements-docker.txt
       - run: pip install -r requirements-docker.txt
       - run: python -m pytest tests -q -p no:cacheprovider
+      - name: Failles connues dans les dépendances (pip-audit)
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements-docker.txt --progress-spinner off
 
   web:
     name: Pages web (ESLint, Playwright)

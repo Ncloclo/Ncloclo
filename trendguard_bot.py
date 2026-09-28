@@ -49,6 +49,7 @@ import ccxt
 import pandas as pd
 
 import alerts
+import anticipation
 import autonomy
 import diagnostics as dg
 import market_watch as mw
@@ -79,6 +80,7 @@ TG_ENV_DOC: Dict[str, str] = {
     "TG_MAX_CAPITAL": "Capital max géré par le bot en USDT (0 = tout le compte)",
     "TG_DD_THROTTLE": "Profil prudent : baisse:multiplicateur (ex. 0.10:0.5) ; vide = off",
     "TG_AUTO_DIAGNOSE_DAYS": "Auto-diagnostic tous les N jours (0 = désactivé)",
+    "TG_ANTICIPATION": "true : alerte quand une vente ou un achat sont probables à la prochaine clôture",
     "TG_CLASSEMENT": "true : classement quotidien des cryptos par bénéfice (panneau, auto-sélection)",
     "TG_KEEP_AWAKE": "true : l'ordinateur ne se met pas en veille tout seul pendant que le bot tourne",
     "TG_MAX_SPREAD": "Ruse : achat différé si l'écart achat/vente dépasse ce seuil (0.005 = 0,5 %)",
@@ -140,6 +142,9 @@ class GuardConfig:
     # Classement des cryptos par bénéfice de la stratégie (affiché dans le
     # panneau, utilisé par l'auto-sélection) ; activé par l'environnement.
     rank_cryptos: bool = False
+    # Alertes d'anticipation (vente ou achat probables à la prochaine
+    # clôture) ; activées par l'environnement.
+    anticipation_alerts: bool = False
     watch_db: str = ""
     max_capital: float = 0.0            # 0 = tout le compte
     keep_awake: bool = False            # anti-veille (activé par l'environnement)
@@ -229,6 +234,7 @@ def load_guard_config_from_env() -> GuardConfig:
         watch=v29._env_b("TG_VEILLE", True),
         watch_ai=v29._env_b("TG_VEILLE_IA", True),
         rank_cryptos=v29._env_b("TG_CLASSEMENT", True),
+        anticipation_alerts=v29._env_b("TG_ANTICIPATION", True),
         watch_db=v29._env_s("TG_VEILLE_DB", os.path.join(v29.APP_DIR, "trendguard_veille.db")),
         max_capital=v29._env_f("TG_MAX_CAPITAL", 0.0),
         keep_awake=v29._env_b("TG_KEEP_AWAKE", True),
@@ -323,6 +329,7 @@ class TrendGuardBot:
         self._started_at = time.time()
         self._last_alive = 0.0
         self._last_selection_try = 0.0
+        self._last_anticipation = 0.0
         # Notes d'exécution du jour (achat différé, annulé) pour le raisonnement.
         self._entry_notes: Dict[str, Tuple[str, str]] = {}
         self._last_close: Optional[pd.DataFrame] = None   # apprentissage de la veille
@@ -586,6 +593,7 @@ class TrendGuardBot:
         self.state["last_cycle_ts"] = time.time()
         self._save_state()
         self._heartbeat(now)
+        self._anticipate(now)
         self._auto_diagnose(now, day)
         self._daily_watch(now, day)
 
@@ -739,6 +747,79 @@ class TrendGuardBot:
             self.notifier(f"{dg.ICONS[v]} TrendGuard auto-diagnostic {day} : {v}\n"
                           + "\n".join(points[:6]),
                           dedup_key=f"tg-diag-{day}", critical=(v == "ALERTE"))
+
+    # ---------- Anticipation (vente ou achat probables ce soir) ----------
+
+    ANTICIPATION_WINDOW_H = 3.0      # alerte dans les 3 h avant la clôture
+    ANTICIPATION_EVERY_SEC = 900     # au plus un calcul toutes les 15 min
+    ANTICIPATION_THRESHOLD = 0.6     # probabilité à partir de laquelle on prévient
+
+    def holdings_view(self) -> List[Dict[str, Any]]:
+        """Positions au format de l'anticipation (stop de clôture, stop
+        catastrophe, risque initial, coût)."""
+        out = []
+        book = (self.state.get("paper") or {}).get("holdings") or {}
+        for a, h in self._holdings().items():
+            disaster = None
+            if self.live:
+                s = self.slots.get(a.upper())
+                disaster = s.ctx.position.sl_price if s else None
+            else:
+                disaster = (book.get(a) or {}).get("disaster")
+            out.append({"asset": a, "qty": h.qty, "entry": h.entry, "stop": h.stop,
+                        "disaster": disaster, "risk": h.risk_quote, "cost": h.cost})
+        return out
+
+    def forecast(self, now: datetime, assets: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
+        basis = self.state.get("anticipation")
+        if not basis:
+            return None
+        holdings = self.holdings_view()
+        wanted = set(assets or []) | {h["asset"] for h in holdings} | {"btc"}
+        if assets is None:
+            # Candidats proches de leur niveau d'achat (moins de 10 %).
+            wanted |= {a for a, b in (basis.get("assets") or {}).items()
+                       if b.get("close") and b.get("buy_trigger")
+                       and b["buy_trigger"] / b["close"] - 1 <= 0.10}
+        prices: Dict[str, float] = {}
+        for a in sorted(wanted):
+            s = self.slots.get(a.upper())
+            if s is None:
+                continue
+            try:
+                prices[a] = float(s.ex.get_ticker()["last"])
+            except Exception:
+                continue
+        return anticipation.forecast(
+            basis, prices, holdings, now, self.p,
+            float(self.state.get("last_equity") or self.g.paper_capital),
+            float(self.state.get("risk_mult", 1.0) or 1.0), self.active_now(),
+            (self.state.get("vetoes") or {}).keys(), bool(self.state.get("halted")))
+
+    def _anticipate(self, now: datetime) -> None:
+        """Dans les 3 h avant la clôture : prévient une fois par soir quand
+        une vente ou un achat deviennent probables (les règles, elles, ne
+        changent pas : c'est la clôture qui décide)."""
+        basis = self.state.get("anticipation")
+        if not self.g.anticipation_alerts or not basis:
+            return
+        close_at = pd.Timestamp(basis["next_close"]).to_pydatetime()
+        hours = (close_at - now).total_seconds() / 3600
+        if not 0 < hours <= self.ANTICIPATION_WINDOW_H:
+            return
+        if time.time() - self._last_anticipation < self.ANTICIPATION_EVERY_SEC:
+            return
+        self._last_anticipation = time.time()
+        f = self.forecast(now)
+        if not f:
+            return
+        sent = self.state.get("anticipation_sent") or {}
+        keys = sent.get("keys", []) if sent.get("close") == basis["next_close"] else []
+        for al in anticipation.alerts_to_send(f, keys, self.ANTICIPATION_THRESHOLD):
+            self.logger.info(f"[ANTICIPATION] {al['text']}")
+            self.notifier(al["text"], dedup_key=f"anticipation-{basis['next_close']}-{al['key']}")
+            keys.append(al["key"])
+        self.state["anticipation_sent"] = {"close": basis["next_close"], "keys": keys}
 
     def _heartbeat(self, now: datetime) -> None:
         """Une ligne de journal toutes les `heartbeat_min` minutes : le bot
@@ -1005,6 +1086,8 @@ class TrendGuardBot:
         # Cryptos que le bot a le droit d'ACHETER aujourd'hui (sélection du
         # panneau) ; les positions détenues restent toutes gérées.
         allowed = self._update_selection(close, feats, regime, day, snap, now)
+        # Niveaux de la PROCHAINE décision (anticipation dans le panneau).
+        self.state["anticipation"] = anticipation.basis_from_market(close, feats, day, self.p)
         # La décision du jour remplace les achats différés de la veille.
         stale = self.state.pop("pending_entries", None)
         if stale:
@@ -1098,7 +1181,8 @@ class TrendGuardBot:
         notes.update(self._entry_notes)
         r = explain_decision(day, bull, self._btc_gap(close, day), snap, holdings, exits,
                              [e["asset"] for e in entries], notes,
-                             bool(self.state.get("halted")), mult, self.p)
+                             bool(self.state.get("halted")), mult, self.p,
+                             float(self.state.get("last_equity") or 0.0) or None)
         r["at"] = now.isoformat()
         self.state["reasoning"] = r
         hist = self.state.get("reasoning_log") or []
@@ -1161,22 +1245,27 @@ class TrendGuardBot:
         return set(auto) if auto else {b.lower() for b in self.g.universe}
 
     def _refresh_selection(self, now: datetime) -> None:
-        """Premier classement sans attendre la décision de 00:02 UTC (une
-        fois, après une mise à jour du bot)."""
-        if (not self.g.rank_cryptos or self.state.get("selection")
+        """Premier classement et premiers niveaux d'anticipation sans
+        attendre la décision de 00:02 UTC (une fois, après une mise à jour du
+        bot)."""
+        day = self.state.get("last_decision_day")
+        need_rank = self.g.rank_cryptos and not self.state.get("selection")
+        need_basis = (self.state.get("anticipation") or {}).get("day") != day
+        if (not day or not (need_rank or need_basis)
                 or time.time() - self._last_selection_try < 1800):
             return
         self._last_selection_try = time.time()
-        day = self.state.get("last_decision_day")
-        if not day:
-            return
         try:
             close, feats, regime = self._load_market(now)
-            snap, _bull, _prices = self._snapshot_at(close, feats, regime, day)
-            self._update_selection(close, feats, regime, day, snap, now)
+            if need_basis:
+                self.state["anticipation"] = anticipation.basis_from_market(
+                    close, feats, day, self.p)
+            if need_rank:
+                snap, _bull, _prices = self._snapshot_at(close, feats, regime, day)
+                self._update_selection(close, feats, regime, day, snap, now)
             self._save_state()
         except Exception as e:
-            self.logger.warning(f"[SÉLECTION] classement reporté : {e}")
+            self.logger.warning(f"[SÉLECTION] classement ou anticipation reportés : {e}")
 
     def _note_asset(self, a: str, status: str, text: str) -> None:
         """Met à jour le raisonnement du jour après un achat différé."""
@@ -1581,7 +1670,8 @@ def _pc(x: float, d: int = 1) -> str:
 def _explain_asset(a: str, s: Dict[str, float], gap: Optional[float], bull: bool,
                    holdings: Dict[str, ts.Holding], sold: Dict[str, str], bought: List[str],
                    notes: Dict[str, Tuple[str, str]], halted: bool,
-                   p: ts.TrendParams) -> Tuple[str, str]:
+                   p: ts.TrendParams, equity: Optional[float] = None,
+                   mult: float = 1.0) -> Tuple[str, str]:
     if a in sold:
         return "sold", "Vendue : " + EXIT_WHY.get(sold[a], sold[a].lower())
     if a in bought:
@@ -1616,6 +1706,17 @@ def _explain_asset(a: str, s: Dict[str, float], gap: Optional[float], bull: bool
                         "au-dessus de sa moyenne")
     if halted:
         return "halted", "Signal d'achat, mais arrêt d'urgence actif"
+    if len(holdings) >= p.max_positions:
+        return "full", (f"Signal d'achat, mais {len(holdings)} positions sont déjà ouvertes "
+                        f"(maximum {p.max_positions}) : achat dès qu'une position sera vendue")
+    if equity:
+        engaged = sum(h.risk_quote for h in holdings.values()) / equity * 100
+        if engaged + p.risk_pct * mult * 100 > p.max_total_risk * mult * 100 + 1e-9:
+            return "full", (f"Signal d'achat, mais plafond de risque cumulé atteint "
+                            f"({engaged:.1f} % engagés sur {p.max_total_risk * mult * 100:.0f} % "
+                            f"permis) : achat dès qu'une position sera vendue").replace(".", ",")
+        return "full", ("Signal d'achat, mais les achats mieux classés du jour ou les liquidités "
+                        "disponibles ont pris la place")
     return "full", "Signal d'achat, mais plafond atteint (positions, risque total ou liquidités)"
 
 
@@ -1623,7 +1724,7 @@ def explain_decision(day: str, bull: bool, btc_gap: Optional[float],
                      snap: Dict[str, Dict[str, float]], holdings: Dict[str, ts.Holding],
                      exits: List[Tuple[str, str]], bought: List[str],
                      notes: Dict[str, Tuple[str, str]], halted: bool, mult: float,
-                     p: ts.TrendParams) -> Dict[str, Any]:
+                     p: ts.TrendParams, equity: Optional[float] = None) -> Dict[str, Any]:
     """Raisonnement de la décision du jour, actif par actif : ce que le bot
     a fait, pourquoi il n'a pas acheté les autres, et ce qu'il guette.
     Mêmes règles que la décision elle-même (trend_strategy.entry_signal)."""
@@ -1633,7 +1734,8 @@ def explain_decision(day: str, bull: bool, btc_gap: Optional[float],
         s = snap.get(a) or {}
         close, hi = s.get("close"), s.get("prior_high")
         gap = (hi / close - 1) * 100 if ts._finite(close, hi) and close > 0 else None
-        status, text = _explain_asset(a, s, gap, bull, holdings, sold, bought, notes, halted, p)
+        status, text = _explain_asset(a, s, gap, bull, holdings, sold, bought, notes, halted, p,
+                                      equity, mult)
         assets[a] = {"status": status, "text": text,
                      "breakout_gap_pct": round(gap, 2) if gap is not None else None}
     radar = sorted((a for a, x in assets.items() if x["status"] == "watch"),

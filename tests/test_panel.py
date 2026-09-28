@@ -196,6 +196,51 @@ def test_password_required_from_the_network(tmp_path):
         httpd.server_close()
 
 
+def test_login_is_locked_after_repeated_failures(tmp_path):
+    app = ps.build_app(_cfg(tmp_path), demo=True, password="secret-du-panneau", loopback=False)
+    httpd = ps.serve(app, "127.0.0.1", 0)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{httpd.server_address[1]}"
+    try:
+        # Quatre échecs déjà notés : le suivant prévient, puis bloque.
+        app._login_fails["127.0.0.1"] = [time.time()] * (ps.LOGIN_MAX_FAILS - 1)
+        code, r = _json(base + "/api/login", method="POST", body={"password": "faux"})
+        assert code == 401 and "bloqué 5 min" in r["error"]
+        # Bloqué, même avec le bon mot de passe.
+        code, r = _json(base + "/api/login", method="POST", body={"password": "secret-du-panneau"})
+        assert code == 429 and "réessayez dans 5 min" in r["error"]
+        sec = app.security_view()
+        row = next(c for c in sec["checks"] if c["label"].startswith("Essais"))
+        assert row["ok"] is False and "1 adresse(s) bloquée(s)" in row["detail"]
+        app._login_fails["127.0.0.1"] = [time.time() - ps.LOGIN_WINDOW_SEC - 1] * 5  # délai passé
+        assert _req(base + "/api/login", method="POST", body={"password": "secret-du-panneau"})[0] == 200
+        assert "127.0.0.1" not in app._login_fails                   # compteur remis à zéro
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def test_anticipation_and_security_endpoints(demo_server, monkeypatch):
+    base, _ = demo_server
+    monkeypatch.setenv("BINANCE_API_KEY", "cle-factice-a-ne-jamais-afficher")
+    monkeypatch.setenv("BINANCE_API_SECRET", "secret-factice-a-ne-jamais-afficher")
+    code, f = _json(base + "/api/anticipation")
+    assert code == 200 and f["ready"] and 0 < f["hours_left"] <= 48
+    assert f["sells"][0]["asset"] == "icp" and f["sells"][0]["prob"] > 0.1      # proche du stop
+    bnb = next(b for b in f["buys"] if b["asset"] == "bnb")
+    assert bnb["prob"] > 0.5 and "plafond de risque atteint" in bnb["blocked"]  # 6 % engagés
+    assert f["risk"]["slots"] == 0 and f["risk"]["budget_pct"] == 6.0
+    assert f["regime"]["bull_now"] == _json(base + "/api/status")[1]["regime_bull"] and f["advice"]
+    code, headers, body = _req(base + "/api/security")
+    sec = json.loads(body)
+    assert code == 200 and sec["total"] == len(sec["checks"]) >= 9 and sec["ok"] >= 6
+    assert b"factice" not in body and b"enregistr" in body                       # présence seulement
+    ans = _json(base + "/api/assistant", method="POST", body={"message": "Que va faire le bot ce soir ?"})[1]
+    assert "ICP" in ans["answer"] and "probabilité" in ans["answer"]
+    ans = _json(base + "/api/assistant", method="POST", body={"message": "Suis-je en sécurité ?"})[1]
+    assert "protections sur" in ans["answer"] and ans["actions"][0]["href"] == "#settings"
+
+
 def test_second_panel_on_the_same_port_is_refused(tmp_path):
     # Démarrage avec l'ordinateur + lancement manuel : un seul panneau par port
     # (sous Windows, SO_REUSEADDR laissait les deux écouter en même temps).

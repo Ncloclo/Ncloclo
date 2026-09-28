@@ -98,6 +98,19 @@
           <div class="kpi card"><span class="label">Dernier cycle</span><strong class="num" id="d-cycle">—</strong><span class="sub" id="d-cycle-sub"></span></div>
           <div class="kpi card"><span class="label">Veille du marché</span><strong id="d-watch">—</strong><span class="sub" id="d-watch-sub"></span></div>
         </div>
+        <div class="card anticip" id="d-anticip">
+          <div class="card-head">
+            <h2>Anticipation : prochaine clôture <span class="sub" id="a-when"></span></h2>
+            <span class="sub" id="a-risk"></span>
+          </div>
+          <div class="anticip-cols">
+            <div><h3 class="a-title down">▼ Ventes possibles</h3><ol class="a-list" id="a-sells"></ol></div>
+            <div><h3 class="a-title up">▲ Achats possibles</h3><ol class="a-list" id="a-buys"></ol></div>
+          </div>
+          <p class="a-regime" id="a-regime"></p>
+          <ul class="a-advice" id="a-advice" aria-label="Conseils"></ul>
+          <p class="sub a-note">Probabilités indicatives, calculées avec les cours du moment et la volatilité de chaque crypto. Les règles ne changent pas : c'est la clôture de 00:00 UTC qui décide.</p>
+        </div>
         <div class="card mind" id="d-mind-card">
           <div class="card-head">
             <h2 class="mind-title"><svg><use href="#i-mind"/></svg>Ce que pense le bot <span class="think" aria-hidden="true"><i></i><i></i><i></i></span></h2>
@@ -246,6 +259,10 @@
             <dl id="s-auto" class="dl"></dl>
           </div>
           <div class="card"><div class="card-head"><h2>Bot</h2></div><dl id="s-bot" class="dl"></dl></div>
+          <div class="card">
+            <div class="card-head"><h2>Sécurité</h2><strong class="sel-count" id="s-sec-score">—</strong></div>
+            <ul class="sec-list" id="s-sec"></ul>
+          </div>
           <div class="card">
             <div class="card-head"><h2>Alertes</h2></div>
             <ul id="s-alerts" class="channel-list"></ul>

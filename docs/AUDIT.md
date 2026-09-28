@@ -166,16 +166,22 @@ tard).
 
 ## 7. Plan d'action
 
-| Priorité | Action | Qui |
-| --- | --- | --- |
-| 1 | Supprimer la clé Binance exposée et en créer une nouvelle | Vous |
-| 2 | Tester les chemins de secours des ordres réels (achat ambigu ou refusé, stop refusé, vente d'urgence) sur le simulateur | Code, avant tout réel |
-| 3 | Limiter les essais de mot de passe du panneau (S2) | Code |
-| 4 | Réessayer l'écriture du choix des cryptos sous Windows (O3) | Code |
-| 5 | Préciser « plafond de risque cumulé de 6 % atteint » dans le raisonnement (R1) | Code |
-| 6 | Encadrer les actualités comme données non fiables pour l'IA de Rachelle (S4) | Code |
-| 7 | Audit des dépendances (`pip-audit`) dans les contrôles GitHub | Code |
-| 8 | Service `panneau` dans `docker-compose.yml` (O5) | Code |
-| 9 | Séparer `v29.py` en modules et archiver l'ancien bot V29 ; un seul moteur de backtest paramétrable | Chantier plus long, sans urgence |
-| 10 | Pour un fonctionnement 24 h/24 : serveur allumé en permanence ou ouverture de session automatique (O1) | Vous |
-| 11 | Avant le réel : `verify`, puis quelques jours de testnet (R5) | Vous, le moment venu |
+| Priorité | Action | Qui | Suivi |
+| --- | --- | --- | --- |
+| 1 | Supprimer la clé Binance exposée et en créer une nouvelle | Vous | **à faire** |
+| 2 | Tester les chemins de secours des ordres réels (achat ambigu ou refusé, stop refusé, vente d'urgence) sur le simulateur | Code, avant tout réel | fait : `tests/test_live_planned.py` (10 cas) ; a révélé et corrigé une erreur de mise en forme du journal à l'ouverture d'une position réelle (`v29.py`) |
+| 3 | Limiter les essais de mot de passe du panneau (S2) | Code | fait : blocage de 5 min après 5 échecs en 10 min, par adresse |
+| 4 | Réessayer l'écriture du choix des cryptos sous Windows (O3) | Code | fait : 10 essais espacés de 50 ms |
+| 5 | Préciser « plafond de risque cumulé de 6 % atteint » dans le raisonnement (R1) | Code | fait (avec le pourcentage engagé) |
+| 6 | Encadrer les actualités comme données non fiables pour l'IA de Rachelle (S4) | Code | fait |
+| 7 | Audit des dépendances (`pip-audit`) dans les contrôles GitHub | Code | fait : aucune faille connue au 28/09/2026 |
+| 8 | Service `panneau` dans `docker-compose.yml` (O5) | Code | reporté : dans Docker, AUTO et ARRÊTER doivent piloter un autre conteneur, relancé seul par Docker ; à concevoir avec le passage sur serveur (O1) |
+| 9 | Séparer `v29.py` en modules et archiver l'ancien bot V29 ; un seul moteur de backtest paramétrable | Chantier plus long, sans urgence | ouvert |
+| 10 | Pour un fonctionnement 24 h/24 : serveur allumé en permanence ou ouverture de session automatique (O1) | Vous | ouvert |
+| 11 | Avant le réel : `verify`, puis quelques jours de testnet (R5) | Vous, le moment venu | ouvert |
+
+Ajouts après l'audit : anticipation de la prochaine clôture (`anticipation.py` :
+ventes et achats probables, régime, risque engagé, pire cas, conseils ; carte du
+tableau de bord, alertes 3 h avant la clôture, réponses de Rachelle), centre de
+sécurité dans les Réglages, actualités sensibles sur une crypto détenue dans les
+alertes du tableau de bord.

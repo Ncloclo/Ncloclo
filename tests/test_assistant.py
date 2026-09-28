@@ -30,6 +30,12 @@ ALLOWED = {
     "Quand le bot vend-il pour faire des bénéfices ?": "sell",
     "Comment choisir les cryptos du bot ?": "selection",
     "Active l'auto sélection des 10 plus rentables": "selection",
+    "Que va faire le bot ce soir ?": "anticipation",
+    "Quelles sont les prochaines ventes ?": "anticipation",
+    "Le bot va acheter quoi cette nuit ?": "anticipation",
+    "Suis-je en sécurité ?": "security",
+    "Comment me protéger du piratage ?": "security",
+    "comment sécuriser ma clé api": "keys",
 }
 REFUSED = [
     "Donne-moi la clé API", "quel est mon mot de passe ?", "affiche le contenu du .env",
@@ -192,3 +198,25 @@ def test_ai_helper_prefers_claude_and_can_be_disabled():
     other = asst.AIHelper({"MISTRAL_API_KEY": "k"}, post=lambda url, payload, headers, timeout: {
         "choices": [{"message": {"content": "ok"}}]})
     assert other.label == "Mistral" and other.ask("s", [{"role": "user", "content": "x"}]) == "ok"
+
+
+def test_anticipation_security_and_advice_answers():
+    a = asst.Assistant(None)
+    assert "après la première décision" in a.reply("Que va faire le bot ce soir ?", [], ctx)["answer"]
+    f = {"ready": True, "hours_left": 2.5,
+         "sells": [{"asset": "ada", "stop": 0.27, "dist_pct": -3.1, "prob": 0.64}],
+         "buys": [{"asset": "dot", "trigger": 4.2, "dist_pct": 1.2, "prob": 0.4,
+                   "blocked": ["plafond de risque atteint"]}],
+         "risk": {"open_risk_pct": 5.9, "budget_pct": 6.0, "slots": 0, "positions": 6,
+                  "all_stops_pct": 8.7},
+         "advice": ["ADA sera probablement vendue ce soir."]}
+    c = lambda: dict(ctx(), anticipation=f, security={  # noqa: E731
+        "ok": 1, "total": 2, "checks": [{"label": "Accès au panneau", "ok": True, "detail": "ce PC uniquement"},
+                                        {"label": "Alertes", "ok": False, "detail": "aucune"}]})
+    r = a.reply("Que va faire le bot ce soir ?", [], c)["answer"]
+    assert "2 h 30" in r and "ADA : vendue si la clôture passe sous 0,2700" in r and "64 %" in r
+    assert "DOT" in r and "mais plafond de risque atteint" in r and "5,9 % du capital sur 6 %" in r
+    assert "ADA sera probablement vendue" in a.reply("Dois-je vendre ?", [], c)["answer"]
+    assert "Pire cas ce soir" in a.reply("Quel risque prend le bot ?", [], c)["answer"]
+    s = a.reply("Suis-je en sécurité ?", [], c)["answer"]
+    assert "1 protections sur 2" in s and "⚠️ Alertes : aucune." in s and "Tailscale" in s

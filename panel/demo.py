@@ -115,11 +115,26 @@ class DemoData:
                                            "conservée(s)."} for k in range(6, 0, -1)],
                 "pending_entries": {"bch": {"reason": "écart achat/vente anormal (0,74 %, limite 0,50 %)",
                                             "tries": 3, "until": time.time() + 4 * 3600}},
+                "anticipation": self._basis(),
                 "selection": {"mode": self._sel["mode"], "day": "2026-09-27",
                               "auto": [a for a, _r, _n in DEMO_RANK[:10]],
                               "ranking": [{"asset": a, "rank": k + 1, "total_r": r, "trades": n,
                                            "win_rate": 0.45, "eligible": True}
                                           for k, (a, r, n) in enumerate(DEMO_RANK)]}}
+
+    def _basis(self) -> Dict[str, Any]:
+        """Niveaux d'exemple de la prochaine décision."""
+        day = (datetime.now(timezone.utc) - timedelta(days=1)).date()
+        assets = {}
+        for a, px in BASE_PRICES.items():
+            st, _t, gap = WHY.get(a, ("held", "", None))
+            gap = {"bnb": -0.8, "bch": 0.6}.get(a, gap if gap is not None else 12.0)
+            assets[a] = {"close": px, "buy_trigger": px * (1 + gap / 100), "mom_ref": px * 0.8,
+                         "vol": px * 0.03, "liquid": st != "illiquid"}
+        last = self.market.regime()[0]["points"][-1]       # même régime que le reste de la démo
+        return {"day": day.isoformat(), "btc_threshold": BASE_PRICES["btc"] * last["sma"] / last["close"],
+                "next_close": (datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc)
+                               + timedelta(days=2)).isoformat(), "assets": assets}
 
     def selection_request(self) -> Dict[str, Any]:
         return dict(self._sel, saved=True)
@@ -174,6 +189,8 @@ class DemoData:
             px = BASE_PRICES[a]
             entry = px * 0.99
             stop = entry * 0.9
+            if a == "icp":                    # exemple : position proche de sa vente
+                stop = px * 0.985
             out.append({"asset": a, "qty": round(100 / (entry - stop), 4), "entry": entry,
                         "stop": stop, "disaster": stop * 0.97, "risk": 100.0,
                         "cost": 100 / (entry - stop) * entry, "entry_date": self._entry[a]})

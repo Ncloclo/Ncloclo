@@ -251,6 +251,27 @@ test("cryptos : cartes, filtre et recherche", async ({ page }) => {
   await expect(page.locator("#detail-title")).toHaveText("ADA/USDT");
 });
 
+test("anticipation de la prochaine clôture et centre de sécurité", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto(BASE + "/#dash");
+  const card = page.locator("#d-anticip");
+  await expect(card.locator("#a-sells .a-row").first()).toContainText("ICP");     // proche de son stop
+  await expect(card.locator("#a-sells .a-row")).toHaveCount(6);
+  await expect(card.locator("#a-buys .a-row").first()).toContainText("plafond de risque atteint");
+  await expect(card.locator("#a-risk")).toContainText("/ 6 %");
+  await expect(card.locator("#a-regime")).toContainText(/Marché (haussier|baissier)/);
+  await expect(card.locator("#a-advice li").first()).toBeVisible();
+  await expect(card.locator("#a-when")).toContainText("dans");
+  await card.locator("#a-sells .a-asset").first().click();                        // graphique de la crypto
+  await expect(page.locator("#detail-title")).toHaveText("ICP/USDT");
+  await page.keyboard.press("Escape");
+  await page.locator('.tab[data-tab="settings"]').click();
+  await expect(page.locator("#s-sec li")).toHaveCount(11);
+  await expect(page.locator("#s-sec-score")).toHaveText(/^\d+ \/ 11$/);
+  await expect(page.locator("#s-sec")).toContainText("ce PC uniquement");
+  expect(errors).toEqual([]);
+});
+
 test("positions, veille, journal, réglages et thème", async ({ page }) => {
   const errors = watchErrors(page);
   await page.goto(BASE + "/#positions");

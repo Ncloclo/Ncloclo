@@ -141,8 +141,19 @@ panneau de contrôle ») :
   une clé ou le `.env`, contourner une protection, ouvrir un port, activer les
   retraits, déplacer des fonds) est refusée poliment en une phrase. Rachelle ne
   voit que des données publiques et ne peut rien modifier ;
+- **Anticipation** (tableau de bord) : ce que le bot fera probablement à la
+  prochaine clôture, avec les cours du moment et les mêmes règles que le bot
+  (`anticipation.py`). Ventes possibles : niveau exact du stop, distance au
+  cours, probabilité, gain ou perte verrouillés. Achats possibles : niveau à
+  dépasser, probabilité, et ce qui bloquerait l'achat (plafond de risque, marché
+  baissier, crypto non sélectionnée…). Plus le niveau de BTC sous lequel le bot
+  n'achèterait plus, le risque engagé et le pire cas si tous les stops étaient
+  touchés, et des conseils en phrases simples. Probabilités indicatives
+  (volatilité de chaque crypto, temps restant), jamais une prévision de prix ;
+  les règles ne changent pas ;
 - **Ce que pense le bot** (tableau de bord) : sa décision du jour expliquée et
-  les cryptos proches d'un signal d'achat ;
+  les cryptos proches d'un signal d'achat. Une actualité sensible (piratage,
+  retrait, régulation) qui cite une crypto détenue s'affiche dans les alertes ;
 - **Graphiques** : capital, régime BTC et chaque position en temps réel ; un
   clic ouvre le détail (bougies, volume, achats et ventes, stops, zoom,
   intervalles de 15 min à 1 jour). Tous les achats du bot sont marqués d'une
@@ -167,7 +178,15 @@ panneau de contrôle ») :
   Réglages ▸ Affichage (3 s, 1 s ou aucun) ;
 - **Positions**, **Veille**, **Journal** et **Réglages** (démarrage avec
   l'ordinateur, test des alertes, thème clair ou sombre, accès depuis un
-  téléphone).
+  téléphone) ;
+- **Centre de sécurité** (Réglages) : accès au panneau, essais de mot de passe
+  ratés, mode, présence des clés (jamais leur valeur), droit de retrait, `.env`
+  privé, arrêt d'urgence, relance automatique, alertes. Après 5 mots de passe
+  ratés en 10 min, l'adresse est bloquée 5 min.
+
+Rachelle répond aussi à « Que va faire le bot ce soir ? » (anticipation et
+conseils) et « Suis-je en sécurité ? » (centre de sécurité et bonnes
+pratiques).
 
 Le panneau lit la base du bot sans la modifier et ne passe aucun ordre
 lui-même. Sans bot ni réseau, `--demo` affiche des données fictives.
@@ -191,6 +210,13 @@ gratuit pour un usage personnel, ou Twilio). Par défaut, seules les alertes
 critiques (arrêt d'urgence, retrait officiel d'une crypto détenue, alerte forte
 de la veille) partent par e-mail et WhatsApp ; `ALERT_LEVEL=all` y ajoute le
 résumé quotidien. Un canal en panne ne ralentit jamais le trading.
+
+**Alertes d'anticipation** (`TG_ANTICIPATION=true` par défaut) : dans les 3
+heures avant la clôture de 00:00 UTC, le bot prévient une seule fois par crypto
+et par soir quand une vente ou un achat devient probable (60 % ou plus) : « 📉
+Vente probable ce soir : ADA si la clôture passe sous 0,2700 ». Elles partent
+sur Telegram, et par e-mail et WhatsApp avec `ALERT_LEVEL=all`. Rien n'est
+avancé : la décision reste celle de la clôture.
 
 ### Bot autonome, rusé, qui explique ses choix (`autonomy.py`)
 

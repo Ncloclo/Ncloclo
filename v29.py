@@ -4936,7 +4936,7 @@ class ExecutionEngine:
             f"[ENTRY] {ctx.position.module} {ctx.position.regime} "
             f"{ctx.position.tier} qty={amount_held:.8f} @ {avg:.8f} "
             f"(coût {cost_basis:.8f}) SL={sl:.8f} TP={tp:.8f} "
-            f"risque={intent.get('eff_risk_pct', 0):.3f}% "
+            f"risque={float(intent.get('eff_risk_pct') or 0):.3f}% "
             f"({risk_quote:.4f} {cfg.quote})")
         self._event("entry", "INFO", {
             "module": ctx.position.module, "tier": ctx.position.tier,

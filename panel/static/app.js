@@ -105,7 +105,7 @@ async function api(path, opts = {}) {
     init.body = JSON.stringify(opts.body);
   }
   const res = await fetch(path, init);
-  if (res.status === 401) { showLogin(); throw new Error("connexion requise"); }
+  if (res.status === 401 && path !== "/api/login") { showLogin(); throw new Error("connexion requise"); }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
@@ -350,7 +350,8 @@ $("#auto-btn").addEventListener("click", async (ev) => {
 let dashChart = null, dashSeries = null;
 async function renderDash() {
   if (!S) await refreshStatus();
-  loadNews().then(renderTicker).catch(() => { /* bandeau : réessai au prochain rafraîchissement */ });
+  const newsP = loadNews().then((n) => { renderTicker(n); newsAlerts(n); }).catch(() => { /* bandeau : réessai au prochain rafraîchissement */ });
+  api("/api/anticipation").then(renderAnticipation).catch(() => { /* réessai au prochain rafraîchissement */ });
   const [pos, eq, mind] = await Promise.all([api("/api/positions"), api("/api/equity?days=30"), api("/api/reasoning")]);
   renderMind(mind);
   countUp($("#d-equity"), S.equity, fusd);
@@ -408,6 +409,7 @@ async function renderDash() {
     return r;
   }));
 
+  await Promise.race([newsP, new Promise((r) => setTimeout(r, 800))]);
   const alerts = [];
   if (S.halted) alerts.push(["crit", `Arrêt d'urgence : ${S.halt_reason || ""}`]);
   if (S.state === "stopped") alerts.push(["warn", "Le bot est arrêté : cliquez sur AUTO pour reprendre l'automatisation."]);
@@ -418,8 +420,66 @@ async function renderDash() {
   S.vetoes.forEach((v) => alerts.push(["crit", `${v.reason} : achats bloqués jusqu'au ${fdate(v.until)}`]));
   ((S.watch && S.watch.alerts) || []).forEach((a) => alerts.push(["warn", a]));
   if (pos.stale) alerts.push(["warn", "Cours Binance momentanément indisponibles : dernières valeurs affichées."]);
+  NEWS_ALERTS.forEach((i) => alerts.push(["warn", `Actualité sensible sur ${i.assets.map(up).join(", ")} (détenue) : ${i.title}`]));
   if (!alerts.length) alerts.push(["ok", "Aucune alerte. Tout est normal."]);
   $("#d-alerts").replaceChildren(...alerts.map(([k, t]) => el("li", k, t)));
+}
+
+// ---------- Anticipation : ventes et achats probables à la prochaine clôture ----------
+let anticipKey = "";
+const pctRound = (p) => `${Math.round((p || 0) * 100)} %`;
+function probRow(cls, asset, text, prob, chips, blocked = false) {
+  const li = el("li", "a-row");
+  const b = el("button", "a-asset");
+  b.type = "button";
+  b.textContent = up(asset);
+  b.addEventListener("click", () => openDetail({ kind: "asset", asset }));
+  const bar = el("span", "a-bar " + (blocked ? "muted" : cls));
+  const fill = el("i");
+  requestAnimationFrame(() => { fill.style.width = Math.max(2, Math.round((prob || 0) * 100)) + "%"; });
+  bar.append(fill);
+  const info = el("span", "a-info");
+  info.append(el("span", "", text));
+  (chips || []).forEach((c) => info.append(el("span", "tag muted", c)));
+  li.append(b, info, bar, el("strong", "a-prob " + (prob >= 0.5 && !blocked ? cls : ""), pctRound(prob)));
+  return li;
+}
+function renderAnticipation(f) {
+  if (!f || !f.ready) {
+    $("#a-when").textContent = "· disponible après la prochaine décision";
+    return;
+  }
+  $("#a-when").textContent = `dans ${fdur(f.hours_left * 3600)}`;
+  const r = f.risk;
+  $("#a-risk").textContent = `Risque engagé ${nf(1).format(r.open_risk_pct || 0)} % / ${nf(0).format(r.budget_pct)} % · ${r.slots} place${r.slots > 1 ? "s" : ""} libre${r.slots > 1 ? "s" : ""}`;
+  const g = f.regime;
+  $("#a-regime").textContent = !g ? "" : g.bull_now
+    ? `Marché haussier : le bot n'achèterait plus si BTC clôturait sous ${fpx(g.threshold)} $ (${fpct(g.dist_pct, 1)}, probabilité ${pctRound(g.prob_bear)}).`
+    : `Marché baissier : aucun achat tant que BTC reste sous ${fpx(g.threshold)} $ (${fpct(g.dist_pct, 1)}).`;
+  // Rafraîchissement sans changement visible : pas de nouvelle animation.
+  const key = JSON.stringify([f.sells.map((s) => [s.asset, Math.round(s.prob * 100), s.stop, Math.round(s.dist_pct * 10)]),
+    f.buys.map((b) => [b.asset, Math.round(b.prob * 100), b.trigger, Math.round(b.dist_pct * 10), b.blocked]), f.advice]);
+  if (key === anticipKey) return;
+  // Première fois : entrée animée ; ensuite, mise à jour discrète.
+  $("#d-anticip").classList.toggle("calm", anticipKey !== "");
+  anticipKey = key;
+  const sells = f.sells.slice(0, 6);
+  $("#a-sells").replaceChildren(...(sells.length ? sells.map((s) => probRow("down", s.asset,
+    `vente si < ${fpx(s.stop)} (${fpct(s.dist_pct, 1)})`, s.prob, s.locked_pct != null ? [`${s.locked_pct >= 0 ? "gain verrouillé" : "perte verrouillée"} ${fpct(s.locked_pct, 1)}`] : [])) : [el("li", "empty", "Aucune position : rien à vendre.")]));
+  const buys = f.buys.slice(0, 6);
+  $("#a-buys").replaceChildren(...(buys.length ? buys.map((b) => probRow("up", b.asset,
+    `achat si > ${fpx(b.trigger)} (${fpct(b.dist_pct, 1)})`, b.prob, b.blocked, b.blocked.length > 0)) : [el("li", "empty", "Aucune crypto proche d'un signal d'achat.")]));
+  $("#a-advice").replaceChildren(...f.advice.map((t, i) => {
+    const li = el("li", "", t);
+    li.style.animationDelay = i * 80 + "ms";
+    return li;
+  }));
+}
+// Actualité sensible (piratage, retrait, régulation…) sur une crypto détenue.
+let NEWS_ALERTS = [];
+function newsAlerts(n) {
+  const held = new Set(n.held || []);
+  NEWS_ALERTS = (n.items || []).filter((i) => i.alert && i.assets.some((a) => held.has(a))).slice(0, 3);
 }
 
 let mindKey = "";
@@ -1133,8 +1193,21 @@ $("#install-btn").addEventListener("click", async () => {
   installEvt = null;
   $("#install-btn").hidden = true;
 });
+async function renderSecurity() {
+  const s = await api("/api/security");
+  $("#s-sec-score").textContent = `${s.ok} / ${s.total}`;
+  $("#s-sec").replaceChildren(...s.checks.map((c) => {
+    const li = el("li", c.ok === true ? "ok" : c.ok === false ? "warn" : "info");
+    li.append(el("span", "sec-ico", c.ok === true ? "✓" : c.ok === false ? "!" : "i"));
+    const t = el("span");
+    t.append(el("strong", "", c.label), el("span", "sub", " · " + c.detail));
+    li.append(t);
+    return li;
+  }));
+}
 async function renderSettings() {
   if (!S) await refreshStatus();
+  renderSecurity().catch(() => { /* réessai au prochain rafraîchissement */ });
   const au = S.autonomy || {}, sup = au.supervisor || {}, le = sup.last_exit;
   const sw = $("#s-autostart");
   sw.checked = !!au.autostart;
