@@ -107,6 +107,15 @@ panneau de contrôle ») :
   **ARRÊTER** l'arrête proprement (fin du cycle en cours, état enregistré, stops
   Binance laissés en place) et sans relance. En mode réel, une confirmation est
   demandée ;
+- **Actualités** : bandeau qui défile lentement en haut du tableau de bord (il
+  s'arrête sous la souris) ; un clic ouvre la page Marchés et actualités :
+  capitalisation crypto, dominance du bitcoin, indice Peur & Avidité, indices
+  boursiers, or, pétrole, dollar et taux sur un mois, plus fortes hausses et
+  baisses des cryptos du bot, et les articles des dernières 48 h (crypto et
+  finance, en français et en anglais) avec les cryptos du bot qu'ils citent.
+  Sources publiques sans clé : CoinDesk, Cointelegraph, Decrypt, Journal du
+  Coin, Cryptoast, CNBC, Le Monde, Google Actualités, CoinGecko, alternative.me,
+  Yahoo Finance ;
 - **Ce que pense le bot** (tableau de bord) : sa décision du jour expliquée et
   les cryptos proches d'un signal d'achat ;
 - **Graphiques** : capital, régime BTC et chaque position en temps réel ; un
@@ -450,7 +459,7 @@ walkforward | status | resume` (voir `python v29.py docs`).
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 301 tests, simulateurs Binance Spot mono et multi-paires
+python -m pytest tests -q      # 309 tests, simulateurs Binance Spot mono et multi-paires
 ```
 
 À chaque envoi sur GitHub, `.github/workflows/checks.yml` lance ces tests, puis

@@ -29,6 +29,7 @@
   <symbol id="i-sun" viewBox="0 0 24 24"><path d="M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10M11 1h2v3h-2zm0 19h2v3h-2zM1 11h3v2H1zm19 0h3v2h-3zM4.2 5.6l1.4-1.4 2.1 2.1-1.4 1.4zm12.1 12.1 1.4-1.4 2.1 2.1-1.4 1.4zM4.2 18.4l2.1-2.1 1.4 1.4-2.1 2.1zM16.3 6.3l2.1-2.1 1.4 1.4-2.1 2.1z"/></symbol>
   <symbol id="i-close" viewBox="0 0 24 24"><path d="m6.4 5 5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></symbol>
   <symbol id="i-mind" viewBox="0 0 24 24"><path d="M9 21h6v-1.6H9zm3-19a7 7 0 0 0-4 12.7V17.5h8v-2.8A7 7 0 0 0 12 2m2.6 11.4-.6.4v1.9h-4v-1.9l-.6-.4a5 5 0 1 1 5.2 0"/></symbol>
+  <symbol id="i-news" viewBox="0 0 24 24"><path d="M4 4h13v4h3v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm2 2v12h11V6zm13 4v8a.5.5 0 0 0 1 0v-8zM8 8h7v4H8zm0 6h7v1.6H8zm0 2.6h5v1.4H8z"/></symbol>
   <symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 4h6v2H6v4H4zm10 0h6v6h-2V6h-4zM4 14h2v4h4v2H4zm14 0h2v6h-6v-2h4z"/></symbol>
 </svg>
 
@@ -40,6 +41,7 @@
     </div>
     <div class="tabs" role="tablist">
       <a class="tab" href="#dash" data-tab="dash"><svg><use href="#i-dash"/></svg><span>Tableau de bord</span></a>
+      <a class="tab" href="#news" data-tab="news"><svg><use href="#i-news"/></svg><span>Actualités</span></a>
       <a class="tab" href="#charts" data-tab="charts"><svg><use href="#i-charts"/></svg><span>Graphiques</span></a>
       <a class="tab" href="#assets" data-tab="assets"><svg><use href="#i-coins"/></svg><span>Cryptos</span></a>
       <a class="tab" href="#positions" data-tab="positions"><svg><use href="#i-pos"/></svg><span>Positions</span></a>
@@ -72,6 +74,11 @@
     <main id="pages">
       <!-- Tableau de bord -->
       <section class="page" id="page-dash" data-title="Tableau de bord">
+        <a class="ticker card" id="d-ticker" href="#news" aria-label="Actualités des marchés crypto et financiers : ouvrir la page détaillée">
+          <span class="ticker-label"><i class="live" aria-hidden="true"></i>Actualités</span>
+          <span class="ticker-view"><span class="ticker-track" id="d-ticker-track"><span class="ticker-group"><span class="t-item">Chargement des actualités…</span></span></span></span>
+          <span class="ticker-more" aria-hidden="true">Tout voir ›</span>
+        </a>
         <div class="hero card">
           <div class="hero-num">
             <span class="label">Capital du bot</span>
@@ -111,6 +118,43 @@
           </div>
         </div>
         <button class="wide-btn" type="button" data-go="charts"><svg><use href="#i-charts"/></svg>Afficher tous les graphiques en temps réel</button>
+      </section>
+
+      <!-- Marchés et actualités -->
+      <section class="page" id="page-news" data-title="Marchés et actualités">
+        <div class="kpis">
+          <div class="kpi card"><span class="label">Capitalisation crypto</span><strong class="num" id="n-cap">—</strong><span class="sub" id="n-cap-sub"></span></div>
+          <div class="kpi card"><span class="label">Dominance du bitcoin</span><strong class="num" id="n-dom">—</strong><span class="sub" id="n-dom-sub"></span></div>
+          <div class="kpi card"><span class="label">Peur &amp; Avidité (crypto)</span><strong id="n-fng">—</strong><span class="gauge" id="n-gauge" aria-hidden="true"><i></i></span><span class="sub" id="n-fng-sub"></span></div>
+          <div class="kpi card"><span class="label">Volume crypto 24 h</span><strong class="num" id="n-vol">—</strong><span class="sub" id="n-vol-sub"></span></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Marchés financiers</h2><span class="sub" id="n-q-sub"></span></div>
+          <div class="quote-grid" id="n-quotes"></div>
+        </div>
+        <div class="grid-2">
+          <div class="card"><div class="card-head"><h2>Cryptos du bot : plus fortes hausses</h2><span class="sub">24 h</span></div><ol class="movers" id="n-up"></ol></div>
+          <div class="card"><div class="card-head"><h2>Cryptos du bot : plus fortes baisses</h2><span class="sub">24 h</span></div><ol class="movers" id="n-down"></ol></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Actualités crypto et finance</h2><span class="sub" id="n-sub"></span></div>
+          <div class="toolbar">
+            <div class="seg" role="group" aria-label="Filtrer les actualités">
+              <button type="button" data-news="all" aria-pressed="true">Toutes</button>
+              <button type="button" data-news="crypto" aria-pressed="false">Crypto</button>
+              <button type="button" data-news="finance" aria-pressed="false">Finance</button>
+              <button type="button" data-news="bot" aria-pressed="false">Cryptos du bot</button>
+            </div>
+            <select id="news-lang" aria-label="Langue">
+              <option value="all">Toutes les langues</option>
+              <option value="fr">Français</option>
+              <option value="en">Anglais</option>
+            </select>
+            <input type="search" id="news-search" placeholder="Rechercher (Fed, bitcoin, ETF…)" aria-label="Rechercher une actualité">
+          </div>
+          <ol class="news-list" id="n-list"></ol>
+          <p class="sub" id="n-sources"></p>
+        </div>
       </section>
 
       <!-- Graphiques -->

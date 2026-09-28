@@ -74,6 +74,15 @@ def test_api_endpoints_answer(demo_server):
     assert _json(base + "/api/nimporte")[0] == 404
 
 
+def test_news_endpoint(demo_server):
+    base, _ = demo_server
+    code, n = _json(base + "/api/news")
+    assert code == 200 and len(n["items"]) == 16 and not n["loading"]
+    assert n["movers"]["up"][0]["change_pct"] >= n["movers"]["down"][0]["change_pct"]
+    assert len(n["markets"]["quotes"]) == 10 and n["markets"]["fear_greed"]["value"] == 74
+    assert set(n["held"]) == {"aave", "ada", "icp", "link", "ltc", "xlm"}
+
+
 def test_reasoning_and_autonomy_endpoints(demo_server):
     base, _ = demo_server
     r = _json(base + "/api/reasoning")[1]

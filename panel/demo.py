@@ -227,3 +227,65 @@ class DemoControl:
             return False, "Le bot est déjà arrêté."
         self._state = "stopped"
         return True, "Arrêt demandé (démonstration)."
+
+
+# Actualités d'exemple (aucun réseau) : titres marqués « exemple ».
+DEMO_NEWS = (
+    ("crypto", "fr", "Journal du Coin", "Bitcoin : les ETF enregistrent une semaine d'entrées record", ["btc"], ["ETF"]),
+    ("finance", "en", "CNBC", "Stocks edge higher as investors await the Fed's rate decision", [], ["macro"]),
+    ("crypto", "en", "CoinDesk", "Cardano developers ship a major network upgrade", ["ada"], []),
+    ("finance", "fr", "Le Monde", "La BCE maintient ses taux directeurs, l'inflation ralentit en zone euro", [], ["macro"]),
+    ("crypto", "en", "Cointelegraph", "Chainlink expands its oracle network to three new blockchains", ["link"], []),
+    ("crypto", "fr", "Cryptoast", "Un protocole DeFi victime d'un piratage, Aave suspend un marché par précaution",
+     ["aave"], ["hack"]),
+    ("finance", "en", "CNBC", "Oil slips as supply worries ease; gold holds near its highs", [], []),
+    ("crypto", "en", "Decrypt", "Ethereum layer-2 activity hits a new all-time high", ["eth"], []),
+    ("finance", "fr", "Google Actualités", "Le CAC 40 termine en hausse, porté par le luxe et les banques", [], []),
+    ("crypto", "fr", "Journal du Coin", "Litecoin : le nombre d'adresses actives grimpe de 12 % sur un mois", ["ltc"], []),
+    ("finance", "en", "CNBC", "Treasury yields rise after stronger-than-expected jobs data", [], ["macro"]),
+    ("crypto", "en", "CoinDesk", "Stablecoin supply climbs above a new record as trading volumes recover", [],
+     ["stablecoin"]),
+    ("crypto", "fr", "Cryptoast", "Polkadot : la feuille de route 2027 dévoilée", ["dot"], []),
+    ("finance", "fr", "Le Monde", "Le dollar recule face à l'euro après les propos de la Fed", [], ["macro"]),
+    ("crypto", "en", "Decrypt", "Stellar partners with a payments firm for cross-border transfers", ["xlm"], []),
+    ("finance", "en", "CNBC", "Tech stocks lead Nasdaq to a fresh record close", [], []),
+)
+DEMO_QUOTES = (("sp500", "S&P 500", "", 7743.0, 0.42), ("nasdaq", "Nasdaq", "", 27068.0, 0.81),
+               ("dow", "Dow Jones", "", 51828.0, 0.12), ("cac40", "CAC 40", "", 8077.0, -0.35),
+               ("gold", "Or (once, $)", "$", 4295.0, 0.55), ("oil", "Pétrole WTI ($)", "$", 93.3, -1.2),
+               ("eurusd", "Euro / dollar", "", 1.1384, -0.03), ("dxy", "Indice dollar", "", 101.0, 0.08),
+               ("us10y", "Taux US 10 ans", "%", 5.18, 1.1), ("vix", "VIX (volatilité)", "", 14.9, -3.4))
+
+
+class DemoNews:
+    def snapshot(self) -> Dict[str, Any]:
+        now = datetime.now(timezone.utc)
+        items = []
+        for k, (cat, lang, src, title, assets, topics) in enumerate(DEMO_NEWS):
+            items.append({"title": f"{title} (exemple)", "url": "https://www.example.com/",
+                          "source": src, "via": src, "category": cat, "lang": lang,
+                          "summary": "Article fictif du mode démonstration : les vraies actualités "
+                                     "s'affichent quand le panneau tourne avec le bot.",
+                          "published": (now - timedelta(minutes=7 + 23 * k)).isoformat(),
+                          "assets": assets, "topics": topics,
+                          "alert": "hack" in topics and bool(assets)})
+        quotes = []
+        for qid, name, unit, px, chg in DEMO_QUOTES:
+            rnd = random.Random(qid)
+            closes, v = [], px / (1 + chg / 100) * 0.97
+            for _ in range(21):
+                v *= 1 + rnd.gauss(0.0015, 0.008)
+                closes.append(round(v, 4))
+            closes.append(px)
+            quotes.append({"id": qid, "name": name, "unit": unit, "price": px, "change_pct": chg,
+                           "closes": closes, "at": now.isoformat(), "source": "démonstration"})
+        sources = [{"name": n, "category": c, "lang": lg, "ok": True, "count": 4}
+                   for n, c, lg in (("CoinDesk", "crypto", "en"), ("Journal du Coin", "crypto", "fr"),
+                                    ("CNBC", "finance", "en"), ("Le Monde", "finance", "fr"))]
+        return {"items": items, "sources": sources, "loading": False, "updated": now.isoformat(),
+                "markets": {"quotes": quotes, "errors": [],
+                            "crypto": {"market_cap_usd": 3.42e12, "market_cap_change_24h_pct": 1.35,
+                                       "volume_24h_usd": 1.18e11, "btc_dominance_pct": 57.8,
+                                       "eth_dominance_pct": 11.9, "active_cryptos": 21642},
+                            "fear_greed": {"value": 74, "label": "Avidité",
+                                           "history": [48 + (i * 7) % 30 for i in range(29)] + [74]}}}

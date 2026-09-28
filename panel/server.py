@@ -34,8 +34,9 @@ import market_watch as mw
 
 from .control import BotControl
 from .data import BotData, _ts
-from .demo import DemoControl, DemoData, DemoMarket
+from .demo import DemoControl, DemoData, DemoMarket, DemoNews
 from .market import INTERVALS, Market
+from .news import NewsHub
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 LOOPBACK = {"127.0.0.1", "localhost", "::1"}
@@ -76,9 +77,10 @@ def lan_ips() -> List[str]:
 class PanelApp:
     def __init__(self, gcfg: Any, data: Any, market: Any, control: Any, hub: Any = None,
                  demo: bool = False, password: str = "", loopback: bool = True,
-                 lan_urls: Optional[List[str]] = None):
+                 lan_urls: Optional[List[str]] = None, news: Any = None):
         self.g = gcfg
         self.data, self.market, self.control, self.hub = data, market, control, hub
+        self.news = news
         self.demo = demo
         self.password = password
         self.loopback = loopback
@@ -168,6 +170,26 @@ class PanelApp:
                          "breakout_gap_pct": (why.get(a) or {}).get("breakout_gap_pct")})
         return {"assets": rows, "stale": stale}
 
+    def news_view(self) -> Dict[str, Any]:
+        """Actualités et marchés, avec les cryptos du bot (hausses et baisses
+        du jour, détenues) pour relier chaque article au portefeuille."""
+        snap = self.news.snapshot() if self.news is not None else {
+            "items": [], "sources": [], "markets": {}, "loading": False, "updated": None}
+        st = self.data.state()
+        held = sorted(h["asset"] for h in self.data.holdings(st))
+        universe = [b.lower() for b in self.g.universe]
+        try:
+            tick, _stale = self.market.tickers(universe)
+        except Exception:
+            tick = {}
+        rows = [{"asset": a, "price": t.get("price"), "change_pct": t.get("change_pct")}
+                for a, t in tick.items() if t.get("change_pct") is not None]
+        rows.sort(key=lambda r: r["change_pct"], reverse=True)
+        snap["movers"] = {"up": rows[:5], "down": rows[::-1][:5]}
+        snap["crypto_prices"] = {a: tick[a] for a in ("btc", "eth", "bnb") if a in tick}
+        snap["held"] = held
+        return snap
+
     def candles(self, asset: str, interval: str, limit: int) -> Dict[str, Any]:
         asset = asset.lower()
         if asset not in {b.lower() for b in self.g.universe}:
@@ -236,6 +258,8 @@ class PanelApp:
                     return 200, self.data.watch()
                 if path == "/api/reasoning":
                     return 200, self.data.reasoning()
+                if path == "/api/news":
+                    return 200, self.news_view()
                 if path == "/api/log":
                     return 200, {"lines": self.data.log_tail(int(q("lines", "300")))}
             if method == "POST":
@@ -381,11 +405,12 @@ def build_app(gcfg: Any, demo: bool = False, password: str = "", loopback: bool 
     if demo:
         market = DemoMarket()
         return PanelApp(gcfg, DemoData(market), market, DemoControl(), None, True,
-                        password, loopback, lan_urls)
+                        password, loopback, lan_urls, news=DemoNews())
     import alerts
     market = Market(quote=gcfg.quote)
     return PanelApp(gcfg, BotData(gcfg, market), market, BotControl(gcfg),
-                    alerts.build_notifier(), False, password, loopback, lan_urls)
+                    alerts.build_notifier(), False, password, loopback, lan_urls,
+                    news=NewsHub(universe=tuple(gcfg.universe)))
 
 
 class PanelServer(ThreadingHTTPServer):

@@ -35,6 +35,35 @@ test("tableau de bord et bouton AUTO", async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test("bandeau d'actualités : défile, s'arrête sous la souris, ouvre la page", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto(BASE + "/#dash");
+  const ticker = page.locator("#d-ticker");
+  await expect(ticker.locator(".ticker-group").first().locator(".t-item")).toHaveCount(16);
+  const track = page.locator("#d-ticker-track");
+  await expect(track).toHaveCSS("animation-play-state", "running");
+  await ticker.hover();
+  await expect(track).toHaveCSS("animation-play-state", "paused");      // lecture tranquille
+  await ticker.locator(".ticker-group").first().locator(".t-item").nth(2).click({ force: true });
+  await expect(page).toHaveURL(/#news$/);
+  await expect(page.locator("#page-news")).toBeVisible();
+  await expect(page.locator("#n-list li.news")).toHaveCount(16);
+  await expect(page.locator("#n-list li.focus")).toHaveCount(1);         // l'article cliqué
+  await expect(page.locator("#n-quotes .quote")).toHaveCount(10);
+  await expect(page.locator("#n-fng")).toContainText("74");
+  await page.locator('[data-news="finance"]').click();
+  await expect(page.locator("#n-list li.news")).toHaveCount(7);
+  await page.locator('[data-news="bot"]').click();
+  await expect(page.locator("#n-list li.news .chip").first()).toBeVisible();
+  await page.locator("#news-search").fill("zzz-introuvable");
+  await expect(page.locator("#n-list li.empty")).toBeVisible();
+  await page.locator("#news-search").fill("");
+  await page.locator("#n-up .mover").first().click();                    // graphique de la crypto
+  await expect(page.locator("#detail")).toBeVisible();
+  await page.keyboard.press("Escape");
+  expect(errors).toEqual([]);
+});
+
 test("graphiques en temps réel et détail d'un graphique", async ({ page }) => {
   const errors = watchErrors(page);
   await page.goto(BASE + "/#charts");
@@ -100,7 +129,7 @@ test("positions, veille, journal, réglages et thème", async ({ page }) => {
 
 test("téléphone : barre d'onglets, aucun défilement horizontal", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  for (const tab of ["dash", "charts", "assets", "positions"]) {
+  for (const tab of ["dash", "news", "charts", "assets", "positions"]) {
     await page.goto(`${BASE}/#${tab}`);
     await expect(page.locator(".side")).toBeVisible();
     await page.waitForTimeout(300);
