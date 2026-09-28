@@ -137,6 +137,12 @@ panneau de contrôle ») :
 - **Cryptos** : les 21 paires avec cours, variation, volume, courbe de 48 h et
   la raison du choix du bot, filtres (détenues, surveillées, bloquées) et
   recherche ;
+- **Temps de réflexion** : chaque passage d'une rubrique ou d'une sélection à
+  une autre (onglet, filtre, tri, graphique détaillé, intervalle) affiche une
+  icône de chargement pendant au moins 3 s, avec une barre de progression,
+  pendant que les données se chargent réellement ; Rachelle réfléchit au moins 3
+  s, jusqu'à 6 s pour une question et une réponse longues. Réglable dans
+  Réglages ▸ Affichage (3 s, 1 s ou aucun) ;
 - **Positions**, **Veille**, **Journal** et **Réglages** (démarrage avec
   l'ordinateur, test des alertes, thème clair ou sombre, accès depuis un
   téléphone).

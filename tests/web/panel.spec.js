@@ -4,6 +4,14 @@ import { test, expect } from "@playwright/test";
 
 const BASE = "http://127.0.0.1:8799";
 
+// Les tests d'ensemble désactivent le temps de chargement (réglage « Aucun ») ;
+// un test dédié vérifie les 3 s par défaut.
+test.beforeEach(async ({ page }, info) => {
+  if (!info.title.startsWith("temps de chargement")) {
+    await page.addInitScript(() => { try { localStorage.setItem("tg:wait", "0"); } catch { /* bloqué */ } });
+  }
+});
+
 function watchErrors(page) {
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -101,6 +109,51 @@ test("assistant : réponses, garde-fou de sécurité, actions", async ({ page })
   await page.keyboard.press("Escape");
   await expect(chat).toBeHidden();
   await expect(page.locator("#chat-fab")).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("temps de chargement : 3 s entre rubriques et sélections, réflexion de Rachelle", async ({ page }) => {
+  test.setTimeout(90_000);
+  const errors = watchErrors(page);
+  await page.goto(BASE + "/#dash");
+  const loader = page.locator("#loader");
+  await expect(loader).toBeHidden({ timeout: 15_000 });            // chargement initial
+  let t0 = Date.now();
+  await page.locator('.tab[data-tab="assets"]').click();
+  await expect(loader).toBeVisible();
+  await expect(loader).toContainText("Cryptos suivies");
+  await expect(loader.locator(".spinner")).toBeVisible();
+  await expect(loader).toBeHidden({ timeout: 15_000 });
+  expect(Date.now() - t0).toBeGreaterThanOrEqual(2900);
+  await expect(page.locator("#asset-grid .asset")).toHaveCount(21);
+  t0 = Date.now();
+  await page.locator('[data-filter="held"]').click();              // sélection
+  await expect(loader).toContainText("Détenues");
+  await expect(loader).toBeHidden({ timeout: 15_000 });
+  expect(Date.now() - t0).toBeGreaterThanOrEqual(2900);
+  await expect(page.locator("#asset-grid .asset:visible")).toHaveCount(6);
+  await page.locator("#asset-grid .asset:visible").first().click(); // graphique détaillé
+  const dl = page.locator("#detail-loader");
+  await expect(dl).toBeVisible();
+  await expect(dl).toBeHidden({ timeout: 15_000 });
+  await page.keyboard.press("Escape");
+  await page.locator("#chat-fab").click();
+  await expect(page.locator("#chat-log .msg.bot").first()).toContainText("Je suis Rachelle");
+  await page.locator("#chat-input").fill("Qui es-tu ?");
+  t0 = Date.now();
+  await page.locator("#chat-input").press("Enter");
+  await expect(page.locator("#chat-log .thinking")).toContainText("Rachelle réfléchit");
+  await expect(page.locator("#chat-log .msg.bot").last()).toContainText("Je m'appelle Rachelle", { timeout: 15_000 });
+  expect(Date.now() - t0).toBeGreaterThanOrEqual(2900);
+  await expect(page.locator("#chat-log .thinking")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await page.locator('.tab[data-tab="settings"]').click();
+  await expect(loader).toBeHidden({ timeout: 15_000 });
+  await page.locator('[data-wait="0"]').click();                    // réglage : aucun
+  await expect(page.locator('[data-wait="0"]')).toHaveAttribute("aria-pressed", "true");
+  await page.locator('.tab[data-tab="dash"]').click();
+  await expect(page.locator("#page-dash")).toBeVisible();
+  await expect(loader).toBeHidden();
   expect(errors).toEqual([]);
 });
 

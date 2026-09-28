@@ -62,6 +62,40 @@ const prefs = {
   set(k, v) { try { localStorage.setItem("tg:" + k, v); } catch { /* stockage bloqué */ } },
 };
 
+// ---------- Temps de réflexion et de chargement ----------
+// Chaque passage d'une rubrique ou d'une sélection à une autre affiche un
+// chargement d'au moins 3 s (réglable : Réglages ▸ Affichage), pendant que
+// les données se chargent réellement dessous.
+const WAITS = { 3: 3000, 1: 1000, 0: 0 };
+const waitBase = () => { const v = WAITS[prefs.get("wait", "3")]; return v == null ? 3000 : v; };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const loaderSeq = {};
+async function withLoader(text, work, target = "loader") {
+  const ms = waitBase();
+  const box = document.getElementById(target);
+  const seq = (loaderSeq[target] = (loaderSeq[target] || 0) + 1);
+  if (ms && box) {
+    box.querySelector(".loader-text").textContent = text;
+    box.style.setProperty("--ms", ms + "ms");
+    const bar = box.querySelector(".loader-bar i");
+    bar.style.animation = "none";
+    void bar.offsetWidth;                          // barre de progression relancée
+    bar.style.animation = "";
+    box.hidden = false;
+  }
+  try {
+    await Promise.all([Promise.resolve().then(work), sleep(ms)]);
+  } finally {
+    if (box && loaderSeq[target] === seq) box.hidden = true;
+  }
+}
+$$("[data-wait]").forEach((b) => b.addEventListener("click", () => {
+  prefs.set("wait", b.dataset.wait);
+  $$("[data-wait]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  toast(`Temps de réflexion et de chargement : ${b.textContent}`, "ok");
+}));
+$$("[data-wait]").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.wait === prefs.get("wait", "3"))));
+
 // ---------- API ----------
 async function api(path, opts = {}) {
   const init = { headers: { "X-TrendGuard": "1" }, credentials: "same-origin" };
@@ -200,9 +234,10 @@ function route() {
     if (a.dataset.tab === t) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
   });
-  $("#page-title").textContent = $("#page-" + t).dataset.title;
+  const title = $("#page-" + t).dataset.title;
+  $("#page-title").textContent = title;
   window.scrollTo({ top: 0 });
-  refreshTab(true);
+  withLoader(`Chargement : ${title}…`, () => refreshTab(true));
 }
 window.addEventListener("hashchange", route);
 $$("[data-go]").forEach((b) => b.addEventListener("click", () => { location.hash = "#" + b.dataset.go; }));
@@ -543,9 +578,11 @@ const newsTag = () => (NEWS ? NEWS.items.map((i) => i.url).join("|") : "");
 $$("[data-news]").forEach((b) => b.addEventListener("click", () => {
   newsFilter = b.dataset.news;
   $$("[data-news]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
-  renderNewsList();
+  withLoader(`Sélection : ${b.textContent}…`, renderNewsList);
 }));
-$("#news-lang").addEventListener("change", () => renderNewsList());
+$("#news-lang").addEventListener("change", (e) => {
+  withLoader(`Langue : ${e.currentTarget.selectedOptions[0].textContent}…`, renderNewsList);
+});
 $("#news-search").addEventListener("input", () => renderNewsList());
 
 // ---------- Graphiques en temps réel ----------
@@ -651,7 +688,7 @@ $$("#detail-intervals button").forEach((b) => b.addEventListener("click", () => 
   D.interval = b.dataset.interval;
   D.fitted = false;
   prefs.set("interval", D.interval);
-  loadDetail();
+  withLoader(`Intervalle ${b.textContent}…`, loadDetail, "detail-loader");
 }));
 
 function openDetail(spec) {
@@ -661,7 +698,7 @@ function openDetail(spec) {
   $("#detail-title").textContent = spec.kind === "asset" ? `${up(spec.asset)}/USDT` : spec.title;
   $("#detail-intervals").hidden = spec.kind !== "asset";
   const box = $("#detail-chart");
-  $$("#detail-chart > :not(.readout)").forEach((n) => n.remove());
+  $$("#detail-chart > :not(.readout):not(.loader)").forEach((n) => n.remove());
   detail.showModal();
   D.chart = makeChart(box);
   if (!D.chart) return;
@@ -687,7 +724,7 @@ function openDetail(spec) {
       ? `O ${fpx(d.open)}  H ${fpx(d.high)}  B ${fpx(d.low)}  C ${fpx(d.close)}`
       : `${fpx(d.value)}`;
   });
-  loadDetail();
+  withLoader("Chargement du graphique…", loadDetail, "detail-loader");
   D.timer = setInterval(loadDetail, 10000);
 }
 
@@ -788,10 +825,12 @@ function fillSpark(svg, closes) {
 $$("[data-filter]").forEach((b) => b.addEventListener("click", () => {
   assetFilter = b.dataset.filter;
   $$("[data-filter]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
-  arrangeAssets();
+  withLoader(`Sélection : ${b.textContent}…`, arrangeAssets);
 }));
 $("#asset-search").addEventListener("input", () => arrangeAssets());
-$("#asset-sort").addEventListener("change", () => arrangeAssets());
+$("#asset-sort").addEventListener("change", (e) => {
+  withLoader(`Tri : ${e.currentTarget.selectedOptions[0].textContent}…`, arrangeAssets);
+});
 let ASSETS = [];
 function arrangeAssets() {
   const q = $("#asset-search").value.trim().toLowerCase(), sort = $("#asset-sort").value;
@@ -928,7 +967,9 @@ async function renderLog() {
   }));
   if ($("#log-follow").checked) log.scrollTop = log.scrollHeight;
 }
-$("#log-level").addEventListener("change", () => renderLog().catch(() => {}));
+$("#log-level").addEventListener("change", (e) => {
+  withLoader(`Journal : ${e.currentTarget.selectedOptions[0].textContent}…`, () => renderLog().catch(() => {}));
+});
 
 // ---------- Réglages ----------
 let installEvt = null;
@@ -1017,6 +1058,14 @@ $("#logout-btn").addEventListener("click", async () => {
 // quittent jamais cette page (le serveur applique le même contrôle).
 const CHAT = { history: [], loaded: false, busy: false };
 const MASK_TEXT = "🔒 Je suis désolée, j'ai masqué votre message : il semblait contenir une information secrète (clé, mot de passe ou code). Il n'a pas été envoyé. Si c'était une vraie clé ou un vrai mot de passe, je vous conseille de le révoquer : sur Binance, « Gestion des API » → supprimer la clé, puis créez-en une nouvelle avec la saisie masquée.";
+// Réflexion de Rachelle : au moins le temps réglé (3 s), plus si la question
+// et la réponse sont longues (jusqu'à 3 s de plus).
+const thinkMs = (q, a) => {
+  const base = waitBase();
+  if (!base) return 0;
+  const words = q.trim().split(/\s+/).length;
+  return base + Math.min(3000, words * 100 + (a || "").length * 1.2);
+};
 const greeting = () => (new Date().getHours() >= 18 || new Date().getHours() < 5 ? "Bonsoir" : "Bonjour");
 const SECRET_RX = [
   /\bsk-[A-Za-z0-9_-]{16,}/,
@@ -1115,22 +1164,30 @@ async function sendChat(text) {
   const input = $("#chat-input");
   input.value = "";
   input.style.height = "";
-  if (looksSecret(text)) {                       // rien n'est envoyé
-    chatMessage("user", "🔒 •••••• (message masqué)", { refused: true });
-    chatMessage("bot", MASK_TEXT, { refused: true, source: "garde-fou" });
-    return;
-  }
-  const userLi = chatMessage("user", text);
+  const secret = looksSecret(text);                // rien n'est envoyé
+  const userLi = chatMessage("user", secret ? "🔒 •••••• (message masqué)" : text, { refused: secret });
   const typing = el("li", "msg bot typing");
-  const dots = el("div", "bubble");
-  dots.append(el("i"), el("i"), el("i"));
-  typing.append(dots);
+  typing.setAttribute("role", "status");
+  const thinking = el("div", "bubble thinking");
+  thinking.append(el("span", "spin"), el("span", "", "Rachelle réfléchit…"));
+  typing.append(thinking);
   $("#chat-log").append(typing);
   chatScroll();
   CHAT.busy = true;
   $("#chat-send").disabled = true;
+  const t0 = performance.now();
+  const think = async (answer) => sleep(Math.max(0, thinkMs(secret ? "" : text, answer) - (performance.now() - t0)));
+  if (secret) {
+    await think("");
+    typing.remove();
+    chatMessage("bot", MASK_TEXT, { refused: true });
+    CHAT.busy = false;
+    $("#chat-send").disabled = false;
+    return;
+  }
   try {
     const r = await api("/api/assistant", { body: { message: text, history: CHAT.history.slice(-6) } });
+    await think(r.answer);
     typing.remove();
     if (r.masked) {
       userLi.classList.add("refused");
@@ -1143,6 +1200,7 @@ async function sendChat(text) {
     }
     if (r.suggestions && r.suggestions.length) chatSuggestions(r.suggestions);
   } catch (e) {
+    await think("");
     typing.remove();
     chatMessage("bot", e.message === "connexion requise" ? "Votre session a expiré : reconnectez-vous au panneau, puis reposez-moi la question."
       : `Je suis désolée, je n'ai pas pu vous répondre (${e.message}). Réessayez dans un instant.`);

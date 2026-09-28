@@ -250,6 +250,12 @@
               <button type="button" data-theme-set="dark">Sombre</button>
               <button type="button" data-theme-set="light">Clair</button>
             </div>
+            <p class="sub setting-label">Temps de réflexion et de chargement (rubriques, sélections, Rachelle)</p>
+            <div class="seg" role="group" aria-label="Temps de réflexion et de chargement">
+              <button type="button" data-wait="3">3 s</button>
+              <button type="button" data-wait="1">1 s</button>
+              <button type="button" data-wait="0">Aucun</button>
+            </div>
             <ul class="links">
               <li><a href="https://ncloclo.github.io/Ncloclo/" target="_blank" rel="noopener">Animation du rejeu (prix réels Binance)</a></li>
               <li><a href="https://github.com/Ncloclo/Ncloclo/pulls" target="_blank" rel="noopener">Revues hebdomadaires de l'agent Claude Code</a></li>
@@ -259,6 +265,13 @@
         </div>
       </section>
     </main>
+    <div class="loader" id="loader" role="status" aria-live="polite" hidden>
+      <div class="loader-card">
+        <span class="spinner" aria-hidden="true"><img src="icon.svg" alt=""></span>
+        <p class="loader-text">Chargement…</p>
+        <span class="loader-bar" aria-hidden="true"><i></i></span>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -298,7 +311,15 @@
     </div>
   </div>
   <div class="detail-body">
-    <div class="detail-chart" id="detail-chart"><div class="readout" id="detail-readout"></div></div>
+    <div class="detail-chart" id="detail-chart"><div class="readout" id="detail-readout"></div>
+      <div class="loader in-dialog" id="detail-loader" role="status" aria-live="polite" hidden>
+        <div class="loader-card">
+          <span class="spinner" aria-hidden="true"><img src="icon.svg" alt=""></span>
+          <p class="loader-text">Chargement…</p>
+          <span class="loader-bar" aria-hidden="true"><i></i></span>
+        </div>
+      </div>
+    </div>
     <dl class="dl detail-stats" id="detail-stats"></dl>
   </div>
 </dialog>
