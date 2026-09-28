@@ -1223,7 +1223,7 @@ class TrendGuardBot:
                                                  f"{self.g.entry_retry_hours:g} h")
                 continue
             holdings = self._holdings()
-            eq = float(e["equity"])
+            eq, cash = self._equity_and_cash({})
             mult = float(self.state.get("risk_mult", 1.0) or 1.0)
             open_risk = sum(h.risk_quote for h in holdings.values())
             if (self.state.get("halted") or not self.state.get("last_regime_bull")
@@ -1236,7 +1236,6 @@ class TrendGuardBot:
                 self._note_asset(a, "cancelled", "Achat abandonné : la situation a changé "
                                                  "depuis la décision")
                 continue
-            _eq, cash = self._equity_and_cash({})
             done = self._execute_entry(e["plan"], eq, now, cash)
             if done is not None:
                 self.logger.info(f"[RUSE] {a.upper()} acheté au {e['tries'] + 1}e essai : "
