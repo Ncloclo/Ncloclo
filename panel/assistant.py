@@ -523,17 +523,18 @@ def a_sell(ctx: Dict[str, Any]) -> str:
 def a_selection(ctx: Dict[str, Any]) -> str:
     sel = (ctx.get("status") or {}).get("selection") or {}
     n, total = len(sel.get("active") or []), sel.get("universe") or 21
-    mode = "auto-sélection" if sel.get("mode") == "auto" else "sélection manuelle"
+    mode = "réglage recommandé" if sel.get("mode") == "auto" else "sélection manuelle"
     return ("**Choisir les cryptos du bot** (page Cryptos) :\n"
-            "- Sélection manuelle : cochez ou décochez chaque crypto ; le bot n'achète que "
-            "les cryptos cochées.\n"
-            "- Auto-sélection : le bot choisit chaque jour les 10 cryptos qui ont le plus "
-            "rapporté avec sa stratégie (achats et ventes) sur 2 ans.\n"
+            "- Recommandé : le bot peut acheter les 21 cryptos, toutes cochées. C'est le "
+            "réglage par défaut.\n"
+            "- Manuel : aucune crypto n'est cochée au départ ; cochez celles que le bot peut "
+            "acheter (tant qu'aucune ne l'est, il n'achète rien).\n"
             "- Une crypto détenue qui sort de la sélection reste gérée jusqu'à sa vente.\n"
             f"Actuellement : {mode}, {n} crypto(s) achetable(s) sur {total}.\n"
-            "Bon à savoir : de 2023 à 2026, les 10 plus rentables ont rapporté +15,5 % par an, "
-            "contre +37,2 % avec les 21 cryptos : la prochaine grande tendance vient souvent "
-            "d'une crypto délaissée.")
+            "Pourquoi les 21 : de 2023 à 2026, elles ont rapporté +37,2 % par an, contre "
+            "+15,5 % avec seulement les 10 plus rentables ; la prochaine grande tendance "
+            "vient souvent d'une crypto délaissée. L'auto-sélection des 10 a donc été "
+            "retirée.")
 
 
 def a_watch(ctx: Dict[str, Any]) -> str:

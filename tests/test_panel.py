@@ -107,12 +107,17 @@ def test_bot_purchases_are_on_the_charts(demo_server):
 def test_selection_endpoint_and_sells_on_charts(demo_server):
     base, _ = demo_server
     a = _json(base + "/api/assets")[1]
-    assert a["selection"]["mode"] == "manual" and len(a["selection"]["active"]) == 21
+    # Par défaut : réglage recommandé, les 21 cryptos cochées.
+    assert a["selection"]["mode"] == "auto" and len(a["selection"]["active"]) == 21
     assert all(r["selected"] for r in a["assets"]) and a["assets"][0]["rank"]["total_r"]
-    r = _json(base + "/api/selection", method="POST", body={"mode": "auto"})[1]
-    assert r["ok"] and r["mode"] == "auto" and len(r["active"]) == 10 and "15,5 %" in r["note"]
+    assert "+37,2 %" in a["selection"]["note"] and "n_auto" not in a["selection"]
+    # Manuel : aucune crypto cochée au départ.
+    r = _json(base + "/api/selection", method="POST", body={"mode": "manual", "manual": []})[1]
+    assert r["ok"] and r["mode"] == "manual" and r["active"] == []
     rows = {x["asset"]: x for x in _json(base + "/api/assets")[1]["assets"]}
-    assert rows["aave"]["selected"] and not rows["algo"]["selected"]
+    assert not any(x["selected"] for x in rows.values())
+    r = _json(base + "/api/selection", method="POST", body={"mode": "auto"})[1]
+    assert r["mode"] == "auto" and len(r["active"]) == 21
     r = _json(base + "/api/selection", method="POST", body={"mode": "manual", "manual": ["btc", "eth"]})[1]
     assert r["active"] == ["btc", "eth"]
     assert _json(base + "/api/status")[1]["selection"]["active"] == ["btc", "eth"]

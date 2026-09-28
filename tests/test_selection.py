@@ -1,6 +1,7 @@
 """Sélection des cryptos : classement par bénéfice de la stratégie (achats
-ET ventes, sans regard vers le futur), auto-sélection des 10 plus rentables
-ou sélection manuelle, respectées par le bot."""
+ET ventes, sans regard vers le futur, affiché pour information), réglage
+recommandé (les 21 cryptos) ou sélection manuelle (aucune cochée au départ),
+respectés par le bot."""
 
 import dataclasses
 import json
@@ -94,24 +95,45 @@ def test_manual_selection_is_respected_and_held_positions_are_kept(tmp_path, log
         t["asset"] == held and t["reason"].startswith("STOP") for t in bot.state["trades"])
 
 
-def test_auto_selection_buys_only_the_most_profitable(tmp_path, logger):
+def test_recommended_setting_buys_among_all_cryptos(tmp_path, logger):
+    """« Recommandé » (par défaut) : les 21 cryptos, plus d'auto-sélection des
+    10 plus rentables ; le classement reste affiché pour information."""
     close, volume = synthetic_market()
     bot, fb = _bot(tmp_path, close, logger, rank_cryptos=True)
-    tg.write_selection(bot.g, "auto", [])
-    bot.AUTO_SELECT_N = 2
+    assert tg.read_selection(bot.g)["mode"] == "auto"            # sans choix enregistré
     run_days(bot, fb, close, volume, SIM_FROM, SIM_FROM + 150)
     sel = bot.state["selection"]
-    assert sel["mode"] == "auto" and len(sel["auto"]) == 2 and sel["active"] == sel["auto"]
-    assert len(sel["ranking"]) == len(close.columns)
-    ranked = [r["asset"] for r in sel["ranking"] if r["eligible"]]
-    assert set(sel["auto"]) <= set(ranked[:2 + bot.AUTO_SELECT_HYSTERESIS])
-    assert bot.active_now() == set(sel["auto"])
+    universe = [b.lower() for b in bot.g.universe]
+    assert sel["mode"] == "auto" and sel["active"] == universe and "auto" not in sel
+    assert len(sel["ranking"]) == len(close.columns)             # classement affiché
+    assert bot.active_now() == set(universe)
+    assert not hasattr(bot, "AUTO_SELECT_N")
+
+
+def test_manual_selection_starts_with_nothing_checked(tmp_path, logger):
+    """« Manuel » : aucune crypto cochée au départ, le bot n'achète rien ;
+    les positions détenues restent gérées."""
+    close, volume = synthetic_market()
+    bot, fb = _bot(tmp_path, close, logger)
+    run_days(bot, fb, close, volume, SIM_FROM, SIM_FROM + 120)
+    held, n_buys = set(bot.state["paper"]["holdings"]), len(bot.state["buys"])
+    tg.write_selection(bot.g, "manual", [])
+    assert bot.active_now() == set()
+    run_days(bot, fb, close, volume, SIM_FROM + 120, SIM_FROM + 150)
+    assert len(bot.state["buys"]) == n_buys                      # aucun nouvel achat
+    assert bot.state["selection"]["active"] == []
+    for a in held:                                               # rien n'est vendu pour autant
+        assert a in bot.state["paper"]["holdings"] or any(
+            t["asset"] == a and t["reason"].startswith(("STOP", "DELISTED"))
+            for t in bot.state["trades"])
 
 
 def test_selection_file_roundtrip_and_validation(tmp_path):
     g = tg.GuardConfig(lock_file=str(tmp_path / "tg.lock"))
     first = tg.read_selection(g)
-    assert first["mode"] == "manual" and len(first["manual"]) == 21 and not first["saved"]
+    assert first["mode"] == "auto" and first["manual"] == [] and not first["saved"]
+    tg.write_selection(g, "manual", [])
+    assert tg.read_selection(g)["mode"] == "manual" and tg.read_selection(g)["manual"] == []
     tg.write_selection(g, "auto", [])
     assert tg.read_selection(g)["mode"] == "auto"
     saved = tg.write_selection(g, "manual", ["BTC", "eth"])

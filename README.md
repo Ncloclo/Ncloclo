@@ -105,9 +105,9 @@ research.selection --cache data_binance` compare, avec le protocole habituel
 (choix sur 2018-2022, vérification sur 2023 → aujourd'hui), le bot sur ses 21
 cryptos, l'auto-sélection des 10 (ou 14) plus rentables, et trois prises de
 bénéfice fixes (+3 R, +5 R, moitié à +3 R). Aucune ne bat la référence sur les
-deux périodes : le bot garde ses 21 cryptos par défaut et laisse courir ses
-gains ; l'auto-sélection reste disponible dans le panneau, résultat historique à
-l'appui.
+deux périodes : le bot garde ses 21 cryptos par défaut (réglage recommandé du
+panneau) et laisse courir ses gains ; l'auto-sélection des 10 a été retirée du
+panneau.
 
 ### Laboratoire de stratégies ([`docs/STRATEGIES.md`](docs/STRATEGIES.md))
 
@@ -182,12 +182,12 @@ panneau de contrôle ») :
 - **Cryptos** : les 21 paires avec cours, variation, volume, courbe de 48 h
   (achats ▲ et ventes ▼ du bot), la raison du choix du bot et sa rentabilité sur
   2 ans (achats ET ventes), filtres (sélectionnées, détenues, surveillées,
-  bloquées) et recherche. **Choix des cryptos achetables** : sélection manuelle
-  par cases à cocher (les 21 par défaut) ou auto-sélection des 10 plus rentables
-  sur 2 ans, avec son résultat historique affiché
-  ([`docs/SELECTION.md`](docs/SELECTION.md) : +15,5 % par an de 2023 à 2026
-  contre +37,2 % avec les 21). Une crypto décochée déjà détenue reste gérée
-  jusqu'à sa vente ;
+  bloquées) et recherche. **Choix des cryptos achetables** : « Recommandé »
+  (par défaut) : les 21 cryptos, toutes cochées, meilleur résultat historique
+  ([`docs/SELECTION.md`](docs/SELECTION.md) : +37,2 % par an de 2023 à 2026,
+  contre +15,5 % avec les 10 plus rentables) ; ou « Manuel » : aucune case
+  cochée au départ, le bot n'achète que les cryptos cochées. Une crypto décochée
+  déjà détenue reste gérée jusqu'à sa vente ;
 - **Temps de réflexion** : chaque passage d'une rubrique ou d'une sélection à
   une autre (onglet, filtre, tri, graphique détaillé, intervalle) affiche une
   icône de chargement pendant au moins 3 s, avec une barre de progression,

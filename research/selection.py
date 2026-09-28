@@ -137,10 +137,11 @@ def report(close: pd.DataFrame, volume: pd.DataFrame) -> str:
         "",
         "- **Par défaut, le bot trade les 21 cryptos** et laisse courir ses gains "
         "jusqu'au stop suiveur (référence).",
-        "- Le panneau (page Cryptos) permet de choisir les cryptos à cocher "
-        "(sélection manuelle) ou d'activer l'**auto-sélection des 10 plus rentables**, "
-        "avec ce résultat historique affiché à côté du bouton. Une crypto décochée "
-        "déjà détenue reste gérée jusqu'à sa vente normale.",
+        "- Le panneau (page Cryptos) propose ce **réglage recommandé** (les 21 "
+        "cryptos, toutes cochées) ou une **sélection manuelle** (aucune crypto cochée "
+        "au départ). L'auto-sélection des 10 plus rentables, moins bonne sur 2023 → "
+        "aujourd'hui, a été retirée du panneau. Une crypto décochée déjà détenue reste "
+        "gérée jusqu'à sa vente normale.",
         "- Aucune prise de bénéfice fixe n'est ajoutée : aucune ne bat la référence sur "
         "les deux périodes.",
     ]

@@ -203,33 +203,38 @@ test("graphiques en temps réel et détail d'un graphique", async ({ page }) => 
   expect(errors).toEqual([]);
 });
 
-test("cryptos : sélection manuelle par cases à cocher, auto-sélection", async ({ page }) => {
+test("cryptos : réglage recommandé (les 21 cochées), manuel sans case cochée", async ({ page }) => {
   const errors = watchErrors(page);
   // Point de départ connu (un essai précédent a pu changer la sélection).
-  const st = await (await page.request.get(BASE + "/api/status")).json();
-  await page.request.post(BASE + "/api/selection", { headers: { "X-TrendGuard": "1" }, data: { mode: "manual", manual: st.universe } });
+  await page.request.post(BASE + "/api/selection", { headers: { "X-TrendGuard": "1" }, data: { mode: "auto" } });
   await page.goto(BASE + "/#assets");
   await expect(page.locator("#asset-grid .asset")).toHaveCount(21);
   await expect(page.locator("#sel-count")).toHaveText("21 / 21");
-  await expect(page.locator('[data-sel="manual"]')).toHaveAttribute("aria-pressed", "true");
-  const eth = page.locator('#asset-grid article[data-asset="eth"]');
-  await expect(eth.locator(".rank")).toContainText("sur 2 ans");
-  await eth.locator(".pick input").uncheck();                      // ne pas acheter ETH
-  await expect(page.locator("#sel-count")).toHaveText("20 / 21");
-  await expect(eth).toHaveClass(/unselected/);
-  await expect(page.locator("#detail")).toBeHidden();              // la case n'ouvre pas le graphique
-  await page.locator('[data-filter="selected"]').click();
-  await expect(page.locator("#asset-grid .asset:visible")).toHaveCount(20);
-  await page.locator('[data-filter="all"]').click();
-  await page.locator('[data-sel="auto"]').click();                 // auto-sélection
-  await expect(page.locator("#sel-count")).toHaveText("10 / 21");
+  await expect(page.locator('[data-sel="auto"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator('[data-sel="auto"]')).toContainText("Recommandé : les 21 cryptos");
+  await expect(page.locator('[data-sel="manual"]')).toHaveAttribute("aria-pressed", "false");
   await expect(page.locator("#sel-help")).toContainText("+37,2 %");
-  await expect(page.locator('#asset-grid [data-asset="aave"] .pick input')).toBeChecked();
-  await expect(page.locator('#asset-grid [data-asset="algo"] .pick input')).not.toBeChecked();
+  await expect(page.locator("#asset-grid .pick input:checked")).toHaveCount(21);
   await expect(page.locator('#asset-grid [data-asset="algo"] .pick input')).toBeDisabled();
   await expect(page.locator("#sel-actions")).toBeHidden();
-  await page.locator('[data-sel="manual"]').click();
-  await page.locator('[data-sel-all="1"]').click();                // tout cocher
+  await expect(page.locator("body")).not.toContainText("10 plus rentables)");
+  const eth = page.locator('#asset-grid article[data-asset="eth"]');
+  await expect(eth.locator(".rank")).toContainText("sur 2 ans");       // classement pour information
+  await page.locator('[data-sel="manual"]').click();                   // manuel : rien de coché
+  await expect(page.locator("#sel-count")).toHaveText("0 / 21");
+  await expect(page.locator("#asset-grid .pick input:checked")).toHaveCount(0);
+  await expect(page.locator("#sel-help")).toContainText("aucune n'est cochée");
+  await eth.locator(".pick input").check();                            // acheter seulement ETH
+  await expect(page.locator("#sel-count")).toHaveText("1 / 21");
+  await expect(eth).not.toHaveClass(/unselected/);
+  await expect(page.locator("#detail")).toBeHidden();                  // la case n'ouvre pas le graphique
+  await page.locator('[data-filter="selected"]').click();
+  await expect(page.locator("#asset-grid .asset:visible")).toHaveCount(1);
+  await page.locator('[data-filter="all"]').click();
+  await page.locator('[data-sel-all="1"]').click();                    // tout cocher
+  await expect(page.locator("#sel-count")).toHaveText("21 / 21");
+  await page.locator('[data-sel="auto"]').click();                     // retour au réglage recommandé
+  await expect(page.locator('[data-sel="auto"]')).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("#sel-count")).toHaveText("21 / 21");
   expect(errors).toEqual([]);
 });

@@ -188,24 +188,20 @@ class PanelApp:
             "server_time": now.isoformat(),
         }
 
-    SELECTION_NOTE = ("Historique (docs/SELECTION.md) : de 2023 à 2026, +15,5 % par an avec les "
-                      "10 plus rentables, contre +37,2 % par an avec les 21 cryptos.")
+    SELECTION_NOTE = ("Historique (docs/SELECTION.md) : de 2023 à 2026, +37,2 % par an avec les "
+                      "21 cryptos, contre +15,5 % avec seulement les 10 plus rentables.")
 
     def selection_view(self, st: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Cryptos que le bot peut acheter : auto-sélection (classement du
-        bot) ou sélection manuelle (cases cochées)."""
+        """Cryptos que le bot peut acheter : réglage recommandé (« auto » :
+        les 21) ou sélection manuelle (cases cochées, aucune au départ)."""
         st = self.data.state() if st is None else st
         req = self.data.selection_request()
         sel = st.get("selection") or {}
         universe = [b.lower() for b in self.g.universe]
-        auto = list(sel.get("auto") or [])
-        if req["mode"] == "auto":
-            active = auto or universe
-        else:
-            active = req["manual"]
-        return {"mode": req["mode"], "manual": req["manual"], "active": active, "auto": auto,
+        active = universe if req["mode"] == "auto" else req["manual"]
+        return {"mode": req["mode"], "manual": req["manual"], "active": active,
                 "ranking": sel.get("ranking") or [], "day": sel.get("day"),
-                "n_auto": 10, "universe": len(universe), "note": self.SELECTION_NOTE,
+                "universe": len(universe), "note": self.SELECTION_NOTE,
                 "ranked": bool(sel.get("ranking"))}
 
     def _last_buy(self, st: Dict[str, Any]) -> Optional[Dict[str, Any]]:

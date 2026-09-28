@@ -994,20 +994,20 @@ function arrangeAssets() {
     grid.append(card);
   });
 }
-let SEL = { mode: "manual", active: [] };
+let SEL = { mode: "auto", active: [] };
 function renderSelection(sel) {
   SEL = sel;
   $$("[data-sel]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.sel === sel.mode)));
   $("#sel-count").textContent = `${sel.active.length} / ${sel.universe}`;
   $("#sel-actions").hidden = sel.mode === "auto";
   $("#sel-help").textContent = sel.mode === "auto"
-    ? `Chaque jour, le bot choisit les 10 cryptos qui ont le plus rapporté avec sa stratégie (achats ET ventes) sur les 2 dernières années${sel.ranked ? "" : " — classement calculé à la prochaine décision"}. ${sel.note} Une crypto détenue qui sort de la sélection reste gérée jusqu'à sa vente.`
-    : "Cochez les cryptos que le bot peut acheter. Recommandé : les 21 (meilleur résultat historique). Une crypto décochée déjà détenue reste gérée jusqu'à sa vente. Appliqué tout de suite aux achats en attente et à chaque décision (00:02 UTC).";
+    ? `Réglage recommandé : le bot peut acheter les 21 cryptos, toutes cochées. ${sel.note} Le classement de chaque carte est affiché pour information.`
+    : `Sélection manuelle : cochez les cryptos que le bot peut acheter ; aucune n'est cochée au départ.${sel.active.length ? "" : " Tant qu'aucune n'est cochée, le bot n'achète rien."} Une crypto décochée déjà détenue reste gérée jusqu'à sa vente. Appliqué tout de suite aux achats en attente et à chaque décision (00:02 UTC).`;
 }
 async function saveSelection(mode, manual) {
   try {
     const r = await api("/api/selection", { body: manual ? { mode, manual } : { mode } });
-    toast(r.mode === "auto" ? `Auto-sélection activée : ${r.active.length} cryptos achetables.` : `Sélection manuelle : ${r.active.length} crypto${r.active.length > 1 ? "s" : ""} achetable${r.active.length > 1 ? "s" : ""}.`, "ok");
+    toast(r.mode === "auto" ? `Réglage recommandé : les ${r.active.length} cryptos sont achetables.` : r.active.length ? `Sélection manuelle : ${r.active.length} crypto${r.active.length > 1 ? "s" : ""} achetable${r.active.length > 1 ? "s" : ""}.` : "Sélection manuelle : aucune crypto cochée, cochez celles que le bot peut acheter.", "ok");
     ASSETS.forEach((a) => { a.selected = r.active.includes(a.asset); });
     renderSelection(r);
     return r;
@@ -1027,8 +1027,9 @@ function onPick() {
 }
 $$("[data-sel]").forEach((b) => b.addEventListener("click", () => {
   if (SEL.mode === b.dataset.sel) return;
-  withLoader(b.dataset.sel === "auto" ? "Auto-sélection des 10 cryptos les plus rentables…" : "Sélection manuelle…", async () => {
-    await saveSelection(b.dataset.sel);
+  const auto = b.dataset.sel === "auto";
+  withLoader(auto ? "Réglage recommandé : les 21 cryptos…" : "Sélection manuelle : aucune crypto cochée…", async () => {
+    await saveSelection(b.dataset.sel, auto ? undefined : []);          // manuel : on part de zéro
     await renderAssets();
   });
 }));

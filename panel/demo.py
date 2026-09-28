@@ -92,7 +92,7 @@ DEMO_RANK = (("aave", 14.2, 9), ("link", 11.8, 8), ("ada", 10.4, 10), ("icp", 9.
 class DemoData:
     def __init__(self, market: DemoMarket):
         self.market = market
-        self._sel = {"mode": "manual", "manual": list(BASE_PRICES)}
+        self._sel = {"mode": "auto", "manual": []}     # réglage recommandé : les 21
         now = datetime.now(timezone.utc)
         self._entry = {a: (now - timedelta(days=2 + i)).isoformat() for i, a in enumerate(HELD)}
 
@@ -117,7 +117,6 @@ class DemoData:
                                             "tries": 3, "until": time.time() + 4 * 3600}},
                 "anticipation": self._basis(),
                 "selection": {"mode": self._sel["mode"], "day": "2026-09-27",
-                              "auto": [a for a, _r, _n in DEMO_RANK[:10]],
                               "ranking": [{"asset": a, "rank": k + 1, "total_r": r, "trades": n,
                                            "win_rate": 0.45, "eligible": True}
                                           for k, (a, r, n) in enumerate(DEMO_RANK)]}}

@@ -909,19 +909,13 @@ class TrendGuardBot:
                  allowed: Optional[Set[str]] = None) -> None:
         holdings = self._holdings()
         notes: Dict[str, Tuple[str, str]] = {}
-        sel = self.state.get("selection") or {}
-        ranks = {r["asset"]: r for r in sel.get("ranking") or []}
         for a in snap:
             v = self._vetoed(a)
             if v and a not in holdings:
                 notes[a] = ("veto", f"Achats bloqués par la veille : {v['reason']}")
             elif allowed is not None and a not in allowed and a not in holdings:
-                rk = ranks.get(a)
-                notes[a] = ("unselected", (
-                    f"Hors auto-sélection : rang {rk['rank']} sur 2 ans "
-                    f"({rk['total_r']:+.1f} R), le bot ne l'achète pas".replace(".", ",")
-                    if sel.get("mode") == "auto" and rk else
-                    "Décochée dans la sélection : le bot ne l'achète pas"))
+                notes[a] = ("unselected", "Non cochée dans la sélection manuelle : "
+                                          "le bot ne l'achète pas")
         notes.update(self._entry_notes)
         r = explain_decision(day, bull, self._btc_gap(close, day), snap, holdings, exits,
                              [e["asset"] for e in entries], notes,
@@ -935,9 +929,10 @@ class TrendGuardBot:
 
     # ---------- Sélection des cryptos (panneau) ----------
 
-    AUTO_SELECT_N = 10            # auto-sélection : les 10 plus rentables…
-    AUTO_SELECT_DAYS = 730        # … sur les 2 dernières années (achats ET ventes)
-    AUTO_SELECT_HYSTERESIS = 3    # une crypto choisie ne sort qu'au-delà du rang 13
+    # Classement affiché dans la page Cryptos : bénéfice de la stratégie sur
+    # chaque crypto (achats ET ventes) sur les 2 dernières années. Il informe,
+    # il ne choisit pas : le réglage recommandé achète parmi les 21 cryptos.
+    RANK_DAYS = 730
 
     def selection_request(self) -> Dict[str, Any]:
         return read_selection(self.g)
@@ -947,35 +942,31 @@ class TrendGuardBot:
                           now: datetime) -> Set[str]:
         req = self.selection_request()
         prev = self.state.get("selection") or {}
-        auto: List[str] = list(prev.get("auto") or [])
         ranking = prev.get("ranking") or []
-        if self.g.rank_cryptos or req["mode"] == "auto":
+        if self.g.rank_cryptos:
             idx = close.index
             end_i = idx.get_loc(pd.Timestamp(day, tz="UTC"))
-            lo = max(0, end_i - self.AUTO_SELECT_DAYS - 5)
+            lo = max(0, end_i - self.RANK_DAYS - 5)
             cols = {a: {k: f[k].values[lo:end_i + 1] for k in
                         ("close", "vol", "prior_high", "mom", "age", "vol30")}
                     for a, f in feats.items()}
             records = ts.asset_track_records(cols, regime.values[lo:end_i + 1], self.p)
             scores = ts.selection_scores(records, idx[lo:end_i + 1], end_i - lo,
-                                         self.AUTO_SELECT_DAYS)
+                                         self.RANK_DAYS)
             eligible = [a for a, s in snap.items()
                         if ts._finite(s.get("vol30")) and s["vol30"] >= self.p.min_volume_usd
                         and s.get("age", 0) >= self.p.min_history and not self._vetoed(a)]
-            auto = ts.rank_selection(scores, eligible, self.AUTO_SELECT_N, auto,
-                                     self.AUTO_SELECT_HYSTERESIS)
             order = sorted(scores, key=lambda a: (-scores[a]["total_r"], -scores[a]["trades"], a))
             ranking = [{"asset": a, "rank": k + 1, "total_r": round(scores[a]["total_r"], 2),
                         "trades": scores[a]["trades"], "win_rate": round(scores[a]["win_rate"], 3),
                         "eligible": a in eligible} for k, a in enumerate(order)]
-        active = auto if req["mode"] == "auto" else req["manual"]
-        if req["mode"] == "auto" and not auto:
-            active = [b.lower() for b in self.g.universe]     # classement indisponible
+        active = ([b.lower() for b in self.g.universe] if req["mode"] == "auto"
+                  else req["manual"])
         if set(active) != set(prev.get("active") or []) and prev:
-            self.logger.info(f"[SÉLECTION] {'auto' if req['mode'] == 'auto' else 'manuelle'} : "
+            self.logger.info(f"[SÉLECTION] {'recommandée' if req['mode'] == 'auto' else 'manuelle'} : "
                              f"{len(active)} crypto(s) achetable(s) : "
-                             + ", ".join(a.upper() for a in active))
-        self.state["selection"] = {"mode": req["mode"], "active": active, "auto": auto,
+                             + (", ".join(a.upper() for a in active) or "aucune"))
+        self.state["selection"] = {"mode": req["mode"], "active": active,
                                    "ranking": ranking, "day": day, "at": now.isoformat()}
         return set(active)
 
@@ -985,8 +976,7 @@ class TrendGuardBot:
         req = self.selection_request()
         if req["mode"] == "manual":
             return set(req["manual"])
-        auto = (self.state.get("selection") or {}).get("auto")
-        return set(auto) if auto else {b.lower() for b in self.g.universe}
+        return {b.lower() for b in self.g.universe}
 
     def _refresh_selection(self, now: datetime) -> None:
         """Premier classement et premiers niveaux d'anticipation sans

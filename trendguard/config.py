@@ -42,7 +42,7 @@ TG_ENV_DOC: Dict[str, str] = {
     "TG_DD_THROTTLE": "Profil prudent : baisse:multiplicateur (ex. 0.10:0.5) ; vide = off",
     "TG_AUTO_DIAGNOSE_DAYS": "Auto-diagnostic tous les N jours (0 = désactivé)",
     "TG_ANTICIPATION": "true : alerte quand une vente ou un achat sont probables à la prochaine clôture",
-    "TG_CLASSEMENT": "true : classement quotidien des cryptos par bénéfice (panneau, auto-sélection)",
+    "TG_CLASSEMENT": "true : classement quotidien des cryptos par bénéfice (page Cryptos du panneau)",
     "TG_KEEP_AWAKE": "true : l'ordinateur ne se met pas en veille tout seul pendant que le bot tourne",
     "TG_MAX_SPREAD": "Ruse : achat différé si l'écart achat/vente dépasse ce seuil (0.005 = 0,5 %)",
     "TG_ENTRY_RETRY_HOURS": "Ruse : durée des nouveaux essais d'un achat différé (heures)",
@@ -96,8 +96,8 @@ class GuardConfig:
     # rejeu hors ligne), activée par l'environnement (TG_VEILLE=true).
     watch: bool = False                 # annonces officielles → veto d'achat
     watch_ai: bool = False              # rapport quotidien des IA (conseil)
-    # Classement des cryptos par bénéfice de la stratégie (affiché dans le
-    # panneau, utilisé par l'auto-sélection) ; activé par l'environnement.
+    # Classement des cryptos par bénéfice de la stratégie (affiché dans la
+    # page Cryptos du panneau) ; activé par l'environnement.
     rank_cryptos: bool = False
     # Alertes d'anticipation (vente ou achat probables à la prochaine
     # clôture) ; activées par l'environnement.

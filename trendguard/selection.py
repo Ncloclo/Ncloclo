@@ -13,16 +13,18 @@ from .config import GuardConfig
 
 
 def read_selection(gcfg: GuardConfig) -> Dict[str, Any]:
-    """Choix enregistré par le panneau : auto-sélection des 10 plus
-    rentables, ou sélection manuelle (cryptos cochées). Sans choix
-    enregistré : sélection manuelle des 21 cryptos (réglage de référence)."""
+    """Choix enregistré par le panneau :
+    - « auto » : réglage recommandé, le bot peut acheter les 21 cryptos
+      (meilleur résultat historique, docs/SELECTION.md) ;
+    - « manual » : seulement les cryptos cochées (aucune au départ).
+    Sans choix enregistré : le réglage recommandé."""
     path = autonomy.sidecar(gcfg.lock_file, ".selection.json")
     data = autonomy._read_json(path) if path else {}
     universe = [b.lower() for b in gcfg.universe]
-    mode = "auto" if data.get("mode") == "auto" else "manual"
+    mode = "manual" if data.get("mode") == "manual" else "auto"
     manual = data.get("manual")
     if not isinstance(manual, list):
-        manual = universe
+        manual = []
     wanted = {str(x).lower() for x in manual}
     return {"mode": mode, "manual": [a for a in universe if a in wanted],
             "saved": bool(data)}
