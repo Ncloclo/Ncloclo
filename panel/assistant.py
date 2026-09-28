@@ -1,6 +1,7 @@
-"""Assistant du panneau : fenêtre de dialogue sur les objectifs du bot, les
-marchés crypto et financiers, le trading, la connexion et la configuration
-d'un téléphone, l'utilisation de l'interface et l'accès au panneau.
+"""Rachelle, l'assistante du panneau : fenêtre de dialogue, polie et
+chaleureuse, sur les objectifs du bot, les marchés crypto et financiers, le
+trading, la connexion et la configuration d'un téléphone, l'utilisation de
+l'interface et l'accès au panneau.
 
 Sécurité d'abord (garde-fou appliqué AVANT toute réponse) :
 - une information secrète collée (clé API, secret, mot de passe, code, phrase
@@ -28,15 +29,24 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import market_watch as mw
 
-REFUSED = "🔒 Demande refusée pour votre sécurité."
-MASKED = ("🔒 Message masqué : il semblait contenir une information secrète (clé, mot de "
-          "passe ou code). Il n'a été ni envoyé à une IA, ni enregistré. Si c'était une vraie "
-          "clé ou un vrai mot de passe, révoquez-le : sur Binance, « Gestion des API » → "
-          "supprimer la clé, puis créez-en une nouvelle avec la saisie masquée "
-          "(python trendguard_bot.py set-keys).")
-SCOPE = ("Je réponds uniquement sur : les objectifs du bot, les marchés crypto et financiers, "
-         "le trading, la connexion et la configuration de votre téléphone, l'utilisation de "
-         "l'interface et votre accès au panneau.")
+NAME = "Rachelle"
+WELCOME = (f"Je suis {NAME}, ravie de vous accueillir. Comment puis-je vous aider "
+           f"aujourd'hui ?")
+REFUSED = ("🔒 Je suis désolée, je ne peux pas répondre à cette demande : elle touche à "
+           "votre sécurité.")
+MASKED = ("🔒 Je suis désolée, j'ai masqué votre message : il semblait contenir une "
+          "information secrète (clé, mot de passe ou code). Il n'a été ni envoyé, ni "
+          "enregistré. Si c'était une vraie clé ou un vrai mot de passe, je vous conseille de "
+          "le révoquer : sur Binance, « Gestion des API » → supprimer la clé, puis créez-en une "
+          "nouvelle avec la saisie masquée (python trendguard_bot.py set-keys).")
+SCOPE = ("Je peux vous aider sur les objectifs du bot, les marchés crypto et financiers, le "
+         "trading, la connexion et la configuration de votre téléphone, l'utilisation du "
+         "panneau et votre accès.")
+OPENERS = ("Avec plaisir !", "Bien sûr !", "Très bonne question !", "Volontiers !")
+CLOSERS = ("N'hésitez pas si vous avez une autre question.",
+           "Je reste à votre disposition.",
+           "Puis-je vous aider sur autre chose ?")
+SOCIAL = {"hello", "who", "thanks", "bye"}      # réponses déjà personnelles
 SUGGESTIONS = ["Quel est l'objectif du bot ?", "Comment va le marché crypto ?",
                "Et la bourse ?", "Connecter mon téléphone", "Configurer mon téléphone",
                "Comment utiliser le panneau ?", "Créer mon accès (mot de passe)",
@@ -405,14 +415,33 @@ def a_watch(ctx: Dict[str, Any]) -> str:
 
 
 def a_hello(ctx: Dict[str, Any]) -> str:
-    return "Bonjour ! " + SCOPE + " Choisissez une question ci-dessous ou écrivez la vôtre."
+    return ("Bonjour, ravie de vous retrouver ! Que puis-je faire pour vous ? Vous pouvez "
+            "choisir une question ci-dessous ou m'écrire la vôtre.")
+
+
+def a_who(ctx: Dict[str, Any]) -> str:
+    return (f"Je m'appelle {NAME}, l'assistante de votre panneau TrendGuard. " + SCOPE
+            + " Je ne peux rien modifier moi-même : je vous explique, vous décidez.")
+
+
+def a_thanks(ctx: Dict[str, Any]) -> str:
+    return "Avec grand plaisir ! Je reste à votre disposition si vous avez une autre question."
+
+
+def a_bye(ctx: Dict[str, Any]) -> str:
+    return "Au revoir, et merci pour votre visite ! Belle journée à vous, à bientôt."
 
 
 # (identifiant, mots-clés, réponse, actions)
 Action = Dict[str, str]
 TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[Action]], ...] = (
-    ("hello", ("bonjour", "salut", "hello", "coucou", "bonsoir", "aide", "help",
-               "que peux tu", "qui es tu"), a_hello, []),
+    ("hello", ("bonjour", "salut", "hello", "coucou", "bonsoir", "aide", "help"), a_hello, []),
+    ("who", ("qui es tu", "tu es qui", "qui etes vous", "ton nom", "votre nom", "t appelles",
+             "vous appelez", "rachelle", "presente toi", "presentez vous", "que peux tu",
+             "que pouvez vous"), a_who, []),
+    ("thanks", ("merci", "super", "genial", "parfait", "top", "bravo"), a_thanks, []),
+    ("bye", ("au revoir", "bonne journee", "bonne soiree", "bonne nuit", "a bientot", "bye"),
+     a_bye, []),
     ("objectives", ("objectif", "objectifs", "but", "strategie", "que fait le bot",
                     "a quoi sert", "fonctionne le bot", "fonctionnement du bot", "comment marche",
                     "rendement", "performance attendue", "gagner", "principe"), a_objectives,
@@ -490,17 +519,32 @@ def match(message: str) -> List[Tuple[int, str]]:
     return [(s, tid) for s, _o, tid in scores]
 
 
+def polite(text: str, message: str) -> str:
+    """Formule d'accueil et de conclusion, variées mais stables pour une même
+    question."""
+    k = sum(map(ord, message))
+    return f"{OPENERS[k % len(OPENERS)]}\n{text}\n{CLOSERS[(k // 7) % len(CLOSERS)]}"
+
+
 def local_answer(message: str, ctx: Dict[str, Any]) -> Dict[str, Any]:
     found = match(message)
     if not found:
-        return {"answer": "Je n'ai pas compris. " + SCOPE, "actions": [], "topics": [],
-                "suggestions": SUGGESTIONS[:5]}
+        return {"answer": "Je suis désolée, je n'ai pas bien compris votre question. " + SCOPE
+                          + " Voici quelques idées :",
+                "actions": [], "topics": [], "suggestions": SUGGESTIONS[:5]}
+    # « Merci, et la bourse ? » : la vraie question passe avant la politesse.
+    useful = [f for f in found if f[1] not in SOCIAL]
+    if useful:
+        found = useful
     best = found[0][1]
     tid, _keys, fn, actions = TOPIC_BY_ID[best]
     text = fn(ctx)
     # Deux sujets aussi probables : les deux réponses (ex. « stop et risque »).
-    if len(found) > 1 and found[1][0] == found[0][0] and found[1][1] not in ("hello",):
+    if (tid not in SOCIAL and len(found) > 1 and found[1][0] == found[0][0]
+            and found[1][1] not in SOCIAL):
         text += "\n\n" + TOPIC_BY_ID[found[1][1]][2](ctx)
+    if tid not in SOCIAL:
+        text = polite(text, message)
     return {"answer": text, "actions": actions, "topics": [t for _s, t in found[:3]],
             "suggestions": [s for s in SUGGESTIONS if norm(s) != norm(message)][:4]}
 
@@ -510,9 +554,11 @@ def local_answer(message: str, ctx: Dict[str, Any]) -> Dict[str, Any]:
 # ══════════════════════════════════════════════════════════════════════
 
 SYSTEM = (
-    "Tu es l'assistant du panneau de contrôle TrendGuard, un bot de suivi de tendance sur "
-    "Binance Spot. Tu réponds en français simple à un utilisateur non développeur, en 170 mots "
-    "au plus, avec des listes à tirets si utile, sans tableau ni code.\n"
+    "Tu t'appelles " + NAME + ", l'assistante du panneau de contrôle TrendGuard, un bot de "
+    "suivi de tendance sur Binance Spot. Tu es toujours polie, chaleureuse et patiente ; tu "
+    "vouvoies l'utilisateur et tu parles de toi au féminin. Tu réponds en français simple à un "
+    "utilisateur non développeur, en 170 mots au plus, avec des listes à tirets si utile, sans "
+    "tableau ni code. Ne te présente pas à chaque réponse.\n"
     "Sujets autorisés, uniquement : objectifs et fonctionnement du bot ; marchés crypto et "
     "financiers ; notions de trading ; connexion à distance et configuration d'un smartphone ; "
     "utilisation de l'interface ; accès au panneau (mot de passe, sessions). Pour toute autre "
@@ -529,7 +575,7 @@ SYSTEM = (
 
 
 def knowledge(ctx: Dict[str, Any]) -> str:
-    parts = [fn(ctx) for tid, _k, fn, _a in TOPICS if tid not in ("hello",)]
+    parts = [fn(ctx) for tid, _k, fn, _a in TOPICS if tid not in SOCIAL]
     return "\n\n".join(p.replace("**", "") for p in parts)
 
 
@@ -584,16 +630,13 @@ class Assistant:
 
     def info(self) -> Dict[str, Any]:
         label = self.ai.label if self.ai else None
-        return {"ai": label, "suggestions": SUGGESTIONS, "welcome": (
-            "Bonjour ! Je suis l'assistant du panneau. " + SCOPE
-            + " 🔒 Je ne traite aucune information secrète : ne tapez jamais de clé, de mot "
-              "de passe ni de code ici.")}
+        return {"name": NAME, "ai": label, "suggestions": SUGGESTIONS, "welcome": WELCOME}
 
     def reply(self, message: Any, history: Any, ctx_fn: Callable[[], Dict[str, Any]]) -> Dict[str, Any]:
         message = str(message or "").strip()[:MAX_MESSAGE]
         if not message:
-            return {"answer": SCOPE, "actions": [], "suggestions": SUGGESTIONS[:4],
-                    "source": "local"}
+            return {"answer": "Je vous écoute : que souhaitez-vous savoir ?", "actions": [],
+                    "suggestions": SUGGESTIONS[:4], "source": "local"}
         g = guard(message)
         if g:
             kind, text = g

@@ -58,7 +58,7 @@ def test_dangerous_requests_are_refused_without_detail(msg):
 @pytest.mark.parametrize("msg", MASKED)
 def test_pasted_secrets_are_masked_and_revocation_advised(msg):
     kind, text = asst.guard(msg)
-    assert kind == "masked" and "révoquez" in text
+    assert kind == "masked" and "révoquer" in text and "désolée" in text
 
 
 def ctx():
@@ -88,7 +88,23 @@ def test_local_answers_use_live_figures_and_offer_actions():
     status = a.reply("Le bot est-il en marche ?", [], ctx)["answer"]
     assert "10 120,00 USDT" in status and "+1,2 %" in status and "Marché haussier." in status
     off = a.reply("Écris-moi un poème sur les chats", [], ctx)
-    assert off["answer"].startswith("Je n'ai pas compris") and off["suggestions"]
+    assert off["answer"].startswith("Je suis désolée") and off["suggestions"]
+
+
+def test_rachelle_is_polite_and_introduces_herself():
+    a = asst.Assistant(None)
+    info = a.info()
+    assert info["name"] == "Rachelle" and info["welcome"].startswith("Je suis Rachelle")
+    for hidden in ("Je réponds uniquement", "information secrète", "assistant du panneau"):
+        assert hidden not in info["welcome"]
+    assert "Rachelle" in a.reply("Comment tu t'appelles ?", [], ctx)["answer"]
+    assert a.reply("Merci beaucoup", [], ctx)["answer"].startswith("Avec grand plaisir")
+    assert a.reply("Au revoir", [], ctx)["answer"].startswith("Au revoir")
+    r = a.reply("Merci ! Et la bourse ?", [], ctx)             # la question passe avant
+    assert "CAC 40" in r["answer"]
+    first, *_mid, last = r["answer"].splitlines()
+    assert first in asst.OPENERS and last in asst.CLOSERS          # formules de politesse
+    assert "désolée" in asst.REFUSED and "votre sécurité" in asst.REFUSED
 
 
 def test_refusal_never_reaches_the_ai_nor_the_context():
@@ -132,7 +148,8 @@ def test_ai_answer_is_filtered_and_history_cleaned():
     flat = " ".join(m["content"] for m in seen["messages"])
     assert "Soleil2024" not in flat and seen["messages"][0]["role"] == "user"
     assert seen["messages"][-1]["content"].endswith("Quel est l'objectif du bot ?")
-    assert "Demande refusée" in seen["system"] and "84 000" in seen["system"]
+    assert asst.REFUSED in seen["system"] and "84 000" in seen["system"]
+    assert "Rachelle" in seen["system"] and "polie" in seen["system"]
 
 
 def test_ai_failure_falls_back_to_local_answer():

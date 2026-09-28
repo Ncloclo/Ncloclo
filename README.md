@@ -116,19 +116,19 @@ panneau de contrôle ») :
   Sources publiques sans clé : CoinDesk, Cointelegraph, Decrypt, Journal du
   Coin, Cryptoast, CNBC, Le Monde, Google Actualités, CoinGecko, alternative.me,
   Yahoo Finance ;
-- **Assistant** (bouton en bas à droite, sur toutes les pages) : fenêtre de
-  dialogue sur les objectifs du bot, les marchés crypto et financiers (avec les
-  chiffres du moment), le trading, la connexion et la configuration d'un
-  téléphone, l'utilisation de l'interface et l'accès au panneau. Réponses
-  intégrées, sans clé ; si une IA de la veille est configurée (Claude de
-  préférence), elle rédige les réponses dans le même périmètre
-  (`PANEL_ASSISTANT_IA=false` pour s'en passer). Garde-fou appliqué avant toute
-  réponse : une clé, un mot de passe, un code ou une phrase de récupération
-  collés sont masqués sans jamais quitter la page, avec le conseil de les
-  révoquer ; toute demande qui toucherait à la sécurité (révéler une clé ou le
-  `.env`, contourner une protection, ouvrir un port, activer les retraits,
-  déplacer des fonds) est refusée en une phrase. L'assistant ne voit que des
-  données publiques et ne peut rien modifier ;
+- **Rachelle, l'assistante** (bouton en bas à droite, sur toutes les pages) :
+  fenêtre de dialogue polie et chaleureuse sur les objectifs du bot, les marchés
+  crypto et financiers (avec les chiffres du moment), le trading, la connexion
+  et la configuration d'un téléphone, l'utilisation de l'interface et l'accès au
+  panneau. Réponses intégrées, sans clé ; si une IA de la veille est configurée
+  (Claude de préférence), elle rédige les réponses dans le même périmètre, avec
+  la même personnalité (`PANEL_ASSISTANT_IA=false` pour s'en passer). Garde-fou
+  appliqué avant toute réponse : une clé, un mot de passe, un code ou une phrase
+  de récupération collés sont masqués sans jamais quitter la page, avec le
+  conseil de les révoquer ; toute demande qui toucherait à la sécurité (révéler
+  une clé ou le `.env`, contourner une protection, ouvrir un port, activer les
+  retraits, déplacer des fonds) est refusée poliment en une phrase. Rachelle ne
+  voit que des données publiques et ne peut rien modifier ;
 - **Ce que pense le bot** (tableau de bord) : sa décision du jour expliquée et
   les cryptos proches d'un signal d'achat ;
 - **Graphiques** : capital, régime BTC et chaque position en temps réel ; un
@@ -475,7 +475,7 @@ walkforward | status | resume` (voir `python v29.py docs`).
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 356 tests, simulateurs Binance Spot mono et multi-paires
+python -m pytest tests -q      # 357 tests, simulateurs Binance Spot mono et multi-paires
 ```
 
 À chaque envoi sur GitHub, `.github/workflows/checks.yml` lance ces tests, puis

@@ -263,21 +263,20 @@
 </div>
 
 <!-- Assistant -->
-<button class="fab" id="chat-fab" type="button" aria-controls="chat" aria-expanded="false" title="Poser une question"><svg><use href="#i-chat"/></svg><span>Assistant</span></button>
+<button class="fab" id="chat-fab" type="button" aria-controls="chat" aria-expanded="false" title="Écrire à Rachelle" aria-label="Ouvrir la conversation avec Rachelle"><span class="fab-avatar" aria-hidden="true">R</span><span>Rachelle</span></button>
 <section class="chat" id="chat" role="dialog" aria-labelledby="chat-title" hidden>
   <header class="chat-head">
-    <span class="chat-avatar" aria-hidden="true"><svg><use href="#i-chat"/></svg></span>
-    <div><h2 id="chat-title">Assistant TrendGuard</h2><span class="sub" id="chat-mode">Réponses intégrées au panneau</span></div>
+    <span class="chat-avatar" aria-hidden="true">R<i class="online"></i></span>
+    <div><h2 id="chat-title">Rachelle</h2></div>
     <button class="icon-btn" id="chat-clear" type="button" title="Effacer la conversation" aria-label="Effacer la conversation"><svg><use href="#i-trash"/></svg></button>
     <button class="icon-btn" id="chat-close" type="button" title="Fermer" aria-label="Fermer l'assistant"><svg><use href="#i-close"/></svg></button>
   </header>
   <ol class="chat-log" id="chat-log" aria-live="polite"></ol>
   <div class="chat-sugg" id="chat-sugg" role="group" aria-label="Questions suggérées"></div>
   <form class="chat-form" id="chat-form">
-    <textarea id="chat-input" rows="1" maxlength="1200" placeholder="Posez votre question…" aria-label="Votre question" autocomplete="off"></textarea>
+    <textarea id="chat-input" rows="1" maxlength="1200" placeholder="Écrivez votre message à Rachelle…" aria-label="Votre message à Rachelle" autocomplete="off"></textarea>
     <button class="btn" id="chat-send" type="submit" aria-label="Envoyer"><svg><use href="#i-send"/></svg></button>
   </form>
-  <p class="chat-note">🔒 Ne tapez jamais de clé, de mot de passe ni de code ici : ils seraient masqués, jamais envoyés.</p>
 </section>
 
 <!-- Détail d'un graphique -->

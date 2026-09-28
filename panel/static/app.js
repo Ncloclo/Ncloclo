@@ -1016,7 +1016,8 @@ $("#logout-btn").addEventListener("click", async () => {
 // Garde-fou côté navigateur : une clé, un mot de passe ou un code collés ne
 // quittent jamais cette page (le serveur applique le même contrôle).
 const CHAT = { history: [], loaded: false, busy: false };
-const MASK_TEXT = "🔒 Message masqué : il semblait contenir une information secrète (clé, mot de passe ou code). Il n'a pas été envoyé. Si c'était une vraie clé ou un vrai mot de passe, révoquez-le : sur Binance, « Gestion des API » → supprimer la clé, puis créez-en une nouvelle avec la saisie masquée.";
+const MASK_TEXT = "🔒 Je suis désolée, j'ai masqué votre message : il semblait contenir une information secrète (clé, mot de passe ou code). Il n'a pas été envoyé. Si c'était une vraie clé ou un vrai mot de passe, je vous conseille de le révoquer : sur Binance, « Gestion des API » → supprimer la clé, puis créez-en une nouvelle avec la saisie masquée.";
+const greeting = () => (new Date().getHours() >= 18 || new Date().getHours() < 5 ? "Bonsoir" : "Bonjour");
 const SECRET_RX = [
   /\bsk-[A-Za-z0-9_-]{16,}/,
   /\b(mot de passe|password|passwd|mdp|pin)\s*(est|=|:|is|c'est|c’est)\s*(?=\S*[\d!@#$%^&*_+=?])\S{4,}/i,
@@ -1073,10 +1074,6 @@ function chatMessage(role, text, extra = {}) {
     });
     li.append(acts);
   }
-  if (role === "bot" && extra.source) {
-    li.append(el("span", "msg-src", extra.source === "local" ? "réponse intégrée au panneau"
-      : extra.source === "garde-fou" ? "garde-fou de sécurité" : `rédigé par ${extra.source}`));
-  }
   $("#chat-log").append(li);
   chatScroll();
   return li;
@@ -1098,12 +1095,11 @@ async function openChat() {
     try {
       const info = await api("/api/assistant");
       CHAT.info = info;
-      $("#chat-mode").textContent = info.ai ? `Réponses rédigées par ${info.ai}, dans un périmètre limité` : "Réponses intégrées au panneau, sans IA externe";
-      chatMessage("bot", info.welcome);
+      chatMessage("bot", `${greeting()} ! ${info.welcome}`);
       chatSuggestions(info.suggestions);
     } catch (e) {
       CHAT.loaded = false;
-      chatMessage("bot", `Assistant indisponible : ${e.message}`);
+      chatMessage("bot", `Je suis désolée, je ne peux pas vous répondre pour le moment (${e.message}). Réessayez dans un instant.`);
     }
   }
   $("#chat-input").focus();
@@ -1148,7 +1144,8 @@ async function sendChat(text) {
     if (r.suggestions && r.suggestions.length) chatSuggestions(r.suggestions);
   } catch (e) {
     typing.remove();
-    chatMessage("bot", e.message === "connexion requise" ? "Reconnectez-vous au panneau, puis reposez la question." : `Réponse impossible : ${e.message}`);
+    chatMessage("bot", e.message === "connexion requise" ? "Votre session a expiré : reconnectez-vous au panneau, puis reposez-moi la question."
+      : `Je suis désolée, je n'ai pas pu vous répondre (${e.message}). Réessayez dans un instant.`);
   } finally {
     CHAT.busy = false;
     $("#chat-send").disabled = false;
@@ -1160,7 +1157,7 @@ $("#chat-clear").addEventListener("click", () => {
   CHAT.history = [];
   $("#chat-log").replaceChildren();
   if (CHAT.info) {
-    chatMessage("bot", CHAT.info.welcome);
+    chatMessage("bot", `${greeting()} ! ${CHAT.info.welcome}`);
     chatSuggestions(CHAT.info.suggestions);
   }
 });
