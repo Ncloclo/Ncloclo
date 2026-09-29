@@ -42,6 +42,7 @@ TG_ENV_DOC: Dict[str, str] = {
     "TG_DD_THROTTLE": "Profil prudent : baisse:multiplicateur (ex. 0.10:0.5) ; vide = off",
     "TG_AUTO_DIAGNOSE_DAYS": "Auto-diagnostic tous les N jours (0 = désactivé)",
     "TG_ANTICIPATION": "true : alerte quand une vente ou un achat sont probables à la prochaine clôture",
+    "TG_EVOLUTION": "true : évolution encadrée, le bot règle lui-même cassure et stops s'il réussit les épreuves",
     "TG_CLASSEMENT": "true : classement quotidien des cryptos par bénéfice (page Cryptos du panneau)",
     "TG_KEEP_AWAKE": "true : l'ordinateur ne se met pas en veille tout seul pendant que le bot tourne",
     "TG_MAX_SPREAD": "Ruse : achat différé si l'écart achat/vente dépasse ce seuil (0.005 = 0,5 %)",
@@ -102,6 +103,10 @@ class GuardConfig:
     # Alertes d'anticipation (vente ou achat probables à la prochaine
     # clôture) ; activées par l'environnement.
     anticipation_alerts: bool = False
+    # Évolution encadrée (evolution.py) : le bot règle lui-même cassure,
+    # stops et lecture du marché s'il réussit les épreuves ; activée par
+    # l'environnement.
+    evolution: bool = False
     watch_db: str = ""
     max_capital: float = 0.0            # 0 = tout le compte
     keep_awake: bool = False            # anti-veille (activé par l'environnement)
@@ -192,6 +197,7 @@ def load_guard_config_from_env() -> GuardConfig:
         watch_ai=v29._env_b("TG_VEILLE_IA", True),
         rank_cryptos=v29._env_b("TG_CLASSEMENT", True),
         anticipation_alerts=v29._env_b("TG_ANTICIPATION", True),
+        evolution=v29._env_b("TG_EVOLUTION", True),
         watch_db=v29._env_s("TG_VEILLE_DB", os.path.join(v29.APP_DIR, "trendguard_veille.db")),
         max_capital=v29._env_f("TG_MAX_CAPITAL", 0.0),
         keep_awake=v29._env_b("TG_KEEP_AWAKE", True),

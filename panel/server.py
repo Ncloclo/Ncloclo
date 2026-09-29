@@ -31,7 +31,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
-from trendguard import anticipation, uptime
+from trendguard import anticipation, evolution, uptime
 from trendguard import market_watch as mw
 
 from .assistant import AIHelper, Assistant
@@ -184,6 +184,9 @@ class PanelApp:
             "watch": st.get("last_watch"),
             "alerts": self._alert_channels(st),
             "uptime": uptime.summary(st.get("uptime"), last_cycle, st.get("stopped_at")),
+            "evolution": evolution.summary(self.g),
+            # Réglages de la stratégie en vigueur (l'évolution a pu les changer).
+            "rules": {k: getattr(evolution.params_for(self.g), k) for k in evolution.SPACE},
             "autonomy": self.control.autonomy(),
             "lan_urls": self.lan_urls, "password": bool(self.password),
             "server_time": now.isoformat(),
@@ -295,7 +298,7 @@ class PanelApp:
             equity = pts[-1]["v"]
         sel = self.selection_view(st)
         f = anticipation.forecast(
-            basis, prices, self.data.holdings(st), datetime.now(timezone.utc), self.g.params,
+            basis, prices, self.data.holdings(st), datetime.now(timezone.utc), evolution.params_for(self.g),
             float(equity or getattr(self.g, "paper_capital", 10_000.0)),
             float(st.get("risk_mult", 1.0) or 1.0), sel["active"],
             (st.get("vetoes") or {}).keys(), bool(st.get("halted")))
@@ -405,6 +408,16 @@ class PanelApp:
             detail += " ; PC branché et mise en veille sur « Jamais » quand il est branché"
         return self._check("Disponibilité du bot (7 j)", pct >= uptime.GOOD_PCT, detail)
 
+    def _evolution_check(self) -> Dict[str, Any]:
+        """Évolution encadrée : niveau atteint, et rappel de ce qui reste
+        hors de sa portée (information)."""
+        ev = evolution.summary(self.g)
+        if not ev["enabled"]:
+            return self._check("Évolution encadrée", None, "désactivée : réglages fixes (TG_EVOLUTION=false)")
+        return self._check("Évolution encadrée", None,
+                           f"niveau {ev['level']} sur {ev['levels']} ({ev['name']}) ; ne touche jamais au "
+                           "risque, aux plafonds, à l'arrêt d'urgence ni au mode réel")
+
     def _runtime_checks(self, st: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Arrêt d'urgence, relance automatique, disponibilité, alertes,
         garde-fou."""
@@ -422,6 +435,7 @@ class PanelApp:
             self._check("Relance automatique", bool(sup.get("running")),
                         "active" if sup.get("running") else "inactive : cliquez sur AUTO"),
             self._uptime_check(st),
+            self._evolution_check(),
             self._alerts_check(st),
             self._check("Garde-fou de Rachelle", True, "secrets masqués, demandes sensibles refusées"),
         ]
@@ -505,7 +519,7 @@ class PanelApp:
         return {"points": pts, "buys": buys, "sells": sells}
 
     def _regime_view(self) -> Dict[str, Any]:
-        reg, stale = self.market.regime(self.g.params.regime_sma)
+        reg, stale = self.market.regime(evolution.params_for(self.g).regime_sma)
         marks = []
         if reg.get("points"):
             # Achats et ventes de BTC par le bot, sur la bougie du jour.

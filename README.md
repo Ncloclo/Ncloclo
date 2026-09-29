@@ -265,6 +265,18 @@ alerte critique (e-mail compris) avec la durée, l'heure et le conseil pour
 l'éviter. Réglages ▸ Autonomie affiche le temps de marche sur 24 h et 7 jours,
 hors arrêts demandés.
 
+**Évolution encadrée** (`evolution.py`,
+[`docs/EVOLUTION.md`](docs/EVOLUTION.md)).
+Chaque jour après la décision, le bot cherche un meilleur réglage (cassure,
+stops, lecture du marché) et le soumet à cinq épreuves : deux époques, frais
+doublés, énigmes des crises passées, plateau et hasard. Le plus simple qui les
+réussit toutes est adopté, puis mis à l'essai 30 jours. Réussi, le bot monte de
+niveau (Apprenti, Compagnon, Expert, Maître : plus de liberté, épreuves plus
+dures) ; raté, retour aux anciens réglages et un niveau de moins. Le risque, les
+plafonds, l'arrêt d'urgence et le passage en réel restent hors de sa portée.
+`python trendguard_bot.py evolution` affiche le niveau et l'historique ;
+`TG_EVOLUTION=false` garde des réglages fixes.
+
 **Rusé à l'achat, discipliné à la vente.** Avant chaque achat, le bot lit le
 carnet d'ordres de Binance. Écart achat/vente supérieur à 0,5 %
 (`TG_MAX_SPREAD`), carnet vide, ou moins de 3 fois le montant de l'achat proposé

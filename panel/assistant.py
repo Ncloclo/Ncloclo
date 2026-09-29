@@ -173,12 +173,13 @@ def _headlines(news: Dict[str, Any], category: Optional[str], n: int) -> List[st
 def a_objectives(ctx: Dict[str, Any]) -> str:
     st = ctx.get("status") or {}
     mode = "réel" if st.get("mode") == "live" else "paper (argent fictif, prix réels)"
+    r = _rules(ctx)
     return (
         "**Objectif** : capter les grandes tendances des cryptos tout en limitant chaque perte.\n"
         f"- 21 cryptos cotées en USDT sur Binance Spot, mode actuel : {mode}.\n"
-        "- Achat quand une crypto casse son plus haut des 30 derniers jours et que sa "
-        "tendance de fond (90 jours) est positive, seulement si le bitcoin est au-dessus "
-        "de sa moyenne 150 jours (marché haussier).\n"
+        f"- Achat quand une crypto casse son plus haut des {r['breakout_n']} derniers jours et "
+        "que sa tendance de fond (90 jours) est positive, seulement si le bitcoin est au-dessus "
+        f"de sa moyenne {r['regime_sma']} jours (marché haussier).\n"
         "- Chaque achat risque 1 % du capital au plus ; 8 positions maximum, 6 % de risque "
         "cumulé au plus.\n"
         "- Vente quand le cours clôture sous un stop qui monte avec le prix ; stop "
@@ -228,9 +229,10 @@ def a_crypto_market(ctx: Dict[str, Any]) -> str:
                      f"100 = euphorie).")
     st = ctx.get("status") or {}
     if st.get("regime_bull") is not None:
-        lines.append("- Pour le bot : " + ("BTC au-dessus de sa moyenne 150 jours, achats "
+        sma = _rules(ctx)["regime_sma"]
+        lines.append("- Pour le bot : " + (f"BTC au-dessus de sa moyenne {sma} jours, achats "
                                            "autorisés." if st["regime_bull"] else
-                                           "BTC sous sa moyenne 150 jours, aucun achat."))
+                                           f"BTC sous sa moyenne {sma} jours, aucun achat."))
     heads = _headlines(news, "crypto", 3)
     if heads:
         lines += ["À la une :"] + heads
@@ -353,16 +355,16 @@ def a_keys(ctx: Dict[str, Any]) -> str:
 
 GLOSSARY = {
     "stop": ("**Stop** : niveau de prix où le bot vend pour limiter la perte. Le stop de "
-             "clôture monte avec le prix (5 × la volatilité sous le plus haut ; 2 × en marché "
-             "baissier) et n'est vérifié qu'à la clôture quotidienne, pour ignorer les mèches. "
+             "clôture monte avec le prix ({trail} × la volatilité sous le plus haut ; {bear}) "
+             "et n'est vérifié qu'à la clôture quotidienne, pour ignorer les mèches. "
              "Le stop catastrophe, posé chez Binance un peu plus bas, protège d'un krach entre "
              "deux clôtures."),
-    "breakout": ("**Cassure** : la clôture dépasse le plus haut des 30 derniers jours. C'est le "
-                 "signal d'entrée du bot, à condition que la tendance sur 90 jours soit positive "
-                 "et le marché haussier."),
-    "regime": ("**Régime du marché** : le bot compare le bitcoin à sa moyenne des 150 derniers "
-               "jours. Au-dessus, marché haussier : achats autorisés. En dessous : aucun achat "
-               "et stops resserrés pour protéger les gains."),
+    "breakout": ("**Cassure** : la clôture dépasse le plus haut des {breakout_n} derniers jours. "
+                 "C'est le signal d'entrée du bot, à condition que la tendance sur 90 jours soit "
+                 "positive et le marché haussier."),
+    "regime": ("**Régime du marché** : le bot compare le bitcoin à sa moyenne des {regime_sma} "
+               "derniers jours. Au-dessus, marché haussier : achats autorisés. En dessous : aucun "
+               "achat et stops resserrés pour protéger les gains."),
     "risk": ("**Risque de 1 %** : la taille de chaque achat est calculée pour qu'en touchant son "
              "stop, la perte soit d'environ 1 % du capital. Une crypto agitée reçoit donc une "
              "position plus petite qu'une crypto calme."),
@@ -388,8 +390,24 @@ GLOSSARY = {
 }
 
 
+RULES_DEFAULT = {"breakout_n": 30, "regime_sma": 150, "trail_atr": 5.0, "bear_trail_atr": 2.0}
+
+
+def _rules(ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Réglages en vigueur (l'évolution encadrée peut les avoir changés),
+    prêts à être cités."""
+    r = dict(RULES_DEFAULT, **((ctx.get("status") or {}).get("rules") or {}))
+
+    def num(v: Any) -> str:
+        return f"{float(v):g}".replace(".", ",")
+    bear = (f"{num(r['bear_trail_atr'])} × en marché baissier" if float(r["bear_trail_atr"]) > 0
+            else "le même en marché baissier")
+    return {"breakout_n": int(r["breakout_n"]), "regime_sma": int(r["regime_sma"]),
+            "trail": num(r["trail_atr"]), "bear": bear}
+
+
 def _gloss(key: str) -> Callable[[Dict[str, Any]], str]:
-    return lambda ctx: GLOSSARY[key]
+    return lambda ctx: GLOSSARY[key].format(**_rules(ctx))
 
 
 def a_advice(ctx: Dict[str, Any]) -> str:
@@ -492,6 +510,32 @@ def a_autonomy(ctx: Dict[str, Any]) -> str:
             "bloque. Le démarrage avec l'ordinateur est " + auto + " (Réglages ▸ Autonomie). "
             "Le PC ne se met pas en veille tout seul pendant que le bot tourne. ARRÊTER est "
             "respecté : aucune relance, même au redémarrage, jusqu'au prochain AUTO.")
+
+
+def a_evolution(ctx: Dict[str, Any]) -> str:
+    ev = (ctx.get("status") or {}).get("evolution") or {}
+    if not ev.get("enabled"):
+        return ("**Évolution encadrée** : désactivée (TG_EVOLUTION=false). Le bot garde ses "
+                "réglages fixes ; il mesure chaque semaine si sa stratégie marche toujours.")
+    changes = ", ".join(f"{c['param']} {c['from']} → {c['to']}" for c in ev.get("changes") or [])
+    lines = [
+        f"**Évolution encadrée** : le bot est au niveau {ev['level']} sur {ev['levels']}, "
+        f"« {ev['name']} ».",
+        "- Chaque jour après la décision, il cherche un meilleur réglage (cassure, stops, "
+        "lecture du marché) et le soumet à 5 épreuves : deux époques, frais doublés, énigmes "
+        "des crises passées, plateau et hasard.",
+        "- Le plus simple qui les réussit toutes est adopté, puis mis à l'essai 30 jours. "
+        "Réussi : il monte de niveau (plus de liberté, épreuves plus dures). Raté : retour aux "
+        "anciens réglages et un niveau de moins.",
+        "- Hors de sa portée : risque par trade, nombre de positions, risque cumulé, arrêt "
+        "d'urgence et passage en réel.",
+        f"- Réglages changés : {changes or 'aucun, réglages d’origine'}.",
+    ]
+    if ev.get("probation"):
+        lines.append(f"- En essai depuis le {ev['probation']['since']} : {ev['probation']['text']}.")
+    if ev.get("last_text"):
+        lines.append(f"- Dernier examen : {ev['last_text']}")
+    return "\n".join(lines)
 
 
 def _px(v: Any) -> str:
@@ -622,6 +666,11 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("autonomy", ("autonome", "autonomie", "redemarrage", "redemarrer", "demarrer avec",
                   "ordinateur", "veille du pc", "plantage", "superviseur", "eteint"), a_autonomy,
      [{"label": "Réglages ▸ autonomie", "href": "#settings"}]),
+    ("evolution", ("evolution", "evolution encadree", "evoluer", "evolue", "s adapter",
+                   "s adapte", "apprend", "apprendre de", "apprentissage", "epreuve", "epreuves",
+                   "enigme", "enigmes", "sagesse", "independant", "independance", "niveau du bot",
+                   "ses propres reglages", "modifier ses reglages", "change ses reglages"),
+     a_evolution, [{"label": "Réglages ▸ autonomie", "href": "#settings"}]),
     ("watch", ("veille", "ia", "intelligence", "claude", "gpt", "annonce", "annonces",
                "retrait de la cote", "delisting", "bloquee", "bloquees"), a_watch,
      [{"label": "Veille", "href": "#watch"}]),

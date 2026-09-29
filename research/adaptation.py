@@ -19,7 +19,6 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import math
-import os
 import sys
 from typing import Any, Dict, List, Optional
 
@@ -27,29 +26,15 @@ import numpy as np
 import pandas as pd
 
 import v29
-from trendguard import diagnostics as dg
+from trendguard import evolution
 from trendguard import trend_strategy as ts
 from trendguard.config import LIVE_UNIVERSE_DEFAULT
 
 
 def load_binance(cache: str) -> tuple:
-    """Clôtures/volumes Binance, mis en cache au format Coin Metrics."""
-    bases = [a.lower() for a in LIVE_UNIVERSE_DEFAULT]
-    if not all(os.path.exists(os.path.join(cache, f"{a}.csv")) for a in bases):
-        os.makedirs(cache, exist_ok=True)
-        # Données publiques (data-api.binance.vision) : accessibles partout,
-        # y compris depuis un serveur aux États-Unis.
-        close, volume, errors = dg.fetch_daily_history(
-            v29.PublicKlines(), [a.upper() for a in bases], since="2017-07-01")
-        if errors:
-            print(f"Erreurs de téléchargement : {errors}")
-        for a in close.columns:
-            pd.DataFrame({"time": close.index.strftime("%Y-%m-%d"),
-                          "PriceUSD": close[a].values,
-                          "volume_reported_spot_usd_1d": volume[a].values}
-                         ).dropna(subset=["PriceUSD"]).to_csv(
-                os.path.join(cache, f"{a}.csv"), index=False)
-    return ts.load_coinmetrics(cache, bases)
+    """Clôtures/volumes Binance, mis en cache au format Coin Metrics
+    (téléchargés une fois ; jamais rafraîchis : études reproductibles)."""
+    return evolution.load_history(cache, list(LIVE_UNIVERSE_DEFAULT), max_age_days=None)
 
 
 def run_variant(close: pd.DataFrame, volume: pd.DataFrame, pre, p: ts.TrendParams,

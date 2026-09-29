@@ -279,8 +279,10 @@ test("anticipation de la prochaine clôture et centre de sécurité", async ({ p
   await expect(page.locator("#detail-title")).toHaveText("ICP/USDT");
   await page.keyboard.press("Escape");
   await page.locator('.tab[data-tab="settings"]').click();
-  await expect(page.locator("#s-sec li")).toHaveCount(12);
-  await expect(page.locator("#s-sec-score")).toHaveText(/^\d+ \/ 12$/);
+  await expect(page.locator("#s-sec li")).toHaveCount(13);
+  await expect(page.locator("#s-sec-score")).toHaveText(/^\d+ \/ 13$/);
+  await expect(page.locator("#s-sec")).toContainText("Évolution encadrée");
+  await expect(page.locator("#s-auto")).toContainText("Évolution encadrée");
   await expect(page.locator("#s-sec")).toContainText("ce PC uniquement");
   await expect(page.locator("#s-sec")).toContainText("Disponibilité du bot (7 j)");
   await expect(page.locator("#s-auto")).toContainText("Temps de marche");

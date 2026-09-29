@@ -30,8 +30,8 @@ def _explain_asset(a: str, s: Dict[str, float], gap: Optional[float], bull: bool
     if a in sold:
         return "sold", "Vendue : " + EXIT_WHY.get(sold[a], sold[a].lower())
     if a in bought:
-        return "bought", ("Achetée : cassure de son plus haut de 30 jours, tendance de fond "
-                          "positive, 1 % du capital risqué")
+        return "bought", (f"Achetée : cassure de son plus haut de {p.breakout_n} jours, tendance "
+                          f"de fond positive, {p.risk_pct * 100:g} % du capital risqué").replace(".", ",")
     if a in holdings:
         h, close = holdings[a], s.get("close")
         if ts._finite(close) and close > 0:
@@ -54,8 +54,9 @@ def _explain_asset(a: str, s: Dict[str, float], gap: Optional[float], bull: bool
     if s["close"] <= s["prior_high"]:
         need = _pc((gap or 0.0) / 100)
         if gap is not None and gap <= WATCH_BAND_PCT:
-            return "watch", f"Sous surveillance : encore {need} pour casser son plus haut de 30 jours"
-        return "wait", f"Pas de cassure : il lui faut {need} pour dépasser son plus haut de 30 jours"
+            return "watch", (f"Sous surveillance : encore {need} pour casser son plus haut de "
+                             f"{p.breakout_n} jours")
+        return "wait", f"Pas de cassure : il lui faut {need} pour dépasser son plus haut de {p.breakout_n} jours"
     if not bull:
         return "bear", ("Signal d'achat, mais marché baissier : le bot attend le retour de BTC "
                         "au-dessus de sa moyenne")
@@ -96,9 +97,9 @@ def explain_decision(day: str, bull: bool, btc_gap: Optional[float],
     radar = sorted((a for a, x in assets.items() if x["status"] == "watch"),
                    key=lambda a: assets[a]["breakout_gap_pct"])
     btc = f" ({_pc(btc_gap / 100)})" if btc_gap is not None else ""
-    lines = [f"Marché haussier : BTC au-dessus de sa moyenne 150 jours{btc}, achats autorisés."
+    lines = [f"Marché haussier : BTC au-dessus de sa moyenne {p.regime_sma} jours{btc}, achats autorisés."
              if bull else
-             f"Marché baissier : BTC sous sa moyenne 150 jours{btc}, aucun achat et stops "
+             f"Marché baissier : BTC sous sa moyenne {p.regime_sma} jours{btc}, aucun achat et stops "
              f"resserrés pour protéger les gains."]
     acts = []
     if bought:

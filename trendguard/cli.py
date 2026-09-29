@@ -20,7 +20,7 @@ import ccxt
 
 import v29
 
-from . import alerts, autonomy
+from . import alerts, autonomy, evolution
 from . import bot as _bot
 from . import diagnostics as dg
 from . import trend_strategy as ts
@@ -634,7 +634,7 @@ def cmd_diagnose(gcfg: GuardConfig, out_path: Optional[str] = None,
     day = last_closed_day(now, gcfg.decision_delay_sec)
     print(f"Analyse en cours ({len(gcfg.universe)} paires, historique Binance "
           f"depuis 2018)…", flush=True)
-    findings = dg.run_diagnosis(exchange, gcfg.params, list(gcfg.universe), state,
+    findings = dg.run_diagnosis(exchange, evolution.params_for(gcfg), list(gcfg.universe), state,
                                 holdings, equity, day, now, db_file=gcfg.db_file,
                                 running=running, quote=gcfg.quote,
                                 kill_drawdown=gcfg.kill_drawdown)
@@ -653,7 +653,8 @@ TOOLS = {"alerts": ("alerts", "alertes : configurer | tester"),
          "watch": ("market_watch", "veille : [report] | check | set-key <ia> [--no-ai]"),
          "strategy": ("trend_strategy", "stratégie : download | research | backtest"),
          "lab": ("strategy_lab", "laboratoire des stratégies (--cache data_binance)"),
-         "animation": ("replay_animation", "page d'animation du rejeu")}
+         "animation": ("replay_animation", "page d'animation du rejeu"),
+         "evolution": ("evolution", "évolution encadrée : [statut] | examen | quotidien | revenir | regles")}
 
 
 def _parser() -> argparse.ArgumentParser:

@@ -52,6 +52,7 @@ sont jamais envoyés sur GitHub. VS Code les masque dans l'explorateur
 | `anticipation.py` | ventes, achats et risques probables à la prochaine clôture |
 | `autonomy.py` | superviseur, démarrage avec l'ordinateur, anti-veille, arrêt demandé |
 | `uptime.py` | disponibilité : arrêts de plus d'une heure, leur cause, temps de marche |
+| `evolution.py` | évolution encadrée : réglages ajustés par le bot sous épreuves, niveaux, essais de 30 jours |
 | `alerts.py` | alertes Telegram, e-mail et WhatsApp |
 | `market_watch.py` | veille : annonces officielles de Binance, actualités, avis des IA |
 | `watch_claude.py` | avis de Claude pour la veille |

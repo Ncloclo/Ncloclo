@@ -8,6 +8,8 @@ import faulthandler
 import logging
 import math
 import os
+import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -18,7 +20,7 @@ import pandas as pd
 
 import v29
 
-from . import anticipation, uptime
+from . import anticipation, autonomy, evolution, uptime
 from . import diagnostics as dg
 from . import market_watch as mw
 from . import trend_strategy as ts
@@ -130,6 +132,7 @@ class TrendGuardBot:
             self.logger.critical("[BOOT] BTC/USDT indisponible (régime) → arrêt")
             return False
         self.state = self.store.get_kv(self.STATE_KEY) or {}
+        self._apply_evolution()
         self._sync_clock(force=True)       # heure de Binance avant toute décision
         self.state.setdefault("last_decision_day", None)
         self.state.setdefault("peak_equity", None)
@@ -326,10 +329,12 @@ class TrendGuardBot:
             self._maintain_paper()
         day = last_closed_day(now, self.g.decision_delay_sec)
         if self.state.get("last_decision_day") != day:
+            self._apply_evolution()
             self._refresh_vetoes(now)
             try:
                 self.daily_decision(now, day)
                 self.state.pop("decision_deferred_since", None)
+                self._launch_evolution(day)
             except DecisionDeferred as e:
                 self._decision_deferred(day, str(e))
         self._refresh_selection(now)
@@ -388,6 +393,47 @@ class TrendGuardBot:
             + (" ; la décision de la clôture quotidienne a été prise en retard" if late else "")
             + f". {uptime.ADVICE.get(ev['cause'], '')}".rstrip(),
             dedup_key=f"tg-downtime-{int(ev['start'])}", critical=True)
+
+    # ---------- Évolution encadrée (evolution.py) ----------
+
+    def _apply_evolution(self) -> None:
+        """Réglages choisis par l'évolution encadrée, pris en compte au
+        démarrage et juste avant la décision quotidienne, jamais en cours de
+        journée. Seuls cassure, stops et lecture du marché peuvent changer."""
+        if not self.g.evolution:
+            return
+        p = evolution.params_for(self.g)
+        if p == self.p:
+            return
+        changed = {k: getattr(p, k) for k in evolution.SPACE if getattr(p, k) != getattr(self.p, k)}
+        self.logger.info(f"[ÉVOLUTION] réglages en vigueur : {evolution.describe(self.p, changed)}")
+        self.p = p
+
+    def _launch_evolution(self, day: str) -> None:
+        """Routine quotidienne de l'évolution (épreuves), une fois par jour
+        après la décision, dans un processus séparé : les stops restent
+        surveillés pendant qu'elle calcule."""
+        if not (self.g.evolution and self.track_uptime) or self.state.get("evolution_day") == day:
+            return
+        self.state["evolution_day"] = day
+        peak, eq = self.state.get("peak_equity"), self.state.get("last_equity")
+        storm = bool(self.state.get("halted")) or bool(
+            peak and eq and float(eq) < float(peak) * (1 - evolution.STORM_DD))
+        kw: Dict[str, Any] = {"cwd": autonomy.ROOT, "stdin": subprocess.DEVNULL,
+                              "stderr": subprocess.STDOUT,
+                              "env": dict(os.environ, RUN_MODE=self.g.run_mode,
+                                          PYTHONIOENCODING="utf-8")}
+        if os.name == "nt":
+            kw["creationflags"] = autonomy.CREATE_NO_WINDOW
+        log = autonomy.sidecar(self.g.lock_file, ".evolution.log") or os.devnull
+        try:
+            with open(log, "a", encoding="utf-8") as out:
+                subprocess.Popen([sys.executable, autonomy.BOT_SCRIPT, "evolution", "quotidien"]
+                                 + (["--tempete"] if storm else []), stdout=out, **kw)
+            self.logger.info("[ÉVOLUTION] épreuves du jour lancées"
+                             + (" (tempête : aucun changement permis)" if storm else ""))
+        except OSError as e:
+            self.logger.warning(f"[ÉVOLUTION] épreuves du jour impossibles : {e}")
 
     def _note_stop(self) -> None:
         """Arrêt propre (bouton ARRÊTER, Ctrl+C) : noté, pour que la reprise

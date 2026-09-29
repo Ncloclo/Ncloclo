@@ -12,6 +12,8 @@
 *.alive
 *.superviseur.json
 *.selection.json
+*.evolution.json
+*.evolution.json.tmp
 # Python
 __pycache__/
 .pytest_cache/
@@ -21,6 +23,7 @@ data/
 runtime/
 diagnostic.txt
 data_binance/
+data_evolution/
 # Animation générée (python trendguard_bot.py animation)
 /rejeu_trendguard.html
 # Environnements virtuels

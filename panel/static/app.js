@@ -687,6 +687,7 @@ async function loadDetail() {
       D.series[0].setData(uniq(reg.points.map((p) => ({ time: p.t, value: p.close }))));
       D.series[1].setData(uniq(reg.points.map((p) => ({ time: p.t, value: p.sma }))));
       D.series[0].setMarkers(tradeMarkers(reg.markers, c));
+      legend($("#detail-legend"), [[c.ink, "BTC (clôture)"], [c.sma, `Moyenne ${reg.sma} jours : au-dessus, achats autorisés`]]);
       const l = reg.points[reg.points.length - 1];
       D.lastText = l ? `BTC ${fpx(l.close)}` : "";
       stats([["BTC", fpx(l && l.close)], [`Moyenne ${reg.sma} j`, fpx(l && l.sma)], ["Écart", fpct(l ? (l.close / l.sma - 1) * 100 : null), reg.bull ? "up" : "down"], ["Régime", reg.bull ? "Haussier : achats autorisés" : "Baissier : aucun achat", reg.bull ? "up" : "down"]]);
@@ -990,6 +991,13 @@ async function renderSecurity() {
     return li;
   }));
 }
+// Évolution encadrée : niveau, réglages changés par le bot, essai en cours.
+function evolutionText(ev) {
+  if (!ev.enabled) return "désactivée : réglages fixes";
+  const changes = ev.changes.length ? ev.changes.map((c) => `${c.param} ${c.from} → ${c.to}`).join(", ") : "réglages d'origine";
+  const trial = ev.probation ? ` · en essai depuis le ${fdate(ev.probation.since)}` : "";
+  return `niveau ${ev.level}/${ev.levels} · ${ev.name} · ${changes}${trial}${ev.last_text ? " — " + ev.last_text : ""}`;
+}
 async function renderSettings() {
   if (!S) await refreshStatus();
   renderSecurity().catch(() => { /* réessai au prochain rafraîchissement */ });
@@ -1006,6 +1014,7 @@ async function renderSettings() {
     ["Dernier arrêt imprévu", le && le.code !== 0 ? `${fdate(le.at)} · ${le.stalled ? "bot bloqué" : "code " + le.code}` : "aucun"],
     ["Temps de marche (24 h · 7 j)", ut.tracked ? `${pct(ut.day_pct)} · ${pct(ut.week_pct)} (hors arrêts demandés)` : "mesuré dès le prochain cycle du bot"],
     ["Dernier arrêt non demandé (> 1 h)", gap ? `${ftime(gap.start)} → ${gap.ongoing ? "en cours" : ftime(gap.end)} (${fdur(gap.end - gap.start)}) · ${gap.text}` : "aucun"],
+    ["Évolution encadrée", evolutionText(S.evolution || {})],
     ["Mise en veille du PC", au.keep_awake ? "bloquée tant que le bot tourne" : "autorisée"],
     ["Bouton ARRÊTER", "aucune relance, même au démarrage du PC"],
   ];

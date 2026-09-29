@@ -95,9 +95,14 @@ diagnose`, et automatiquement tous les 7 jours pendant qu'il tourne,
 | Système (horloge, latence, bot actif, disque, arrêt d'urgence) | ordres refusés ou retardés |
 | Portefeuille (risque engagé, corrélation, krach de −20 % / −35 %) | concentration excessive |
 
-La décision reste humaine : réduire le risque, activer le profil prudent ou
-arrêter. Un bot qui change seul ses paramètres après une mauvaise série fait,
-d'après le tableau ci-dessus, en moyenne moins bien.
+Pour le risque, la décision reste humaine : le réduire, activer le profil
+prudent ou arrêter. Un bot qui change seul ses paramètres après une mauvaise
+série fait, d'après le tableau ci-dessus, en moyenne moins bien.
+
+Depuis le 29 septembre 2026, le bot peut régler lui-même sa cassure, ses stops
+et sa lecture du marché, jamais son risque, à condition de réussir des épreuves
+strictes (deux époques, frais doublés, crises passées, plateau, hasard) puis 30
+jours d'essai : voir [`EVOLUTION.md`](EVOLUTION.md).
 
 Suite de l'étude : [`STRATEGIES.md`](STRATEGIES.md) teste l'autre forme
 d'« apprentissage », changer de stratégie selon les résultats récents (tournoi
