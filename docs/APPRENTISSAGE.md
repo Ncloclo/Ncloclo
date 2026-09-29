@@ -13,7 +13,7 @@ Depuis le 29 septembre 2026, le bot suit une charte en deux parties :
 
 | Domaine | Ce que le bot apprend | Ce qu'il en fait aussitôt |
 | --- | --- | --- |
-| Carnets d'ordres | l'écart achat/vente et la profondeur normaux de chaque crypto, relevés toutes les heures et à chaque achat | la ruse diffère un achat dès qu'un carnet s'écarte de SA normale : écart de plus de 3 fois la normale (au moins 0,2 %), ou carnet vidé à moins du quart de sa profondeur habituelle |
+| Carnets d'ordres | l'écart achat/vente et la profondeur normaux de chaque crypto, relevés toutes les 10 minutes le temps de les apprendre (quelques heures), puis toutes les heures, et à chaque achat | la ruse diffère un achat dès qu'un carnet s'écarte de SA normale : écart de plus de 3 fois la normale (au moins 0,2 %), ou carnet vidé à moins du quart de sa profondeur habituelle |
 | Prévisions | chaque probabilité annoncée (vente, achat, marché baissier), relevée 12, 6, 3 et 1 heure avant la clôture, comparée à ce qui s'est passé | les probabilités suivantes sont corrigées par cette expérience : panneau, alertes d'anticipation, Rachelle |
 | Ruse | le bilan des achats différés : achetés plus tard et à quel prix, ou abandonnés | affiché dans Réglages ▸ Autonomie |
 | Veille | les annonces officielles de Binance (retraits de cryptos), relues toutes les heures au lieu d'une fois par jour | achats bloqués dans l'heure ; alerte si la crypto est détenue |

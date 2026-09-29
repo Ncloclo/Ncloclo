@@ -269,7 +269,9 @@ hors arrêts demandés.
 [`docs/APPRENTISSAGE.md`](docs/APPRENTISSAGE.md)). Apprendre, s'adapter, ruser
 et s'informer sont libres, rapides et précis : le bot apprend l'écart
 achat/vente
-et la profondeur normaux du carnet de chaque crypto (relevés toutes les heures)
+et la profondeur normaux du carnet de chaque crypto (relevés toutes les 10 min
+le
+temps de les apprendre, puis toutes les heures)
 et diffère un achat dès qu'un carnet s'écarte de sa normale ; il compare chaque
 probabilité annoncée à la clôture et corrige les suivantes ; il relit les
 annonces officielles de Binance toutes les heures. Un seuil appris n'est jamais

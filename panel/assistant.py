@@ -518,7 +518,8 @@ def a_learning(ctx: Dict[str, Any]) -> str:
         "**Apprentissage libre** : le bot apprend en continu, sans attendre ni demander, "
         "et s'en sert aussitôt.",
         "- Carnets d'ordres : il apprend l'écart achat/vente et la profondeur normaux de chaque "
-        "crypto (relevés toutes les heures) ; sa ruse diffère un achat dès qu'un carnet "
+        "crypto (relevés toutes les 10 minutes le temps de les apprendre, puis toutes les "
+        "heures) ; sa ruse diffère un achat dès qu'un carnet "
         "s'écarte de SA normale, jamais avec un seuil plus large que 0,5 %.",
         "- Prévisions : chaque probabilité annoncée est comparée à la clôture ; les suivantes "
         "sont corrigées par cette expérience.",

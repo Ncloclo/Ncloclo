@@ -5,6 +5,7 @@ au bot et au panneau."""
 
 import logging
 import os
+import time
 from datetime import datetime, timezone
 
 import pytest
@@ -126,13 +127,18 @@ def test_bot_samples_books_hourly_and_defers_on_its_learned_normal(tmp_path, log
         bot._last_book_sample = 0.0
         bot._sample_books()
     assert bot.state["learning"]["books"]["eth"]["spread"] == pytest.approx(0.0002)
+    bot._last_book_sample = time.time() - 700
     bot._sample_books()
-    assert ex.calls == lg.BOOK_MIN_N                                 # une fois par heure
+    assert ex.calls == lg.BOOK_MIN_N                                 # appris : une fois par heure
     ex.books["ETH/USDT"] = _book(99.8, 100.2, 1_000)                 # écart 0,4 % : sous 0,5 %
     why = bot._book_anomaly(slot, 1_000.0)
     assert "écart achat/vente anormal" in why and "normale de cette crypto" in why
     fresh = tg.TrendGuardBot(g, logger, None, v29.Store(":memory:", logger), lambda *a, **k: True)
     assert fresh._book_anomaly(slot, 1_000.0) is None               # sans apprentissage : seuil fixe
+    calls = ex.calls
+    bot.state["learning"]["books"].pop("eth")
+    bot._sample_books()
+    assert ex.calls == calls + 1                                     # à apprendre : toutes les 10 min
 
 
 def test_bot_learns_from_each_close(tmp_path, logger):

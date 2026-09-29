@@ -663,6 +663,7 @@ class TrendGuardBot:
     # ---------- Apprentissage libre (learning.py) ----------
 
     BOOK_SAMPLE_EVERY_SEC = 3600
+    BOOK_SAMPLE_FAST_SEC = 600         # tant qu'une normale reste à apprendre
     BOOK_SAMPLE_MAX_SEC = 20
 
     def _learning(self) -> Dict[str, Any]:
@@ -670,14 +671,18 @@ class TrendGuardBot:
         return self.state["learning"]
 
     def _sample_books(self) -> None:
-        """Toutes les heures, en marche continue : écart achat/vente et
-        profondeur de chaque carnet, pour apprendre la normale de chaque
-        crypto. Au plus 20 s ; une erreur réseau arrête le relevé (nouvel
-        essai dans une heure)."""
-        if not self.track_uptime or time.time() - self._last_book_sample < self.BOOK_SAMPLE_EVERY_SEC:
+        """En marche continue : écart achat/vente et profondeur de chaque
+        carnet, pour apprendre la normale de chaque crypto. Toutes les 10 min
+        tant qu'une normale reste à apprendre (quelques heures), puis toutes
+        les heures. Au plus 20 s ; une erreur réseau arrête le relevé."""
+        L = self._learning()
+        learned = all((L["books"].get(s.base.lower()) or {}).get("spread") is not None
+                      for s in self.slots.values())
+        every = self.BOOK_SAMPLE_EVERY_SEC if learned else self.BOOK_SAMPLE_FAST_SEC
+        if not self.track_uptime or time.time() - self._last_book_sample < every:
             return
         self._last_book_sample = time.time()
-        L, t0 = self._learning(), time.time()
+        t0 = time.time()
         for s in list(self.slots.values()):
             fetch = getattr(s.ex.exchange, "fetch_order_book", None)
             if fetch is None or time.time() - t0 > self.BOOK_SAMPLE_MAX_SEC:

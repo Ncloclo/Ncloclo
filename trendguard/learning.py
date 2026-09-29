@@ -4,7 +4,8 @@ continu, sans attendre ni demander (docs/APPRENTISSAGE.md).
 Libre, rapide et précis : chaque relevé est appris et appliqué aussitôt.
 
 - Carnets d'ordres : l'écart achat/vente et la profondeur NORMAUX de chaque
-  crypto, relevés toutes les heures et à chaque achat. La ruse diffère un
+  crypto, relevés toutes les 10 minutes le temps de les apprendre (quelques
+  heures), puis toutes les heures, et à chaque achat. La ruse diffère un
   achat dès que le carnet s'écarte de SA normale, pas seulement au-delà du
   seuil fixe de 0,5 %.
 - Prévisions : chaque probabilité annoncée (vente, achat, marché), relevée
