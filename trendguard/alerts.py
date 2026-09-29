@@ -328,6 +328,28 @@ def _ask_smtp_host(read: Callable[[str], str], say: Callable[..., None]) -> str:
     return "smtp.gmail.com"
 
 
+def _is_app_password(pw: str) -> bool:
+    return len(pw) == 16 and pw.isalpha() and pw.isascii()
+
+
+def _ask_smtp_password(host: str, secret: Callable[[str], str], say: Callable[..., None]) -> str:
+    """Gmail n'accepte qu'un mot de passe d'application : 16 lettres,
+    affichées par groupes de 4 (espaces retirés). Un mot de passe habituel
+    est signalé et redemandé deux fois."""
+    prompt = "Mot de passe SMTP (Gmail : mot de passe d'application) : "
+    pw = secret(prompt).strip()
+    if host != "smtp.gmail.com":
+        return pw
+    for _ in range(2):
+        if _is_app_password(pw.replace(" ", "")):
+            break
+        say("   Ce n'est pas un mot de passe d'application Gmail (16 lettres, par exemple "
+            "« abcd efgh ijkl mnop ») : Gmail le refuserait. Créez-en un sur "
+            "myaccount.google.com/apppasswords, puis collez-le ici.")
+        pw = secret(prompt).strip()
+    return pw.replace(" ", "") if _is_app_password(pw.replace(" ", "")) else pw
+
+
 def explain_send_error(e: Exception, host: str = "") -> str:
     """Cause d'un envoi raté, en clair (sans aucun secret)."""
     if isinstance(e, smtplib.SMTPAuthenticationError):
@@ -338,7 +360,9 @@ def explain_send_error(e: Exception, host: str = "") -> str:
         return (f"serveur « {host} » introuvable : vérifiez son nom (Gmail : smtp.gmail.com) "
                 "ou la connexion Internet")
     if isinstance(e, smtplib.SMTPServerDisconnected):
-        return "le serveur a coupé la connexion : vérifiez le port (587 ou 465) et le mot de passe"
+        return ("le serveur a coupé la connexion : vérifiez le port (587 ou 465) et le mot de passe"
+                + (" (Gmail : « mot de passe d'application », myaccount.google.com/apppasswords)"
+                   if "gmail" in host.lower() else ""))
     return f"{type(e).__name__}: {e}"
 
 
@@ -365,8 +389,7 @@ def cmd_configure(env_path: Optional[str] = None, read: Callable[[str], str] = i
                 say("   Gmail refuse votre mot de passe habituel : créez un « mot de passe "
                     "d'application » (16 lettres) sur myaccount.google.com/apppasswords "
                     "(la validation en deux étapes doit être activée).")
-            values["SMTP_PASSWORD"] = secret("Mot de passe SMTP (Gmail : mot de passe "
-                                             "d'application) : ").strip()
+            values["SMTP_PASSWORD"] = _ask_smtp_password(values["SMTP_HOST"], secret, say)
         say("── Alertes WhatsApp (laisser vide pour passer)")
         phone = read("Numéro WhatsApp au format international (ex. +2250700000000) : ").strip()
         if phone:

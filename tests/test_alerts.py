@@ -131,7 +131,7 @@ def test_configure_writes_env_without_echoing_secrets(tmp_path, monkeypatch):
     env = tmp_path / ".env"
     env.write_text("RUN_MODE=paper\n", encoding="utf-8")
     answers = iter(["moi@example.com", "", "", "", "+2250700000000", "1", "2"])
-    secrets = iter(["mdp-application", "cle-callmebot"])
+    secrets = iter(["mdpapplicationxy", "cle-callmebot"])
     out = io.StringIO()
     for k in ("ALERT_EMAIL_TO", "SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "WHATSAPP_PHONE",
               "WHATSAPP_PROVIDER", "CALLMEBOT_APIKEY", "ALERT_LEVEL"):
@@ -139,10 +139,10 @@ def test_configure_writes_env_without_echoing_secrets(tmp_path, monkeypatch):
     assert alerts.cmd_configure(str(env), read=lambda _p: next(answers), secret=lambda _p: next(secrets), out=out) == 0
     text = env.read_text(encoding="utf-8")
     for line in ("ALERT_EMAIL_TO=moi@example.com", "SMTP_HOST=smtp.gmail.com", "SMTP_PORT=587",
-                 "SMTP_PASSWORD=mdp-application", "WHATSAPP_PROVIDER=callmebot",
+                 "SMTP_PASSWORD=mdpapplicationxy", "WHATSAPP_PROVIDER=callmebot",
                  "CALLMEBOT_APIKEY=cle-callmebot", "ALERT_LEVEL=all", "RUN_MODE=paper"):
         assert line in text, line
-    assert "mdp-application" not in out.getvalue() and "cle-callmebot" not in out.getvalue()
+    assert "mdpapplicationxy" not in out.getvalue() and "cle-callmebot" not in out.getvalue()
 
 
 def test_configure_refuses_a_receiving_server_and_explains_gmail(tmp_path, monkeypatch):
@@ -151,14 +151,16 @@ def test_configure_refuses_a_receiving_server_and_explains_gmail(tmp_path, monke
     env = tmp_path / ".env"
     env.write_text("RUN_MODE=paper\n", encoding="utf-8")
     answers = iter(["moi@gmail.com", "pop3", "", "", "", "", "1"])
-    secrets = iter(["mdp-application"])
+    secrets = iter(["MonMotDePasse2026", "abcd efgh ijkl mnop"])   # habituel refusé, puis le bon
     out = io.StringIO()
     for k in ("ALERT_EMAIL_TO", "SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "ALERT_LEVEL"):
         monkeypatch.delenv(k, raising=False)
     assert alerts.cmd_configure(str(env), read=lambda _p: next(answers), secret=lambda _p: next(secrets), out=out) == 0
-    assert "SMTP_HOST=smtp.gmail.com" in env.read_text(encoding="utf-8")
+    saved = env.read_text(encoding="utf-8")
+    assert "SMTP_HOST=smtp.gmail.com" in saved and "SMTP_PASSWORD=abcdefghijklmnop" in saved
     text = out.getvalue()
     assert "« pop3 » n'est pas un serveur d'envoi" in text and "apppasswords" in text
+    assert "Ce n'est pas un mot de passe d'application Gmail" in text
 
 
 def test_send_errors_are_explained_in_plain_french():
@@ -169,3 +171,5 @@ def test_send_errors_are_explained_in_plain_french():
     dns = alerts.explain_send_error(socket.gaierror(11001, "getaddrinfo failed"), "pop3")
     assert "« pop3 » introuvable" in dns and "smtp.gmail.com" in dns
     assert "port" in alerts.explain_send_error(smtplib.SMTPServerDisconnected("closed"))
+    assert "apppasswords" in alerts.explain_send_error(smtplib.SMTPServerDisconnected("closed"),
+                                                       "smtp.gmail.com")
