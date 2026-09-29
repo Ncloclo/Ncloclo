@@ -53,6 +53,11 @@ manuelle, l'arrêt ou le redémarrage du PC. S'y ajoutent de
 courtes coupures d'Internet (quelques minutes, plusieurs fois par jour), que le
 bot rattrape seul.
 
+Corrigé le 29/09 (plan, ligne 9) : le bot note désormais chaque arrêt de plus
+d'une heure et sa cause, envoie une alerte critique quand il n'a pas été
+demandé, et le panneau affiche le temps de marche sur 24 h et 7 jours
+(Réglages ▸ Autonomie, centre de sécurité).
+
 ### Robustesse de la stratégie ([`ROBUSTESSE.md`](ROBUSTESSE.md))
 
 - **Coûts** : rentable même avec des frais et un glissement triplés (+31,1 %
@@ -73,7 +78,8 @@ L'e-mail est configuré mais aucune alerte n'est encore arrivée : le serveur
 indiqué était « pop3 » (corrigé en `smtp.gmail.com`) et Gmail refuse le mot de
 passe habituel (il faut un mot de passe d'application). Défaut trouvé : le
 centre de sécurité affiche « Alertes » en vert dès qu'un canal est configuré,
-même si ses envois échouent.
+même si ses envois échouent. Corrigé le 29/09 (plan, ligne 10) : « Alertes »
+passe à corriger quand le dernier envoi d'un canal a échoué, avec la cause.
 
 ### Résultats du paper (3 jours)
 
@@ -209,8 +215,8 @@ Points faibles :
 | 6 | Découper les fonctions les plus complexes et `app.js` | Code | **fait** : les six plus lourdes découpées, `app.js` en quatre modules ; un test d'horodatage fragile rendu fiable |
 | 7 | Décider du sort de l'ancien bot V29 (le supprimer allégerait le dépôt) | Code | **décidé : gardé à part.** Son moteur d'exécution est aussi celui de TrendGuard ; le supprimer obligerait à retoucher le code des ordres réels pour peu de gain |
 | 8 | Avant le réel : `verify` complet, quelques jours de testnet, au moins 100 USDT | Vous | le moment venu |
-| 9 | Mesurer la disponibilité du bot dans le panneau et prévenir quand il a été arrêté plus d'une heure | Code | à faire |
-| 10 | Centre de sécurité : « Alertes » à corriger si le dernier envoi a échoué | Code | à faire |
+| 9 | Mesurer la disponibilité du bot dans le panneau et prévenir quand il a été arrêté plus d'une heure | Code | fait (29/09) |
+| 10 | Centre de sécurité : « Alertes » à corriger si le dernier envoi a échoué | Code | fait (29/09) |
 
 Fait depuis l'audit du matin : chemins de secours des ordres réels testés (et
 un défaut corrigé), blocage des mots de passe ratés, écriture sûre du choix des

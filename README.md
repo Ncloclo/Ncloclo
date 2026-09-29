@@ -201,8 +201,10 @@ panneau de contrôle ») :
   téléphone) ;
 - **Centre de sécurité** (Réglages) : accès au panneau, essais de mot de passe
   ratés, mode, présence des clés (jamais leur valeur), droit de retrait, `.env`
-  privé, arrêt d'urgence, relance automatique, alertes. Après 5 mots de passe
-  ratés en 10 min, l'adresse est bloquée 5 min.
+  privé, arrêt d'urgence, relance automatique, disponibilité du bot sur 7
+  jours (à corriger sous 95 %), alertes (à corriger si le dernier envoi d'un
+  canal a échoué). Après 5 mots de passe ratés en 10 min, l'adresse est
+  bloquée 5 min.
 
 Rachelle répond aussi à « Que va faire le bot ce soir ? » (anticipation et
 conseils) et « Suis-je en sécurité ? » (centre de sécurité et bonnes
@@ -254,6 +256,14 @@ le bot tourne, l'ordinateur ne se met pas en veille tout seul
 capot reste possible). ARRÊTER (ou `python trendguard_bot.py stop`) est
 respecté : aucune relance, même au prochain démarrage de l'ordinateur, jusqu'au
 prochain AUTO.
+
+**Disponibilité** (`uptime.py`). À chaque reprise après plus d'une heure sans
+cycle, le bot note l'arrêt et sa cause probable (PC éteint ou en veille, bot
+figé, Internet coupé, arrêt demandé) ; au premier démarrage, les arrêts passés
+sont reconstitués d'après son journal. Un arrêt non demandé déclenche une
+alerte critique (e-mail compris) avec la durée, l'heure et le conseil pour
+l'éviter. Réglages ▸ Autonomie affiche le temps de marche sur 24 h et 7 jours,
+hors arrêts demandés.
 
 **Rusé à l'achat, discipliné à la vente.** Avant chaque achat, le bot lit le
 carnet d'ordres de Binance. Écart achat/vente supérieur à 0,5 %

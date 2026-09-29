@@ -199,6 +199,9 @@ class AlertHub:
         self.logger = logger
         self.dedup_sec = dedup_sec
         self._sent: Dict[str, float] = {}
+        # Dernier envoi de chaque canal : {"at", "ok", "error"} (centre de
+        # sécurité du panneau : un canal configuré mais en échec est signalé).
+        self.last: Dict[str, Dict[str, Any]] = {}
         self._lock = threading.Lock()
         self._q: "queue.Queue" = queue.Queue(maxsize=200)
         self._thread: Optional[threading.Thread] = None
@@ -250,7 +253,12 @@ class AlertHub:
                                         ch.secrets)[:300]
                 results[ch.name] = err
                 self._log("warning", f"[ALERTES] {ch.label} : envoi impossible ({err})")
+            self._note(ch.name, results[ch.name])
         return results
+
+    def _note(self, name: str, err: Optional[str]) -> None:
+        with self._lock:
+            self.last[name] = {"at": time.time(), "ok": err is None, "error": err}
 
     def _log(self, level: str, text: str) -> None:
         if self.logger is not None:
@@ -269,15 +277,19 @@ class AlertHub:
         if name == "telegram":
             if not getattr(self.telegram, "enabled", False):
                 return False, "Telegram n'est pas configuré (TELEGRAM_TOKEN, TELEGRAM_CHAT_ID)"
-            return bool(self.telegram(text, dedup_key=f"test-{time.time()}", sync=True)), ""
+            ok = bool(self.telegram(text, dedup_key=f"test-{time.time()}", sync=True))
+            self._note(name, None if ok else "envoi Telegram refusé : vérifiez le jeton et le chat")
+            return ok, ""
         for ch in self.channels:
             if ch.name == name:
                 try:
                     ch.send("TrendGuard : test des alertes", text)
-                    return True, ""
+                    err = None
                 except Exception as e:
-                    return False, v29.scrub_secrets(explain_send_error(e, getattr(ch, "host", "")),
-                                                    ch.secrets)[:300]
+                    err = v29.scrub_secrets(explain_send_error(e, getattr(ch, "host", "")),
+                                            ch.secrets)[:300]
+                self._note(name, err)
+                return err is None, err or ""
         return False, f"{name} n'est pas configuré (python trendguard_bot.py alerts configurer)"
 
     def close(self, timeout: float = 5.0) -> None:

@@ -34,6 +34,9 @@ export const fdate = (iso) => {
   const d = iso ? new Date(iso) : null;
   return d && !isNaN(d) ? dShort.format(d) : "–";
 };
+const dTime = new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+// Instant en secondes depuis 1970 (horodatage Python) → « 29/09 07:17 ».
+export const ftime = (sec) => (sec == null || !isFinite(sec) ? "–" : dTime.format(new Date(sec * 1000)));
 export const fdur = (s) => {
   if (s == null) return "–";
   s = Math.max(0, Math.round(s));

@@ -31,7 +31,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
-from trendguard import anticipation
+from trendguard import anticipation, uptime
 from trendguard import market_watch as mw
 
 from .assistant import AIHelper, Assistant
@@ -182,7 +182,8 @@ class PanelApp:
             "universe": [b.lower() for b in self.g.universe],
             "vetoes": [dict(v, asset=a) for a, v in sorted((st.get("vetoes") or {}).items())],
             "watch": st.get("last_watch"),
-            "alerts": self.hub.status() if self.hub is not None else [],
+            "alerts": self._alert_channels(st),
+            "uptime": uptime.summary(st.get("uptime"), last_cycle, st.get("stopped_at")),
             "autonomy": self.control.autonomy(),
             "lan_urls": self.lan_urls, "password": bool(self.password),
             "server_time": now.isoformat(),
@@ -347,8 +348,66 @@ class PanelApp:
             self._check("Fichier des secrets (.env)", True if env_ok else None, "privé, exclu de GitHub"),
         ]
 
+    @staticmethod
+    def _when(ts: Any) -> str:
+        try:
+            return time.strftime("%d/%m à %H:%M", time.localtime(float(ts)))
+        except (TypeError, ValueError, OverflowError, OSError):
+            return "?"
+
+    def _alert_channels(self, st: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Canaux d'alerte et résultat de leur dernier envoi : envoi du bot
+        (son état) ou test depuis ce panneau, le plus récent des deux."""
+        if self.hub is None:
+            return []
+        seen: Dict[str, Dict[str, Any]] = {}
+        for src in (st.get("alerts_last"), getattr(self.hub, "last", None)):
+            for name, r in (dict(src) if isinstance(src, dict) else {}).items():
+                if isinstance(r, dict) and float(r.get("at") or 0) >= float((seen.get(name) or {}).get("at") or 0):
+                    seen[name] = r
+        return [dict(c, last=seen.get(c["name"])) for c in self.hub.status()]
+
+    def _alerts_check(self, st: Dict[str, Any]) -> Dict[str, Any]:
+        """« Alertes » : à corriger si le dernier envoi d'un canal a échoué,
+        vert si un envoi a réussi, information tant qu'aucun n'est connu."""
+        chans = [c for c in self._alert_channels(st) if c.get("enabled")]
+        if not chans:
+            return self._check("Alertes", True if self.demo else False,
+                               "démonstration" if self.demo
+                               else "aucune : python trendguard_bot.py alerts configurer")
+        parts, failed, sent = [], False, False
+        for c in chans:
+            r = c.get("last")
+            if not r:
+                parts.append(f"{c['label']} : aucun envoi connu, cliquez sur Tester (Réglages ▸ Alertes)")
+            elif r.get("ok"):
+                sent = True
+                parts.append(f"{c['label']} : dernier envoi réussi le {self._when(r.get('at'))}")
+            else:
+                failed = True
+                parts.append(f"{c['label']} : dernier envoi RATÉ le {self._when(r.get('at'))} "
+                             f"({r.get('error') or 'cause inconnue'})")
+        return self._check("Alertes", False if failed else True if sent else None, " ; ".join(parts))
+
+    def _uptime_check(self, st: Dict[str, Any]) -> Dict[str, Any]:
+        """Temps de marche du bot sur 7 jours, hors arrêts demandés."""
+        u = uptime.summary(st.get("uptime"), st.get("last_cycle_ts"), st.get("stopped_at"))
+        pct = u["week_pct"]
+        if pct is None:
+            return self._check("Disponibilité du bot (7 j)", None, "mesurée à partir du prochain cycle du bot")
+        detail = f"{pct:.0f} % du temps (hors arrêts demandés)"
+        missed = [e for e in u["events"] if not e["requested"]]
+        if missed:
+            e = missed[0]
+            detail += (f" ; dernier arrêt : {uptime.fdur(e['end'] - e['start'])} le "
+                       f"{self._when(e['start'])}, {e['text']}")
+        if pct < uptime.GOOD_PCT:
+            detail += " ; PC branché et mise en veille sur « Jamais » quand il est branché"
+        return self._check("Disponibilité du bot (7 j)", pct >= uptime.GOOD_PCT, detail)
+
     def _runtime_checks(self, st: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Arrêt d'urgence, relance automatique, alertes, garde-fou."""
+        """Arrêt d'urgence, relance automatique, disponibilité, alertes,
+        garde-fou."""
         if st.get("halted"):
             halt = f"déclenché : {st.get('halt_reason')}"
         else:
@@ -358,16 +417,12 @@ class PanelApp:
             sup = self.control.autonomy().get("supervisor") or {}
         except Exception:
             sup = {}
-        chans = [c for c in (self.hub.status() if self.hub is not None else []) if c.get("enabled")]
-        if chans:
-            alerts = ", ".join(c["label"] for c in chans)
-        else:
-            alerts = "démonstration" if self.demo else "aucune : python trendguard_bot.py alerts configurer"
         return [
             self._check("Arrêt d'urgence", not bool(st.get("halted")), halt),
             self._check("Relance automatique", bool(sup.get("running")),
                         "active" if sup.get("running") else "inactive : cliquez sur AUTO"),
-            self._check("Alertes", bool(chans) or self.demo, alerts),
+            self._uptime_check(st),
+            self._alerts_check(st),
             self._check("Garde-fou de Rachelle", True, "secrets masqués, demandes sensibles refusées"),
         ]
 

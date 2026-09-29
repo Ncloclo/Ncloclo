@@ -18,7 +18,7 @@ import pandas as pd
 
 import v29
 
-from . import anticipation
+from . import anticipation, uptime
 from . import diagnostics as dg
 from . import market_watch as mw
 from . import trend_strategy as ts
@@ -74,6 +74,10 @@ class TrendGuardBot:
         self._last_alive = 0.0
         self._last_selection_try = 0.0
         self._last_anticipation = 0.0
+        # Disponibilité (uptime.py) : relevée seulement en marche continue
+        # (run_forever), pas pour un cycle isolé ni un rejeu.
+        self.track_uptime = False
+        self._tries_since: Optional[float] = None
         # Notes d'exécution du jour (achat différé, annulé) pour le raisonnement.
         self._entry_notes: Dict[str, Tuple[str, str]] = {}
         self._last_close: Optional[pd.DataFrame] = None   # apprentissage de la veille
@@ -311,6 +315,8 @@ class TrendGuardBot:
     # ---------- Cycle ----------
 
     def run_cycle(self, now: Optional[datetime] = None) -> None:
+        if self._tries_since is None:
+            self._tries_since = time.time()
         self._sync_clock()
         now = now or v29._utcnow()          # heure de Binance
         self._now = now
@@ -332,14 +338,72 @@ class TrendGuardBot:
                 self._retry_pending(now)
             except Exception as e:
                 self.logger.warning(f"[RUSE] nouvel essai d'achat impossible : {e}")
+        try:
+            if self.track_uptime:
+                self._note_downtime()
+            self._keep_alert_status()
+        except Exception as e:           # un simple relevé : jamais bloquant
+            self.logger.warning(f"[REPRISE] disponibilité non relevée : {e}")
         # Horloge réelle (et non `now`, simulé en rejeu) : sert au contrôle
         # de santé du conteneur.
         self.state["last_cycle_ts"] = time.time()
+        self._tries_since = None
         self._save_state()
         self._heartbeat(now)
         self._anticipate(now)
         self._auto_diagnose(now, day)
         self._daily_watch(now, day)
+
+    # ---------- Disponibilité (uptime.py) et alertes ----------
+
+    def _note_downtime(self) -> None:
+        """Fin d'un cycle réussi : un trou de plus d'une heure depuis le
+        cycle réussi précédent est un arrêt (PC éteint ou en veille, bot
+        figé, Internet coupé, arrêt demandé). Il est gardé pour le panneau
+        et signalé s'il n'a pas été demandé. Première fois : les arrêts
+        passés sont reconstitués d'après le journal."""
+        now = time.time()
+        last = self.state.get("last_cycle_ts")
+        up = self.state.get("uptime")
+        if not isinstance(up, dict):
+            up = uptime.from_log(self.g.log_file, last) if self.g.log_file else {}
+            up["since"] = up.get("since") or last or now
+            up.setdefault("events", [])
+            self.state["uptime"] = up
+        if not last or now - float(last) <= uptime.GAP_SEC:
+            return
+        ev = {"start": float(last), "end": now,
+              "cause": uptime.cause_of_gap(float(last), now, self._started_at,
+                                           self._tries_since, self.state.get("stopped_at"))}
+        uptime.add(up, ev, now)
+        text = uptime.describe(ev)
+        if ev["cause"] == uptime.USER:
+            self.logger.info(f"[REPRISE] le bot a été {text}")
+            return
+        late = uptime.crossed_close(ev, self.g.decision_delay_sec)
+        self.logger.warning(f"[REPRISE] le bot a été {text}"
+                            + (" ; décision de clôture prise en retard" if late else ""))
+        self.notifier(
+            f"⚠️ TrendGuard a été {text}. Il a repris et a rattrapé les contrôles manqués"
+            + (" ; la décision de la clôture quotidienne a été prise en retard" if late else "")
+            + f". {uptime.ADVICE.get(ev['cause'], '')}".rstrip(),
+            dedup_key=f"tg-downtime-{int(ev['start'])}", critical=True)
+
+    def _note_stop(self) -> None:
+        """Arrêt propre (bouton ARRÊTER, Ctrl+C) : noté, pour que la reprise
+        ne le compte pas comme une panne."""
+        try:
+            self.state["stopped_at"] = time.time()
+            self._save_state()
+        except Exception as e:
+            self.logger.warning(f"[ARRÊT] état non enregistré : {e}")
+
+    def _keep_alert_status(self) -> None:
+        """Résultat du dernier envoi de chaque canal d'alerte (e-mail,
+        WhatsApp), gardé pour le centre de sécurité du panneau."""
+        last = getattr(self.notifier, "last", None)
+        if isinstance(last, dict) and last:
+            self.state["alerts_last"] = {k: dict(v) for k, v in list(last.items())}
 
     # ---------- Veille (market_watch.py) ----------
 
@@ -1324,6 +1388,7 @@ class TrendGuardBot:
             except OSError:
                 hang = None
         backoff = 5
+        self.track_uptime = True
         try:
             while _running and not self.stop_requested():
                 self._touch_alive(force=True)
@@ -1347,6 +1412,7 @@ class TrendGuardBot:
             if hang is not None:
                 faulthandler.cancel_dump_traceback_later()
                 hang.close()
+            self._note_stop()
 
 
 _running = True

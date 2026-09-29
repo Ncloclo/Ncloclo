@@ -96,12 +96,21 @@ class DemoData:
         now = datetime.now(timezone.utc)
         self._entry = {a: (now - timedelta(days=2 + i)).isoformat() for i, a in enumerate(HELD)}
 
+    @staticmethod
+    def _uptime() -> Dict[str, Any]:
+        """Disponibilité d'exemple : une veille du PC ce matin, un arrêt demandé."""
+        now = time.time()
+        return {"since": now - 10 * 86400,
+                "events": [{"start": now - 3 * 86400, "end": now - 3 * 86400 + 7200, "cause": "user"},
+                           {"start": now - 9 * 3600, "end": now - 7.5 * 3600, "cause": "asleep"}]}
+
     def state(self) -> Dict[str, Any]:
         eq = 10_000 + 180 * math.sin(time.time() / 600) + 420
         return {"last_decision_day": (datetime.now(timezone.utc) - timedelta(days=1)).date().isoformat(),
                 "last_equity": round(eq, 2), "start_equity": 10_000.0, "peak_equity": 10_650.0,
                 "halted": False, "last_regime_bull": self.market.regime()[0]["bull"], "risk_mult": 1.0,
                 "last_cycle_ts": time.time() - 20,
+                "uptime": self._uptime(),
                 "vetoes": {"xtz": {"until": "2099-01-01", "reason": "Binance retire XTZ (exemple)",
                                    "url": "https://www.binance.com/", "date": "2026-09-20"}},
                 "last_watch": {"day": "2026-09-27", "sentiment": 0.18, "providers": 3,

@@ -2,7 +2,7 @@
 // (panel/server.py). Tout texte venant des données passe par textContent.
 // Modules : js/core.js (outils communs), js/charts.js (graphiques),
 // js/assistant.js (Rachelle).
-import { $, $$, api, CANDIDATE, countUp, cssVar, el, fage, fdate, fdur, fpct, fpx, fR, fusd, fvol, LWC, nf, onUnauthorized, prefs, REASON, reduceMotion, ripple, sign, STATUS, toast, up, withLoader } from "./js/core.js";
+import { $, $$, api, CANDIDATE, countUp, cssVar, el, fage, fdate, fdur, fpct, fpx, fR, ftime, fusd, fvol, LWC, nf, onUnauthorized, prefs, REASON, reduceMotion, ripple, sign, STATUS, toast, up, withLoader } from "./js/core.js";
 import { addPositionLines, buyMarkersOn, candleData, chartOptions, charts, COLORS, dropChart, gridInterval, legend, makeChart, tradeMarkers, uniq } from "./js/charts.js";
 import { closeChat } from "./js/assistant.js";
 
@@ -192,6 +192,9 @@ async function renderDash() {
   if (S.state === "restarting") alerts.push(["warn", "Le bot s'est arrêté sur une erreur : relance automatique en cours."]);
   else if (S.state === "running" && !sup.running && !S.demo) alerts.push(["warn", "Relance automatique inactive (bot lancé hors du panneau) : ARRÊTER puis AUTO pour l'activer."]);
   if (sup.running && sup.restarts > 0 && sup.last_exit) alerts.push(["warn", `Le bot s'est relancé seul ${sup.restarts} fois (dernière erreur le ${fdate(sup.last_exit.at)}).`]);
+  const gap = S.uptime && S.uptime.recent;
+  if (gap) alerts.push(["warn", `Le bot a été arrêté ${fdur(gap.end - gap.start)} (du ${ftime(gap.start)} au ${ftime(gap.end)}) : ${gap.text}. Il a repris et rattrapé les contrôles manqués.`]);
+  S.alerts.filter((c) => c.enabled && c.last && !c.last.ok).forEach((c) => alerts.push(["warn", `Les alertes ${c.label} n'arrivent pas (dernier envoi raté le ${ftime(c.last.at)}) : voir Réglages ▸ Sécurité.`]));
   S.vetoes.forEach((v) => alerts.push(["crit", `${v.reason} : achats bloqués jusqu'au ${fdate(v.until)}`]));
   ((S.watch && S.watch.alerts) || []).forEach((a) => alerts.push(["warn", a]));
   if (pos.stale) alerts.push(["warn", "Cours Binance momentanément indisponibles : dernières valeurs affichées."]);
@@ -991,6 +994,8 @@ async function renderSettings() {
   if (!S) await refreshStatus();
   renderSecurity().catch(() => { /* réessai au prochain rafraîchissement */ });
   const au = S.autonomy || {}, sup = au.supervisor || {}, le = sup.last_exit;
+  const ut = S.uptime || {}, gap = (ut.events || []).find((e) => !e.requested);
+  const pct = (v) => (v == null ? "–" : nf(0).format(v) + " %");
   const sw = $("#s-autostart");
   sw.checked = !!au.autostart;
   sw.disabled = au.autostart == null;
@@ -999,6 +1004,8 @@ async function renderSettings() {
     ["Relance après une erreur", sup.running ? "active" : "inactive : cliquez sur AUTO"],
     ["Relances automatiques", sup.running ? String(sup.restarts || 0) : "–"],
     ["Dernier arrêt imprévu", le && le.code !== 0 ? `${fdate(le.at)} · ${le.stalled ? "bot bloqué" : "code " + le.code}` : "aucun"],
+    ["Temps de marche (24 h · 7 j)", ut.tracked ? `${pct(ut.day_pct)} · ${pct(ut.week_pct)} (hors arrêts demandés)` : "mesuré dès le prochain cycle du bot"],
+    ["Dernier arrêt non demandé (> 1 h)", gap ? `${ftime(gap.start)} → ${gap.ongoing ? "en cours" : ftime(gap.end)} (${fdur(gap.end - gap.start)}) · ${gap.text}` : "aucun"],
     ["Mise en veille du PC", au.keep_awake ? "bloquée tant que le bot tourne" : "autorisée"],
     ["Bouton ARRÊTER", "aucune relance, même au démarrage du PC"],
   ];
@@ -1022,11 +1029,14 @@ async function renderSettings() {
       try {
         const r = await api("/api/alerts/test", { body: { channel: c.name } });
         toast(`${c.label} : ${r.message}`, r.ok ? "ok" : "err");
+        await refreshStatus();
+        await renderSettings();
       } catch (e) { toast(e.message, "err"); }
       b.disabled = false;
     });
-    const t = el("span");
-    t.append(el("strong", "", c.label), el("span", "sub", c.enabled ? " · configuré" : " · non configuré"));
+    const t = el("span"), r = c.last;
+    const state = !c.enabled ? "non configuré" : !r ? "configuré" : r.ok ? `dernier envoi réussi le ${ftime(r.at)}` : `dernier envoi RATÉ le ${ftime(r.at)} : ${r.error || "cause inconnue"}`;
+    t.append(el("strong", "", c.label), el("span", "sub" + (r && !r.ok ? " down" : ""), " · " + state));
     li.append(t, b);
     return li;
   }));
