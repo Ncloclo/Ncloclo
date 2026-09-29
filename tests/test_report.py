@@ -206,6 +206,8 @@ def _deps(tmp_path, **kw):
                                                                           "autostart": True}},
                                         "security": {"checks": [{"label": "Accès au panneau", "ok": True,
                                                                  "detail": "ce PC uniquement"},
+                                                                {"label": "Alertes", "ok": False,
+                                                                 "detail": "E-mail : dernier envoi RATÉ"},
                                                                 {"label": "Mode", "ok": True, "detail": "paper"}]}},
                 binance=lambda env, testnet: rp.chk("Clé API Binance", False, "refusée", "Vérifiez l'IP."),
                 diagnose=lambda g: ([Finding("Marché", "OK", "haussier"),
@@ -226,6 +228,7 @@ def test_report_is_complete_ordered_and_secret_free(root):
     labels = [c["label"] for s in r["sections"] for c in s["checks"]]
     assert labels.count("Mode") == 1                                  # pas de doublon du panneau
     assert r["recommendations"][0] == "Vérifiez l'IP." and "Rien à faire." in r["recommendations"]
+    assert "Alertes : E-mail : dernier envoi RATÉ" in r["recommendations"]
     assert any("base sauvegardée" in a for a in r["actions"])
     assert r["proposals"] == ["Amélioration quotidienne 2026-09-30 : contrastes — https://x/pr/7"]
     assert r["score"]["total"] == len(labels) and r["verdict"].endswith("à corriger")

@@ -637,7 +637,8 @@ def _github_json(url: str) -> Any:
 LEVEL_OK = {"OK": True, "INFO": True, "ATTENTION": None, "ALERTE": False}
 # Lignes du centre de sécurité déjà vérifiées par le rapport lui-même.
 PANEL_DUPLICATES = {"Disponibilité du bot (7 j)", "Relance automatique", "Arrêt d'urgence", "Mode",
-                    "Clés API Binance", "Fichier des secrets (.env)", "Rapport quotidien"}
+                    "Clés API Binance", "Fichier des secrets (.env)", "Rapport quotidien",
+                    "Évolution encadrée"}
 
 
 def strategy_checks(gcfg: Any, deps: Deps) -> List[Check]:
@@ -700,7 +701,9 @@ def build(gcfg: Any, env: Dict[str, str], deps: Optional[Deps] = None,
                            "Vérifiez l'espace disque."))
     sec.append(check_database(gcfg.db_file))
     sec += check_windows(deps)
-    panel_sec = [chk(c["label"], c["ok"], c["detail"]) for c in (security or {}).get("checks", [])
+    panel_sec = [chk(c["label"], c["ok"], c["detail"],
+                     f"{c['label']} : {c['detail']}" if c.get("ok") is False else "")
+                 for c in (security or {}).get("checks", [])
                  if c.get("label") not in PANEL_DUPLICATES]
     health = bot_checks(gcfg, st, status, now)
     health.insert(0, chk("Panneau de contrôle", "ms" in pnl,
