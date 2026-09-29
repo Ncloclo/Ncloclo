@@ -143,3 +143,29 @@ def test_configure_writes_env_without_echoing_secrets(tmp_path, monkeypatch):
                  "CALLMEBOT_APIKEY=cle-callmebot", "ALERT_LEVEL=all", "RUN_MODE=paper"):
         assert line in text, line
     assert "mdp-application" not in out.getvalue() and "cle-callmebot" not in out.getvalue()
+
+
+def test_configure_refuses_a_receiving_server_and_explains_gmail(tmp_path, monkeypatch):
+    """« pop3 » (serveur de réception) est refusé ; pour Gmail, le mot de
+    passe d'application est expliqué avant la saisie."""
+    env = tmp_path / ".env"
+    env.write_text("RUN_MODE=paper\n", encoding="utf-8")
+    answers = iter(["moi@gmail.com", "pop3", "", "", "", "", "1"])
+    secrets = iter(["mdp-application"])
+    out = io.StringIO()
+    for k in ("ALERT_EMAIL_TO", "SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "ALERT_LEVEL"):
+        monkeypatch.delenv(k, raising=False)
+    assert alerts.cmd_configure(str(env), read=lambda _p: next(answers), secret=lambda _p: next(secrets), out=out) == 0
+    assert "SMTP_HOST=smtp.gmail.com" in env.read_text(encoding="utf-8")
+    text = out.getvalue()
+    assert "« pop3 » n'est pas un serveur d'envoi" in text and "apppasswords" in text
+
+
+def test_send_errors_are_explained_in_plain_french():
+    import smtplib
+    import socket
+    auth = alerts.explain_send_error(smtplib.SMTPAuthenticationError(535, b"Username and Password not accepted"))
+    assert "mot de passe d'application" in auth and "apppasswords" in auth
+    dns = alerts.explain_send_error(socket.gaierror(11001, "getaddrinfo failed"), "pop3")
+    assert "« pop3 » introuvable" in dns and "smtp.gmail.com" in dns
+    assert "port" in alerts.explain_send_error(smtplib.SMTPServerDisconnected("closed"))

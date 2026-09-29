@@ -29,6 +29,7 @@ import base64
 import os
 import queue
 import smtplib
+import socket
 import ssl
 import sys
 import threading
@@ -245,7 +246,8 @@ class AlertHub:
                 ch.send(subject, msg)
                 results[ch.name] = None
             except Exception as e:
-                err = v29.scrub_secrets(f"{type(e).__name__}: {e}", ch.secrets)[:200]
+                err = v29.scrub_secrets(explain_send_error(e, getattr(ch, "host", "")),
+                                        ch.secrets)[:300]
                 results[ch.name] = err
                 self._log("warning", f"[ALERTES] {ch.label} : envoi impossible ({err})")
         return results
@@ -274,7 +276,8 @@ class AlertHub:
                     ch.send("TrendGuard : test des alertes", text)
                     return True, ""
                 except Exception as e:
-                    return False, v29.scrub_secrets(f"{type(e).__name__}: {e}", ch.secrets)[:200]
+                    return False, v29.scrub_secrets(explain_send_error(e, getattr(ch, "host", "")),
+                                                    ch.secrets)[:300]
         return False, f"{name} n'est pas configuré (python trendguard_bot.py alerts configurer)"
 
     def close(self, timeout: float = 5.0) -> None:
@@ -300,6 +303,33 @@ def build_notifier(logger: Any = None, env: Optional[Dict[str, str]] = None) -> 
 # CLI
 # ══════════════════════════════════════════════════════════════════════
 
+def _ask_smtp_host(read: Callable[[str], str], say: Callable[..., None]) -> str:
+    """Serveur d'ENVOI (SMTP) : un nom complet comme smtp.gmail.com. Un
+    serveur de réception (« pop3 », « imap ») ou un nom incomplet est refusé."""
+    for _ in range(3):
+        host = read("Serveur SMTP [smtp.gmail.com] : ").strip() or "smtp.gmail.com"
+        if "." in host and " " not in host and not host.lower().startswith(("pop", "imap")):
+            return host
+        say(f"   « {host} » n'est pas un serveur d'envoi. Gmail : smtp.gmail.com ; "
+            "Outlook : smtp.office365.com ; Yahoo : smtp.mail.yahoo.com.")
+    say("   Serveur Gmail retenu : smtp.gmail.com.")
+    return "smtp.gmail.com"
+
+
+def explain_send_error(e: Exception, host: str = "") -> str:
+    """Cause d'un envoi raté, en clair (sans aucun secret)."""
+    if isinstance(e, smtplib.SMTPAuthenticationError):
+        return ("identifiant ou mot de passe refusés par le serveur. Gmail : utilisez un "
+                "« mot de passe d'application » (myaccount.google.com/apppasswords), pas "
+                "votre mot de passe habituel ; puis python trendguard_bot.py alerts configurer")
+    if isinstance(e, socket.gaierror):
+        return (f"serveur « {host} » introuvable : vérifiez son nom (Gmail : smtp.gmail.com) "
+                "ou la connexion Internet")
+    if isinstance(e, smtplib.SMTPServerDisconnected):
+        return "le serveur a coupé la connexion : vérifiez le port (587 ou 465) et le mot de passe"
+    return f"{type(e).__name__}: {e}"
+
+
 def cmd_configure(env_path: Optional[str] = None, read: Callable[[str], str] = input,
                   secret: Optional[Callable[[str], str]] = None, out=None) -> int:
     """Saisie guidée ; les mots de passe et clés ne s'affichent pas."""
@@ -316,9 +346,13 @@ def cmd_configure(env_path: Optional[str] = None, read: Callable[[str], str] = i
         to = read("Adresse qui reçoit les alertes : ").strip()
         if to:
             values["ALERT_EMAIL_TO"] = to
-            values["SMTP_HOST"] = read("Serveur SMTP [smtp.gmail.com] : ").strip() or "smtp.gmail.com"
+            values["SMTP_HOST"] = _ask_smtp_host(read, say)
             values["SMTP_PORT"] = read("Port [587] : ").strip() or "587"
             values["SMTP_USER"] = read(f"Identifiant SMTP [{to}] : ").strip() or to
+            if values["SMTP_HOST"] == "smtp.gmail.com":
+                say("   Gmail refuse votre mot de passe habituel : créez un « mot de passe "
+                    "d'application » (16 lettres) sur myaccount.google.com/apppasswords "
+                    "(la validation en deux étapes doit être activée).")
             values["SMTP_PASSWORD"] = secret("Mot de passe SMTP (Gmail : mot de passe "
                                              "d'application) : ").strip()
         say("── Alertes WhatsApp (laisser vide pour passer)")

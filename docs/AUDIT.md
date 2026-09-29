@@ -141,7 +141,7 @@ Points faibles :
 
 | Priorité | Action | Qui | Quand |
 | --- | --- | --- | --- |
-| 1 | Configurer les alertes (Telegram, e-mail ou WhatsApp) | Vous | maintenant : fenêtre de configuration ouverte sur le PC |
+| 1 | Configurer les alertes (Telegram, e-mail ou WhatsApp) | Vous | **en cours** (29/09) : e-mail enregistré, serveur corrigé (`pop3` → `smtp.gmail.com`), mais Gmail refuse le mot de passe habituel : créer un « mot de passe d'application » puis relancer `alerts configurer`. La configuration refuse désormais un serveur de réception et explique chaque échec en clair |
 | 2 | Supprimer sur Binance les clés montrées dans la conversation ; en créer une neuve (lecture, et Trading Spot le jour du testnet), sans retrait, limitée à votre adresse IP | Vous | avant le testnet |
 | 3 | Laisser tourner en paper jusqu'à 10 à 20 trades vendus, puis comparer à l'attendu (section « Réel vs attendu » du diagnostic) | Vous et le bot | plusieurs semaines |
 | 4 | Garder le PC allumé et branché, ou passer sur un petit serveur | Vous | dès que possible |
