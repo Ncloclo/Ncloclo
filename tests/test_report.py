@@ -148,8 +148,33 @@ def test_windows_checks_read_only():
     assert checks["Pare-feu Windows"]["ok"] is True and checks["Antivirus"]["ok"] is True
     power = checks["Veille du PC (sur secteur)"]
     assert power["ok"] is False and "après 30 min" in power["detail"] and "veille" in power["detail"]
+    assert "« Jamais »" in power["reco"] and "capot" in power["reco"]
     assert not any(c[0] == "icacls" for c in run.calls)            # constat seulement
     assert rp.check_windows(rp.Deps(run=run, platform="linux")) == []
+
+
+def test_power_check_on_a_desktop_without_lid():
+    def run(cmd, **kw):
+        if "LIDACTION" in cmd:                                      # PC fixe : réglage absent
+            return proc("GUID du mode : 381b4222 (Utilisation normale)\n")
+        return proc("Minimum 0x00000000\nMaximum 0xffffffff\nAC 0x00000000\nDC 0x00000384")
+    c = rp._power_check(rp.Deps(run=run, platform="win32"))
+    assert c["ok"] is True and c["detail"] == "mise en veille : jamais" and not c["reco"]
+
+
+def test_acl_check_retries_a_slow_powershell(root):
+    calls = []
+
+    def run(cmd, timeout=60, **kw):
+        calls.append(timeout)
+        if len(calls) == 1:
+            raise rp.subprocess.TimeoutExpired(cmd, timeout)
+        return proc("S-1-5-18|Allow")
+    c = rp.check_env_permissions(str(root), rp.Deps(run=run, platform="win32"))
+    assert c["ok"] is True and calls == [60, 180]
+    never = rp.check_env_permissions(str(root), rp.Deps(
+        run=lambda cmd, **kw: proc("", 1, "Accès refusé"), platform="win32"))
+    assert never["ok"] is None and "Accès refusé" in never["detail"]
 
 
 def test_decision_time_and_bot_health(tmp_path):

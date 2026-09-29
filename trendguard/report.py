@@ -179,24 +179,30 @@ def check_env_published(root: str, deps: Deps) -> Check:
     return chk("Secrets hors de GitHub", True, "fichier .env exclu de GitHub, jamais publié")
 
 
-def _win_acl(path: str, deps: Deps) -> Optional[List[Tuple[str, str]]]:
-    """(SID, Allow/Deny) de chaque droit du fichier, via PowerShell."""
+def _win_acl(path: str, deps: Deps) -> Tuple[Optional[List[Tuple[str, str]]], str]:
+    """(SID, Allow/Deny) de chaque droit du fichier, via PowerShell, et la
+    cause d'un échec. Un second essai, plus patient, suit un échec (PowerShell
+    peut être lent à démarrer quand le PC est chargé)."""
     ps = ("$a=(Get-Acl -LiteralPath $env:TG_ACL_PATH).Access; foreach($e in $a){ try{"
           "$s=$e.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value}"
           "catch{$s=[string]$e.IdentityReference}; Write-Output ($s + '|' + $e.AccessControlType) }")
-    try:
-        r = deps.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
-                     env=dict(os.environ, TG_ACL_PATH=path))
-    except (OSError, subprocess.SubprocessError):
-        return None
-    if r.returncode != 0:
-        return None
-    out = []
-    for line in r.stdout.splitlines():
-        if "|" in line:
-            sid, kind = line.strip().split("|", 1)
-            out.append((sid, kind))
-    return out
+    err = ""
+    for timeout in (60, 180):
+        try:
+            r = deps.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
+                         env=dict(os.environ, TG_ACL_PATH=path), timeout=timeout)
+        except subprocess.TimeoutExpired:
+            err = "PowerShell trop lent"
+            continue
+        except (OSError, subprocess.SubprocessError) as e:
+            err = f"PowerShell indisponible ({type(e).__name__})"
+            continue
+        if r.returncode == 0:
+            return [tuple(line.strip().split("|", 1)) for line in r.stdout.splitlines()
+                    if "|" in line], ""
+        lines = (r.stderr or "").strip().splitlines()
+        err = f"PowerShell : {lines[-1][:120]}" if lines else f"PowerShell : code {r.returncode}"
+    return None, err
 
 
 def check_env_permissions(root: str, deps: Deps) -> Check:
@@ -213,9 +219,9 @@ def check_env_permissions(root: str, deps: Deps) -> Check:
         os.chmod(path, 0o600)
         return chk(label, True, "lisible par votre seul compte (600)",
                    action=f"droits du fichier .env resserrés ({oct(mode)[2:]} → 600)")
-    acl = _win_acl(path, deps)
+    acl, err = _win_acl(path, deps)
     if acl is None:
-        return chk(label, None, "vérification impossible (PowerShell indisponible)")
+        return chk(label, None, f"vérification impossible ({err})")
     broad = sorted({sid for sid, kind in acl if sid in BROAD_SIDS and kind == "Allow"})
     if not broad:
         return chk(label, True, "réservé à votre compte, à Windows et aux administrateurs")
@@ -225,7 +231,7 @@ def check_env_permissions(root: str, deps: Deps) -> Check:
         deps.run(["icacls", path, "/remove:g", *[f"*{s}" for s in broad]])
     except (OSError, subprocess.SubprocessError):
         pass
-    after = _win_acl(path, deps) or []
+    after = _win_acl(path, deps)[0] or []
     still = [s for s, kind in after if s in BROAD_SIDS and kind == "Allow"]
     if still:
         return chk(label, False, f"lisible par : {names}",
@@ -429,15 +435,21 @@ def _power_check(deps: Deps) -> Check:
     lid = _power_ac(deps, "SUB_BUTTONS", "LIDACTION")
     if sleep is None and lid is None:
         return chk("Veille du PC (sur secteur)", None, "réglages inconnus")
-    good = sleep == 0 and lid in (0, None)
-    detail = ("mise en veille : " + ("jamais" if sleep == 0 else f"après {sleep // 60} min"
-                                     if sleep is not None else "?")
-              + " ; capot fermé : " + ({0: "ne rien faire", 1: "veille", 2: "veille prolongée",
-                                        3: "arrêt"}.get(lid, "?") if lid is not None else "?"))
-    return chk("Veille du PC (sur secteur)", good, detail,
-               "" if good else "Paramètres Windows ▸ Alimentation : sur secteur, mise en veille "
-                               "« Jamais » et capot fermé « Ne rien faire » (le bot ne surveille "
-                               "rien quand le PC dort).")
+    good = sleep in (0, None) and lid in (0, None)
+    parts = []
+    if sleep is not None:
+        parts.append("mise en veille : " + ("jamais" if sleep == 0 else f"après {sleep // 60} min"))
+    if lid is not None:     # absent sur un PC fixe (pas de capot)
+        parts.append("capot fermé : " + {0: "ne rien faire", 1: "veille", 2: "veille prolongée",
+                                          3: "arrêt"}.get(lid, "?"))
+    todo = []
+    if sleep not in (0, None):
+        todo.append("mise en veille « Jamais »")
+    if lid not in (0, None):
+        todo.append("capot fermé « Ne rien faire »")
+    return chk("Veille du PC (sur secteur)", good, " ; ".join(parts),
+               "" if good else "Paramètres Windows ▸ Alimentation, sur secteur : "
+                               + " et ".join(todo) + " (le bot ne surveille rien quand le PC dort).")
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -529,7 +541,9 @@ def bot_checks(gcfg: Any, st: Dict[str, Any], status: Optional[Dict[str, Any]],
         week = u.get("week_pct")
         out.append(chk("Disponibilité (7 jours)", None if week is None else week >= 95,
                        "mesure en cours" if week is None else f"{week:.0f} % du temps".replace(".", ","),
-                       "" if week is None or week >= 95 else "PC branché, sans mise en veille."))
+                       "" if week is None or week >= 95 else
+                       f"Laissez le PC allumé et branché en continu : le bot n'a tourné que "
+                       f"{week:.0f} % du temps sur 7 jours."))
         au = status.get("autonomy") or {}
         sup = (au.get("supervisor") or {}).get("running")
         out.append(chk("Relance automatique", bool(sup), "active" if sup else "inactive",
