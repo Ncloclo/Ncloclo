@@ -17,8 +17,10 @@ l'avance, avec les cours du moment :
 - CONSEILS : ce qu'il faut en retenir, en phrases simples.
 
 Probabilités : modèle simple (mouvement d'ici la clôture de loi normale,
-écart-type tiré de la volatilité récente de la crypto). Ce sont des ordres
-de grandeur pour se préparer, pas des prévisions de prix.
+écart-type tiré de la volatilité récente de la crypto), corrigé par
+l'expérience du bot dès qu'elle suffit (learning.py : chaque prévision est
+comparée à la clôture). Ce sont des ordres de grandeur pour se préparer, pas
+des prévisions de prix.
 """
 
 from __future__ import annotations
@@ -148,12 +150,29 @@ def _buys(assets: Dict[str, Any], prices: Dict[str, float], held: set, hours: fl
     return buys[:12]
 
 
+def _calibrate(sells: List[Dict[str, Any]], buys: List[Dict[str, Any]],
+               regime: Optional[Dict[str, Any]], calibrate: Callable[[str, float], float]) -> None:
+    """Probabilités corrigées par l'expérience du bot (learning.py) ; celles
+    du modèle restent dans prob_model."""
+    for s in sells:
+        s["prob_model"], s["prob"] = s["prob"], round(calibrate("sell", s["prob"]), 3)
+    sells.sort(key=lambda s: -s["prob"])
+    for b in buys:
+        b["prob_model"], b["prob"] = b["prob"], round(calibrate("buy", b["prob"]), 3)
+    buys.sort(key=lambda x: (bool(x["blocked"]), -x["prob"]))
+    if regime:
+        regime["prob_bear_model"] = regime["prob_bear"]
+        regime["prob_bear"] = round(calibrate("bear", regime["prob_bear"]), 3)
+
+
 def forecast(basis: Dict[str, Any], prices: Dict[str, float], holdings: List[Dict[str, Any]],
              now: datetime, p: ts.TrendParams, equity: float, mult: float = 1.0,
              allowed: Optional[Iterable[str]] = None, vetoed: Iterable[str] = (),
-             halted: bool = False) -> Dict[str, Any]:
+             halted: bool = False,
+             calibrate: Optional[Callable[[str, float], float]] = None) -> Dict[str, Any]:
     """Anticipation de la prochaine décision avec les cours du moment.
-    holdings : [{asset, qty, entry, stop, disaster, risk, cost}]."""
+    holdings : [{asset, qty, entry, stop, disaster, risk, cost}].
+    calibrate : correction des probabilités apprise (learning.calibrator)."""
     close_at = pd.Timestamp(basis["next_close"]).to_pydatetime()
     hours = max(0.0, (close_at - now).total_seconds() / 3600)
     assets = basis.get("assets") or {}
@@ -172,6 +191,8 @@ def forecast(basis: Dict[str, Any], prices: Dict[str, float], holdings: List[Dic
                            int((budget - open_risk + 1e-9) // per_trade)))
     buys = _buys(assets, prices, {h["asset"] for h in holdings}, hours,
                  lambda a, b: _buy_blocks(a, b, allowed, vetoed, bull_tonight, halted, slots))
+    if calibrate is not None:
+        _calibrate(sells, buys, regime, calibrate)
 
     stop_loss = sum(s["given_back_usdt"] for s in sells)
     risk = {"open_risk_usdt": round(open_risk, 2), "open_risk_pct": round(open_risk / equity * 100, 2) if equity else None,
@@ -180,7 +201,8 @@ def forecast(basis: Dict[str, Any], prices: Dict[str, float], holdings: List[Dic
             "all_stops_usdt": round(stop_loss, 2),
             "all_stops_pct": round(stop_loss / equity * 100, 2) if equity else None}
     out = {"hours_left": round(hours, 2), "next_close": basis["next_close"], "basis_day": basis["day"],
-           "sells": sells, "buys": buys, "regime": regime, "risk": risk}
+           "sells": sells, "buys": buys, "regime": regime, "risk": risk,
+           "calibrated": calibrate is not None}
     out["advice"] = advice(out)
     return out
 

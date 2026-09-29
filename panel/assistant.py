@@ -512,6 +512,25 @@ def a_autonomy(ctx: Dict[str, Any]) -> str:
             "respecté : aucune relance, même au redémarrage, jusqu'au prochain AUTO.")
 
 
+def a_learning(ctx: Dict[str, Any]) -> str:
+    lr = (ctx.get("status") or {}).get("learning") or {}
+    lines = [
+        "**Apprentissage libre** : le bot apprend en continu, sans attendre ni demander, "
+        "et s'en sert aussitôt.",
+        "- Carnets d'ordres : il apprend l'écart achat/vente et la profondeur normaux de chaque "
+        "crypto (relevés toutes les heures) ; sa ruse diffère un achat dès qu'un carnet "
+        "s'écarte de SA normale, jamais avec un seuil plus large que 0,5 %.",
+        "- Prévisions : chaque probabilité annoncée est comparée à la clôture ; les suivantes "
+        "sont corrigées par cette expérience.",
+        "- Veille : annonces officielles de Binance relues toutes les heures.",
+        "- Les règles (cassure, stops, lecture du marché) ne changent que par l'évolution "
+        "encadrée, avec épreuves et essai de 30 jours ; le risque, jamais.",
+    ]
+    if lr.get("text"):
+        lines.append(f"- Ce qu'il sait déjà : {lr['text']}.")
+    return "\n".join(lines)
+
+
 def a_evolution(ctx: Dict[str, Any]) -> str:
     ev = (ctx.get("status") or {}).get("evolution") or {}
     if not ev.get("enabled"):
@@ -666,10 +685,14 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("autonomy", ("autonome", "autonomie", "redemarrage", "redemarrer", "demarrer avec",
                   "ordinateur", "veille du pc", "plantage", "superviseur", "eteint"), a_autonomy,
      [{"label": "Réglages ▸ autonomie", "href": "#settings"}]),
-    ("evolution", ("evolution", "evolution encadree", "evoluer", "evolue", "s adapter",
-                   "s adapte", "apprend", "apprendre de", "apprentissage", "epreuve", "epreuves",
+    ("learning", ("apprend", "apprendre de", "apprentissage", "apprentissage libre", "s adapter",
+                  "s adapte", "adaptation", "experience", "lecons", "precision", "precis",
+                  "rapide", "libre"),
+     a_learning, [{"label": "Réglages ▸ autonomie", "href": "#settings"}]),
+    ("evolution", ("evolution", "evolution encadree", "evoluer", "evolue", "epreuve", "epreuves",
                    "enigme", "enigmes", "sagesse", "independant", "independance", "niveau du bot",
-                   "ses propres reglages", "modifier ses reglages", "change ses reglages"),
+                   "ses propres reglages", "modifier ses reglages", "change ses reglages",
+                   "changer les regles", "change ses regles"),
      a_evolution, [{"label": "Réglages ▸ autonomie", "href": "#settings"}]),
     ("watch", ("veille", "ia", "intelligence", "claude", "gpt", "annonce", "annonces",
                "retrait de la cote", "delisting", "bloquee", "bloquees"), a_watch,

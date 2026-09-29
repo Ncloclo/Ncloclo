@@ -31,7 +31,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
-from trendguard import anticipation, evolution, uptime
+from trendguard import anticipation, evolution, learning, uptime
 from trendguard import market_watch as mw
 
 from .assistant import AIHelper, Assistant
@@ -185,6 +185,7 @@ class PanelApp:
             "alerts": self._alert_channels(st),
             "uptime": uptime.summary(st.get("uptime"), last_cycle, st.get("stopped_at")),
             "evolution": evolution.summary(self.g),
+            "learning": learning.summary(st.get("learning")),
             # Réglages de la stratégie en vigueur (l'évolution a pu les changer).
             "rules": {k: getattr(evolution.params_for(self.g), k) for k in evolution.SPACE},
             "autonomy": self.control.autonomy(),
@@ -301,7 +302,8 @@ class PanelApp:
             basis, prices, self.data.holdings(st), datetime.now(timezone.utc), evolution.params_for(self.g),
             float(equity or getattr(self.g, "paper_capital", 10_000.0)),
             float(st.get("risk_mult", 1.0) or 1.0), sel["active"],
-            (st.get("vetoes") or {}).keys(), bool(st.get("halted")))
+            (st.get("vetoes") or {}).keys(), bool(st.get("halted")),
+            calibrate=learning.calibrator(st.get("learning")))
         return dict(f, ready=True, stale=stale)
 
     @staticmethod

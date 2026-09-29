@@ -228,6 +228,9 @@ function renderAnticipation(f) {
     return;
   }
   $("#a-when").textContent = `dans ${fdur(f.hours_left * 3600)}`;
+  $("#a-note").textContent = f.calibrated
+    ? "Probabilités corrigées par l'expérience du bot : chaque prévision passée a été comparée à la clôture. Les règles ne changent pas : c'est la clôture de 00:00 UTC qui décide."
+    : "Probabilités indicatives, calculées avec les cours du moment et la volatilité de chaque crypto. Les règles ne changent pas : c'est la clôture de 00:00 UTC qui décide.";
   const r = f.risk;
   $("#a-risk").textContent = `Risque engagé ${nf(1).format(r.open_risk_pct || 0)} % / ${nf(0).format(r.budget_pct)} % · ${r.slots} place${r.slots > 1 ? "s" : ""} libre${r.slots > 1 ? "s" : ""}`;
   const g = f.regime;
@@ -1014,6 +1017,7 @@ async function renderSettings() {
     ["Dernier arrêt imprévu", le && le.code !== 0 ? `${fdate(le.at)} · ${le.stalled ? "bot bloqué" : "code " + le.code}` : "aucun"],
     ["Temps de marche (24 h · 7 j)", ut.tracked ? `${pct(ut.day_pct)} · ${pct(ut.week_pct)} (hors arrêts demandés)` : "mesuré dès le prochain cycle du bot"],
     ["Dernier arrêt non demandé (> 1 h)", gap ? `${ftime(gap.start)} → ${gap.ongoing ? "en cours" : ftime(gap.end)} (${fdur(gap.end - gap.start)}) · ${gap.text}` : "aucun"],
+    ["Apprentissage libre", (S.learning && S.learning.text) || "premiers relevés dans l'heure"],
     ["Évolution encadrée", evolutionText(S.evolution || {})],
     ["Mise en veille du PC", au.keep_awake ? "bloquée tant que le bot tourne" : "autorisée"],
     ["Bouton ARRÊTER", "aucune relance, même au démarrage du PC"],

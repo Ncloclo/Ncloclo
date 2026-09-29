@@ -6,6 +6,11 @@ plus en plus difficiles. Activée par défaut (`TG_EVOLUTION=true` ;
 `TG_EVOLUTION=false` dans `.env` pour garder des réglages fixes). Code :
 `trendguard/evolution.py`.
 
+C'est la partie encadrée de la charte du bot : apprendre, s'adapter, ruser et
+s'informer sont libres, rapides et précis
+([`APPRENTISSAGE.md`](APPRENTISSAGE.md)) ; changer une règle passe par les
+épreuves et la sagesse décrites ici.
+
 ## Ce qu'il peut changer, et ce qui reste hors de sa portée
 
 | Réglage | Valeurs permises | D'origine |

@@ -265,6 +265,16 @@ alerte critique (e-mail compris) avec la durée, l'heure et le conseil pour
 l'éviter. Réglages ▸ Autonomie affiche le temps de marche sur 24 h et 7 jours,
 hors arrêts demandés.
 
+**Apprentissage libre** (`learning.py`,
+[`docs/APPRENTISSAGE.md`](docs/APPRENTISSAGE.md)). Apprendre, s'adapter, ruser
+et s'informer sont libres, rapides et précis : le bot apprend l'écart
+achat/vente
+et la profondeur normaux du carnet de chaque crypto (relevés toutes les heures)
+et diffère un achat dès qu'un carnet s'écarte de sa normale ; il compare chaque
+probabilité annoncée à la clôture et corrige les suivantes ; il relit les
+annonces officielles de Binance toutes les heures. Un seuil appris n'est jamais
+plus large que le seuil fixe, et aucune décision n'est avancée.
+
 **Évolution encadrée** (`evolution.py`,
 [`docs/EVOLUTION.md`](docs/EVOLUTION.md)).
 Chaque jour après la décision, le bot cherche un meilleur réglage (cassure,

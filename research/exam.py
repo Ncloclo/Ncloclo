@@ -35,6 +35,7 @@ import pandas as pd
 import v29
 from research import adaptation as ra
 from research.robustness import cell, fr, periods
+from trendguard import learning
 from trendguard import trend_strategy as ts
 from trendguard.bot import TrendGuardBot
 from trendguard.config import GuardConfig
@@ -265,21 +266,22 @@ def run_traps(runner: Optional[Callable[[List[str]], Dict[str, str]]] = None
 
 def book_check(book: Dict[str, Any], symbol: str, notional: float, max_spread: float
                ) -> Optional[str]:
-    """Le vrai contrôle du bot (TrendGuardBot._book_anomaly) sur un carnet donné."""
+    """Le vrai contrôle du bot (TrendGuardBot._book_anomaly) sur un carnet
+    donné, avec les seuils fixes (avant tout apprentissage)."""
+    memory = learning.new()
     bot = SimpleNamespace(g=SimpleNamespace(max_spread=max_spread, quote="USDT"),
                           BOOK_DEPTH_MULT=TrendGuardBot.BOOK_DEPTH_MULT,
-                          BOOK_DEPTH_BAND=TrendGuardBot.BOOK_DEPTH_BAND)
-    slot = SimpleNamespace(symbol=symbol, ex=SimpleNamespace(
+                          BOOK_DEPTH_BAND=TrendGuardBot.BOOK_DEPTH_BAND,
+                          _learning=lambda: memory)
+    slot = SimpleNamespace(symbol=symbol, base=symbol.split("/")[0], ex=SimpleNamespace(
         exchange=SimpleNamespace(fetch_order_book=lambda *_a, **_k: book)))
     return TrendGuardBot._book_anomaly(bot, slot, notional)
 
 
 def book_stats(book: Dict[str, Any]) -> Tuple[float, float]:
     """(écart achat/vente en %, montant proposé à la vente à moins de 1 %)."""
-    bid, ask = float(book["bids"][0][0]), float(book["asks"][0][0])
-    depth = sum(float(px) * float(q) for px, q, *_ in book["asks"]
-                if float(px) <= ask * (1 + TrendGuardBot.BOOK_DEPTH_BAND))
-    return (ask - bid) / ((ask + bid) / 2) * 100, depth
+    spread, depth = learning.book_stats(book, TrendGuardBot.BOOK_DEPTH_BAND)
+    return spread * 100, depth
 
 
 def live_books(assets: List[str], notional: float, exchange: Any = None

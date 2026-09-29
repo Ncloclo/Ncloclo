@@ -20,7 +20,7 @@ import pandas as pd
 
 import v29
 
-from . import anticipation, autonomy, evolution, uptime
+from . import anticipation, autonomy, evolution, learning, uptime
 from . import diagnostics as dg
 from . import market_watch as mw
 from . import trend_strategy as ts
@@ -80,6 +80,7 @@ class TrendGuardBot:
         # (run_forever), pas pour un cycle isolé ni un rejeu.
         self.track_uptime = False
         self._tries_since: Optional[float] = None
+        self._last_book_sample = 0.0       # apprentissage libre des carnets (learning.py)
         # Notes d'exécution du jour (achat différé, annulé) pour le raisonnement.
         self._entry_notes: Dict[str, Tuple[str, str]] = {}
         self._last_close: Optional[pd.DataFrame] = None   # apprentissage de la veille
@@ -328,9 +329,12 @@ class TrendGuardBot:
         else:
             self._maintain_paper()
         day = last_closed_day(now, self.g.decision_delay_sec)
+        # Veille rapide : annonces officielles de Binance relues toutes les
+        # heures, pas seulement avant la décision.
+        self._refresh_vetoes(now)
         if self.state.get("last_decision_day") != day:
             self._apply_evolution()
-            self._refresh_vetoes(now)
+            self._refresh_vetoes(now, max_age=600)
             try:
                 self.daily_decision(now, day)
                 self.state.pop("decision_deferred_since", None)
@@ -349,6 +353,11 @@ class TrendGuardBot:
             self._keep_alert_status()
         except Exception as e:           # un simple relevé : jamais bloquant
             self.logger.warning(f"[REPRISE] disponibilité non relevée : {e}")
+        try:
+            self._sample_books()
+            self._learn_forecast(now)
+        except Exception as e:           # apprendre ne bloque jamais le trading
+            self.logger.warning(f"[APPRENTISSAGE] relevé impossible : {e}")
         # Horloge réelle (et non `now`, simulé en rejeu) : sert au contrôle
         # de santé du conteneur.
         self.state["last_cycle_ts"] = time.time()
@@ -460,12 +469,12 @@ class TrendGuardBot:
             return v
         return None
 
-    def _refresh_vetoes(self, now: datetime) -> None:
-        """Annonces officielles de Binance, lues sans IA avant chaque
-        décision (au plus une fois par heure si la décision est reportée).
-        Binance injoignable : les vetos précédents restent en place et la
-        décision a lieu quand même."""
-        if not self.g.watch or time.time() - self._last_veto_refresh < 3600:
+    def _refresh_vetoes(self, now: datetime, max_age: float = 3600) -> None:
+        """Annonces officielles de Binance, lues sans IA toutes les heures,
+        et juste avant chaque décision si la dernière lecture a plus de
+        10 minutes. Binance injoignable : les vetos précédents restent en
+        place et la décision a lieu quand même."""
+        if not self.g.watch or time.time() - self._last_veto_refresh < max_age:
             return
         self._last_veto_refresh = time.time()
         memory = None
@@ -648,7 +657,65 @@ class TrendGuardBot:
             basis, prices, holdings, now, self.p,
             float(self.state.get("last_equity") or self.g.paper_capital),
             float(self.state.get("risk_mult", 1.0) or 1.0), self.active_now(),
-            (self.state.get("vetoes") or {}).keys(), bool(self.state.get("halted")))
+            (self.state.get("vetoes") or {}).keys(), bool(self.state.get("halted")),
+            calibrate=learning.calibrator(self.state.get("learning")))
+
+    # ---------- Apprentissage libre (learning.py) ----------
+
+    BOOK_SAMPLE_EVERY_SEC = 3600
+    BOOK_SAMPLE_MAX_SEC = 20
+
+    def _learning(self) -> Dict[str, Any]:
+        self.state["learning"] = learning.ensure(self.state.get("learning"))
+        return self.state["learning"]
+
+    def _sample_books(self) -> None:
+        """Toutes les heures, en marche continue : écart achat/vente et
+        profondeur de chaque carnet, pour apprendre la normale de chaque
+        crypto. Au plus 20 s ; une erreur réseau arrête le relevé (nouvel
+        essai dans une heure)."""
+        if not self.track_uptime or time.time() - self._last_book_sample < self.BOOK_SAMPLE_EVERY_SEC:
+            return
+        self._last_book_sample = time.time()
+        L, t0 = self._learning(), time.time()
+        for s in list(self.slots.values()):
+            fetch = getattr(s.ex.exchange, "fetch_order_book", None)
+            if fetch is None or time.time() - t0 > self.BOOK_SAMPLE_MAX_SEC:
+                return
+            try:
+                st = learning.book_stats(fetch(s.symbol, limit=100), self.BOOK_DEPTH_BAND)
+            except Exception:
+                return
+            if st is not None:
+                learning.observe_book(L, s.base.lower(), *st)
+
+    def _learn_forecast(self, now: datetime) -> None:
+        """Relève les probabilités du modèle 12, 6, 3 et 1 heure avant la
+        clôture ; elles seront comparées à ce qui s'est passé."""
+        basis = self.state.get("anticipation")
+        if not (self.track_uptime and basis):
+            return
+        close_at = pd.Timestamp(basis["next_close"]).to_pydatetime()
+        bucket = learning.forecast_bucket((close_at - now).total_seconds() / 3600)
+        for_day = (pd.Timestamp(basis["next_close"]) - pd.Timedelta(days=1)).date().isoformat()
+        L = self._learning()
+        if bucket is None or learning.has_snapshot(L, for_day, bucket):
+            return
+        f = self.forecast(now)
+        if f:
+            learning.record_forecast(L, f, for_day, bucket)
+
+    def _learn_close(self, day: str, snap: Dict[str, Dict[str, float]], bull: bool,
+                     exits: List[Tuple[str, str]]) -> None:
+        """À la décision : chaque prévision relevée pour cette clôture
+        devient une leçon (vendu ? cassure ? marché baissier ?)."""
+        sold = {a for a, reason in exits if reason == "STOP"}
+        signals = {a for a, s in snap.items()
+                   if ts._finite(s.get("close"), s.get("prior_high"), s.get("mom"))
+                   and s["close"] > s["prior_high"] and s["mom"] > 0}
+        n = learning.evaluate(self._learning(), day, sold, signals, not bull)
+        if n:
+            self.logger.info(f"[APPRENTISSAGE] {n} prévision(s) comparée(s) à la clôture du {day}")
 
     def _anticipate(self, now: datetime) -> None:
         """Dans les 3 h avant la clôture : prévient une fois par soir quand
@@ -947,6 +1014,8 @@ class TrendGuardBot:
         if stale:
             self.logger.info("[RUSE] achats différés remplacés par la décision du jour : "
                              + ", ".join(a.upper() for a in sorted(stale)))
+            for _a in stale:
+                learning.note_deferral(self._learning(), "cancelled")
         self._entry_notes = {}
         missed = self._missed_days(close.index,
                                    self.state.get("last_decision_day"), day)
@@ -954,6 +1023,10 @@ class TrendGuardBot:
                 if missed else [])
         holdings = self._holdings()
         exits = ts.update_positions(holdings, snap, bull, p)
+        try:
+            self._learn_close(day, snap, bull, exits)
+        except Exception as e:           # apprendre ne bloque jamais la décision
+            self.logger.warning(f"[APPRENTISSAGE] leçon du jour impossible : {e}")
         for a, reason in exits:
             holdings.pop(a, None)
             self._execute_exit(a, reason, prices.get(a))
@@ -1213,27 +1286,34 @@ class TrendGuardBot:
             return None
         try:
             ob = fetch(s.symbol, limit=100)
-            bids, asks = ob.get("bids") or [], ob.get("asks") or []
-            if not bids or not asks:
+            if not (ob.get("bids") or []) or not (ob.get("asks") or []):
                 return "carnet d'ordres vide"
-            bid, ask = float(bids[0][0]), float(asks[0][0])
-            if bid <= 0 or ask <= 0:
+            stats = learning.book_stats(ob, self.BOOK_DEPTH_BAND)
+            if stats is None:
                 return None
-            spread = (ask - bid) / ((ask + bid) / 2)
-            if spread > self.g.max_spread:
+            spread, depth = stats
+            # Ruse apprise (learning.py) : limite réglée sur la normale de
+            # CETTE crypto, jamais plus large que le seuil fixe.
+            a, L = s.base.lower(), self._learning()
+            limit = learning.spread_limit(L, a, self.g.max_spread)
+            drained = learning.depth_drained(L, a, depth, self.g.quote)
+            learning.observe_book(L, a, spread, depth)
+            if spread > limit:
                 return (f"écart achat/vente anormal ({spread * 100:.2f} %, limite "
-                        f"{self.g.max_spread * 100:.2f} %)")
-            depth = sum(float(p) * float(q) for p, q, *_ in asks
-                        if float(p) <= ask * (1 + self.BOOK_DEPTH_BAND))
+                        f"{limit * 100:.2f} %"
+                        + (", réglée sur la normale de cette crypto" if limit < self.g.max_spread else "")
+                        + ")")
             if depth < self.BOOK_DEPTH_MULT * notional:
                 return (f"carnet d'ordres trop mince ({depth:,.0f} {self.g.quote} à moins "
                         f"de 1 % du prix pour un achat de {notional:,.0f})")
+            if drained:
+                return drained
         except Exception:
             return None
         return None
 
     def _defer_entry(self, plan: Dict[str, Any], equity: float, now: datetime,
-                     reason: str) -> None:
+                     reason: str, price: Optional[float] = None) -> None:
         a = plan["asset"]
         book = self._pending()
         t = now.timestamp()
@@ -1251,7 +1331,8 @@ class TrendGuardBot:
             return
         book[a] = {"plan": plan, "equity": float(equity), "reason": reason, "tries": 1,
                    "since": t, "until": t + self.g.entry_retry_hours * 3600,
-                   "next": t + self.RETRY_EVERY_SEC}
+                   "next": t + self.RETRY_EVERY_SEC, "price": price}
+        learning.note_deferral(self._learning(), "deferred")
         self.logger.warning(
             f"[RUSE] achat de {a.upper()} différé : {reason} → nouvel essai toutes "
             f"les 5 min pendant {self.g.entry_retry_hours:g} h")
@@ -1283,6 +1364,7 @@ class TrendGuardBot:
                 continue
             if t >= e["until"]:
                 book.pop(a, None)
+                learning.note_deferral(self._learning(), "abandoned")
                 self.logger.warning(f"[RUSE] achat de {a.upper()} abandonné : {e['reason']} "
                                     f"pendant {self.g.entry_retry_hours:g} h")
                 self._note_asset(a, "cancelled", f"Achat abandonné : {e['reason']} pendant "
@@ -1298,6 +1380,7 @@ class TrendGuardBot:
                     or len(holdings) >= p.max_positions
                     or open_risk + e["plan"]["risk_quote"] > p.max_total_risk * eq * mult + 1e-9):
                 book.pop(a, None)
+                learning.note_deferral(self._learning(), "cancelled")
                 self.logger.info(f"[RUSE] achat différé de {a.upper()} abandonné : la situation "
                                  f"a changé depuis la décision")
                 self._note_asset(a, "cancelled", "Achat abandonné : la situation a changé "
@@ -1351,9 +1434,13 @@ class TrendGuardBot:
         # manipulation, maintenance). Nouvel essai plus tard dans la journée.
         anomaly = self._book_anomaly(s, adj["cost"])
         if anomaly:
-            self._defer_entry(plan, equity, now, anomaly)
+            self._defer_entry(plan, equity, now, anomaly, px_now)
             return None
-        deferred = self._pending().pop(a, None) is not None
+        waited = self._pending().pop(a, None)
+        deferred = waited is not None
+        # Bilan de la ruse : prix obtenu par rapport au premier essai (+ = moins cher).
+        first = (waited or {}).get("price")
+        ruse_gain = (first - px_now) / first if first else None
         if abs(drift) > 0.01:
             self.logger.info(
                 f"[ENTRY] {a.upper()} : prix {px_now:.6g} ({drift * 100:+.1f} % "
@@ -1377,6 +1464,8 @@ class TrendGuardBot:
                 f"risque={plan['risk_quote']:.2f} {self.g.quote}")
             self._record_buy(a, now, plan["entry"], plan["qty"], plan["cost"],
                              plan["risk_quote"], "différé" if deferred else "")
+            if deferred:
+                learning.note_deferral(self._learning(), "bought", ruse_gain)
             return plan
         res = s.eng.enter_planned(
             s.ctx, plan["qty"], plan["exec_price"], sl_abs=disaster,
@@ -1393,6 +1482,8 @@ class TrendGuardBot:
             self._record_buy(a, now, p.buy_price or plan["exec_price"], p.amount_held or plan["qty"],
                              (p.cost_basis or p.buy_price) * (p.amount_held or plan["qty"]),
                              plan["risk_quote"], "différé" if deferred else "")
+            if deferred:
+                learning.note_deferral(self._learning(), "bought", ruse_gain)
         self._save_slot(s)
         return plan if res == v29.EntryResult.OPENED else None
 
