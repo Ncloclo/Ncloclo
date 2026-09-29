@@ -1,4 +1,4 @@
-# Audit et diagnostic expert de TrendGuard — 28 septembre 2026 (soir)
+# Audit et diagnostic expert de TrendGuard — 28 et 29 septembre 2026
 
 Mise à jour de l'audit du matin, après les changements de la journée :
 anticipation, centre de sécurité, code rangé par rôle, ancien bot V29 mis à
@@ -20,6 +20,66 @@ configurée), une clé Binance neuve avec le droit de trading, et quelques
 semaines de paper puis de testnet. Un risque de démarrage trouvé pendant ce
 diagnostic est déjà corrigé : en paper, le bot ne transmet plus les clés à
 Binance.
+
+## Diagnostic approfondi du 29 septembre
+
+**Verdict du jour : la stratégie est robuste, mais le bot n'a tourné que 58 %
+du temps.** Le point faible n'est ni la stratégie ni le code : c'est le PC,
+éteint ou en veille près de la moitié du temps depuis le démarrage du bot.
+Méthode : journal du bot et du superviseur minute par minute, journal de
+Windows, nouvelle étude de robustesse sur l'historique Binance
+([`ROBUSTESSE.md`](ROBUSTESSE.md)), test réel des alertes. Les heures sont
+celles du PC, réglé sur UTC.
+
+### Disponibilité du bot (26/09 22 h 53 → 29/09 13 h 24)
+
+| Arrêt | Durée | Ce qui s'est passé |
+| --- | --- | --- |
+| 26/09 23 h 43 → 27/09 16 h 23 | 16,7 h | PC éteint ou en veille la nuit : la décision de la clôture du 26 n'a été prise qu'à 16 h 23, avec 16 h de retard (rattrapée au redémarrage) |
+| 27/09 16 h 39 → 18 h 12 | 1,5 h | PC éteint ou en veille |
+| 28/09 09 h 06 → 10 h 30 | 1,4 h | PC en veille : bot figé, relancé par le superviseur au réveil (« aucun signe de vie depuis 74 min ») |
+| 28/09 20 h 54 → 23 h 41 | 2,8 h | PC en veille (« aucun signe de vie depuis 156 min ») |
+| 29/09 07 h 17 → 10 h 53 | 3,6 h | PC en veille ou éteint (réveil bref à 9 h 09), redémarré à 10 h 41 |
+
+Au total **26 heures d'arrêt sur 62,5 : 58 % de disponibilité**. Pendant ces
+arrêts, en paper, le stop catastrophe n'est pas surveillé et les décisions de
+clôture attendent le retour du PC. En réel, le stop catastrophe posé chez
+Binance protégerait quand même, mais la règle principale (vente à la clôture
+sous le stop suiveur) serait appliquée en retard. Depuis le démarrage, deux
+décisions sur trois ont été prises à l'heure (00 h 02 et 00 h 03), une avec 16 h
+de retard. L'anti-veille du bot empêche seulement la mise en veille
+automatique : elle ne peut rien contre le capot fermé, la mise en veille
+manuelle, l'arrêt ou le redémarrage du PC. S'y ajoutent de
+courtes coupures d'Internet (quelques minutes, plusieurs fois par jour), que le
+bot rattrape seul.
+
+### Robustesse de la stratégie ([`ROBUSTESSE.md`](ROBUSTESSE.md))
+
+- **Coûts** : rentable même avec des frais et un glissement triplés (+31,1 %
+  puis +27,5 % par an).
+- **Réglages** : les 27 combinaisons voisines (cassure, stops) sont rentables
+  sur les deux périodes : un plateau, pas un réglage chanceux.
+- **Gagnants** : ZEC, XRP et ADA font 50 % des gains ; même sans elles, retirées
+  après coup, le bot reste rentable (+31,9 % puis +21,2 % par an).
+- **Hasard** (3 ans rejoués 5 000 fois par blocs de 30 jours) : résultat médian
+  +155 %, 4 % de chances de finir en perte, pire baisse médiane −26 % et −41 %
+  une fois sur 20 ; séries de 8 à 12 trades perdants de suite.
+- **Année par année** : une seule année en perte (2022, −9 %, marché baissier) ;
+  pire mois −13,2 % (janvier 2024).
+
+### Alertes
+
+L'e-mail est configuré mais aucune alerte n'est encore arrivée : le serveur
+indiqué était « pop3 » (corrigé en `smtp.gmail.com`) et Gmail refuse le mot de
+passe habituel (il faut un mot de passe d'application). Défaut trouvé : le
+centre de sécurité affiche « Alertes » en vert dès qu'un canal est configuré,
+même si ses envois échouent.
+
+### Résultats du paper (3 jours)
+
+Capital 10 250 USDT (+2,5 %), aucun trade vendu : AAVE +12 %, LINK +8 %, XLM
++7,5 %, ICP +4 %, ADA 0 %, LTC −5 %. Trois jours ne disent rien de la
+stratégie : il faut 10 à 20 trades vendus pour comparer à l'attendu.
 
 ## 1. État du bot (28 septembre, 19 h)
 
@@ -144,11 +204,13 @@ Points faibles :
 | 1 | Configurer les alertes (Telegram, e-mail ou WhatsApp) | Vous | **en cours** (29/09) : e-mail enregistré, serveur corrigé (`pop3` → `smtp.gmail.com`), mais Gmail refuse le mot de passe habituel : créer un « mot de passe d'application » puis relancer `alerts configurer`. La configuration refuse désormais un serveur de réception et explique chaque échec en clair |
 | 2 | Supprimer sur Binance les clés montrées dans la conversation ; en créer une neuve (lecture, et Trading Spot le jour du testnet), sans retrait, limitée à votre adresse IP | Vous | avant le testnet |
 | 3 | Laisser tourner en paper jusqu'à 10 à 20 trades vendus, puis comparer à l'attendu (section « Réel vs attendu » du diagnostic) | Vous et le bot | plusieurs semaines |
-| 4 | Garder le PC allumé et branché, ou passer sur un petit serveur | Vous | dès que possible |
+| 4 | **Disponibilité** : PC branché et allumé en continu, veille désactivée sur secteur, capot fermé = « Ne rien faire » sur secteur ; ou un petit serveur | Vous | **priorité n° 1** (29/09 : 58 % de disponibilité) |
 | 5 | Synchroniser l'horloge de Windows | Vous | droits d'administrateur nécessaires : Paramètres ▸ Heure et langue ▸ Synchroniser maintenant |
 | 6 | Découper les fonctions les plus complexes et `app.js` | Code | **fait** : les six plus lourdes découpées, `app.js` en quatre modules ; un test d'horodatage fragile rendu fiable |
 | 7 | Décider du sort de l'ancien bot V29 (le supprimer allégerait le dépôt) | Code | **décidé : gardé à part.** Son moteur d'exécution est aussi celui de TrendGuard ; le supprimer obligerait à retoucher le code des ordres réels pour peu de gain |
 | 8 | Avant le réel : `verify` complet, quelques jours de testnet, au moins 100 USDT | Vous | le moment venu |
+| 9 | Mesurer la disponibilité du bot dans le panneau et prévenir quand il a été arrêté plus d'une heure | Code | à faire |
+| 10 | Centre de sécurité : « Alertes » à corriger si le dernier envoi a échoué | Code | à faire |
 
 Fait depuis l'audit du matin : chemins de secours des ordres réels testés (et
 un défaut corrigé), blocage des mots de passe ratés, écriture sûre du choix des

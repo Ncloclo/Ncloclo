@@ -372,6 +372,7 @@ python trendguard_bot.py verify                                 # sans clé : te
 python trendguard_bot.py set-keys                               # clés API vérifiées par Binance, saisie masquée
 python trendguard_bot.py lab --cache data_binance               # tournoi des stratégies + méta-apprentissage
 python -m research.selection --cache data_binance               # auto-sélection et prise de bénéfice
+python -m research.robustness --cache data_binance              # robustesse : coûts, réglages, hasard
 python trendguard_bot.py animation                              # animation du bot sur les prix réels Binance
 python trendguard_bot.py panel                                  # panneau de contrôle (navigateur)
 python trendguard_bot.py set-panel-password                     # accès depuis un téléphone (saisie masquée)

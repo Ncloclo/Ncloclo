@@ -784,7 +784,7 @@ def test_repository_markdown_is_formatted():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     docs = ["README.md"] + [os.path.join("docs", n) for n in (
         "TRENDGUARD_REPORT.md", "ADAPTATION.md", "STRATEGIES.md", "SELECTION.md", "AUDIT.md",
-        "ARCHITECTURE.md")]
+        "ARCHITECTURE.md", "ROBUSTESSE.md")]
     names = [n for n in docs if os.path.exists(os.path.join(root, n))]
     if not names:
         pytest.skip("documentation absente (image Docker)")
