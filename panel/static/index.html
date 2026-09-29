@@ -264,6 +264,15 @@
             <div class="card-head"><h2>Sécurité</h2><strong class="sel-count" id="s-sec-score">—</strong></div>
             <ul class="sec-list" id="s-sec"></ul>
           </div>
+          <div class="card" id="s-report">
+            <div class="card-head"><h2>Rapport quotidien</h2><strong class="sel-count" id="s-rep-score">—</strong></div>
+            <p class="sub" id="s-rep-when">Sécurité et diagnostic expert, chaque jour à 00:30 UTC, envoyés par e-mail et WhatsApp.</p>
+            <ul class="sec-list" id="s-rep-top"></ul>
+            <div class="row-end rep-actions">
+              <button class="btn small ghost" type="button" id="s-rep-run">Générer maintenant</button>
+              <button class="btn small" type="button" id="s-rep-open" disabled>Rapport complet</button>
+            </div>
+          </div>
           <div class="card">
             <div class="card-head"><h2>Alertes</h2></div>
             <ul id="s-alerts" class="channel-list"></ul>
@@ -356,6 +365,17 @@
 </dialog>
 
 <!-- Confirmation (mode réel) -->
+<dialog id="report" aria-labelledby="report-title">
+  <div class="report-head">
+    <div>
+      <h2 id="report-title">Rapport quotidien</h2>
+      <p class="sub" id="report-when"></p>
+    </div>
+    <button class="btn small ghost" type="button" id="report-close">Fermer</button>
+  </div>
+  <div class="report-body" id="report-body"></div>
+</dialog>
+
 <dialog id="confirm" aria-labelledby="confirm-title">
   <h2 id="confirm-title">Démarrer en mode RÉEL ?</h2>
   <p id="confirm-text">Le bot passera de vrais ordres sur Binance avec votre argent.</p>

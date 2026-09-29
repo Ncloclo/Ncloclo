@@ -340,3 +340,47 @@ class DemoNews:
                                        "eth_dominance_pct": 11.9, "active_cryptos": 21642},
                             "fear_greed": {"value": 74, "label": "Avidité",
                                            "history": [48 + (i * 7) % 30 for i in range(29)] + [74]}}}
+
+
+def demo_report() -> Dict[str, Any]:
+    """Rapport quotidien d'exemple (mode démonstration), même forme que
+    trendguard/report.py."""
+    from trendguard import report
+
+    now = datetime.now(timezone.utc).replace(hour=0, minute=31, second=5, microsecond=0)
+    ok, warn, info = True, False, None
+    sections = [
+        {"title": "Sécurité", "checks": [
+            report.chk("Secrets hors de GitHub", ok, "fichier .env exclu de GitHub, jamais publié"),
+            report.chk("Droits du fichier des secrets", ok, "réservé à votre compte (exemple)"),
+            report.chk("Secrets dans le dépôt GitHub", ok, "aucune clé ni aucun mot de passe"),
+            report.chk("Secrets dans les journaux", ok, "aucun secret dans les journaux"),
+            report.chk("Sauvegarde de la base", ok, "faite (812 Ko, intégrité vérifiée), 14 jours gardés",
+                       action="base sauvegardée (exemple)"),
+            report.chk("Pare-feu Windows", ok, "actif sur tous les réseaux")]},
+        {"title": "Santé du bot (le fond)", "checks": [
+            report.chk("Bot en marche", ok, "en marche"),
+            report.chk("Décision du jour", ok, "prise à 00:02:41 UTC"),
+            report.chk("Veille du PC (sur secteur)", warn, "mise en veille : après 30 min",
+                       "Paramètres Windows ▸ Alimentation : sur secteur, mise en veille « Jamais » "
+                       "(exemple).")]},
+        {"title": "Compétences acquises", "checks": [
+            report.chk("Apprentissage libre", info, "carnets : normale apprise pour 21 crypto(s) (exemple)")]},
+        {"title": "Code, journal et panneau (la forme)", "checks": [
+            report.chk("Code du bot", ok, "identique à la version publiée"),
+            report.chk("Qualité du code (ruff)", ok, "aucun problème")]}]
+    allc = [c for s in sections for c in s["checks"]]
+    r = {"ready": True, "running": False, "day": now.date().isoformat(),
+         "generated_at": now.isoformat(timespec="seconds"), "mode": "paper",
+         "score": {"ok": sum(1 for c in allc if c["ok"] is True),
+                   "warn": sum(1 for c in allc if c["ok"] is False),
+                   "info": sum(1 for c in allc if c["ok"] is None), "total": len(allc)},
+         "verdict": "1 point(s) à corriger",
+         "actions": [c["action"] for c in allc if c.get("action")],
+         "recommendations": [c["reco"] for c in allc if c.get("reco")],
+         "proposals": ["Amélioration quotidienne (exemple) — https://github.com/"],
+         "sections": sections,
+         "delivery": {"email": {"at": now.timestamp(), "ok": True, "error": None}}}
+    r["text"] = report.render_text(r)
+    r["short"] = report.render_short(r)
+    return r

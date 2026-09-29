@@ -14,6 +14,11 @@
 *.selection.json
 *.evolution.json
 *.evolution.json.tmp
+*.rapport.json
+*.rapport.json.tmp
+# Rapports quotidiens et sauvegardes de la base (report.py)
+rapports/
+sauvegardes/
 # Python
 __pycache__/
 .pytest_cache/

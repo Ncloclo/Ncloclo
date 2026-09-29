@@ -512,6 +512,24 @@ def a_autonomy(ctx: Dict[str, Any]) -> str:
             "respecté : aucune relance, même au redémarrage, jusqu'au prochain AUTO.")
 
 
+def a_report(ctx: Dict[str, Any]) -> str:
+    r = ctx.get("report") or {}
+    if not r.get("ready"):
+        return ("**Rapport quotidien** : chaque jour à 00:30 UTC, le bot fait une analyse "
+                "profonde (sécurité, santé, stratégie, compétences, code) et vous l'envoie par "
+                "e-mail et WhatsApp. Le premier n'est pas encore prêt : Réglages ▸ Rapport "
+                "quotidien ▸ Générer maintenant.")
+    s = r.get("score") or {}
+    lines = [f"**Rapport quotidien du {r.get('day')}** : {r.get('verdict', '').lower()} "
+             f"({s.get('ok', 0)} contrôles conformes sur {s.get('total', 0)})."]
+    if r.get("actions"):
+        lines.append("- Fait seul : " + " ; ".join(r["actions"][:3]) + ".")
+    for k, reco in enumerate((r.get("recommendations") or [])[:3], 1):
+        lines.append(f"- À faire {k} : {reco}")
+    lines.append("- Rapport complet : Réglages ▸ Rapport quotidien ▸ Rapport complet.")
+    return "\n".join(lines)
+
+
 def a_learning(ctx: Dict[str, Any]) -> str:
     lr = (ctx.get("status") or {}).get("learning") or {}
     lines = [
@@ -686,6 +704,10 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("autonomy", ("autonome", "autonomie", "redemarrage", "redemarrer", "demarrer avec",
                   "ordinateur", "veille du pc", "plantage", "superviseur", "eteint"), a_autonomy,
      [{"label": "Réglages ▸ autonomie", "href": "#settings"}]),
+    ("report", ("rapport", "rapport quotidien", "rapport de securite", "rapport du jour",
+                "analyse du jour", "diagnostic du jour", "analyse profonde", "sauvegarde",
+                "sauvegardes"),
+     a_report, [{"label": "Réglages ▸ rapport", "href": "#settings"}]),
     ("learning", ("apprend", "apprendre de", "apprentissage", "apprentissage libre", "s adapter",
                   "s adapte", "adaptation", "experience", "lecons", "precision", "precis",
                   "rapide", "libre"),

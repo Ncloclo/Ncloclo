@@ -239,7 +239,10 @@ def test_anticipation_and_security_endpoints(demo_server, monkeypatch):
     monkeypatch.setenv("BINANCE_API_SECRET", "secret-factice-a-ne-jamais-afficher")
     code, f = _json(base + "/api/anticipation")
     assert code == 200 and f["ready"] and 0 < f["hours_left"] <= 48
-    assert f["sells"][0]["asset"] == "icp" and f["sells"][0]["prob"] > 0.1      # proche du stop
+    # ICP, la plus proche de son stop, est la vente la plus probable (la
+    # probabilité elle-même dépend de l'heure : moins de temps, moins de chances).
+    assert f["sells"][0]["asset"] == "icp" and f["sells"][0]["prob"] > 0
+    assert f["sells"][0]["prob"] == max(s["prob"] for s in f["sells"])
     bnb = next(b for b in f["buys"] if b["asset"] == "bnb")
     assert bnb["prob"] > 0.5 and "plafond de risque atteint" in bnb["blocked"]  # 6 % engagés
     assert f["risk"]["slots"] == 0 and f["risk"]["budget_pct"] == 6.0

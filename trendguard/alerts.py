@@ -256,6 +256,25 @@ class AlertHub:
             self._note(ch.name, results[ch.name])
         return results
 
+    def send_report(self, subject: str, full: str, short: str) -> Dict[str, Optional[str]]:
+        """Rapport quotidien, quel que soit le niveau d'alerte : complet par
+        e-mail, résumé par WhatsApp et Telegram. Résultat par canal (None =
+        envoyé)."""
+        results: Dict[str, Optional[str]] = {}
+        if getattr(self.telegram, "enabled", False):
+            ok = bool(self.telegram(f"{subject}\n{short}", dedup_key=f"rapport-{subject}", sync=True))
+            results["telegram"] = None if ok else "envoi Telegram refusé"
+        for ch in self.channels:
+            try:
+                ch.send(subject, full if ch.name == "email" else short)
+                results[ch.name] = None
+            except Exception as e:
+                results[ch.name] = v29.scrub_secrets(explain_send_error(e, getattr(ch, "host", "")),
+                                                     ch.secrets)[:300]
+                self._log("warning", f"[RAPPORT] {ch.label} : envoi impossible ({results[ch.name]})")
+            self._note(ch.name, results[ch.name])
+        return results
+
     def _note(self, name: str, err: Optional[str]) -> None:
         with self._lock:
             self.last[name] = {"at": time.time(), "ok": err is None, "error": err}

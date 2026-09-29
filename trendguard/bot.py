@@ -20,7 +20,7 @@ import pandas as pd
 
 import v29
 
-from . import anticipation, autonomy, evolution, learning, uptime
+from . import anticipation, autonomy, evolution, learning, report, uptime
 from . import diagnostics as dg
 from . import market_watch as mw
 from . import trend_strategy as ts
@@ -358,6 +358,7 @@ class TrendGuardBot:
             self._learn_forecast(now)
         except Exception as e:           # apprendre ne bloque jamais le trading
             self.logger.warning(f"[APPRENTISSAGE] relevé impossible : {e}")
+        self._launch_report(now)
         # Horloge réelle (et non `now`, simulé en rejeu) : sert au contrôle
         # de santé du conteneur.
         self.state["last_cycle_ts"] = time.time()
@@ -443,6 +444,22 @@ class TrendGuardBot:
                              + (" (tempête : aucun changement permis)" if storm else ""))
         except OSError as e:
             self.logger.warning(f"[ÉVOLUTION] épreuves du jour impossibles : {e}")
+
+    def _launch_report(self, now: datetime) -> None:
+        """Rapport quotidien (report.py) à partir de 00:30 UTC, une fois par
+        jour, dans un processus séparé ; rattrapé au retour du PC s'il était
+        éteint à cette heure-là."""
+        if not (self.g.daily_report and self.track_uptime):
+            return
+        today = now.date().isoformat()
+        if self.state.get("report_day") == today or now.hour * 60 + now.minute < report.REPORT_MINUTE:
+            return
+        self.state["report_day"] = today
+        try:
+            if report.launch(self.g, "quotidien"):
+                self.logger.info("[RAPPORT] analyse profonde, sécurité et rapport du jour lancés")
+        except Exception as e:
+            self.logger.warning(f"[RAPPORT] rapport du jour impossible : {e}")
 
     def _note_stop(self) -> None:
         """Arrêt propre (bouton ARRÊTER, Ctrl+C) : noté, pour que la reprise

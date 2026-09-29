@@ -784,7 +784,8 @@ def test_repository_markdown_is_formatted():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     docs = ["README.md"] + [os.path.join("docs", n) for n in (
         "TRENDGUARD_REPORT.md", "ADAPTATION.md", "STRATEGIES.md", "SELECTION.md", "AUDIT.md",
-        "ARCHITECTURE.md", "ROBUSTESSE.md", "EXAMEN.md", "EVOLUTION.md", "APPRENTISSAGE.md")]
+        "ARCHITECTURE.md", "ROBUSTESSE.md", "EXAMEN.md", "EVOLUTION.md", "APPRENTISSAGE.md",
+        "RAPPORT.md")]
     names = [n for n in docs if os.path.exists(os.path.join(root, n))]
     if not names:
         pytest.skip("documentation absente (image Docker)")
@@ -802,4 +803,4 @@ def test_tools_share_the_single_entry_point(capsys, monkeypatch):
     out = capsys.readouterr().out
     assert "trendguard_bot.py watch" in out and "set-key" in out
     assert sys.argv[0] == "trendguard_bot.py"                 # rétabli après l'aide
-    assert set(tg.TOOLS) == {"alerts", "watch", "strategy", "lab", "animation", "evolution"}
+    assert set(tg.TOOLS) == {"alerts", "watch", "strategy", "lab", "animation", "evolution", "rapport"}

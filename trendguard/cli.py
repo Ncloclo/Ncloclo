@@ -589,6 +589,22 @@ def health_check(gcfg: GuardConfig, max_age_sec: int) -> int:
 def cmd_diagnose(gcfg: GuardConfig, out_path: Optional[str] = None,
                  exchange: Any = None, now: Optional[datetime] = None) -> int:
     """Diagnostic complet en lecture seule (aucun ordre, bot arrêté ou non)."""
+    print(f"Analyse en cours ({len(gcfg.universe)} paires, historique Binance "
+          f"depuis 2018)…", flush=True)
+    findings, day = diagnose_findings(gcfg, exchange, now)
+    text = dg.render(findings, f"({gcfg.run_mode.upper()}, {day})")
+    print(text)
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as fh:
+            fh.write(text + "\n")
+        print(f"\nRapport enregistré : {out_path}")
+    return 1 if dg.verdict(findings) == "ALERTE" else 0
+
+
+def diagnose_findings(gcfg: GuardConfig, exchange: Any = None, now: Optional[datetime] = None
+                      ) -> Tuple[List[dg.Finding], str]:
+    """Constats du diagnostic complet (lecture seule) et jour de la bougie
+    analysée ; utilisé aussi par le rapport quotidien (report.py)."""
     if exchange is None:
         # Historique public (data-api.binance.vision) : sans la liste des
         # marchés (4,7 Mo) et accessible depuis n'importe quel serveur.
@@ -632,19 +648,11 @@ def cmd_diagnose(gcfg: GuardConfig, out_path: Optional[str] = None,
     equity = float(state.get("last_equity") or (
         gcfg.paper_capital if gcfg.run_mode == "paper" else 0.0))
     day = last_closed_day(now, gcfg.decision_delay_sec)
-    print(f"Analyse en cours ({len(gcfg.universe)} paires, historique Binance "
-          f"depuis 2018)…", flush=True)
     findings = dg.run_diagnosis(exchange, evolution.params_for(gcfg), list(gcfg.universe), state,
                                 holdings, equity, day, now, db_file=gcfg.db_file,
                                 running=running, quote=gcfg.quote,
                                 kill_drawdown=gcfg.kill_drawdown)
-    text = dg.render(findings, f"({gcfg.run_mode.upper()}, {day})")
-    print(text)
-    if out_path:
-        with open(out_path, "w", encoding="utf-8") as fh:
-            fh.write(text + "\n")
-        print(f"\nRapport enregistré : {out_path}")
-    return 1 if dg.verdict(findings) == "ALERTE" else 0
+    return findings, day
 
 
 # Outils du bot, lancés par la même commande (leurs propres options suivent) :
@@ -654,7 +662,8 @@ TOOLS = {"alerts": ("alerts", "alertes : configurer | tester"),
          "strategy": ("trend_strategy", "stratégie : download | research | backtest"),
          "lab": ("strategy_lab", "laboratoire des stratégies (--cache data_binance)"),
          "animation": ("replay_animation", "page d'animation du rejeu"),
-         "evolution": ("evolution", "évolution encadrée : [statut] | examen | quotidien | revenir | regles")}
+         "evolution": ("evolution", "évolution encadrée : [statut] | examen | quotidien | revenir | regles"),
+         "rapport": ("report", "rapport quotidien, sécurité et diagnostic : [dernier] | maintenant | quotidien")}
 
 
 def _parser() -> argparse.ArgumentParser:

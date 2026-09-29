@@ -31,13 +31,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
-from trendguard import anticipation, evolution, learning, uptime
+from trendguard import anticipation, evolution, learning, report, uptime
 from trendguard import market_watch as mw
 
 from .assistant import AIHelper, Assistant
 from .control import BotControl
 from .data import BotData, _ts
-from .demo import DemoControl, DemoData, DemoMarket, DemoNews
+from .demo import DemoControl, DemoData, DemoMarket, DemoNews, demo_report
 from .market import INTERVALS, Market
 from .news import NewsHub
 
@@ -278,7 +278,8 @@ class PanelApp:
         mot de passe, rien du fichier .env."""
         return {"status": self.status(), "news": self.news_view(),
                 "reasoning": self.data.reasoning(), "positions": self.data.positions(),
-                "anticipation": self.anticipation_view(), "security": self.security_view()}
+                "anticipation": self.anticipation_view(), "security": self.security_view(),
+                "report": self.report_view()}
 
     def anticipation_view(self) -> Dict[str, Any]:
         """Ce que le bot fera probablement à la prochaine clôture, avec les
@@ -362,11 +363,13 @@ class PanelApp:
 
     def _alert_channels(self, st: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Canaux d'alerte et résultat de leur dernier envoi : envoi du bot
-        (son état) ou test depuis ce panneau, le plus récent des deux."""
+        (son état), rapport quotidien ou test depuis ce panneau, le plus
+        récent l'emporte."""
         if self.hub is None:
             return []
         seen: Dict[str, Dict[str, Any]] = {}
-        for src in (st.get("alerts_last"), getattr(self.hub, "last", None)):
+        sent = (report.load_latest(self.g) or {}).get("delivery")
+        for src in (st.get("alerts_last"), sent, getattr(self.hub, "last", None)):
             for name, r in (dict(src) if isinstance(src, dict) else {}).items():
                 if isinstance(r, dict) and float(r.get("at") or 0) >= float((seen.get(name) or {}).get("at") or 0):
                     seen[name] = r
@@ -410,6 +413,40 @@ class PanelApp:
             detail += " ; PC branché et mise en veille sur « Jamais » quand il est branché"
         return self._check("Disponibilité du bot (7 j)", pct >= uptime.GOOD_PCT, detail)
 
+    def report_view(self) -> Dict[str, Any]:
+        """Dernier rapport quotidien (sécurité et diagnostic), sans secret."""
+        if self.demo:
+            return demo_report()
+        r = report.load_latest(self.g) or {"ready": False}
+        return dict(r, running=report.is_running(self.g))
+
+    def _run_report(self) -> Dict[str, Any]:
+        if self.demo:
+            return {"ok": False, "message": "Indisponible en démonstration."}
+        if not report.launch(self.g, "maintenant"):
+            return {"ok": False, "message": "Un rapport est déjà en cours : il apparaîtra ici dans "
+                                            "quelques minutes."}
+        return {"ok": True, "message": "Analyse lancée : le rapport sera prêt dans 2 à 3 minutes, "
+                                       "puis envoyé par e-mail et WhatsApp."}
+
+    def _report_check(self) -> Dict[str, Any]:
+        """Rapport quotidien : date et verdict du dernier ; à corriger s'il a
+        plus de 36 heures."""
+        r = self.report_view()
+        if not r.get("ready"):
+            return self._check("Rapport quotidien", None, "le premier arrive à 00:30 UTC "
+                                                          "(ou Réglages ▸ Générer maintenant)")
+        try:
+            age_h = (datetime.now(timezone.utc) - datetime.fromisoformat(r["generated_at"])).total_seconds() / 3600
+        except (KeyError, ValueError, TypeError):
+            age_h = 0.0
+        s = r.get("score") or {}
+        detail = (f"dernier : {self._when(datetime.fromisoformat(r['generated_at']).timestamp())} "
+                  f"UTC · {s.get('ok', 0)}/{s.get('total', 0)} conformes · {r.get('verdict', '')}")
+        if age_h > 36:
+            return self._check("Rapport quotidien", False, detail + " ; plus de 36 h : PC éteint à 00:30 ?")
+        return self._check("Rapport quotidien", None, detail)
+
     def _evolution_check(self) -> Dict[str, Any]:
         """Évolution encadrée : niveau atteint, et rappel de ce qui reste
         hors de sa portée (information)."""
@@ -438,6 +475,7 @@ class PanelApp:
                         "active" if sup.get("running") else "inactive : cliquez sur AUTO"),
             self._uptime_check(st),
             self._evolution_check(),
+            self._report_check(),
             self._alerts_check(st),
             self._check("Garde-fou de Rachelle", True, "secrets masqués, demandes sensibles refusées"),
         ]
@@ -567,6 +605,7 @@ class PanelApp:
             "/api/assistant": self.assistant.info,
             "/api/anticipation": self.anticipation_view,
             "/api/security": self.security_view,
+            "/api/report": self.report_view,
             "/api/log": lambda: {"lines": self.data.log_tail(int(q("lines", "300")))},
         }
         post = {
@@ -575,6 +614,7 @@ class PanelApp:
             "/api/selection": lambda: self._save_selection(body),
             "/api/autostart": lambda: reply(self.control.set_autostart(body.get("enabled") is True)),
             "/api/alerts/test": lambda: self._test_alerts(body),
+            "/api/report/run": self._run_report,
         }
         try:
             if method == "POST" and path == "/api/assistant":
@@ -609,6 +649,12 @@ def make_handler(app: PanelApp):
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("X-Frame-Options", "DENY")
             self.send_header("Referrer-Policy", "no-referrer")
+            # Aucune fenêtre d'un autre site ne peut piloter ou lire le panneau,
+            # et aucune fonction sensible du navigateur ne lui est ouverte.
+            self.send_header("Cross-Origin-Opener-Policy", "same-origin")
+            self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+            self.send_header("Permissions-Policy",
+                             "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
             for k, v in (extra or {}).items():
                 self.send_header(k, v)
             self.end_headers()
