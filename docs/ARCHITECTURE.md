@@ -30,7 +30,7 @@ clé « Démarrer avec l'ordinateur » et les tâches VS Code ne changent pas.
 | `trendguard/` | le bot TrendGuard |
 | `v29/` | moteur d'exécution Binance (ordres, stops, base, verrou) ; ancien bot V29.6 rangé dans `v29/intraday/` |
 | `panel/` | panneau de contrôle (serveur local et interface web) |
-| `research/` | études reproductibles, lecture seule : adaptation, sélection, robustesse |
+| `research/` | études reproductibles, lecture seule : adaptation, sélection, robustesse, examen |
 | `tests/` | tests Python (`pytest`) et navigateur (`tests/web/`, Playwright) |
 | `templates/` | gabarit de la page d'animation du rejeu |
 | `docs/` | rapports de recherche, audit, revues hebdomadaires |
