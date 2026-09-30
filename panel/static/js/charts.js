@@ -22,6 +22,11 @@ export function makeChart(box, extra, logo = true) {
   if (!LWC) { box.textContent = "Bibliothèque de graphiques introuvable."; return null; }
   const c = LWC.createChart(box, chartOptions(extra, logo));
   c.tgLogo = logo;
+  // En taille automatique, la largeur n'est connue qu'après le premier
+  // affichage : ajusté avant, le tracé resterait tassé à droite. Il est donc
+  // réajusté dès que la largeur change.
+  let width = 0;
+  c.timeScale().subscribeSizeChange((w) => { if (w !== width) { width = w; c.timeScale().fitContent(); } });
   charts.add(c);
   return c;
 }
@@ -50,8 +55,20 @@ export function buyMarkersOn(points, buys, c, withText = true, sells = []) {
     while (lo < hi) { const mid = (lo + hi) >> 1; if (points[mid].time < t) lo = mid + 1; else hi = mid; }
     return lo > 0 && t - points[lo - 1].time < points[lo].time - t ? points[lo - 1] : points[lo];
   };
-  (buys || []).forEach((b) => out.push({ time: nearest(b.t).time, position: "belowBar", color: c.up, shape: "arrowUp", text: withText ? up(b.asset) : "" }));
-  (sells || []).forEach((s) => out.push({ time: nearest(s.t).time, position: "aboveBar", color: c.down, shape: "arrowDown", text: withText ? `${up(s.asset)} ${fR(s.r)}` : "" }));
+  // Un seul repère par point : six achats le même jour donnent « 6 achats ».
+  const groups = new Map();
+  const add = (t, side, label) => {
+    const key = `${nearest(t).time}|${side}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(label);
+  };
+  (buys || []).forEach((b) => add(b.t, "buy", up(b.asset)));
+  (sells || []).forEach((s) => add(s.t, "sell", `${up(s.asset)} ${fR(s.r)}`));
+  groups.forEach((labels, key) => {
+    const [time, side] = key.split("|"), buy = side === "buy";
+    const text = !withText ? "" : labels.length <= 3 ? labels.join(" · ") : `${labels.length} ${buy ? "achats" : "ventes"}`;
+    out.push({ time: Number(time), position: buy ? "belowBar" : "aboveBar", color: buy ? c.up : c.down, shape: buy ? "arrowUp" : "arrowDown", text });
+  });
   return out.sort((a, b) => a.time - b.time);
 }
 // Graphique d'une position : intervalle choisi pour que l'achat soit visible.

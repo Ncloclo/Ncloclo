@@ -229,8 +229,12 @@
         <div class="kpis">
           <div class="kpi card"><span class="label">Climat selon les IA</span><strong id="w-mood">—</strong><span class="sub" id="w-mood-sub"></span></div>
           <div class="kpi card"><span class="label">Achats bloqués (Binance)</span><strong class="num" id="w-vetoes">—</strong><span class="sub">annonces officielles de retrait</span></div>
+          <div class="kpi card"><span class="label">Peur &amp; Avidité</span><strong id="w-fng">—</strong><span class="sub">0 = peur extrême, 100 = euphorie</span></div>
+          <div class="kpi card"><span class="label">Parité USDC/USDT</span><strong class="num" id="w-peg">—</strong><span class="sub" id="w-peg-sub"></span></div>
+          <div class="kpi card"><span class="label">Actualités lues</span><strong class="num" id="w-items">—</strong><span class="sub" id="w-items-sub"></span></div>
         </div>
         <div class="card"><div class="card-head"><h2>Alertes et retraits annoncés</h2></div><ul id="w-list" class="alert-list"></ul></div>
+        <div class="card"><div class="card-head"><h2>Avis des IA</h2><span class="sub" id="w-ai-sub"></span></div><ul id="w-ai" class="alert-list"></ul><p class="sub" id="w-ai-help"></p></div>
         <div class="card"><div class="card-head"><h2>Dernier rapport</h2></div><pre id="w-report" class="report"></pre></div>
       </section>
 
@@ -250,61 +254,65 @@
       <!-- Réglages -->
       <section class="page" id="page-settings" data-title="Réglages">
         <div class="grid-2">
-          <div class="card" id="s-report">
-            <div class="card-head"><h2>Rapport quotidien</h2><strong class="sel-count" id="s-rep-score">—</strong></div>
-            <div class="rep-verdict" id="s-rep-verdict" role="status">Sécurité et diagnostic expert, chaque jour à 00:30 UTC.</div>
-            <p class="sub" id="s-rep-when">Envoyé par e-mail (complet) et WhatsApp (résumé).</p>
-            <ul class="rep-chips" id="s-rep-chips" aria-label="Envoi du rapport"></ul>
-            <p class="rep-help" id="s-rep-help" hidden></p>
-            <ol class="rep-todo" id="s-rep-todo" aria-label="À faire"></ol>
-            <p class="rep-trend" id="s-rep-trend"></p>
-            <div class="row-end rep-actions">
-              <button class="btn small ghost" type="button" id="s-rep-run">Générer maintenant</button>
-              <button class="btn small" type="button" id="s-rep-open" disabled>Rapport complet</button>
+          <div class="col">
+            <div class="card" id="s-report">
+              <div class="card-head"><h2>Rapport quotidien</h2><strong class="sel-count" id="s-rep-score">—</strong></div>
+              <div class="rep-verdict" id="s-rep-verdict" role="status">Sécurité et diagnostic expert, chaque jour à 00:30 UTC.</div>
+              <p class="sub" id="s-rep-when">Envoyé par e-mail (complet) et WhatsApp (résumé).</p>
+              <ul class="rep-chips" id="s-rep-chips" aria-label="Envoi du rapport"></ul>
+              <p class="rep-help" id="s-rep-help" hidden></p>
+              <ol class="rep-todo" id="s-rep-todo" aria-label="À faire"></ol>
+              <p class="rep-trend" id="s-rep-trend"></p>
+              <div class="row-end rep-actions">
+                <button class="btn small ghost" type="button" id="s-rep-run">Générer maintenant</button>
+                <button class="btn small" type="button" id="s-rep-open" disabled>Rapport complet</button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head"><h2>Autonomie</h2><span class="sub" id="s-auto-os"></span></div>
+              <label class="switch">
+                <input type="checkbox" id="s-autostart" role="switch">
+                <span class="track" aria-hidden="true"><i></i></span>
+                <span><strong>Démarrer avec l'ordinateur</strong><span class="sub"> le bot et ce panneau s'ouvrent seuls à chaque session</span></span>
+              </label>
+              <dl id="s-auto" class="dl"></dl>
+            </div>
+            <div class="card">
+              <div class="card-head"><h2>Alertes</h2></div>
+              <ul id="s-alerts" class="channel-list"></ul>
+              <p class="sub">E-mail et WhatsApp : <code>python trendguard_bot.py alerts configurer</code> (tâche VS Code « Alertes — configurer »).</p>
+            </div>
+            <div class="card">
+              <div class="card-head"><h2>Affichage</h2></div>
+              <div class="seg" role="group" aria-label="Thème">
+                <button type="button" data-theme-set="auto">Automatique</button>
+                <button type="button" data-theme-set="dark">Sombre</button>
+                <button type="button" data-theme-set="light">Clair</button>
+              </div>
+              <p class="sub setting-label">Temps de réflexion et de chargement (rubriques, sélections, Rachelle)</p>
+              <div class="seg" role="group" aria-label="Temps de réflexion et de chargement">
+                <button type="button" data-wait="3">3 s</button>
+                <button type="button" data-wait="1">1 s</button>
+                <button type="button" data-wait="0">Aucun</button>
+              </div>
+              <ul class="links">
+                <li><a href="https://ncloclo.github.io/Ncloclo/" target="_blank" rel="noopener">Animation du rejeu (prix réels Binance)</a></li>
+                <li><a href="https://github.com/Ncloclo/Ncloclo/pulls" target="_blank" rel="noopener">Revues hebdomadaires de l'agent Claude Code</a></li>
+              </ul>
+              <button class="btn ghost" id="logout-btn" type="button" hidden>Se déconnecter</button>
             </div>
           </div>
-          <div class="card">
-            <div class="card-head"><h2>Sécurité</h2><strong class="sel-count" id="s-sec-score">—</strong></div>
-            <ul class="sec-list" id="s-sec"></ul>
-          </div>
-          <div class="card">
-            <div class="card-head"><h2>Autonomie</h2><span class="sub" id="s-auto-os"></span></div>
-            <label class="switch">
-              <input type="checkbox" id="s-autostart" role="switch">
-              <span class="track" aria-hidden="true"><i></i></span>
-              <span><strong>Démarrer avec l'ordinateur</strong><span class="sub"> le bot et ce panneau s'ouvrent seuls à chaque session</span></span>
-            </label>
-            <dl id="s-auto" class="dl"></dl>
-          </div>
-          <div class="card"><div class="card-head"><h2>Bot</h2></div><dl id="s-bot" class="dl"></dl></div>
-          <div class="card">
-            <div class="card-head"><h2>Alertes</h2></div>
-            <ul id="s-alerts" class="channel-list"></ul>
-            <p class="sub">E-mail et WhatsApp : <code>python trendguard_bot.py alerts configurer</code> (tâche VS Code « Alertes — configurer »).</p>
-          </div>
-          <div class="card">
-            <div class="card-head"><h2>Sur votre téléphone</h2></div>
-            <div id="s-phone"></div>
-            <button class="btn" id="install-btn" type="button" hidden>Installer l'application</button>
-          </div>
-          <div class="card">
-            <div class="card-head"><h2>Affichage</h2></div>
-            <div class="seg" role="group" aria-label="Thème">
-              <button type="button" data-theme-set="auto">Automatique</button>
-              <button type="button" data-theme-set="dark">Sombre</button>
-              <button type="button" data-theme-set="light">Clair</button>
+          <div class="col">
+            <div class="card">
+              <div class="card-head"><h2>Sécurité</h2><strong class="sel-count" id="s-sec-score">—</strong></div>
+              <ul class="sec-list" id="s-sec"></ul>
             </div>
-            <p class="sub setting-label">Temps de réflexion et de chargement (rubriques, sélections, Rachelle)</p>
-            <div class="seg" role="group" aria-label="Temps de réflexion et de chargement">
-              <button type="button" data-wait="3">3 s</button>
-              <button type="button" data-wait="1">1 s</button>
-              <button type="button" data-wait="0">Aucun</button>
+            <div class="card"><div class="card-head"><h2>Bot</h2></div><dl id="s-bot" class="dl"></dl></div>
+            <div class="card">
+              <div class="card-head"><h2>Sur votre téléphone</h2></div>
+              <div id="s-phone"></div>
+              <button class="btn" id="install-btn" type="button" hidden>Installer l'application</button>
             </div>
-            <ul class="links">
-              <li><a href="https://ncloclo.github.io/Ncloclo/" target="_blank" rel="noopener">Animation du rejeu (prix réels Binance)</a></li>
-              <li><a href="https://github.com/Ncloclo/Ncloclo/pulls" target="_blank" rel="noopener">Revues hebdomadaires de l'agent Claude Code</a></li>
-            </ul>
-            <button class="btn ghost" id="logout-btn" type="button" hidden>Se déconnecter</button>
           </div>
         </div>
       </section>

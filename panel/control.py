@@ -24,6 +24,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import v29
 from trendguard import autonomy
+from trendguard.systeme import power_source
 
 BOT_SCRIPT = autonomy.BOT_SCRIPT
 START_GRACE_SEC = 20        # démarrage en cours : le verrou n'est pas sondé
@@ -31,10 +32,12 @@ START_GRACE_SEC = 20        # démarrage en cours : le verrou n'est pas sondé
 
 class BotControl:
     def __init__(self, gcfg: Any, popen: Callable[..., Any] = subprocess.Popen,
-                 python: str = sys.executable, autostart: Any = None):
+                 python: str = sys.executable, autostart: Any = None,
+                 power: Callable[[], Optional[Dict[str, Any]]] = power_source):
         self.g = gcfg
         self.popen = popen
         self.python = python
+        self.power = power
         self._autostart = autostart
         self._starting_until = 0.0
         self._proc: Optional[Any] = None
@@ -111,7 +114,9 @@ class BotControl:
         return {"supervisor": {k: sup.get(k) for k in ("running", "state", "restarts",
                                                         "last_exit", "since", "next_start")},
                 "off": bool(sup.get("off")), "autostart": auto, "os": self._auto().kind,
-                "keep_awake": bool(getattr(self.g, "keep_awake", False))}
+                "keep_awake": bool(getattr(self.g, "keep_awake", False)),
+                # Portable sur batterie : il s'endort capot fermé, puis s'éteint.
+                "power": self.power()}
 
     def set_autostart(self, enabled: bool) -> Tuple[bool, str]:
         try:

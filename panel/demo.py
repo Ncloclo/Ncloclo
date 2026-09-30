@@ -238,7 +238,18 @@ class DemoData:
         return {"last": st["last_watch"],
                 "vetoes": [dict(v, asset=a) for a, v in st["vetoes"].items()],
                 "report_text": "VEILLE DU MARCHÉ (démonstration)\nClimat selon 3 IA : neutre (+0,18).\n"
-                               "Fear & Greed : 70 (Greed) · USDC/USDT 1.0002"}
+                               "Fear & Greed : 70 (Greed) · USDC/USDT 1,0002",
+                "report": {"day": st["last_watch"]["day"], "generated": "2026-09-27 00:03 UTC",
+                           "items": 42, "fear_greed": 70, "fear_greed_label": "Greed",
+                           "usdc_usdt": 1.0002, "errors": [],
+                           "providers": [{"label": "Claude", "ok": True, "error": None},
+                                         {"label": "GPT", "ok": True, "error": None},
+                                         {"label": "Gemini", "ok": True, "error": None},
+                                         {"label": "Mistral", "ok": False,
+                                          "error": "clé refusée (exemple)"}]},
+                "ai": {"configured": ["Claude", "GPT", "Gemini", "Mistral"],
+                       "possible": ["Claude", "GPT", "Gemini", "DeepSeek", "Mistral", "Kimi",
+                                    "Perplexity", "Grok"]}}
 
     def log_tail(self, lines: int = 300) -> List[str]:
         now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")

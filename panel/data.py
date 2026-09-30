@@ -65,6 +65,26 @@ def merge_buys(state: Dict[str, Any], holdings: List[Dict[str, Any]]) -> List[Di
     return out
 
 
+def watch_summary(rep: Dict[str, Any]) -> Dict[str, Any]:
+    """Ce que la page Veille montre du dernier rapport : indicateurs,
+    actualités lues, état de chaque IA consultée."""
+    ind = rep.get("indicators") or {}
+    providers = [{"label": mw.PROVIDER_BY_NAME[n].label if n in mw.PROVIDER_BY_NAME else n,
+                  "ok": bool(r.get("ok")), "error": r.get("error")}
+                 for n, r in sorted((rep.get("providers") or {}).items())]
+    return {"day": rep.get("day"), "generated": rep.get("generated"), "items": rep.get("items"),
+            "fear_greed": ind.get("fear_greed"), "fear_greed_label": ind.get("fear_greed_label"),
+            "usdc_usdt": ind.get("usdc_usdt"), "providers": providers,
+            "errors": list(rep.get("errors") or [])}
+
+
+def ai_summary() -> Dict[str, List[str]]:
+    """IA de la veille : celles dont une clé est enregistrée (leur nom
+    seulement, jamais la clé) et celles qu'on peut ajouter."""
+    have = [p.label for p, _key, _model in mw.configured()]
+    return {"configured": have, "possible": [p.label for p in mw.PROVIDERS]}
+
+
 def _ts(value: Any) -> Optional[int]:
     """Horodatage ISO → secondes UNIX (UTC)."""
     dt = v29._parse_iso(str(value)) if value else None
@@ -172,19 +192,21 @@ class BotData:
 
     def watch(self, state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         state = self.state() if state is None else state
-        text = ""
+        text, rep = "", {}
         con = _ro(getattr(self.g, "watch_db", "") or mw.DEFAULT_DB)
         if con is not None:
             try:
                 row = con.execute("SELECT report FROM reports ORDER BY day DESC LIMIT 1").fetchone()
                 if row:
-                    text = mw.render(json.loads(row[0]))
+                    rep = json.loads(row[0])
+                    text = mw.render(rep)
             except (sqlite3.Error, KeyError, ValueError):
-                text = ""
+                text, rep = "", {}
             finally:
                 con.close()
         vetoes = [dict(v, asset=a) for a, v in sorted((state.get("vetoes") or {}).items())]
-        return {"last": state.get("last_watch"), "vetoes": vetoes, "report_text": text}
+        return {"last": state.get("last_watch"), "vetoes": vetoes, "report_text": text,
+                "report": watch_summary(rep), "ai": ai_summary()}
 
     def reasoning(self, state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         return reasoning_view(self.state() if state is None else state)

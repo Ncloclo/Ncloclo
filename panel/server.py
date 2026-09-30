@@ -49,6 +49,8 @@ LOGIN_MAX_FAILS = 5         # essais ratés tolérés par adresse…
 LOGIN_WINDOW_SEC = 600      # … sur 10 minutes,
 LOGIN_LOCK_SEC = 300        # puis 5 minutes de blocage
 CHAT_PER_MINUTE = 20        # questions à l'assistant (coût d'une IA éventuelle)
+WARM_SEC = 60               # cours relus d'avance toutes les minutes…
+WARM_CANDLES_EVERY = 4      # … et bougies des pages toutes les quatre minutes
 MAX_BODY = 32_000           # octets acceptés dans le corps d'une requête
 MAX_DISCARD = 1_000_000     # corps démesuré : lu sans être gardé jusqu'à 1 Mo, puis refusé
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
@@ -68,6 +70,18 @@ def _clean(obj: Any) -> Any:
     if isinstance(obj, (list, tuple)):
         return [_clean(v) for v in obj]
     return obj
+
+
+def chart_window(entry_date: Any, now: Optional[float] = None) -> Tuple[str, int]:
+    """Intervalle et nombre de bougies du graphique d'une position, pour que
+    son achat reste visible (même règle que gridInterval, static/js/charts.js)."""
+    t = _ts(entry_date)
+    age = max(0.0, ((time.time() if now is None else now) - t) / 3600) if t else 0.0
+    if age <= 60:
+        return "1h", 72
+    if age <= 24 * 12:
+        return "4h", min(500, math.ceil(age / 4) + 30)
+    return "1d", min(500, math.ceil(age / 24) + 20)
 
 
 def lan_ips() -> List[str]:
@@ -423,10 +437,25 @@ class PanelApp:
             fixed = any(c.get("label") == "Veille du PC (sur secteur)" and c.get("ok") is True
                         for s in (report.load_latest(self.g) or {}).get("sections") or []
                         for c in s.get("checks") or [])
-            detail += (" ; veille du PC désormais réglée sur « Jamais » quand il est branché : "
-                       "la mesure remonte jour après jour" if fixed else
-                       " ; PC branché et mise en veille sur « Jamais » quand il est branché")
+            detail += (" ; veille et capot fermé désormais réglés pour laisser tourner le bot "
+                       "quand le PC est branché : la mesure remonte jour après jour" if fixed else
+                       " ; PC branché, mise en veille sur « Jamais » et capot fermé sur « Ne rien "
+                       "faire » quand il est branché")
         return self._check("Disponibilité du bot (7 j)", pct >= uptime.GOOD_PCT, detail)
+
+    def _power_check(self) -> List[Dict[str, Any]]:
+        """Portable sur batterie : à dire tout de suite (rien sur un PC fixe)."""
+        try:
+            p = (self.control.autonomy() or {}).get("power")
+        except Exception:
+            p = None
+        if not p or p.get("battery_pct") is None:
+            return []
+        if p.get("ac"):
+            return [self._check("Alimentation du PC", True, f"sur secteur (batterie à {p['battery_pct']} %)")]
+        return [self._check("Alimentation du PC", False,
+                            f"SUR BATTERIE ({p['battery_pct']} %) : branchez le chargeur ; sur batterie, "
+                            "le PC se met en veille capot fermé, puis s'éteint, et le bot s'arrête")]
 
     def report_view(self) -> Dict[str, Any]:
         """Dernier rapport quotidien (sécurité et diagnostic), sans secret."""
@@ -489,6 +518,7 @@ class PanelApp:
             self._check("Relance automatique", bool(sup.get("running")),
                         "active" if sup.get("running") else "inactive : cliquez sur AUTO"),
             self._uptime_check(st),
+            *self._power_check(),
             self._evolution_check(),
             self._report_check(),
             self._alerts_check(st),
@@ -563,10 +593,20 @@ class PanelApp:
     # ---------- Routage ----------
 
     def _equity_view(self, days: int) -> Dict[str, Any]:
-        """Courbe du capital avec les achats et les ventes du bot."""
+        """Courbe du capital avec les achats et les ventes du bot. Elle part du
+        capital de départ, au démarrage du bot, même si les relevés commencent
+        plus tard : les premiers achats restent visibles."""
         pts = self.data.equity(days=days)
-        since = pts[0]["t"] if pts else 0
         st = self.data.state()
+        born, start = _ts(st.get("started_at")), st.get("start_equity")
+        if pts and born and start and time.time() - days * 86400 <= born < pts[0]["t"]:
+            # Court palier avant le départ (le capital était intact, en USDT) :
+            # le repère des premiers achats a la place de s'afficher.
+            n = max(3, round(len(pts) * 0.06))
+            lead = max(3600, int((pts[-1]["t"] - born) * 0.06))
+            flat = round(float(start), 2)
+            pts = [{"t": born - lead + i * lead // n, "v": flat} for i in range(n + 1)] + pts
+        since = pts[0]["t"] if pts else 0
         buys = [{"t": b["t"], "asset": b["asset"], "price": b["price"]}
                 for b in self.data.buys(st) if b["t"] >= since]
         sells = [{"t": t, "asset": tr["asset"], "price": tr.get("exit"), "r": tr.get("r")}
@@ -574,6 +614,18 @@ class PanelApp:
                  if (t := _ts(tr.get("date"))) is not None and t >= since]
         sells.sort(key=lambda x: x["t"])
         return {"points": pts, "buys": buys, "sells": sells}
+
+    def warm(self, full: bool = True) -> None:
+        """Lit d'avance ce que les pages afficheront : les cours, et si `full`
+        les bougies des cartes, des positions et du régime. La première page
+        s'ouvre ainsi sans attendre Binance."""
+        universe = [b.lower() for b in self.g.universe]
+        charts: List[Tuple[str, str, int]] = []
+        if full:
+            charts.append(("btc", "1d", evolution.params_for(self.g).regime_sma + 365))
+            charts += [(h["asset"], *chart_window(h.get("entry_date")))
+                       for h in self.data.holdings()]
+        self.market.warm(universe, charts, sparks=full)
 
     def _regime_view(self) -> Dict[str, Any]:
         reg, stale = self.market.regime(evolution.params_for(self.g).regime_sma)
@@ -805,7 +857,6 @@ class PanelHandler(BaseHTTPRequestHandler):
             self.wfile.write(data)
 
 
-
 def make_handler(app: PanelApp) -> type:
     """Classe de requêtes liée à `app` : une par serveur."""
     return type("Handler", (PanelHandler,), {"app": app})
@@ -842,6 +893,20 @@ def serve(app: PanelApp, host: str, port: int) -> ThreadingHTTPServer:
     return PanelServer((host, port), make_handler(app))
 
 
+def keep_warm(app: PanelApp, stop: threading.Event) -> None:
+    """Tant que le panneau tourne : cours relus d'avance chaque minute,
+    bougies des pages toutes les quatre minutes. Une panne est ignorée."""
+    n = 0
+    while True:
+        try:
+            app.warm(full=n % WARM_CANDLES_EVERY == 0)
+        except Exception:
+            pass
+        n += 1
+        if stop.wait(WARM_SEC):
+            return
+
+
 def main(gcfg: Any, host: str = "127.0.0.1", port: int = 8765, demo: bool = False,
          open_browser: bool = True) -> int:
     """Lance le panneau : accès réseau refusé sans mot de passe, adresses
@@ -867,11 +932,16 @@ def main(gcfg: Any, host: str = "127.0.0.1", port: int = 8765, demo: bool = Fals
     print("Ctrl+C pour fermer le panneau (le bot continue de tourner).")
     if open_browser:
         threading.Timer(0.8, lambda: webbrowser.open(local)).start()
+    stop = threading.Event()
+    if not demo:
+        threading.Thread(target=keep_warm, args=(app, stop), daemon=True,
+                         name="cours-binance-avance").start()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
+        stop.set()
         httpd.server_close()
         if app.hub is not None:
             app.hub.close()

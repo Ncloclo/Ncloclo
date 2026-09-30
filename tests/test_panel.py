@@ -8,7 +8,9 @@ import os
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
 
 import pytest
 
@@ -428,3 +430,175 @@ def test_market_cache_and_stale_fallback():
     m._cache = {k: (0, v) for k, (_t, v) in m._cache.items()}   # cache expiré
     t, stale = m.tickers(["btc"])
     assert stale and t["btc"]["price"] == 84000      # dernière valeur, signalée
+
+
+# ---------- Cours Binance : jamais d'attente, une lecture pour toutes les pages ----------
+
+def _binance(calls, down=None):
+    """Binance simulé : chaque adresse demandée est notée dans `calls`."""
+    def fetch(url):
+        calls.append(url)
+        if down and down[0]:
+            raise OSError("réseau coupé")
+        if "ticker/24hr" in url:
+            symbols = json.loads(urllib.parse.unquote(url.split("symbols=")[1]))
+            return [{"symbol": s, "lastPrice": "10", "priceChangePercent": "1", "highPrice": "11",
+                     "lowPrice": "9", "quoteVolume": "1e6"} for s in symbols]
+        n = int(urllib.parse.parse_qs(url.split("?")[1])["limit"][0])
+        return [[1790467200000 + i * 3_600_000, "1", "2", "0.5", str(100 + i), "10"] for i in range(n)]
+    return fetch
+
+
+def _until(done, seconds=5.0):
+    end = time.time() + seconds
+    while not done() and time.time() < end:
+        time.sleep(0.02)
+    return done()
+
+
+def test_market_serves_a_recent_value_at_once_and_refreshes_behind():
+    calls, down, now = [], [False], [1000.0]
+    m = Market(_binance(calls, down), clock=lambda: now[0])
+    try:
+        assert set(m.tickers(["btc", "eth"])[0]) == {"btc", "eth"} and len(calls) == 1
+        now[0] += 15                                 # période écoulée : valeur rendue tout de suite…
+        t, stale = m.tickers(["btc"])                # … une page qui n'en veut qu'une partie aussi
+        assert set(t) == {"btc"} and not stale
+        assert _until(lambda: len(calls) == 2)       # … et relue en arrière-plan, pour tous
+        assert "BTCUSDT" in urllib.parse.unquote(calls[1]) and "ETHUSDT" in urllib.parse.unquote(calls[1])
+        down[0] = True                               # panne : dernière valeur gardée, puis signalée
+        now[0] += 15
+        assert m.tickers(["btc"])[0]["btc"]["price"] == 10
+        assert _until(lambda: m.tickers(["btc"])[1] is True)
+        now[0] += 3600                               # trop vieille : relue tout de suite, panne dite
+        t, stale = m.tickers(["eth"])
+        assert stale and t["eth"]["price"] == 10
+    finally:
+        m.close()
+
+
+def test_market_candles_are_read_once_per_pair_and_interval():
+    calls = []
+    m = Market(_binance(calls), background=False)
+    rows, stale = m.klines("aave", "1h", 48)         # courbe d'une carte
+    assert len(rows) == 48 and not stale and "limit=100" in calls[0]
+    assert len(m.klines("AAVE", "1h", 72)[0]) == 72 and len(calls) == 1      # graphique : même lecture
+    assert rows[-1] == m.klines("aave", "1h", 72)[0][-1]
+    assert len(m.klines("aave", "1h", 300)[0]) == 300 and "limit=500" in calls[1]
+    assert len(m.klines("aave", "1h", 48)[0]) == 48 and len(calls) == 2      # le palier large sert tout
+    assert len(m.klines("aave", "4h", 48)[0]) == 48 and len(calls) == 3      # autre intervalle
+    with pytest.raises(ValueError):
+        m.klines("aave", "3m")
+
+
+def test_market_warm_reads_the_pages_ahead():
+    calls, down = [], [False]
+    m = Market(_binance(calls, down), background=False)
+    m.warm(["btc", "eth"], [("btc", "1d", 515)])
+    assert len(calls) == 4                           # cours, 2 courbes horaires, régime
+    m.tickers(["eth"])
+    m.klines("btc", "1h", 48)
+    reg, _stale = m.regime(150, 365)
+    assert len(calls) == 4 and len(reg["points"]) == 365                     # rien à relire
+    m.warm(["btc"], sparks=False)
+    assert len(calls) == 4                           # cours encore frais
+    down[0] = True
+    Market(_binance([], down), background=False).warm(["btc"])               # panne : ignorée
+
+
+# ---------- Courbe du capital, graphiques, alimentation, veille ----------
+
+class _Data:
+    """Base du bot simulée : démarrage et achats il y a 3 jours, relevés du
+    capital depuis 2 jours seulement."""
+
+    def __init__(self):
+        self.t0 = int(time.time()) - 3 * 86400
+
+    def state(self):
+        return {"started_at": datetime.fromtimestamp(self.t0, timezone.utc).isoformat(),
+                "start_equity": 10_000.0, "trades": []}
+
+    def equity(self, days=90):
+        return [{"t": self.t0 + 86400, "v": 9912.0}, {"t": self.t0 + 2 * 86400, "v": 9990.0}]
+
+    def buys(self, st=None):
+        return [{"t": self.t0 + 1, "asset": "aave", "price": 154.0, "date": ""}]
+
+    def trades(self, st=None):
+        return []
+
+    def holdings(self, st=None):
+        return []
+
+
+def test_capital_curve_starts_with_the_bot_and_shows_its_first_buys(tmp_path):
+    data = _Data()
+    app = ps.PanelApp(_cfg(tmp_path), data, None, None)
+    eq = app._equity_view(30)
+    assert [p["v"] for p in eq["points"]] == [10_000.0] * 4 + [9912.0, 9990.0]
+    times = [p["t"] for p in eq["points"]]
+    assert times == sorted(set(times)) and times[3] == data.t0               # palier, puis départ
+    assert eq["buys"] == [{"t": data.t0 + 1, "asset": "aave", "price": 154.0}]
+    short = app._equity_view(1)                      # fenêtre qui commence après le départ
+    assert len(short["points"]) == 2 and short["buys"] == []
+
+
+def test_chart_window_is_the_rule_of_the_page():
+    now = 1_800_000_000.0
+
+    def entry(hours):
+        return datetime.fromtimestamp(now - hours * 3600, timezone.utc).isoformat()
+    assert ps.chart_window(entry(10), now) == ("1h", 72)
+    assert ps.chart_window(entry(100), now) == ("4h", 55)
+    assert ps.chart_window(entry(480), now) == ("1d", 40)
+    assert ps.chart_window(None, now) == ("1h", 72)
+
+
+def test_panel_warms_prices_candles_and_held_charts(tmp_path):
+    asked = []
+
+    class M:
+        def warm(self, bases, charts, sparks=True):
+            asked.append((len(list(bases)), list(charts), sparks))
+
+    class D(_Data):
+        def holdings(self, st=None):
+            return [{"asset": "aave", "entry_date": datetime.now(timezone.utc).isoformat()}]
+    app = ps.PanelApp(_cfg(tmp_path), D(), M(), None)
+    app.warm()
+    app.warm(full=False)
+    assert asked[0] == (21, [("btc", "1d", 515), ("aave", "1h", 72)], True)
+    assert asked[1] == (21, [], False)               # chaque minute : les cours seulement
+
+
+def test_security_center_says_when_the_laptop_runs_on_battery(tmp_path):
+    def rows(power):
+        class Ctl:
+            def autonomy(self):
+                return {"power": power}
+        return ps.PanelApp(_cfg(tmp_path), _Data(), None, Ctl())._power_check()
+    bad = rows({"ac": False, "battery_pct": 85})
+    assert bad[0]["ok"] is False and "SUR BATTERIE (85 %)" in bad[0]["detail"]
+    assert rows({"ac": True, "battery_pct": 100})[0]["ok"] is True
+    assert rows({"ac": True, "battery_pct": None}) == [] and rows(None) == []    # PC fixe
+    ctl = BotControl(_cfg(tmp_path), power=lambda: {"ac": False, "battery_pct": 40})
+    assert ctl.autonomy()["power"] == {"ac": False, "battery_pct": 40}
+
+
+def test_watch_page_data(monkeypatch):
+    from panel.data import ai_summary, watch_summary
+    s = watch_summary({"day": "2026-09-30", "generated": "2026-09-30 00:03 UTC", "items": 60,
+                       "indicators": {"fear_greed": 71, "fear_greed_label": "Greed", "usdc_usdt": 1.0004},
+                       "providers": {"grok": {"ok": False, "error": "clé refusée"},
+                                     "claude": {"ok": True, "seconds": 3.2}}, "errors": []})
+    assert (s["items"], s["fear_greed"], s["usdc_usdt"]) == (60, 71, 1.0004)
+    assert s["providers"] == [{"label": "Claude", "ok": True, "error": None},
+                              {"label": "Grok", "ok": False, "error": "clé refusée"}]
+    assert watch_summary({})["providers"] == [] and watch_summary({})["fear_greed"] is None
+    for p in ps.mw.PROVIDERS:
+        monkeypatch.delenv(p.key_env, raising=False)
+    monkeypatch.setenv("MISTRAL_API_KEY", "cle-secrete-de-test")
+    ai = ai_summary()
+    assert ai["configured"] == ["Mistral"] and len(ai["possible"]) == len(ps.mw.PROVIDERS)
+    assert "cle-secrete-de-test" not in json.dumps(ai)                       # le nom, jamais la clé

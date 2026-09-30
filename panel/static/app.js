@@ -164,7 +164,7 @@ async function renderDash() {
   const w = S.watch, wd = $("#d-watch");
   wd.textContent = !w ? "—" : w.sentiment > 0.2 ? "Positive" : w.sentiment < -0.2 ? "Négative" : "Neutre";
   wd.className = !w ? "" : w.sentiment > 0.2 ? "up" : w.sentiment < -0.2 ? "down" : "";
-  $("#d-watch-sub").textContent = w ? (w.providers_total ? `${w.providers}/${w.providers_total} IA · ${w.day}` : `mots-clés · ${w.day}`) : "pas encore de rapport";
+  $("#d-watch-sub").textContent = w ? (w.providers_total ? `${w.providers}/${w.providers_total} IA · ${fdate(w.day)}` : `mots-clés · ${fdate(w.day)}`) : "pas encore de rapport";
 
   const list = $("#d-positions");
   const rows = pos.positions.slice().sort((a, b) => (b.pnl_pct || 0) - (a.pnl_pct || 0));
@@ -194,6 +194,8 @@ async function renderDash() {
   if (S.state === "restarting") alerts.push(["warn", "Le bot s'est arrêté sur une erreur : relance automatique en cours."]);
   else if (S.state === "running" && !sup.running && !S.demo) alerts.push(["warn", "Relance automatique inactive (bot lancé hors du panneau) : ARRÊTER puis AUTO pour l'activer."]);
   if (sup.running && sup.restarts > 0 && sup.last_exit) alerts.push(["warn", `Le bot s'est relancé seul ${sup.restarts} fois (dernière erreur le ${fdate(sup.last_exit.at)}).`]);
+  const power = S.autonomy && S.autonomy.power;
+  if (power && power.ac === false && power.battery_pct != null) alerts.push(["crit", `PC sur batterie (${power.battery_pct} %) : branchez le chargeur. Sur batterie, le PC se met en veille capot fermé, puis s'éteint, et le bot s'arrête.`]);
   const gap = S.uptime && S.uptime.recent;
   if (gap) alerts.push(["warn", `Le bot a été arrêté ${fdur(gap.end - gap.start)} (du ${ftime(gap.start)} au ${ftime(gap.end)}) : ${gap.text}. Il a repris et rattrapé les contrôles manqués.`]);
   S.alerts.filter((c) => c.enabled && c.last && !c.last.ok).forEach((c) => alerts.push(["warn", `Les alertes ${c.label} n'arrivent pas (dernier envoi raté le ${ftime(c.last.at)}) : voir Réglages ▸ Sécurité.`]));
@@ -306,6 +308,8 @@ function renderMind(m) {
 
 // ---------- Actualités : bandeau défilant et page détaillée ----------
 let NEWS = null, newsAt = 0, tickerKey = "", listKey = "", newsFilter = "all", pendingNews = null;
+const NEWS_PAGE = 30;                   // articles affichés d'un coup
+let newsShown = NEWS_PAGE, newsView = "";
 const CAT = { crypto: "Crypto", finance: "Finance" };
 const safeUrl = (u) => (/^https?:\/\//i.test(u || "") ? u : "#");
 const fago = (iso) => {
@@ -416,7 +420,9 @@ async function renderNews() {
 function renderNewsList() {
   if (!NEWS) return;
   const q = $("#news-search").value.trim().toLowerCase(), lang = $("#news-lang").value;
-  const key = [newsTag(), newsFilter, lang, q].join("|");
+  const view = [newsFilter, lang, q].join("|");
+  if (view !== newsView) { newsView = view; newsShown = NEWS_PAGE; }     // autre sélection : retour au début
+  const key = [newsTag(), view, newsShown].join("|");
   if (key === listKey && !pendingNews) return;   // rien de nouveau : pas de réaffichage
   listKey = key;
   const held = new Set(NEWS.held || []);
@@ -429,7 +435,11 @@ function renderNewsList() {
     list.replaceChildren(el("li", "empty", NEWS.loading ? "Chargement des actualités…" : "Aucun article ne correspond."));
     return;
   }
-  list.replaceChildren(...rows.slice(0, 150).map((it, k) => {
+  if (pendingNews) {                             // l'article cliqué dans le bandeau doit être affiché
+    const at = rows.findIndex((it) => it.url === pendingNews);
+    if (at >= newsShown) newsShown = Math.ceil((at + 1) / NEWS_PAGE) * NEWS_PAGE;
+  }
+  list.replaceChildren(...rows.slice(0, newsShown).map((it, k) => {
     const li = el("li", "news" + (it.alert ? " alert" : ""));
     li.dataset.url = it.url;
     li.style.animationDelay = Math.min(k, 20) * 30 + "ms";
@@ -456,6 +466,13 @@ function renderNewsList() {
     if (tags.childNodes.length) li.append(tags);
     return li;
   }));
+  if (rows.length > newsShown) {
+    const more = el("li", "more"), b = el("button", "btn ghost", `Afficher ${Math.min(NEWS_PAGE, rows.length - newsShown)} articles de plus (${rows.length - newsShown} restants)`);
+    b.type = "button";
+    b.addEventListener("click", () => { newsShown += NEWS_PAGE; renderNewsList(); });
+    more.append(b);
+    list.append(more);
+  }
   if (pendingNews) {
     const hit = $$("#n-list li").find((li) => li.dataset.url === pendingNews);
     pendingNews = null;
@@ -902,13 +919,13 @@ async function renderAssets() {
 }
 
 // ---------- Positions ----------
-function table(node, head, rows, onRow) {
+function table(node, head, rows, onRow, empty = "Rien à afficher.") {
   const thead = el("thead"), tr = el("tr");
   head.forEach((h) => { const th = el("th", "", h); th.scope = "col"; tr.append(th); });
   thead.append(tr);
   const tb = el("tbody");
   if (!rows.length) {
-    const r = el("tr"), td = el("td", "empty", "Rien à afficher.");
+    const r = el("tr"), td = el("td", "empty", empty);
     td.colSpan = head.length;
     r.append(td);
     tb.append(r);
@@ -933,14 +950,15 @@ async function renderPositions() {
       const locked = p.entry ? (p.stop / p.entry - 1) * 100 : null;
       return { key: p.asset, cells: [up(p.asset), fdate(p.entry_date), fpx(p.entry), fpx(p.price), fpx(p.stop), fpct(locked, 1), fpct(p.stop_dist_pct, 1), fpct(p.pnl_pct), fR(p.r)],
         cls: { 5: (locked || 0) >= 0 ? "up" : "down", 7: (p.pnl_pct || 0) >= 0 ? "up" : "down", 8: (p.r || 0) >= 0 ? "up" : "down" } };
-    }), open);
+    }), open, "Aucune position ouverte : le capital est à 100 % en USDT.");
   $("#p-sub").textContent = `${pos.positions.length} / ${S ? S.max_positions : 8}`;
   const trades = tr.trades;
   const wins = trades.filter((t) => t.pnl > 0).length;
   $("#t-sub").textContent = trades.length ? `${trades.length} trades · ${nf(0).format(wins / trades.length * 100)} % gagnants` : "";
   table($("#t-table"), ["Crypto", "Achat", "Vente", "Prix d'achat", "Prix de vente", "Raison", "Résultat", "En R"],
     trades.map((t) => ({ key: t.asset, cells: [up(t.asset), fdate(t.entry_date), fdate(t.date), fpx(t.entry), fpx(t.exit), REASON[t.reason] || t.reason || "", `${sign(t.pnl)}${nf(2).format(Math.abs(t.pnl || 0))} USDT`, fR(t.r)],
-      cls: { 6: t.pnl > 0 ? "up" : "down", 7: t.r > 0 ? "up" : "down" } })), open);
+      cls: { 6: t.pnl > 0 ? "up" : "down", 7: t.r > 0 ? "up" : "down" } })), open,
+    "Aucun trade clos pour l'instant : le premier apparaîtra ici quand le bot vendra une position.");
 }
 
 // ---------- Veille ----------
@@ -949,12 +967,34 @@ async function renderWatch() {
   const last = w.last, mood = $("#w-mood");
   mood.textContent = !last ? "—" : last.sentiment > 0.2 ? "Positif" : last.sentiment < -0.2 ? "Négatif" : "Neutre";
   mood.className = !last ? "" : last.sentiment > 0.2 ? "up" : last.sentiment < -0.2 ? "down" : "";
-  $("#w-mood-sub").textContent = last ? `${nf(2).format(last.sentiment)} · ${last.providers_total ? `${last.providers}/${last.providers_total} IA` : "mots-clés"} · ${last.day}` : "pas encore de rapport";
+  $("#w-mood-sub").textContent = last ? `${nf(2).format(last.sentiment)} · ${last.providers_total ? `${last.providers}/${last.providers_total} IA` : "mots-clés"} · ${fdate(last.day)}` : "pas encore de rapport";
   countUp($("#w-vetoes"), w.vetoes.length, (v) => String(Math.round(v)));
   const items = [...w.vetoes.map((v) => ["crit", `${v.reason} : achats bloqués jusqu'au ${fdate(v.until)}`]),
     ...((last && last.alerts) || []).map((a) => ["warn", a])];
   if (!items.length) items.push(["ok", "Aucune alerte."]);
   $("#w-list").replaceChildren(...items.map(([k, t]) => el("li", k, t)));
+  const r = w.report || {}, ai = w.ai || { configured: [], possible: [] };
+  const FNG = { "extreme fear": "Peur extrême", fear: "Peur", neutral: "Neutre", greed: "Avidité", "extreme greed": "Avidité extrême" };
+  const fng = $("#w-fng");
+  fng.textContent = r.fear_greed == null ? "—" : `${r.fear_greed} · ${FNG[String(r.fear_greed_label || "").toLowerCase()] || r.fear_greed_label || ""}`;
+  fng.className = r.fear_greed == null ? "" : r.fear_greed >= 55 ? "up" : r.fear_greed <= 45 ? "down" : "";
+  const peg = $("#w-peg"), off = r.usdc_usdt == null ? null : Math.abs(r.usdc_usdt - 1);
+  peg.textContent = off == null ? "—" : nf(4).format(r.usdc_usdt);
+  peg.className = "num " + (off == null ? "" : off > 0.005 ? "down" : "up");
+  $("#w-peg-sub").textContent = off == null ? "" : off > 0.005 ? "un stablecoin décroche" : "normale : les deux valent 1 dollar";
+  $("#w-items").textContent = r.items == null ? "—" : String(r.items);
+  const made = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})/.exec(r.generated || "");
+  $("#w-items-sub").textContent = made ? `rapport du ${fdate(made[1])} à ${made[2]} UTC` : "";
+  const asked = r.providers || [];
+  $("#w-ai-sub").textContent = ai.configured.length ? `${ai.configured.length} configurée${ai.configured.length > 1 ? "s" : ""}` : "aucune configurée";
+  const rows = asked.map((p) => [p.ok ? "ok" : "warn", p.ok ? `${p.label} : avis reçu` : `${p.label} : pas d'avis (${p.error || "cause inconnue"})`]);
+  ai.configured.filter((name) => !asked.some((p) => p.label === name)).forEach((name) => rows.push(["ok", `${name} : consultée au prochain rapport`]));
+  if (!rows.length) rows.push(["ok", "Sans IA, la veille fait déjà l'essentiel : elle lit les annonces officielles de Binance (les seules à bloquer un achat) et repère les mots sensibles dans les actualités."]);
+  $("#w-ai").replaceChildren(...rows.map(([k, t]) => el("li", k, t)));
+  const free = ai.possible.filter((name) => !ai.configured.includes(name));
+  const help = $("#w-ai-help");
+  help.replaceChildren();
+  if (free.length) help.append("Facultatif : pour ajouter l'avis d'une IA, ", el("code", "", "python trendguard_bot.py watch set-key claude"), ` (au choix : ${free.join(", ")}). La clé se saisit masquée ; une IA conseille, elle ne passe jamais d'ordre.`);
   $("#w-report").textContent = w.report_text || "Aucun rapport : la veille tourne chaque jour avec le bot (python trendguard_bot.py watch pour un rapport immédiat).";
 }
 

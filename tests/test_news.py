@@ -150,3 +150,13 @@ def test_demo_news_is_marked_as_example():
     snap = DemoNews().snapshot()
     assert snap["items"] and all("exemple" in i["title"] for i in snap["items"])
     json.dumps(snap)
+
+
+def test_quote_pages_are_not_news():
+    """Fiches de cotation et pages « cours en direct » : écartées."""
+    xml = rss([
+        ("AIRBUS Cours Action AIR, Cotation Bourse Euronext Paris", "https://ex.com/a", rfc(NOW), "", ""),
+        ("Cours NeuralAI (NEURAL) en euro et dollar - Prix en direct", "https://ex.com/b", rfc(NOW), "", ""),
+        ("Le cours du bitcoin repasse 84 000 dollars", "https://ex.com/c", rfc(NOW), "", ""),
+    ])
+    assert [i["url"] for i in news.parse_feed(xml, "Test", "finance", "fr", UNIVERSE)] == ["https://ex.com/c"]

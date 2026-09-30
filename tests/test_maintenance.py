@@ -34,7 +34,9 @@ class Power:
 
     def __call__(self, cmd, **kw):
         self.calls.append(cmd)
-        if cmd[:2] == ["powercfg", "/query"]:
+        if cmd[:2] == ["powercfg", "/query"]:             # Windows y cache le capot des portables
+            return proc("GUID du mode : (Utilisation normale)\n")
+        if cmd[:2] == ["powercfg", "/qh"]:
             key = cmd[-1]
             if key not in self.v:
                 return proc("GUID du mode : (Utilisation normale)\n")
@@ -62,7 +64,8 @@ def test_power_is_fixed_on_mains_only_and_can_be_restored(tmp_path):
     assert "mise en veille sur secteur : jamais (avant : après 15 min)" in c["action"]
     assert "capot fermé sur secteur : ne rien faire (avant : veille)" in c["action"]
     assert mt.fix_power(g, Deps(run=pw, platform="win32")) is None          # plus rien à faire
-    changes = [c for c in pw.calls if c[1] != "/query"]
+    assert not any(c[1] == "/query" for c in pw.calls)                      # /qh : réglages cachés lus
+    changes = [c for c in pw.calls if c[1] != "/qh"]
     assert changes and not any("-dc" in " ".join(c) or "setdcvalueindex" in c for c in changes)  # batterie : jamais touchée
     text = mt.restore_power(g, Deps(run=pw, platform="win32"))
     assert pw.v == {"STANDBYIDLE": 900, "HIBERNATEIDLE": 10800, "LIDACTION": 1}

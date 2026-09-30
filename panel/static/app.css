@@ -179,6 +179,7 @@ svg { width: 20px; height: 20px; fill: currentColor; flex: none; }
 .news { display: grid; gap: 6px; padding: 12px 14px; border-radius: 12px; border-left: 3px solid transparent; background: var(--surface-2); animation: line-in .45s var(--ease) both; transition: background .2s; }
 .news:hover { background: var(--surface-3); }
 .news.alert { border-left-color: var(--down); }
+.news-list li.more { display: grid; justify-items: center; padding: 4px 0 2px; }
 .news.focus { border-left-color: var(--accent); animation: focus-flash 2.5s var(--ease); }
 @keyframes focus-flash { 0%, 50% { background: var(--accent-wash); } }
 .news-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; color: var(--muted); }
@@ -349,8 +350,9 @@ tbody tr.click:hover { background: var(--surface-2); }
 .dl details { margin-top: 4px; }
 .dl details summary, .channel-list details summary { cursor: pointer; color: var(--accent-2); font-size: 12.5px; }
 .dl details p, .channel-list details p { margin: 4px 0 0; color: var(--muted); font-size: 12.5px; }
-/* Réglages : chaque carte garde sa hauteur, sans grands vides */
+/* Réglages : deux colonnes indépendantes, sans vide sous une carte courte */
 #page-settings .grid-2 { align-items: start; }
+#page-settings .col { display: grid; gap: 16px; align-content: start; min-width: 0; }
 .channel-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; }
 .channel-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; background: var(--surface-2); }
 .links { padding-left: 18px; margin: 14px 0; display: grid; gap: 6px; font-size: 14px; }
@@ -478,6 +480,15 @@ dialog[open] { animation: pop .35s var(--ease); }
   .hero { grid-template-columns: minmax(0, 1fr); }
   .big { font-size: 32px; }
   .grid-2 { grid-template-columns: minmax(0, 1fr); }
+  /* Réglages sur une colonne : rapport, sécurité, puis le reste en alternance */
+  #page-settings .col { display: contents; }
+  #page-settings .col:nth-child(1) > .card:nth-child(1) { order: 1; }
+  #page-settings .col:nth-child(2) > .card:nth-child(1) { order: 2; }
+  #page-settings .col:nth-child(1) > .card:nth-child(2) { order: 3; }
+  #page-settings .col:nth-child(2) > .card:nth-child(2) { order: 4; }
+  #page-settings .col:nth-child(1) > .card:nth-child(3) { order: 5; }
+  #page-settings .col:nth-child(2) > .card:nth-child(3) { order: 6; }
+  #page-settings .col:nth-child(1) > .card:nth-child(4) { order: 7; }
   .chart-grid { grid-template-columns: minmax(0, 1fr); }
   .detail-body { grid-template-columns: minmax(0, 1fr); }
   .detail-stats { border-left: 0; border-top: 1px solid var(--border); }

@@ -34,9 +34,11 @@ pour l'arrêter.
 défaut) :
 
 - **veille du PC, sur secteur seulement** : mise en veille et veille prolongée
-  « Jamais », capot fermé « Ne rien faire ». Le bot ne surveille rien quand le
-  PC dort ; sur batterie, rien ne change. Vos réglages d'origine sont gardés :
-  `python trendguard_bot.py rapport restaurer` les remet et arrête ces
+  « Jamais », capot fermé « Ne rien faire » (réglage que Windows cache sur bien
+  des portables : le bot le lit quand même). Le bot ne surveille rien quand le
+  PC dort ; sur batterie, rien ne change, et le bouton d'alimentation reste à
+  vous : le rapport dit seulement ce qu'il fait. Vos réglages d'origine sont
+  gardés : `python trendguard_bot.py rapport restaurer` les remet et arrête ces
   corrections, `python trendguard_bot.py rapport corriger` les reprend ;
 - sauvegarde quotidienne de la base et des réglages du bot (dossier
   `sauvegardes/`, 14 jours gardés), vérifiée par un contrôle d'intégrité ;
@@ -78,7 +80,7 @@ tête des recommandations, classées par importance.
 | Partie | Contrôles |
 | --- | --- |
 | Recommandations appliquées seules | correction de la veille du PC, mise à jour validée installée (ou pourquoi pas) |
-| Sécurité | secrets hors de GitHub (fichier `.env` jamais publié), droits du fichier des secrets, aucune clé ni aucun mot de passe dans les fichiers publiés ni dans les journaux, droits de la clé Binance (retrait interdit, restriction IP), sauvegarde et intégrité de la base, pare-feu et antivirus de Windows, veille du PC |
+| Sécurité | secrets hors de GitHub (fichier `.env` jamais publié), droits du fichier des secrets, aucune clé ni aucun mot de passe dans les fichiers publiés ni dans les journaux, droits de la clé Binance (retrait interdit, restriction IP), sauvegarde et intégrité de la base, pare-feu et antivirus de Windows, veille du PC, alimentation d'un portable (sur batterie, il s'endort capot fermé puis s'éteint : à brancher) |
 | Centre de sécurité du panneau | accès, mots de passe ratés, alertes (dernier envoi), garde-fou de Rachelle |
 | Santé du bot (le fond) | panneau en marche, bot en marche, dernier cycle, décision du jour à l'heure, disponibilité sur 7 jours, relance automatique, démarrage avec l'ordinateur, arrêt d'urgence, risque configuré dans les limites sages, mode, espace disque |
 | Stratégie (le fond) | le diagnostic expert complet (données, marché, signaux, portefeuille, santé de la stratégie, réel contre attendu, stratégies concurrentes, veille) |

@@ -351,7 +351,28 @@ def test_panel_shows_the_report_and_its_delivery(tmp_path):
     t = datetime.now(timezone.utc).timestamp()
     st = {"last_cycle_ts": t, "uptime": {"since": t - 60 * 3600, "events": [
         {"start": t - 30 * 3600, "end": t - 5 * 3600, "cause": "off"}]}}
-    assert "Jamais » quand il est branché" in live._uptime_check(st)["detail"]
+    assert "capot fermé sur « Ne rien faire » quand il est branché" in live._uptime_check(st)["detail"]
     rp._save_json(rp.paths(live.g)["json"], {"ready": True, "sections": [{"title": "Sécurité", "checks": [
         rp.chk("Veille du PC (sur secteur)", True, "mise en veille : jamais")]}]})
     assert "la mesure remonte jour après jour" in live._uptime_check(st)["detail"]
+
+
+def test_laptop_on_battery_is_flagged():
+    """Sur batterie, un portable s'endort capot fermé puis s'éteint : à dire."""
+    def source(power):
+        return rp._source_check(rp.Deps(platform="win32", extra={"power": power}))
+    on_battery = source({"ac": False, "battery_pct": 85})
+    assert on_battery["ok"] is False and "SUR BATTERIE (batterie à 85 %)" in on_battery["detail"]
+    assert "chargeur" in on_battery["reco"]
+    assert source({"ac": True, "battery_pct": 100})["ok"] is True
+    assert source({"ac": True, "battery_pct": None}) is None       # PC fixe : rien à dire
+    assert source(None) is None and rp._source_check(rp.Deps(run=FakeRun(), platform="win32")) is None
+
+
+def test_power_check_names_the_power_button_on_a_laptop():
+    def run(cmd, **kw):
+        idx = {"STANDBYIDLE": 0, "LIDACTION": 0, "PBUTTONACTION": 1}[cmd[-1]]
+        return proc(f"Index possible : 000\nAC 0x{idx:08x}\nDC 0x00000001")
+    c = rp._power_check(rp.Deps(run=run, platform="win32"))
+    assert c["ok"] is True and "capot fermé : ne rien faire" in c["detail"]
+    assert "bouton d'alimentation : veille" in c["detail"] and "fermez le capot" in c["detail"]

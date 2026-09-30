@@ -70,7 +70,8 @@ FALLBACK = {"gold": "PAXGUSDT", "eurusd": "EURUSDT"}     # Binance si Yahoo éch
 FNG_FR = {"extreme fear": "Peur extrême", "fear": "Peur", "neutral": "Neutre",
           "greed": "Avidité", "extreme greed": "Avidité extrême"}
 
-TOPICS = (("hack", re.compile(r"\b(hack\w*|exploit\w*|piratage|pirat\w*|stolen|vol[ée]s?|drain\w*)\b", re.I)),
+TOPICS = (("hack", re.compile(r"\b(hack\w*|exploit(ed|s)?|piratage|pirat\w*|stolen|vol[ée]s?|"
+                               r"drain(ed|s)?)\b", re.I)),
           ("régulation", re.compile(r"\b(SEC|AMF|MiCA|lawsuit|ban(s|ned)?|regulat\w*|r[ée]gulat\w*|"
                                     r"sanction\w*|plainte|interdi\w*)\b", re.I)),
           ("retrait", re.compile(r"\b(delist\w*|retrait de la cote)\b", re.I)),
@@ -79,6 +80,9 @@ TOPICS = (("hack", re.compile(r"\b(hack\w*|exploit\w*|piratage|pirat\w*|stolen|v
                                r"emploi|jobs|PIB|GDP|Powell|Lagarde)\b", re.I)),
           ("ETF", re.compile(r"\bETFs?\b")))
 ALERT_TOPICS = {"hack", "retrait", "stablecoin", "régulation"}
+
+# Fiches de cotation et pages « cours en direct » : pas des articles.
+NOT_NEWS = re.compile(r"cours action|cotation bourse|\b(prix|cours) en direct\b", re.I)
 
 TAG_RE = re.compile(r"<[^>]+>")
 SPACE_RE = re.compile(r"\s+")
@@ -126,7 +130,7 @@ def parse_feed(xml_bytes: bytes, source: str, category: str, lang: str,
     for it in root.iter("item"):
         title = plain(it.findtext("title") or "")
         link = (it.findtext("link") or "").strip()
-        if not title or not link.startswith(("https://", "http://")):
+        if not title or not link.startswith(("https://", "http://")) or NOT_NEWS.search(title):
             continue
         name = source
         src = it.find("source")

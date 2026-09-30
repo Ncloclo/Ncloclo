@@ -73,13 +73,43 @@ def ps_lines(deps: Deps, script: str) -> Optional[List[str]]:
 
 def power_ac(deps: Deps, sub: str, setting: str) -> Optional[int]:
     """Valeur sur secteur d'un réglage d'alimentation de Windows (secondes ou
-    index), ou None si le réglage n'existe pas sur ce PC (capot d'un PC fixe)."""
+    index), ou None si le réglage n'existe pas sur ce PC (capot d'un PC fixe).
+    /qh lit aussi les réglages que Windows cache : sur bien des portables,
+    l'action du capot n'apparaît pas avec /query."""
     try:
-        r = deps.run(["powercfg", "/query", "SCHEME_CURRENT", sub, setting])
+        r = deps.run(["powercfg", "/qh", "SCHEME_CURRENT", sub, setting])
     except (OSError, subprocess.SubprocessError):
         return None
     vals = re.findall(r"0x([0-9a-fA-F]{8})", r.stdout or "")
     return int(vals[-2], 16) if r.returncode == 0 and len(vals) >= 2 else None
+
+
+def power_source(deps: Optional[Deps] = None) -> Optional[Dict[str, Any]]:
+    """Alimentation du PC sous Windows : {"ac": sur secteur ?, "battery_pct":
+    charge de la batterie, None sans batterie}. None ailleurs, ou si Windows
+    ne le dit pas."""
+    if deps is not None:
+        if "power" in deps.extra:
+            return deps.extra["power"]
+        if deps.run is not run or not deps.platform.startswith("win"):
+            return None                 # commandes simulées (tests) : rien de réel n'est lu
+    elif not sys.platform.startswith("win"):
+        return None
+    try:
+        import ctypes
+
+        class Status(ctypes.Structure):
+            _fields_ = [("ac", ctypes.c_ubyte), ("flag", ctypes.c_ubyte), ("pct", ctypes.c_ubyte),
+                        ("saver", ctypes.c_ubyte), ("left", ctypes.c_ulong), ("full", ctypes.c_ulong)]
+        s = Status()
+        if not ctypes.windll.kernel32.GetSystemPowerStatus(ctypes.byref(s)):
+            return None
+    except (OSError, AttributeError):
+        return None
+    if s.ac not in (0, 1):
+        return None
+    battery = s.flag not in (128, 255) and s.pct != 255     # 128 : pas de batterie
+    return {"ac": s.ac == 1, "battery_pct": int(s.pct) if battery else None}
 
 
 def github_json(url: str) -> Any:

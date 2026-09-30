@@ -76,7 +76,7 @@ sont jamais envoyés sur GitHub. VS Code les masque dans l'explorateur
 | Fichier | Rôle |
 | --- | --- |
 | `server.py` | serveur local : pages, API (une table de routes), sécurité, anticipation, centre de sécurité |
-| `data.py`, `market.py` | lecture de la base du bot (sans la modifier), cours publics de Binance |
+| `data.py`, `market.py` | lecture de la base du bot (sans la modifier) ; cours publics de Binance, lus d'avance et gardés : une page n'attend jamais le réseau |
 | `control.py` | bouton AUTO / ARRÊTER (superviseur), démarrage avec l'ordinateur |
 | `assistant.py`, `news.py` | Rachelle ; actualités et marchés |
 | `demo.py` | données fictives pour `--demo` et les tests |

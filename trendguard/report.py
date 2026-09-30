@@ -48,6 +48,7 @@ from . import autonomy, evolution, learning, maintenance
 from .systeme import Check, Deps, chk, ci_status, github_json, read_state, repo_slug
 from .systeme import git as _git
 from .systeme import power_ac as _power_ac
+from .systeme import power_source as _power_source
 from .systeme import ps_lines as _ps_lines
 from .texte import fr
 
@@ -356,12 +357,20 @@ def check_windows(deps: Deps) -> List[Check]:
                        "" if good else "Activez la protection en temps réel et mettez à jour "
                                        "Microsoft Defender."))
     out.append(_power_check(deps))
+    source = _source_check(deps)
+    if source:
+        out.append(source)
     return out
+
+
+BUTTON_ACTIONS = {0: "ne rien faire", 1: "veille", 2: "veille prolongée", 3: "arrêt",
+                  4: "éteindre l'écran"}
 
 
 def _power_check(deps: Deps) -> Check:
     sleep = _power_ac(deps, "SUB_SLEEP", "STANDBYIDLE")
     lid = _power_ac(deps, "SUB_BUTTONS", "LIDACTION")
+    button = _power_ac(deps, "SUB_BUTTONS", "PBUTTONACTION")
     if sleep is None and lid is None:
         return chk("Veille du PC (sur secteur)", None, "réglages inconnus")
     good = sleep in (0, None) and lid in (0, None)
@@ -369,8 +378,11 @@ def _power_check(deps: Deps) -> Check:
     if sleep is not None:
         parts.append("mise en veille : " + ("jamais" if sleep == 0 else f"après {sleep // 60} min"))
     if lid is not None:     # absent sur un PC fixe (pas de capot)
-        parts.append("capot fermé : " + {0: "ne rien faire", 1: "veille", 2: "veille prolongée",
-                                          3: "arrêt"}.get(lid, "?"))
+        parts.append("capot fermé : " + BUTTON_ACTIONS.get(lid, "?"))
+    if lid is not None and button in (1, 2, 3):
+        # Information : ce bouton reste à vous, le bot ne le change pas.
+        parts.append(f"bouton d'alimentation : {BUTTON_ACTIONS[button]} (pour laisser tourner le "
+                     "bot, fermez le capot au lieu d'appuyer dessus)")
     todo = []
     if sleep not in (0, None):
         todo.append("mise en veille « Jamais »")
@@ -379,6 +391,20 @@ def _power_check(deps: Deps) -> Check:
     return chk("Veille du PC (sur secteur)", good, " ; ".join(parts),
                "" if good else "Paramètres Windows ▸ Alimentation, sur secteur : "
                                + " et ".join(todo) + " (le bot ne surveille rien quand le PC dort).")
+
+
+def _source_check(deps: Deps) -> Optional[Check]:
+    """Sur batterie, un portable s'endort capot fermé, puis s'éteint : le bot
+    s'arrête. None si Windows ne dit rien (ou PC fixe sans batterie)."""
+    p = _power_source(deps)
+    if not p or p.get("battery_pct") is None:
+        return None
+    pct = f"batterie à {p['battery_pct']} %"
+    if p["ac"]:
+        return chk("Alimentation du PC", True, f"sur secteur ({pct})")
+    return chk("Alimentation du PC", False, f"SUR BATTERIE ({pct})",
+               "Branchez le chargeur : sur batterie, le PC se met en veille dès que le capot est "
+               "fermé, puis s'éteint quand elle est vide, et le bot s'arrête.")
 
 
 # ══════════════════════════════════════════════════════════════════════

@@ -303,9 +303,14 @@ test("positions, veille, journal, réglages et thème", async ({ page }) => {
   await expect(page.locator("#t-table tbody tr")).toHaveCount(6);
   await page.locator('.tab[data-tab="watch"]').click();
   await expect(page.locator("#w-report")).toContainText("VEILLE");
+  await expect(page.locator("#w-fng")).toHaveText("70 · Avidité");             // indicateurs de la veille
+  await expect(page.locator("#w-peg")).toHaveText("1,0002");
+  await expect(page.locator("#w-ai li")).toHaveCount(4);                        // une ligne par IA consultée
+  await expect(page.locator("#w-ai-sub")).toHaveText("4 configurées");
   await page.locator('.tab[data-tab="log"]').click();
   await expect(page.locator("#log li").first()).toBeVisible();
   await page.locator('.tab[data-tab="settings"]').click();
+  await expect(page.locator("#page-settings .col")).toHaveCount(2);             // deux colonnes sans vide
   await expect(page.locator("#s-bot dt").first()).toBeVisible();
   const sw = page.locator("#s-autostart");
   await expect(sw).toBeChecked();
