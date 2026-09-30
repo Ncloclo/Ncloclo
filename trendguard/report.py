@@ -601,7 +601,7 @@ LEVEL_OK = {"OK": True, "INFO": True, "ATTENTION": None, "ALERTE": False}
 # Lignes du centre de sécurité déjà vérifiées par le rapport lui-même.
 PANEL_DUPLICATES = {"Disponibilité du bot (7 j)", "Relance automatique", "Arrêt d'urgence", "Mode",
                     "Clés API Binance", "Fichier des secrets (.env)", "Rapport quotidien",
-                    "Évolution encadrée"}
+                    "Évolution encadrée", "Alimentation du PC"}
 
 
 def strategy_checks(gcfg: Any, deps: Deps) -> List[Check]:

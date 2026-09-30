@@ -227,7 +227,9 @@ def _deps(tmp_path, **kw):
                                                                  "detail": "ce PC uniquement"},
                                                                 {"label": "Alertes", "ok": False,
                                                                  "detail": "E-mail : dernier envoi RATÉ"},
-                                                                {"label": "Mode", "ok": True, "detail": "paper"}]}},
+                                                                {"label": "Mode", "ok": True, "detail": "paper"},
+                                                                {"label": "Alimentation du PC", "ok": False,
+                                                                 "detail": "SUR BATTERIE (40 %)"}]}},
                 binance=lambda env, testnet: rp.chk("Clé API Binance", False, "refusée", "Vérifiez l'IP."),
                 diagnose=lambda g: ([Finding("Marché", "OK", "haussier"),
                                      Finding("Données", "ATTENTION", "ETC peu liquide", "Rien à faire.")],
@@ -246,6 +248,7 @@ def test_report_is_complete_ordered_and_secret_free(root):
     assert titles[0] == "Sécurité" and "Stratégie (le fond)" in titles and titles[-1].endswith("(la forme)")
     labels = [c["label"] for s in r["sections"] for c in s["checks"]]
     assert labels.count("Mode") == 1                                  # pas de doublon du panneau
+    assert "Alimentation du PC" not in labels                         # contrôlée par le rapport lui-même
     assert r["recommendations"][0] == "Vérifiez l'IP." and "Rien à faire." in r["recommendations"]
     assert "Alertes : E-mail : dernier envoi RATÉ" in r["recommendations"]
     assert any("base sauvegardée" in a for a in r["actions"])
