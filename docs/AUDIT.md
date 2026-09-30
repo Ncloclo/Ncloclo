@@ -93,6 +93,21 @@ encore corrigeables, peu exploitables contre ce bot. Heures en UTC.
   les droits d'administrateur (essai refusé) : Services ▸ Temps Windows ▸
   Démarrage automatique ▸ Démarrer.
 
+### Redémarrage du PC à 18 h 20 : premier essai grandeur nature
+
+Vous avez redémarré le PC à 18 h 20. C'était le premier vrai redémarrage depuis
+que le bot a ses propres bibliothèques : le superviseur, le bot et le panneau
+sont repartis seuls à l'ouverture de session, en passant bien par le Python de
+l'installation puis par l'environnement propre du bot. Le bot a repris ses
+cycles à 18 h 30 avec ses 6 positions, rien de perdu ; 11 minutes d'arrêt en
+tout, sous le seuil d'une heure du compteur de disponibilité.
+
+Le redémarrage a fermé la démonstration (port 8799), la page de l'essai (port
+8899) et la fenêtre des alertes (F7). La page de l'essai et la fenêtre des
+alertes, qui attend toujours le mot de passe d'application Gmail, ont été
+rouvertes ; la démonstration reste fermée. Le service « Temps Windows » est
+toujours arrêté après le redémarrage (F4) : il ne démarre pas seul sur ce PC.
+
 ## Diagnostic approfondi du 30 septembre, 13 h
 
 **Verdict : la mise à jour des bibliothèques n'a rien cassé, et la stratégie
