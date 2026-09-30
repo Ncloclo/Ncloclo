@@ -141,6 +141,8 @@ def build_replay(close: pd.DataFrame, volume: pd.DataFrame, start: str,
             events.append({"x": exits, "e": entries, "s": signals,
                            "risk": round(sum(h["risk_quote"]
                                              for h in book["holdings"].values()), 2)})
+            if bot.state.get("halted"):
+                events[-1]["h"] = 1         # arrêt d'urgence : plus aucun achat
     finally:
         bot.store.close()
 
@@ -166,7 +168,8 @@ def build_replay(close: pd.DataFrame, volume: pd.DataFrame, start: str,
                    "regime_sma": p.regime_sma, "risk_pct": p.risk_pct,
                    "max_positions": p.max_positions,
                    "max_total_risk": p.max_total_risk,
-                   "min_volume_usd": p.min_volume_usd},
+                   "min_volume_usd": p.min_volume_usd,
+                   "kill_drawdown": bot.g.kill_drawdown},
     }
 
 

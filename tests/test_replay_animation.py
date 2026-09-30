@@ -39,6 +39,10 @@ def test_replay_matches_backtest_and_is_consistent(replay):
     buys = sum(len(ev["e"]) for ev in data["events"])
     sells = sum(len(ev["x"]) for ev in data["events"])
     assert buys == len(data["episodes"]) and sells == len(closed) == data["metrics"]["trades"]
+    # Réglages montrés par la page : ceux du rejeu, arrêt d'urgence compris ;
+    # un jour sous arrêt d'urgence est marqué (ici, jamais).
+    assert data["params"]["risk_pct"] == 0.01 and data["params"]["kill_drawdown"] == 0.40
+    assert not any(ev.get("h") for ev in data["events"])
 
 
 def _page(data, **extra):
