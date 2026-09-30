@@ -12,13 +12,14 @@ dépendances (pip-audit), recherche de secrets dans git.
 
 **Le bot, sa stratégie et son code sont sains ; ce qui l'entoure ne l'est pas
 encore.** Au 30 septembre, la stratégie est conforme (27 contrôles sur 27), le
-journal ne contient aucune erreur du bot, les 491 tests et les contrôles de
-GitHub sont au vert. Les quatre faiblesses sont autour du bot : le PC portable
-(batterie, veille, arrêts : 65 % de disponibilité), les alertes qui n'arrivent
-pas, la clé Binance refusée, et des bibliothèques Python en retard sur le PC.
-Le bot n'est pas prêt pour de l'argent réel : il lui faut des alertes qui
-arrivent, une machine allumée en permanence avec une adresse fixe, et plusieurs
-semaines de paper avec des trades vendus.
+journal ne contient aucune erreur du bot, les tests et les contrôles de GitHub
+sont au vert. Trois faiblesses restent autour du bot : le PC portable (batterie,
+veille, arrêts : 65 % de disponibilité), les alertes qui n'arrivent pas et la
+clé Binance refusée. La quatrième, des bibliothèques Python en retard sur le PC,
+a été corrigée le jour même : le bot a maintenant les siennes, aux versions
+testées. Le bot n'est pas prêt pour de l'argent réel : il lui faut des alertes
+qui arrivent, une machine allumée en permanence avec une adresse fixe, et
+plusieurs semaines de paper avec des trades vendus.
 
 ## Diagnostic approfondi du 30 septembre
 
@@ -56,13 +57,39 @@ marché sur la période, mais sans aucun trade vendu, cela ne prouve rien.
 | D2 | **Disponibilité : 65 % sur 7 jours** (84 % sur 24 h). Causes relevées dans le journal de Windows : PC éteint la nuit du 26 au 27 (16,7 h), mises en veille par le capot ou le bouton d'alimentation (29/09 à 21 h 33, 30/09 à 07 h 02), arrêt le 29 au matin | Élevée | **Corrigé en partie le 30/09** : Windows cachait le réglage du capot, le bot ne le voyait pas ; capot fermé sur secteur = « ne rien faire ». Reste à vous : PC branché ; ne pas appuyer sur le bouton d'alimentation (il met en veille) |
 | D3 | **Aucune alerte ne vous parvient** : Gmail refuse le mot de passe (il faut un mot de passe d'application), WhatsApp et Telegram ne sont pas configurés. Deux alertes critiques sont restées dans le journal (arrêts du 29 et du 30). La fenêtre « Alertes — configurer » est ouverte depuis 01 h 45, sans saisie | Élevée | `python trendguard_bot.py alerts configurer`, puis « Tester » dans Réglages |
 | D4 | **Clé Binance refusée** (erreur −2015). L'adresse du PC sur Internet change (102.209.218.110 à la première vérification, 160.120.68.43 le 30) : une clé limitée à une adresse ne peut pas tenir sur cette connexion | Aucune en paper ; bloquante pour le réel | Pour le réel : une machine à adresse fixe (petit serveur), qui règle aussi D2 |
-| D5 | **Bibliothèques Python du PC en retard** sur celles que GitHub teste : pandas 2.3.3 (testée : 3.0.6), ccxt 4.5.44 (4.5.84), numpy 2.4.3 (2.5.3). Et 15 paquets installés sur 226 ont des failles connues, dont 6 utilisés par le bot : aiohttp, cryptography, requests, urllib3, anyio, setuptools | Moyenne : le bot n'écoute que sur ce PC, mais il parle à Binance avec ces bibliothèques | Mettre le PC aux versions testées, puis relancer le bot (plan, ligne 11) |
-| D6 | **Angle mort du rapport quotidien** : « tests, qualité et sécurité au vert » décrit les contrôles de GitHub, faits avec des bibliothèques à jour ; celles du PC ne sont pas contrôlées | Moyenne | Ajouter ce contrôle au rapport (plan, ligne 12) |
+| D5 | **Bibliothèques Python du PC en retard** sur celles que GitHub teste : pandas 2.3.3 (testée : 3.0.6), ccxt 4.5.44 (4.5.84), numpy 2.4.3 (2.5.3). Et 15 paquets installés sur 226 ont des failles connues, dont 6 utilisés par le bot : aiohttp, cryptography, requests, urllib3, anyio, setuptools | Moyenne : le bot n'écoute que sur ce PC, mais il parle à Binance avec ces bibliothèques | **Corrigé le 30/09** : le bot a ses propres bibliothèques, aux versions testées (voir « Suite donnée ») |
+| D6 | **Angle mort du rapport quotidien** : « tests, qualité et sécurité au vert » décrit les contrôles de GitHub, faits avec des bibliothèques à jour ; celles du PC ne sont pas contrôlées | Moyenne | **Corrigé le 30/09** : deux contrôles ajoutés au rapport (voir « Suite donnée ») |
 | D7 | Apprentissage : erreur de prévision 0,002 sur 51 prévisions. Le chiffre ne dit encore rien : aucune vente ni aucun achat n'a eu lieu depuis qu'il mesure | Information | Jugé à partir de 100 prévisions, comme prévu |
 | D8 | Évolution encadrée : niveau 1, 10 réglages essayés chaque nuit, aucun adopté | Information | Le garde-fou tient : rien ne change sans réussir toutes les épreuves |
 | D9 | Sauvegardes de la base sur le même disque que la base (2 jours gardés) | Faible en paper | Avant le réel : une copie hors du PC |
 | D10 | Dépôt GitHub public : le code est visible de tous | Information | Aucun secret dedans (vérifié) ; base, journaux, rapports et `.env` ne sont jamais publiés |
 | D11 | Proposition n° 3 en attente sur GitHub ; démonstration encore ouverte sur le port 8799 (126 Mo) | Faible | Fusionner ou fermer la proposition ; fermer la démonstration quand elle ne sert plus |
+| D12 | Hors du bot : sur ce PC, les logiciels qui passent par `aiohttp` avec `aiodns` (freqtrade, par exemple) ne trouvent pas les serveurs DNS et ne joignent pas Binance. Vérifié avant et après les mises à jour du 30/09 : elles n'y changent rien | Information : le bot n'utilise pas ce chemin | À traiter seulement si vous utilisez ces logiciels sur ce PC |
+
+### Suite donnée le 30 septembre (D5 et D6)
+
+Mettre tout le PC aux versions testées aurait cassé d'autres logiciels installés
+(freqtrade, vectorbt, numba), qui exigent pandas 2 et numpy avant 2.5. Le bot a
+donc reçu son propre jeu de bibliothèques, dans le dossier `.venv` à côté du
+code ; les autres logiciels gardent les leurs.
+
+| Mesure | Avant | Après |
+| --- | --- | --- |
+| Bibliothèques du bot | celles du PC : ccxt 4.5.44, numpy 2.4.3, pandas 2.3.3 | les siennes, aux versions testées : ccxt 4.5.84, numpy 2.5.3, pandas 3.0.6 |
+| Failles connues dans ce que le bot utilise | 6 bibliothèques | aucune (70 bibliothèques contrôlées) |
+| Tests sur le PC avec ces bibliothèques | jamais lancés avec les versions testées | 493 réussis, aucun échec |
+| Bibliothèques du PC (autres logiciels) | 15 sur 226 avec une faille connue | 1 sur 226 : 14 corrections compatibles installées ; les logiciels qui en dépendent se chargent comme avant (73 modules essayés avant et après) |
+| Rapport quotidien | ne contrôlait pas les bibliothèques du PC | deux contrôles : « Bibliothèques du bot » (versions testées) et « Failles connues des bibliothèques » |
+
+Le bot et le panneau ont été relancés à 12 h 06 avec ces bibliothèques (moins
+d'une minute d'arrêt). Toute commande `python trendguard_bot.py …` passe
+d'elle-même par le dossier `.venv`, le démarrage avec l'ordinateur aussi ; si ce
+dossier disparaît, le bot tourne avec les bibliothèques du PC et le rapport le
+signale.
+Une bibliothèque du PC garde une faille connue, sans effet sur le bot :
+`curl-cffi`, retenue par yfinance, qui n'accepte pas la version corrigée. La
+liste des versions d'avant est gardée dans le dossier `sauvegardes/` : tout peut
+être remis comme avant.
 
 ### Stratégie (clôture du 29, données Binance) : tout est conforme
 
@@ -91,7 +118,7 @@ dans [`DIAGNOSTIC_CODE.md`](DIAGNOSTIC_CODE.md). Le même jour, le panneau réel
 1. des alertes qui arrivent (D3) ;
 2. une machine allumée en permanence, à adresse fixe (D2, D4) ;
 3. une clé Binance acceptée, avec le droit de trading et sans retrait (D4) ;
-4. des bibliothèques à jour sur la machine qui tourne (D5) ;
+4. des bibliothèques à jour sur la machine qui tourne (D5) : fait le 30/09 ;
 5. 10 à 20 trades vendus en paper, conformes à l'attendu, puis quelques jours
    de testnet.
 
@@ -292,8 +319,8 @@ Points faibles :
 | 8 | Avant le réel : `verify` complet, quelques jours de testnet, au moins 100 USDT | Vous | le moment venu |
 | 9 | Mesurer la disponibilité du bot dans le panneau et prévenir quand il a été arrêté plus d'une heure | Code | fait (29/09) |
 | 10 | Centre de sécurité : « Alertes » à corriger si le dernier envoi a échoué | Code | fait (29/09) |
-| 11 | Mettre les bibliothèques Python du PC aux versions testées sur GitHub, et corriger les 6 qui ont des failles connues (aiohttp, cryptography, requests, urllib3, anyio, setuptools) ; tests, puis relance du bot | Code, avec votre accord | à faire (constat du 30/09) |
-| 12 | Rapport quotidien : contrôler les bibliothèques installées sur le PC (versions testées, failles connues) | Code | à faire (constat du 30/09) |
+| 11 | Mettre les bibliothèques Python du PC aux versions testées sur GitHub, et corriger les 6 qui ont des failles connues (aiohttp, cryptography, requests, urllib3, anyio, setuptools) ; tests, puis relance du bot | Code, avec votre accord | **fait** (30/09) : le bot a ses propres bibliothèques (dossier `.venv`), aux versions testées et sans faille connue ; sur le PC, 14 corrections de sécurité compatibles, 1 restante sans effet sur le bot (`curl-cffi`, retenue par yfinance) |
+| 12 | Rapport quotidien : contrôler les bibliothèques installées sur le PC (versions testées, failles connues) | Code | **fait** (30/09) : deux contrôles dans la section Sécurité du rapport |
 | 13 | Avant le réel : faire tourner le bot sur une machine allumée en permanence, à adresse fixe (petit serveur) | Vous | le moment venu ; règle la disponibilité et la clé Binance |
 | 14 | Fusionner ou fermer la proposition n° 3 sur GitHub ; fermer la démonstration du port 8799 quand elle ne sert plus | Vous | quand vous voulez |
 | 15 | Alimentation du portable signalée (tableau de bord, centre de sécurité, rapport) ; réglage caché du capot lu | Code | fait (30/09) |
