@@ -1,12 +1,13 @@
 # Audit et diagnostic expert de TrendGuard — 28 au 30 septembre 2026
 
-Trois diagnostics successifs : l'audit du 28, le diagnostic approfondi du 29
-(disponibilité, robustesse, alertes) et celui du 30 (alimentation, bibliothèques
-du PC, état en direct). Méthode : diagnostic de la stratégie sur les données
-publiques de Binance (`python trendguard_bot.py diagnose`), état du bot dans le
-panneau, journal du bot, du superviseur et de Windows, vérification Binance
-(`verify`, aucun ordre), tests, analyse statique, failles connues des
-dépendances (pip-audit), recherche de secrets dans git.
+Quatre diagnostics successifs : l'audit du 28, le diagnostic approfondi du 29
+(disponibilité, robustesse, alertes), celui du 30 à 10 h (alimentation,
+bibliothèques du PC, état en direct) et celui du 30 à 13 h, après la mise à jour
+des bibliothèques (PC, contrôles croisés). Méthode : diagnostic de la stratégie
+sur les données publiques de Binance (`python trendguard_bot.py diagnose`), état
+du bot dans le panneau, journal du bot, du superviseur et de Windows,
+vérification Binance (`verify`, aucun ordre), tests, analyse statique, failles
+connues des dépendances (pip-audit), recherche de secrets dans git.
 
 ## Verdict
 
@@ -21,7 +22,61 @@ testées. Le bot n'est pas prêt pour de l'argent réel : il lui faut des alerte
 qui arrivent, une machine allumée en permanence avec une adresse fixe, et
 plusieurs semaines de paper avec des trades vendus.
 
-## Diagnostic approfondi du 30 septembre
+## Diagnostic approfondi du 30 septembre, 13 h
+
+**Verdict : la mise à jour des bibliothèques n'a rien cassé, et la stratégie
+donne exactement les mêmes chiffres qu'avant ; les faiblesses sont toutes du
+côté du PC et des alertes.** Méthode, en plus de celle de 10 h : état interne du
+bot relu dans sa base et recalculé avec les prix en direct, courbe du capital
+(211 relevés), sauvegardes rouvertes, répétition des ordres du jour sans clé,
+mémoire, disque, horloge, redémarrages et plantages relevés dans Windows,
+réglages publics du dépôt GitHub. Heures en UTC.
+
+### État du bot (30/09, 13 h)
+
+| Mesure | Valeur |
+| --- | --- |
+| Capital | 10 232,04 USDT (+2,32 %), son plus haut ; pire baisse relevée −3,0 % (le 30 à 03 h 32) |
+| Marché depuis le début du paper | BTC +1,2 % ; moyenne des 21 cryptos 0,0 % ; moyenne des 6 détenues +4,0 % |
+| Positions | ICP +10,4 %, XLM +6,2 %, AAVE +6,0 %, LINK +4,4 %, ADA +0,4 %, LTC −5,8 % |
+| Prochaine clôture | LTC à 2,2 % de son stop : vente probable à 17 % (36 % ce matin) ; DOT à 1,5 % d'un signal d'achat, bloqué par le plafond de risque (6 % engagés sur 6 %) |
+| Comptes | capital recalculé à la main à partir des quantités et des prix en direct : identique à celui du bot ; base saine |
+| Disponibilité | 87,7 % sur 24 h, 66,4 % sur 7 jours ; aucune mise en veille depuis la correction du capot (09 h 29) ; aucun plantage de Python dans le journal de Windows depuis le 26 |
+| Journal du 30 | 0 erreur du bot ; 4 délais de réseau dépassés, tous rattrapés au cycle suivant ; 5 relances demandées (moins d'une minute chacune) |
+| Bibliothèques | celles du bot : versions testées, aucune faille connue sur 70 ; celles du PC : 1 sur 226 |
+| Code | 65 modules, 23 747 lignes, 1 051 fonctions ; 508 tests (495 réussis, 13 sans objet sur ce PC), ruff sans remarque, contrôles GitHub au vert |
+| Rapport de 12 h 50 | 32 contrôles conformes sur 40, 3 à corriger (clé Binance, alertes, disponibilité) |
+
+### Ce qui a été vérifié et tient
+
+| Contrôle | Résultat |
+| --- | --- |
+| Stratégie avec les nouvelles bibliothèques | chiffres identiques à ceux de 10 h, au trade près : +33,5 % par an, pire baisse −24,7 %, 313 trades, +1,12 R ; 12 derniers mois +33,3 % ; tournoi inchangé. Verdict du diagnostic : tout est conforme |
+| Ordres du jour, répétés sans clé ni envoi | Binance joignable (405 ms), règles des 21 paires conformes, ordres d'achat et de stop constructibles |
+| Achats du 26/09 (faits 23 h après la clôture du signal, au démarrage) | payés 0,65 % moins cher que cette clôture : ce retard n'a rien coûté |
+| Sauvegardes | les deux bases gardées se rouvrent : intégrité correcte, 6 positions et liquidités identiques à la base en service |
+| Secrets | aucune clé dans les 152 fichiers publiés ni dans les 88 versions de l'historique ; `.env`, base, journaux et dossier `.venv` jamais publiés |
+| Accès | panneau et démonstration à l'écoute sur ce PC seulement (127.0.0.1) ; pare-feu et antivirus actifs |
+| Démarrage avec l'ordinateur | commande rejouée : elle passe par les bibliothèques du bot et ne lance rien en double |
+| Saisie masquée des secrets | essayée dans une vraie fenêtre, à travers le passage aux bibliothèques du bot : rien ne s'affiche, tout est reçu |
+
+### Constats de 13 h
+
+| N° | Constat | Gravité | Suite |
+| --- | --- | --- | --- |
+| E1 | **Aucune alerte ne vous parvient toujours.** Gmail refuse le mot de passe depuis hier ; après 5 essais en 16 heures (chaque rapport en fait un), il coupe maintenant la connexion | Élevée | Créer le mot de passe d'application (myaccount.google.com/apppasswords) et le saisir dans la fenêtre « TrendGuard - Alertes », rouverte dans la barre des tâches |
+| E2 | **Mémoire du PC presque pleine** : 20,4 Go réservés sur 22,9 possibles (89 %), 2,3 Go libres. Chrome en prend 6,0 Go (44 processus), VS Code 4,8 Go. Le bot et ses compagnons en réservent 1,75 Go, dont 0,65 Go pour la démonstration et la fenêtre des alertes. Si la mémoire sature, Windows peut arrêter le bot (le superviseur le relance) | Moyenne | Vous : fermer des onglets de Chrome, et la démonstration quand elle ne sert plus. Code : alléger le superviseur, qui réserve 324 Mo pour seulement surveiller (plan, ligne 17) |
+| E3 | **Disque presque plein** : 17 Go libres sur 240 (7 %). Le rapport ne le signale que sous 2 Go ; Windows a besoin de place pour ses mises à jour | Moyenne | Vous : libérer de la place. Code : prévenir plus tôt, sous 10 % (plan, ligne 17) |
+| E4 | **Après un redémarrage de Windows, le bot attend l'ouverture de votre session.** Aucun redémarrage en attente aujourd'hui ; Windows redémarre seul entre 1 h et 8 h après une mise à jour : le bot resterait arrêté jusqu'au matin | Moyenne en paper, bloquant pour le réel | Petit serveur (plan, ligne 13) ; d'ici là, rouvrir la session après chaque mise à jour de Windows |
+| E5 | **Proposition n° 3 devenue inutile et en conflit** : elle retirait du README un nombre de tests périmé, corrigé entre-temps pendant la mise à jour. GitHub ne peut plus la fusionner | Faible | Vous : la fermer sur GitHub (« Close pull request ») |
+| E6 | Horloge de Windows jamais synchronisée (source : horloge interne), en retard de 1,1 s | Faible : le bot prend l'heure de Binance | Plan, ligne 5 |
+| E7 | L'arrêt d'urgence et le profil prudent sont évalués une fois par jour, à la clôture, comme dans le backtest. Entre deux clôtures, ce sont les stops qui protègent. Le panneau affiche donc un « plus haut » de clôture (10 074,83) inférieur au capital en direct | Information | Code : afficher le plus haut en direct (plan, ligne 17) |
+| E8 | `verify` s'arrête dès que la clé est refusée, sans répéter les ordres ; la répétition ci-dessus a dû être lancée sans clé | Faible | Code : continuer en mode public quand la clé est refusée (plan, ligne 17) |
+| E9 | Le dossier `.venv` est utilisé dès qu'il existe, même incomplet (installation interrompue) : le bot ne démarrerait pas | Faible : dossier complet et contrôlé chaque nuit | Code : vérifier qu'il est complet avant d'y passer, sinon bibliothèques du PC (plan, ligne 17) |
+| E10 | Branche principale du dépôt non protégée sur GitHub. Le bot n'installe que ce que vous avez fusionné vous-même, et le refuse sinon | Information | Avant le réel : exiger les contrôles GitHub avant toute fusion |
+| E11 | Réseau : Wi-Fi partagé (signal 100 %), adresse publique changeante (160.120.68.43 à 13 h), latence de 330 à 400 ms vers Binance | Information | Confirme D4 : clé à adresse fixe impossible sur cette connexion |
+
+## Diagnostic approfondi du 30 septembre, 10 h
 
 **Verdict du jour : rien à corriger dans la stratégie ni dans le code ; deux
 faiblesses matérielles (alimentation, veille) et un angle mort.** Méthode : les
@@ -327,8 +382,10 @@ Points faibles :
 | 11 | Mettre les bibliothèques Python du PC aux versions testées sur GitHub, et corriger les 6 qui ont des failles connues (aiohttp, cryptography, requests, urllib3, anyio, setuptools) ; tests, puis relance du bot | Code, avec votre accord | **fait** (30/09) : le bot a ses propres bibliothèques (dossier `.venv`), aux versions testées et sans faille connue ; sur le PC, 14 corrections de sécurité compatibles, 1 restante sans effet sur le bot (`curl-cffi`, retenue par yfinance) |
 | 12 | Rapport quotidien : contrôler les bibliothèques installées sur le PC (versions testées, failles connues) | Code | **fait** (30/09) : deux contrôles dans la section Sécurité du rapport |
 | 13 | Avant le réel : faire tourner le bot sur une machine allumée en permanence, à adresse fixe (petit serveur) | Vous | le moment venu ; règle la disponibilité et la clé Binance |
-| 14 | Fusionner ou fermer la proposition n° 3 sur GitHub ; fermer la démonstration du port 8799 quand elle ne sert plus | Vous | quand vous voulez |
+| 14 | Fermer la proposition n° 3 sur GitHub (devenue inutile, en conflit) ; fermer la démonstration du port 8799 quand elle ne sert plus | Vous | quand vous voulez |
 | 15 | Alimentation du portable signalée (tableau de bord, centre de sécurité, rapport) ; réglage caché du capot lu | Code | fait (30/09) |
+| 16 | Libérer de la mémoire (onglets de Chrome) et de la place sur le disque (17 Go libres sur 240) | Vous | constat du 30/09, 13 h |
+| 17 | Six améliorations du code : superviseur allégé ; rapport qui prévient quand la mémoire ou le disque se remplissent ; `verify` qui continue sans clé ; repli si le dossier `.venv` est incomplet ; « plus haut » en direct dans le panneau ; e-mail mis en pause après trois refus du mot de passe | Code, avec votre accord | à faire (constat du 30/09, 13 h) |
 
 Fait depuis l'audit du matin : chemins de secours des ordres réels testés (et
 un défaut corrigé), blocage des mots de passe ratés, écriture sûre du choix des
