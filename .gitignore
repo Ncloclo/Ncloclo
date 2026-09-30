@@ -16,6 +16,9 @@
 *.evolution.json.tmp
 *.rapport.json
 *.rapport.json.tmp
+# Alertes en pause après trois refus du mot de passe (alerts.py)
+*.alertes.json
+*.alertes.json.tmp
 # Maintenance autonome (maintenance.py) : réglages d'origine, arrêt des
 # corrections, redémarrage prévu
 *.restauration.json

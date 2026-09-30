@@ -20,9 +20,8 @@ sécurisé :
 Une seule commande à retenir : `python trendguard_bot.py <commande>` (liste
 complète : `python trendguard_bot.py --help`). Le code est rangé par rôle ;
 détail module par module dans [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md),
-sommaire de tous les documents dans [`docs/README.md`](docs/README.md),
-dernier diagnostic du code dans
-[`docs/DIAGNOSTIC_CODE.md`](docs/DIAGNOSTIC_CODE.md).
+sommaire de tous les documents dans [`docs/README.md`](docs/README.md), dernier
+diagnostic du code dans [`docs/DIAGNOSTIC_CODE.md`](docs/DIAGNOSTIC_CODE.md).
 
 | Dossier | Contenu |
 | --- | --- |
@@ -93,12 +92,10 @@ Le bot relance ce diagnostic tous les 7 jours (`TG_AUTO_DIAGNOSE_DAYS`) et
 notifie en cas d'alerte.
 
 Aucune règle ne s'auto-modifie : sur données réelles, les adaptations « apprises
-des
-résultats récents » font moins bien hors échantillon. Seul un **profil prudent**
-optionnel est proposé (`TG_DD_THROTTLE=0.10:0.5` : risque divisé par 2 au-delà
-de 10 %
-de baisse). Il réduit la pire baisse de −33,6 % à −24,2 % sur 2023-2026, pour
-+32 % par an au lieu de +37 %.
+des résultats récents » font moins bien hors échantillon. Seul un **profil
+prudent** optionnel est proposé (`TG_DD_THROTTLE=0.10:0.5` : risque divisé par 2
+au-delà de 10 % de baisse). Il réduit la pire baisse de −33,6 % à −24,2 % sur
+2023-2026, pour +32 % par an au lieu de +37 %.
 
 ### Sélection des cryptos et prise de bénéfice ([`docs/SELECTION.md`](docs/SELECTION.md))
 
@@ -205,8 +202,9 @@ panneau de contrôle ») :
 - **Centre de sécurité** (Réglages) : accès au panneau, essais de mot de passe
   ratés, mode, présence des clés (jamais leur valeur), droit de retrait, `.env`
   privé, arrêt d'urgence, relance automatique, disponibilité du bot sur 7
-  jours (à corriger sous 95 %), alertes (à corriger si le dernier envoi d'un
-  canal a échoué). Après 5 mots de passe ratés en 10 min, l'adresse est
+  jours (à corriger sous 95 %), alimentation, disque et mémoire du PC (mêmes
+  seuils que le rapport quotidien), alertes (à corriger si le dernier envoi
+  d'un canal a échoué). Après 5 mots de passe ratés en 10 min, l'adresse est
   bloquée 5 min.
 
 Rachelle répond aussi à « Que va faire le bot ce soir ? » (anticipation et
@@ -221,10 +219,9 @@ téléphone Android ou un iPhone connecté au même Wi-Fi : créer le mot de pas
 avec `python trendguard_bot.py set-panel-password` (saisie masquée, accès Wi-Fi
 proposé), lancer `python trendguard_bot.py panel --host 0.0.0.0` (ou redémarrer
 l'ordinateur), ouvrir l'adresse affichée, puis « Ajouter à l'écran d'accueil » :
-le
-panneau s'ouvre comme une application. Il n'y a pas de fichier APK : il
-faudrait publier le panneau sur Internet en HTTPS, ce qui exposerait la
-commande du bot.
+le panneau s'ouvre comme une application. Il n'y a pas de fichier APK : il
+faudrait publier le panneau sur Internet en HTTPS, ce qui exposerait la commande
+du bot.
 
 ### Alertes par e-mail et WhatsApp (`trendguard/alerts.py`)
 
@@ -235,7 +232,10 @@ WhatsApp (CallMeBot, gratuit pour un usage personnel, ou Twilio). Par défaut,
 seules les alertes critiques (arrêt d'urgence, retrait officiel d'une crypto
 détenue, alerte forte de la veille) partent par e-mail et WhatsApp ;
 `ALERT_LEVEL=all` y ajoute le résumé quotidien. Un canal en panne ne ralentit
-jamais le trading.
+jamais le trading. Un canal dont le mot de passe est refusé trois fois de suite
+n'essaie plus qu'une fois par jour, pour ne pas faire bloquer votre compte de
+messagerie ; il reprend dès qu'un bon mot de passe est enregistré, et le bouton
+« Tester » envoie toujours.
 
 **Alertes d'anticipation** (`TG_ANTICIPATION=true` par défaut) : dans les 3
 heures avant la clôture de 00:00 UTC, le bot prévient une seule fois par crypto
@@ -271,26 +271,23 @@ hors arrêts demandés.
 **Apprentissage libre** (`learning.py`,
 [`docs/APPRENTISSAGE.md`](docs/APPRENTISSAGE.md)). Apprendre, s'adapter, ruser
 et s'informer sont libres, rapides et précis : le bot apprend l'écart
-achat/vente
-et la profondeur normaux du carnet de chaque crypto (relevés toutes les 10 min
-le
-temps de les apprendre, puis toutes les heures)
-et diffère un achat dès qu'un carnet s'écarte de sa normale ; il compare chaque
-probabilité annoncée à la clôture et corrige les suivantes ; il relit les
-annonces officielles de Binance toutes les heures. Un seuil appris n'est jamais
-plus large que le seuil fixe, et aucune décision n'est avancée.
+achat/vente et la profondeur normaux du carnet de chaque crypto (relevés toutes
+les 10 min le temps de les apprendre, puis toutes les heures) et diffère un
+achat dès qu'un carnet s'écarte de sa normale ; il compare chaque probabilité
+annoncée à la clôture et corrige les suivantes ; il relit les annonces
+officielles de Binance toutes les heures. Un seuil appris n'est jamais plus
+large que le seuil fixe, et aucune décision n'est avancée.
 
 **Évolution encadrée** (`evolution.py`,
-[`docs/EVOLUTION.md`](docs/EVOLUTION.md)).
-Chaque jour après la décision, le bot cherche un meilleur réglage (cassure,
-stops, lecture du marché) et le soumet à cinq épreuves : deux époques, frais
-doublés, énigmes des crises passées, plateau et hasard. Le plus simple qui les
-réussit toutes est adopté, puis mis à l'essai 30 jours. Réussi, le bot monte de
-niveau (Apprenti, Compagnon, Expert, Maître : plus de liberté, épreuves plus
-dures) ; raté, retour aux anciens réglages et un niveau de moins. Le risque, les
-plafonds, l'arrêt d'urgence et le passage en réel restent hors de sa portée.
-`python trendguard_bot.py evolution` affiche le niveau et l'historique ;
-`TG_EVOLUTION=false` garde des réglages fixes.
+[`docs/EVOLUTION.md`](docs/EVOLUTION.md)). Chaque jour après la décision, le bot
+cherche un meilleur réglage (cassure, stops, lecture du marché) et le soumet à
+cinq épreuves : deux époques, frais doublés, énigmes des crises passées, plateau
+et hasard. Le plus simple qui les réussit toutes est adopté, puis mis à l'essai
+30 jours. Réussi, le bot monte de niveau (Apprenti, Compagnon, Expert, Maître :
+plus de liberté, épreuves plus dures) ; raté, retour aux anciens réglages et un
+niveau de moins. Le risque, les plafonds, l'arrêt d'urgence et le passage en
+réel restent hors de sa portée. `python trendguard_bot.py evolution` affiche le
+niveau et l'historique ; `TG_EVOLUTION=false` garde des réglages fixes.
 
 **Rapport quotidien et recommandations appliquées** (`report.py`,
 `maintenance.py`, [`docs/RAPPORT.md`](docs/RAPPORT.md)). Chaque jour à 00:30
@@ -521,10 +518,9 @@ Chaque position est protégée à deux niveaux :
   bas, remonté avec le trailing. Il protège d'un krach entre deux clôtures.
 
 Au-delà de 40 % de baisse depuis le plus haut, l'arrêt d'urgence bloque les
-achats
-(`TG_KILL_DRAWDOWN`). Pour le lever, arrêtez le bot puis lancez
-`python trendguard_bot.py resume` : la commande est refusée tant que le bot
-tourne, car il réécrirait son état au cycle suivant.
+achats (`TG_KILL_DRAWDOWN`). Pour le lever, arrêtez le bot puis lancez `python
+trendguard_bot.py resume` : la commande est refusée tant que le bot tourne, car
+il réécrirait son état au cycle suivant.
 
 **Une seule instance par compte Binance.** Un verrou empêche deux bots de
 partager la même base sur une même machine. Il ne peut rien contre deux
@@ -574,9 +570,8 @@ w32tm /resync /force
 - Une paire injoignable ne bloque pas la surveillance des autres positions.
 - Si un cycle reste bloqué plus de 20 minutes, la pile de chaque thread est
   écrite dans `<journal>.blocage.txt` (par exemple
-  `trendguard_paper.log.blocage.txt`),
-  pour savoir où le bot s'est arrêté. `diagnose` signale un bot qui tourne sans
-  réussir ses cycles.
+  `trendguard_paper.log.blocage.txt`), pour savoir où le bot s'est arrêté.
+  `diagnose` signale un bot qui tourne sans réussir ses cycles.
 
 ## Déploiement (Docker)
 

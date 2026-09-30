@@ -118,6 +118,56 @@ n'arrive : le navigateur voyait une erreur de réseau au lieu du message
 jusqu'à 1 Mo, puis refusé. Ce défaut, rare, a fait échouer une fois le test
 concerné pendant ce travail.
 
+## Suite du 30 septembre : recommandations appliquées
+
+Après le diagnostic de 13 h ([`AUDIT.md`](AUDIT.md)), ses six recommandations
+de code ont été appliquées, puis le code restructuré et harmonisé autour
+d'elles. Aucune règle de trading, aucun réglage de risque, aucune clé n'a
+bougé ; le moteur `v29/` est resté tel quel.
+
+| Mesure | Au matin | Après |
+| --- | --- | --- |
+| Modules Python | 64 | 69 |
+| Lignes (hors tests) | 23 132 | 24 023 |
+| Plus gros fichier hors `v29` | `report.py`, 1 012 lignes | `trend_strategy.py`, 996 lignes |
+| Mémoire réservée par processus du bot | 341 Mo | 104 Mo |
+| Tests | 478 | 518 |
+
+### Recommandations appliquées
+
+- **Mémoire** : chaque processus du bot n'utilise qu'un fil de calcul. numpy
+  réservait environ 30 Mo par fil dès son chargement, pour rien : le
+  superviseur, le bot, le panneau et la démonstration réservent chacun trois
+  fois moins de mémoire, pour les mêmes résultats.
+- **Disque et mémoire du PC** : le rapport quotidien et le centre de sécurité
+  préviennent sous 10 % de place libre (ou 2 Go) et quand 90 % de la mémoire
+  est réservé aux programmes.
+- **`verify`** : une clé refusée n'arrête plus la vérification ; le marché,
+  les règles des paires et les ordres du jour sont vérifiés sans elle.
+- **Dossier `.venv` incomplet** (installation interrompue) : le bot garde les
+  bibliothèques du PC au lieu de ne plus démarrer.
+- **Panneau** : le plus haut affiché n'est jamais sous le capital en direct.
+- **E-mail** : après trois refus du mot de passe à la suite, un seul essai par
+  jour ; reprise dès qu'un bon mot de passe est enregistré.
+
+### Structuration
+
+- **Le rapport quotidien** : `report.py` (1 012 lignes) est réparti en quatre
+  fichiers. L'assemblage, l'archive et l'envoi restent dans `report.py` ; les
+  contrôles de sécurité vont dans `report_security.py`, la santé du fond et de
+  la forme dans `report_health.py`, la mise en page dans `report_render.py`.
+- **Le panneau** : le centre de sécurité sort de `server.py` (955 lignes) vers
+  `security.py` ; `PanelApp` en hérite, comme le bot hérite de ses routines.
+
+### Harmonisation
+
+| Avant | Maintenant |
+| --- | --- |
+| le panneau et le rapport avaient chacun leurs seuils et leurs phrases pour l'alimentation du PC | un seul constat (`report_security.battery_check`), repris par le panneau, comme ceux du disque et de la mémoire (`report_health.resource_checks`) |
+| trois endroits envoyaient une alerte, chacun avec sa gestion des pannes | une seule fonction, `AlertHub._send` |
+| deux noms pour lire ou écrire un fichier JSON du bot, et deux lectures faites à la main | `autonomy.read_json` et `autonomy.write_json` partout |
+| six paragraphes du README coupés au milieu d'une phrase | recollés |
+
 ## Laissé volontairement
 
 - **Le moteur `v29/`** : ses six zones répétées, une septième partagée avec

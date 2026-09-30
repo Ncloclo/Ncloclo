@@ -23,7 +23,7 @@ from panel.control import BotControl
 from panel.data import BotData
 from panel.market import Market
 from test_trendguard import SIM_FROM, make_bot, run_days, synthetic_market
-from trendguard import autonomy
+from trendguard import autonomy, report_health
 
 
 def _cfg(tmp_path, **kw):
@@ -549,6 +549,9 @@ def test_drawdown_is_never_positive():
     assert ps.drawdown_pct(9_000.0, 10_000.0) == -10.0
     assert ps.drawdown_pct(10_086.86, 10_074.83) == 0.0          # au-dessus du plus haut relevé
     assert ps.drawdown_pct(None, 10_000.0) is None and ps.drawdown_pct(10_000.0, None) is None
+    # Le plus haut affiché n'est jamais sous le capital en direct.
+    assert ps.shown_peak(10_232.04, 10_074.83) == 10_232.04 and ps.shown_peak(9_000.0, 10_000.0) == 10_000.0
+    assert ps.shown_peak(None, None) is None and ps.shown_peak(10_000.0, None) == 10_000.0
     status = {"state": "running", "mode": "paper", "equity": 10_086.86, "start_equity": 10_000.0,
               "positions": 6, "max_positions": 8, "drawdown_pct": 0.0}
     assert "aucune, le capital est à son plus haut" in pa.a_status({"status": status})
@@ -590,11 +593,23 @@ def test_security_center_says_when_the_laptop_runs_on_battery(tmp_path):
                 return {"power": power}
         return ps.PanelApp(_cfg(tmp_path), _Data(), None, Ctl())._power_check()
     bad = rows({"ac": False, "battery_pct": 85})
-    assert bad[0]["ok"] is False and "SUR BATTERIE (85 %)" in bad[0]["detail"]
+    assert bad[0]["ok"] is False and "SUR BATTERIE (batterie à 85 %) ; branchez le chargeur" in bad[0]["detail"]
     assert rows({"ac": True, "battery_pct": 100})[0]["ok"] is True
     assert rows({"ac": True, "battery_pct": None}) == [] and rows(None) == []    # PC fixe
     ctl = BotControl(_cfg(tmp_path), power=lambda: {"ac": False, "battery_pct": 40})
     assert ctl.autonomy()["power"] == {"ac": False, "battery_pct": 40}
+
+
+def test_security_center_watches_disk_and_memory_like_the_report(tmp_path, monkeypatch):
+    full = {"disk_free": 17.1, "disk_total": 240.3, "memory_used": 21.5, "memory_limit": 22.9}
+    monkeypatch.setattr(report_health, "pc_resources", lambda deps=None, root="": full)
+    app = ps.PanelApp(_cfg(tmp_path), _Data(), None, None)
+    disk, memory = app._resource_checks()
+    assert disk["label"] == "Espace disque" and disk["ok"] is False and "17,1 Go libres sur 240 (7 %)" in disk["detail"]
+    assert "; libérez de la place" in disk["detail"]                # la marche à suivre, dans la ligne
+    assert memory["ok"] is False and "94 % réservés" in memory["detail"] and "onglets" in memory["detail"]
+    assert {"Espace disque", "Mémoire du PC"} <= ps.report.PANEL_DUPLICATES    # pas en double dans le rapport
+    assert ps.build_app(_cfg(tmp_path), demo=True)._resource_checks() == []   # démonstration : rien
 
 
 def test_watch_page_data(monkeypatch):

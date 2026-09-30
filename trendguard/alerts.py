@@ -42,11 +42,70 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import v29
 
+from . import autonomy
+
 WHATSAPP_MAX = 1500          # caractères par message WhatsApp
+ERROR_MAX = 300              # caractères gardés d'une cause d'échec
+PAUSE_AFTER = 3              # refus du mot de passe à la suite avant la pause
+PAUSE_RETRY_SEC = 24 * 3600  # en pause : un essai par jour
+PAUSE_FILE = os.path.join(v29.APP_DIR, "trendguard.alertes.json")
 
 
 def _env(env: Dict[str, str], name: str, default: str = "") -> str:
     return (env.get(name) or default).strip()
+
+
+def refused(e: Exception) -> bool:
+    """Le serveur refuse le mot de passe, ou coupe la connexion, ce que fait
+    Gmail après plusieurs refus."""
+    return isinstance(e, (smtplib.SMTPAuthenticationError, smtplib.SMTPServerDisconnected))
+
+
+class Pause:
+    """Après trois refus du mot de passe à la suite, un canal n'essaie plus
+    qu'une fois par jour : chaque essai raté est une connexion refusée sur
+    votre compte de messagerie, qui finit par se bloquer. L'envoi reprend
+    dès qu'un essai réussit ou que le fichier .env change (nouveau mot de
+    passe enregistré) ; un test demandé est toujours envoyé."""
+
+    def __init__(self, path: str, env_file: str = "", clock: Callable[[], float] = time.time):
+        self.path, self.env_file, self.clock = path, env_file, clock
+
+    def held(self, name: str) -> Optional[str]:
+        """Cause de la pause du canal, ou None s'il peut envoyer."""
+        s = autonomy.read_json(self.path).get(name) or {}
+        n, last = int(s.get("refusals") or 0), float(s.get("last_try") or 0)
+        if n < PAUSE_AFTER or self.clock() - last >= PAUSE_RETRY_SEC:
+            return None
+        try:
+            if os.path.getmtime(self.env_file) > last:
+                return None
+        except OSError:
+            pass
+        return (f"en pause après {n} refus du mot de passe (un essai par jour) : enregistrez le "
+                "bon avec python trendguard_bot.py alerts configurer (Gmail : « mot de passe "
+                "d'application », myaccount.google.com/apppasswords)")
+
+    def note(self, name: str, error: Optional[Exception]) -> None:
+        """Résultat d'un essai : réussi (None), mot de passe refusé, ou autre
+        panne (réseau…), qui ne compte pas."""
+        if error is not None and not refused(error):
+            return
+        state = autonomy.read_json(self.path)
+        if error is None:
+            if name not in state:
+                return
+            del state[name]
+        else:
+            state[name] = {"refusals": int((state.get(name) or {}).get("refusals") or 0) + 1,
+                           "last_try": self.clock()}
+        try:
+            if state:
+                autonomy.write_json(self.path, state)
+            else:
+                os.remove(self.path)
+        except OSError:
+            pass
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -198,12 +257,14 @@ class AlertHub:
     e-mail et WhatsApp selon le niveau, dans un fil d'envoi dédié."""
 
     def __init__(self, telegram: Any, channels: List[Any], level: str = "critical",
-                 logger: Any = None, async_mode: bool = True, dedup_sec: int = 600):
+                 logger: Any = None, async_mode: bool = True, dedup_sec: int = 600,
+                 pause: Optional[Pause] = None):
         self.telegram = telegram
         self.channels = [c for c in channels if c is not None and c.enabled]
         self.level = level if level in ("critical", "all") else "critical"
         self.logger = logger
         self.dedup_sec = dedup_sec
+        self.pause = pause
         self._sent: Dict[str, float] = {}
         # Dernier envoi de chaque canal : {"at", "ok", "error"} (centre de
         # sécurité du panneau : un canal configuré mais en échec est signalé).
@@ -246,21 +307,35 @@ class AlertHub:
                 return
             self._deliver(*item)
 
+    def _send(self, ch: Any, subject: str, text: str, html: Optional[str] = None,
+              tag: str = "", force: bool = False) -> Optional[str]:
+        """Un envoi sur un canal, noté pour le centre de sécurité. Renvoie la
+        cause d'un échec, en clair et sans secret (None : envoyé). `tag` :
+        étiquette de l'avertissement écrit au journal ; `force` : envoyer
+        même si le canal est en pause (test demandé)."""
+        err = None if force or self.pause is None else self.pause.held(ch.name)
+        if err is None:
+            failure: Optional[Exception] = None
+            try:
+                if html and getattr(ch, "supports_html", False):
+                    ch.send(subject, text, html=html)
+                else:
+                    ch.send(subject, text)
+            except Exception as e:
+                failure = e
+                err = v29.scrub_secrets(explain_send_error(e, getattr(ch, "host", "")),
+                                        ch.secrets)[:ERROR_MAX]
+            if self.pause is not None:
+                self.pause.note(ch.name, failure)
+        if err and tag:
+            self._log("warning", f"[{tag}] {ch.label} : envoi impossible ({err})")
+        self._note(ch.name, err)
+        return err
+
     def _deliver(self, msg: str, critical: bool) -> Dict[str, Optional[str]]:
         subject = ("🛑 TrendGuard : alerte critique" if critical
                    else "TrendGuard : notification")
-        results: Dict[str, Optional[str]] = {}
-        for ch in self.channels:
-            try:
-                ch.send(subject, msg)
-                results[ch.name] = None
-            except Exception as e:
-                err = v29.scrub_secrets(explain_send_error(e, getattr(ch, "host", "")),
-                                        ch.secrets)[:300]
-                results[ch.name] = err
-                self._log("warning", f"[ALERTES] {ch.label} : envoi impossible ({err})")
-            self._note(ch.name, results[ch.name])
-        return results
+        return {ch.name: self._send(ch, subject, msg, tag="ALERTES") for ch in self.channels}
 
     def send_report(self, subject: str, full: str, short: str,
                     html: Optional[str] = None) -> Dict[str, Optional[str]]:
@@ -272,19 +347,9 @@ class AlertHub:
             ok = bool(self.telegram(f"{subject}\n{short}", dedup_key=f"rapport-{subject}", sync=True))
             results["telegram"] = None if ok else "envoi Telegram refusé"
         for ch in self.channels:
-            try:
-                if ch.name != "email":
-                    ch.send(subject, short)
-                elif html and getattr(ch, "supports_html", False):
-                    ch.send(subject, full, html=html)
-                else:
-                    ch.send(subject, full)
-                results[ch.name] = None
-            except Exception as e:
-                results[ch.name] = v29.scrub_secrets(explain_send_error(e, getattr(ch, "host", "")),
-                                                     ch.secrets)[:300]
-                self._log("warning", f"[RAPPORT] {ch.label} : envoi impossible ({results[ch.name]})")
-            self._note(ch.name, results[ch.name])
+            whole = ch.name == "email"
+            results[ch.name] = self._send(ch, subject, full if whole else short,
+                                          html if whole else None, tag="RAPPORT")
         return results
 
     def _note(self, name: str, err: Optional[str]) -> None:
@@ -313,13 +378,7 @@ class AlertHub:
             return ok, ""
         for ch in self.channels:
             if ch.name == name:
-                try:
-                    ch.send("TrendGuard : test des alertes", text)
-                    err = None
-                except Exception as e:
-                    err = v29.scrub_secrets(explain_send_error(e, getattr(ch, "host", "")),
-                                            ch.secrets)[:300]
-                self._note(name, err)
+                err = self._send(ch, "TrendGuard : test des alertes", text, force=True)
                 return err is None, err or ""
         return False, f"{name} n'est pas configuré (python trendguard_bot.py alerts configurer)"
 
@@ -335,11 +394,19 @@ class AlertHub:
             self.telegram.close()
 
 
-def build_notifier(logger: Any = None, env: Optional[Dict[str, str]] = None) -> AlertHub:
-    env = os.environ if env is None else env
+def build_notifier(logger: Any = None, env: Optional[Dict[str, str]] = None,
+                   pause_file: Optional[str] = None) -> AlertHub:
+    """Les alertes du bot, d'après le fichier .env. La pause après trois
+    refus du mot de passe est gardée dans `pause_file` (celui du bot avec
+    l'environnement réel ; aucune avec un environnement fourni, sauf si le
+    fichier est donné)."""
+    from . import config as tgc
+    if env is None:
+        env, pause_file = os.environ, pause_file or PAUSE_FILE
     telegram = v29.Notifier(_env(env, "TELEGRAM_TOKEN"), _env(env, "TELEGRAM_CHAT_ID"), logger=logger)
     return AlertHub(telegram, [EmailChannel.from_env(env), whatsapp_from_env(env)],
-                    _env(env, "ALERT_LEVEL", "critical").lower(), logger)
+                    _env(env, "ALERT_LEVEL", "critical").lower(), logger,
+                    pause=Pause(pause_file, tgc.ENV_FILE) if pause_file else None)
 
 
 # ══════════════════════════════════════════════════════════════════════

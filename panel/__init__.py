@@ -6,6 +6,7 @@ Panneau de contrôle TrendGuard : application web locale.
 
 Modules :
   server.py   serveur HTTP (bibliothèque standard), API JSON, sécurité
+  security.py centre de sécurité (état des protections, en direct)
   data.py     lecture seule de la base du bot (état, capital, positions)
   market.py   cours Binance publics, mis en cache
   control.py  démarrage et arrêt propre du bot

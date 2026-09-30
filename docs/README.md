@@ -24,10 +24,9 @@ du bot (installation, commandes, panneau) est dans le
 | [`ADAPTATION.md`](ADAPTATION.md) | le bot peut-il « apprendre et s'adapter » ? |
 | [`STRATEGIES.md`](STRATEGIES.md) | le bot peut-il « apprendre la meilleure stratégie » ? |
 
-Les cinq dernières indiquent en tête la commande qui les régénère ; le
-rapport de recherche se régénère avec
-`python trendguard_bot.py strategy research --data data`. Ce sont des
-diagnostics : aucune étude ne change une règle du bot.
+Les cinq dernières indiquent en tête la commande qui les régénère ; le rapport
+de recherche se régénère avec `python trendguard_bot.py strategy research --data
+data`. Ce sont des diagnostics : aucune étude ne change une règle du bot.
 
 ## Contrôles et suivi
 

@@ -2,6 +2,8 @@
 sans jamais bloquer ni faire échouer le bot."""
 
 import io
+import os
+import smtplib
 
 from trendguard import alerts
 
@@ -173,3 +175,84 @@ def test_send_errors_are_explained_in_plain_french():
     assert "port" in alerts.explain_send_error(smtplib.SMTPServerDisconnected("closed"))
     assert "apppasswords" in alerts.explain_send_error(smtplib.SMTPServerDisconnected("closed"),
                                                        "smtp.gmail.com")
+
+
+# ---------- Pause après trois refus du mot de passe ----------
+
+class RefusingSMTP(FakeSMTP):
+    """Serveur qui refuse le mot de passe, ou qui est injoignable."""
+    tries, error = 0, None
+
+    def login(self, user, password):
+        RefusingSMTP.tries += 1
+        if RefusingSMTP.error is not None:
+            raise RefusingSMTP.error
+
+
+def _paused_hub(tmp_path):
+    env = tmp_path / ".env"
+    env.write_text("SMTP_PASSWORD=x\n", encoding="utf-8")
+    os.utime(env, (1_000, 1_000))
+    clock = {"now": 10_000.0}
+    pause = alerts.Pause(str(tmp_path / "tg.alertes.json"), str(env), clock=lambda: clock["now"])
+    ch = alerts.EmailChannel("smtp.gmail.com", 587, "moi@example.com", "mdp", "moi@example.com",
+                             smtp_factory=RefusingSMTP)
+    hub = alerts.AlertHub(FakeTelegram(enabled=False), [ch], level="all", async_mode=False,
+                          dedup_sec=0, pause=pause)
+    RefusingSMTP.tries, RefusingSMTP.error = 0, smtplib.SMTPAuthenticationError(535, b"refuse")
+    return hub, clock, env
+
+
+def test_email_pauses_after_three_refused_passwords(tmp_path):
+    """Chaque essai raté est une connexion refusée sur le compte de
+    messagerie : après trois, un seul essai par jour."""
+    hub, clock, _env = _paused_hub(tmp_path)
+    for k in range(5):
+        clock["now"] += 60
+        hub(f"alerte {k}", critical=True)
+    assert RefusingSMTP.tries == 3                                  # les deux suivantes : aucun essai
+    assert hub.last["email"]["ok"] is False and "en pause après 3 refus" in hub.last["email"]["error"]
+    assert "alerts configurer" in hub.last["email"]["error"]
+    res = hub.send_report("Rapport", "complet", "court")
+    assert RefusingSMTP.tries == 3 and "en pause" in res["email"]   # le rapport non plus
+    clock["now"] += alerts.PAUSE_RETRY_SEC                          # le lendemain : un essai, un seul
+    hub("alerte du lendemain", critical=True)
+    hub("encore une", critical=True)
+    assert RefusingSMTP.tries == 4
+
+
+def test_paused_email_resumes_with_a_new_password_or_a_success(tmp_path):
+    hub, clock, env = _paused_hub(tmp_path)
+    for k in range(3):
+        hub(f"alerte {k}", critical=True)
+    assert hub.pause.held("email")
+    os.utime(env, (clock["now"] + 5, clock["now"] + 5))             # nouveau mot de passe enregistré
+    clock["now"] += 10
+    assert hub.pause.held("email") is None
+    RefusingSMTP.error = None                                        # il est accepté
+    hub("reprise", critical=True)
+    assert hub.last["email"]["ok"] is True and not os.path.exists(hub.pause.path)
+    assert hub.pause.held("email") is None
+
+
+def test_pause_ignores_network_failures_and_a_requested_test_always_goes(tmp_path):
+    hub, clock, _env = _paused_hub(tmp_path)
+    RefusingSMTP.error = OSError("réseau coupé")                     # pas un refus du mot de passe
+    for k in range(5):
+        hub(f"alerte {k}", critical=True)
+    assert RefusingSMTP.tries == 5 and hub.pause.held("email") is None
+    RefusingSMTP.error = smtplib.SMTPServerDisconnected("fermé")     # Gmail, après plusieurs refus
+    for k in range(3):
+        hub(f"refus {k}", critical=True)
+    assert hub.pause.held("email") and RefusingSMTP.tries == 8
+    ok, err = hub.test("email")                                     # test demandé : envoyé malgré la pause
+    assert RefusingSMTP.tries == 9 and not ok and "coupé la connexion" in err
+    RefusingSMTP.error = None
+    assert hub.test("email") == (True, "") and hub.pause.held("email") is None
+
+
+def test_pause_file_is_the_bot_s_only_with_the_real_environment(tmp_path):
+    assert alerts.build_notifier(env={}).pause is None              # environnement fourni : aucune pause
+    hub = alerts.build_notifier(env={}, pause_file=str(tmp_path / "p.json"))
+    assert hub.pause.path.endswith("p.json") and hub.pause.env_file.endswith(".env")
+    assert alerts.PAUSE_FILE.endswith("trendguard.alertes.json")

@@ -11,6 +11,7 @@ import json
 import os
 import pathlib
 import re
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -112,6 +113,37 @@ def power_source(deps: Optional[Deps] = None) -> Optional[Dict[str, Any]]:
         return None
     battery = s.flag not in (128, 255) and s.pct != 255     # 128 : pas de batterie
     return {"ac": s.ac == 1, "battery_pct": int(s.pct) if battery else None}
+
+
+def pc_resources(deps: Optional[Deps] = None, root: str = "") -> Optional[Dict[str, Any]]:
+    """Place sur le disque du bot et mémoire du PC, en Go :
+    {"disk_free", "disk_total", "memory_used", "memory_limit"} ; la mémoire
+    est celle que Windows a réservée aux programmes et le plus qu'il peut
+    leur réserver (None ailleurs). None avec des commandes simulées (tests)."""
+    if deps is not None:
+        if "resources" in deps.extra:
+            return deps.extra["resources"]
+        if deps.run is not run:
+            return None
+    disk = shutil.disk_usage(root or autonomy.ROOT)
+    out: Dict[str, Any] = {"disk_free": disk.free / 1e9, "disk_total": disk.total / 1e9,
+                           "memory_used": None, "memory_limit": None}
+    if not sys.platform.startswith("win"):
+        return out
+    try:
+        import ctypes
+
+        class Memory(ctypes.Structure):
+            _fields_ = [("size", ctypes.c_ulong), ("load", ctypes.c_ulong)] + [
+                (name, ctypes.c_ulonglong) for name in ("phys", "phys_free", "limit", "limit_free",
+                                                        "virtual", "virtual_free", "extended")]
+        m = Memory()
+        m.size = ctypes.sizeof(m)
+        if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(m)) and m.limit:
+            out["memory_used"], out["memory_limit"] = (m.limit - m.limit_free) / 1e9, m.limit / 1e9
+    except (OSError, AttributeError):
+        pass
+    return out
 
 
 def installed_versions(deps: Deps, names: List[str]) -> Optional[Dict[str, Optional[str]]]:

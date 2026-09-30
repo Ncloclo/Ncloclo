@@ -37,9 +37,13 @@ jour des uns ne casse plus les autres.
 - Un processus lancé par le bot (superviseur, bot, rapport, panneau relancé)
   reste dans l'environnement de son parent : la variable `TRENDGUARD_ENV`, posée
   par le premier, passe aux suivants.
-- Sans dossier `.venv`, ou s'il ne peut pas être lancé, le bot tourne avec les
-  bibliothèques du PC. La clé « Démarrer avec l'ordinateur » garde donc le
-  Python de l'installation : le démarrage ne dépend pas de ce dossier.
+- Sans dossier `.venv`, s'il est incomplet (installation interrompue) ou s'il
+  ne peut pas être lancé, le bot tourne avec les bibliothèques du PC. La clé
+  « Démarrer avec l'ordinateur » garde donc le Python de l'installation : le
+  démarrage ne dépend pas de ce dossier.
+- Chaque processus du bot n'utilise qu'un fil de calcul (`limit_math_threads`).
+  numpy réserve environ 30 Mo de mémoire par fil dès son chargement : avec huit
+  fils, 341 Mo par processus ; avec un seul, 104 Mo, pour les mêmes résultats.
 - Le rapport quotidien compare les bibliothèques installées aux versions testées
   et cherche leurs failles connues (`pip-audit`). Les installer reste une
   recommandation : README, « Bibliothèques du bot ».
@@ -79,13 +83,16 @@ sont jamais envoyés sur GitHub. VS Code les masque dans l'explorateur
 | `uptime.py` | disponibilité : arrêts de plus d'une heure, leur cause, temps de marche |
 | `learning.py` | apprentissage libre : normale des carnets, ruse réglée sur elle, prévisions corrigées par l'expérience |
 | `evolution.py` | évolution encadrée : réglages ajustés par le bot sous épreuves, niveaux, essais de 30 jours |
-| `report.py` | rapport quotidien : sécurité, diagnostic du fond et de la forme, protections sûres, envoi |
+| `report.py` | rapport quotidien : assemblage, archive, envoi, ligne de commande |
+| `report_security.py` | contrôles de sécurité du rapport : secrets, base, clé Binance, Windows, alimentation, bibliothèques ; protections sûres appliquées seules |
+| `report_health.py` | santé du fond et de la forme : panneau, bot, disque et mémoire du PC, journal, stratégie, compétences, code |
+| `report_render.py` | mise en page du rapport : texte, résumé court, page de l'e-mail |
 | `maintenance.py` | recommandations appliquées seules : veille du PC, mises à jour validées par le propriétaire |
-| `systeme.py` | accès au système partagé : commandes, git, GitHub, réglages de Windows, bibliothèques installées, état en lecture seule |
-| `environnement.py` | environnement propre du bot (dossier `.venv`) : commande relancée dedans, Python du démarrage avec l'ordinateur |
+| `systeme.py` | accès au système partagé : commandes, git, GitHub, réglages de Windows, bibliothèques installées, disque et mémoire, état en lecture seule |
+| `environnement.py` | environnement propre du bot (dossier `.venv`) : commande relancée dedans s'il est complet, un seul fil de calcul, Python du démarrage avec l'ordinateur |
 | `texte.py` | nombres écrits à la française (`fr`, `fr_plain`) pour le bot, le panneau, les rapports et les études |
 | `journal.py` | journaux muets des simulations et des vérifications (`silent_logger`) |
-| `alerts.py` | alertes Telegram, e-mail et WhatsApp |
+| `alerts.py` | alertes Telegram, e-mail et WhatsApp ; un canal dont le mot de passe est refusé trois fois n'essaie plus qu'une fois par jour |
 | `market_watch.py` | veille : annonces officielles de Binance, actualités, avis des IA |
 | `watch_claude.py` | avis de Claude pour la veille |
 | `diagnostics.py` | auto-diagnostic hebdomadaire (lecture seule) |
@@ -98,7 +105,8 @@ sont jamais envoyés sur GitHub. VS Code les masque dans l'explorateur
 
 | Fichier | Rôle |
 | --- | --- |
-| `server.py` | serveur local : pages, API (une table de routes), sécurité, anticipation, centre de sécurité |
+| `server.py` | serveur local : pages, API (une table de routes), sécurité des accès, anticipation |
+| `security.py` | centre de sécurité : état des protections en direct ; alimentation, disque et mémoire repris du rapport quotidien |
 | `data.py`, `market.py` | lecture de la base du bot (sans la modifier) ; cours publics de Binance, lus d'avance et gardés : une page n'attend jamais le réseau |
 | `control.py` | bouton AUTO / ARRÊTER (superviseur), démarrage avec l'ordinateur |
 | `assistant.py`, `news.py` | Rachelle ; actualités et marchés |
@@ -176,6 +184,14 @@ trendguard_bot.py ─► trendguard
   l'anticipation, la veille et le diagnostic ; `cli.py` assemble le tout et
   n'est importé que par les points d'entrée (`trendguard_bot.py`,
   `python -m panel`).
+- Le rapport quotidien est en quatre fichiers : `report.py` assemble les
+  contrôles de `report_security.py` et de `report_health.py`, puis les met en
+  page avec `report_render.py`. Le panneau reprend les mêmes constats
+  (`panel/security.py`, dont hérite `PanelApp`) : un seuil ou un texte ne
+  s'écrit qu'une fois.
+- Les fichiers JSON du bot se lisent et s'écrivent par deux fonctions
+  (`autonomy.read_json`, `autonomy.write_json`), et tout envoi d'alerte passe
+  par une seule (`AlertHub._send`).
 - Le bot est une seule classe en trois fichiers : `bot.py` (le cœur),
   `bot_routines.py` et `bot_execution.py` (deux parties ajoutées par
   héritage), avec les types communs dans `bot_types.py`.

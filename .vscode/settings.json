@@ -20,6 +20,7 @@
     "*.log.*.txt": true,
     "*.selection.json": true,
     "*.superviseur.json": true,
+    "*.alertes.json": true,
     "test-results": true,
     "node_modules": true
   }

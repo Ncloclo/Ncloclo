@@ -387,7 +387,8 @@ def cmd_verify(gcfg: GuardConfig, exchange: Any = None,
                now: Optional[datetime] = None, out=None) -> int:
     """Vérifications SANS AUCUN ORDRE avant le passage en réel : droits de
     la clé, soldes, validation des types d'ordres (order/test) et
-    simulation de la décision du jour. Retourne 0 si tout est prêt."""
+    simulation de la décision du jour. Clé refusée : le marché est vérifié
+    quand même, sans elle. Retourne 0 si tout est prêt."""
     out = out or sys.stdout
     say = lambda msg="": print(msg, file=out)       # noqa: E731
     if exchange is None:
@@ -404,6 +405,10 @@ def cmd_verify(gcfg: GuardConfig, exchange: Any = None,
         f"— aucun ordre ne sera passé")
     rights, ok = _verify_rights(exchange, say)
     if ok is None:
+        # Clé refusée : le marché, les règles des paires et les ordres du jour
+        # se vérifient sans elle, avec une connexion publique.
+        say("\nLe reste est vérifié sans clé :\n")
+        cmd_verify_public(gcfg, now=now, out=out)
         return 1
     _verify_balances(exchange, say)
     decision = _verify_decision(gcfg, exchange, rights, now, out, say)

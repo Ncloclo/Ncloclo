@@ -102,7 +102,8 @@ def _rm(path: str) -> None:
         pass
 
 
-def _read_json(path: str) -> Dict[str, Any]:
+def read_json(path: str) -> Dict[str, Any]:
+    """Contenu d'un fichier JSON du bot, ou {} s'il est absent ou illisible."""
     try:
         with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
@@ -126,9 +127,6 @@ def write_json(path: str, data: Dict[str, Any], attempts: int = 10) -> None:
             if k == attempts - 1:
                 raise
             time.sleep(0.05)
-
-
-_write_json = write_json
 
 
 def launch_tool(gcfg: Any, args: List[str], log_ext: str) -> bool:
@@ -221,7 +219,7 @@ def allow_start(gcfg: Any) -> None:
 
 
 def supervisor_status(gcfg: Any) -> Dict[str, Any]:
-    st = _read_json(sidecar(gcfg.lock_file, ".superviseur.json")) if gcfg.lock_file else {}
+    st = read_json(sidecar(gcfg.lock_file, ".superviseur.json")) if gcfg.lock_file else {}
     st["running"] = lock_held(sidecar(gcfg.lock_file, ".superviseur.lock"))
     st["off"] = automation_off(gcfg)
     return st
@@ -298,7 +296,7 @@ class Supervisor:
                 "updated": v29._utcnow_iso()}
         data.update(extra)
         try:
-            _write_json(self.f_status, data)
+            write_json(self.f_status, data)
         except OSError:
             pass
 

@@ -21,6 +21,9 @@ from panel import assistant as pa
 from panel import server as ps
 from trendguard import alerts
 from trendguard import report as rp
+from trendguard import report_health as rph
+from trendguard import report_render as rpr
+from trendguard import report_security as rps
 from trendguard import systeme as sy
 from trendguard.diagnostics import Finding
 
@@ -61,7 +64,7 @@ class FakeRun:
                 return proc("True|1")
         if cmd[0] == "icacls":
             if "/remove:g" in cmd:
-                self.acl = [(s, k) for s, k in self.acl if s not in rp.BROAD_SIDS]
+                self.acl = [(s, k) for s, k in self.acl if s not in rps.BROAD_SIDS]
             return proc("ok")
         if cmd[0] == "powercfg":
             idx = "0x00000708" if "STANDBYIDLE" in cmd else "0x00000001"
@@ -79,27 +82,27 @@ def root(tmp_path):
 
 
 def test_secrets_file_is_never_published(root):
-    ok = rp.check_env_published(str(root), rp.Deps(run=FakeRun()))
+    ok = rps.check_env_published(str(root), rp.Deps(run=FakeRun()))
     assert ok["ok"] is True and "jamais publié" in ok["detail"]
-    bad = rp.check_env_published(str(root), rp.Deps(run=FakeRun(tracked_env=".env\n")))
+    bad = rps.check_env_published(str(root), rp.Deps(run=FakeRun(tracked_env=".env\n")))
     assert bad["ok"] is False and "PUBLIÉ" in bad["detail"] and "nouvelles" in bad["reco"]
 
 
 def test_windows_acl_is_tightened_only_for_broad_groups(root):
     run = FakeRun(acl=[("S-1-5-18", "Allow"), ("S-1-5-32-544", "Allow"), ("S-1-5-32-545", "Allow")])
-    c = rp.check_env_permissions(str(root), rp.Deps(run=run, platform="win32"))
+    c = rps.check_env_permissions(str(root), rp.Deps(run=run, platform="win32"))
     assert c["ok"] is True and "Utilisateurs" in c["action"]
     assert ["icacls", str(root / ".env"), "/inheritance:d"] in run.calls
     assert ["icacls", str(root / ".env"), "/remove:g", "*S-1-5-32-545"] in run.calls
     calm = FakeRun()
-    c = rp.check_env_permissions(str(root), rp.Deps(run=calm, platform="win32"))
+    c = rps.check_env_permissions(str(root), rp.Deps(run=calm, platform="win32"))
     assert c["ok"] is True and not c["action"] and not any(x[0] == "icacls" for x in calm.calls)
 
 
 @pytest.mark.skipif(os.name == "nt", reason="droits POSIX")
 def test_posix_permissions_are_tightened(root):
     os.chmod(root / ".env", 0o644)
-    c = rp.check_env_permissions(str(root), rp.Deps(run=FakeRun(), platform="linux"))
+    c = rps.check_env_permissions(str(root), rp.Deps(run=FakeRun(), platform="linux"))
     assert c["ok"] is True and "644 → 600" in c["action"]
     assert oct(os.stat(root / ".env").st_mode & 0o777) == "0o600"
 
@@ -109,12 +112,12 @@ def test_secret_leaks_are_found_and_masked_in_logs(root):
     (root / "bot.log").write_text(f"2026-09-30 00:02:00,000 [INFO] mot de passe {SECRET} !\n",
                                   encoding="utf-8")
     env = {"SMTP_PASSWORD": SECRET, "TG_RISK_PCT": "0.01", "PANEL_PASSWORD": "court"}
-    repo, logs = rp.check_secret_leaks(str(root), env, rp.Deps(run=FakeRun(files=["code.py"])))
+    repo, logs = rps.check_secret_leaks(str(root), env, rp.Deps(run=FakeRun(files=["code.py"])))
     assert repo["ok"] is False and "SMTP_PASSWORD dans code.py" in repo["detail"]
     assert SECRET not in repo["detail"] + repo["reco"]
     text = (root / "bot.log").read_text(encoding="utf-8")
     assert SECRET not in text and "*" * len(SECRET) in text and logs["action"].endswith("bot.log")
-    clean = rp.check_secret_leaks(str(root), env, rp.Deps(run=FakeRun(files=[])))
+    clean = rps.check_secret_leaks(str(root), env, rp.Deps(run=FakeRun(files=[])))
     assert clean[0]["ok"] is True and not clean[1]["action"]
 
 
@@ -132,25 +135,25 @@ def test_database_backup_is_verified_and_rotated(tmp_path):
     (tmp_path / "trendguard_paper.selection.json").write_text("{}", encoding="utf-8")
     dest = tmp_path / "sauvegardes"
     for day in ("2026-09-28", "2026-09-29", "2026-09-30"):
-        c = rp.backup_database(str(db), str(dest), day, keep=2)
+        c = rps.backup_database(str(db), str(dest), day, keep=2)
     assert c["ok"] is True and "intégrité vérifiée" in c["detail"] and c["action"]
     assert sorted(os.listdir(dest)) == ["trendguard_paper-2026-09-29.db",
                                         "trendguard_paper-2026-09-29.selection.json",
                                         "trendguard_paper-2026-09-30.db",
                                         "trendguard_paper-2026-09-30.selection.json"]
-    assert rp.check_database(str(db))["ok"] is True
+    assert rps.check_database(str(db))["ok"] is True
     assert rp.read_state(str(db)) == {"halted": False}
 
 
 def test_windows_checks_read_only():
     run = FakeRun()
-    checks = {c["label"]: c for c in rp.check_windows(rp.Deps(run=run, platform="win32"))}
+    checks = {c["label"]: c for c in rps.check_windows(rp.Deps(run=run, platform="win32"))}
     assert checks["Pare-feu Windows"]["ok"] is True and checks["Antivirus"]["ok"] is True
     power = checks["Veille du PC (sur secteur)"]
     assert power["ok"] is False and "après 30 min" in power["detail"] and "veille" in power["detail"]
     assert "« Jamais »" in power["reco"] and "capot" in power["reco"]
     assert not any(c[0] == "icacls" for c in run.calls)            # constat seulement
-    assert rp.check_windows(rp.Deps(run=run, platform="linux")) == []
+    assert rps.check_windows(rp.Deps(run=run, platform="linux")) == []
 
 
 def test_power_check_on_a_desktop_without_lid():
@@ -158,7 +161,7 @@ def test_power_check_on_a_desktop_without_lid():
         if "LIDACTION" in cmd:                                      # PC fixe : réglage absent
             return proc("GUID du mode : 381b4222 (Utilisation normale)\n")
         return proc("Minimum 0x00000000\nMaximum 0xffffffff\nAC 0x00000000\nDC 0x00000384")
-    c = rp._power_check(rp.Deps(run=run, platform="win32"))
+    c = rps._power_check(rp.Deps(run=run, platform="win32"))
     assert c["ok"] is True and c["detail"] == "mise en veille : jamais" and not c["reco"]
 
 
@@ -168,11 +171,11 @@ def test_acl_check_retries_a_slow_powershell(root):
     def run(cmd, timeout=60, **kw):
         calls.append(timeout)
         if len(calls) == 1:
-            raise rp.subprocess.TimeoutExpired(cmd, timeout)
+            raise rps.subprocess.TimeoutExpired(cmd, timeout)
         return proc("S-1-5-18|Allow")
-    c = rp.check_env_permissions(str(root), rp.Deps(run=run, platform="win32"))
+    c = rps.check_env_permissions(str(root), rp.Deps(run=run, platform="win32"))
     assert c["ok"] is True and calls == [60, 180]
-    never = rp.check_env_permissions(str(root), rp.Deps(
+    never = rps.check_env_permissions(str(root), rp.Deps(
         run=lambda cmd, **kw: proc("", 1, "Accès refusé"), platform="win32"))
     assert never["ok"] is None and "Accès refusé" in never["detail"]
 
@@ -197,7 +200,7 @@ def test_windows_powershell_does_not_inherit_the_modules_of_powershell_7(monkeyp
 def test_acl_is_read_even_when_started_from_powershell_7(root, monkeypatch):
     monkeypatch.setenv("PSModulePath", r"c:\program files\powershell\7\Modules;"
                        + os.environ.get("PSModulePath", ""))
-    acl, err = rp._win_acl(str(root / ".env"), rp.Deps())
+    acl, err = rps._win_acl(str(root / ".env"), rp.Deps())
     assert acl and not err
 
 
@@ -206,14 +209,14 @@ def test_decision_time_and_bot_health(tmp_path):
     log.write_text("2026-09-30 00:02:41,000 [INFO] [DAILY]\n"
                    "2026-09-30 00:05:00,000 [WARNING] [CYCLE] réseau : délai\n", encoding="utf-8")
     now = datetime(2026, 9, 30, 0, 31, tzinfo=timezone.utc)
-    assert rp.decision_time(str(log), now) == "00:02:41"
+    assert rph.decision_time(str(log), now) == "00:02:41"
     g = tg.GuardConfig(log_file=str(log), lock_file=str(tmp_path / "tg.lock"), db_file=":memory:")
     status = {"state": "running", "last_cycle_age_s": 20, "uptime": {"week_pct": 61.2},
               "autonomy": {"supervisor": {"running": True}, "autostart": True}}
-    checks = {c["label"]: c for c in rp.bot_checks(g, {}, status, now)}
+    checks = {c["label"]: c for c in rph.bot_checks(g, {}, status, now)}
     assert checks["Bot en marche"]["ok"] and checks["Décision du jour"]["ok"]
     assert checks["Disponibilité (7 jours)"]["ok"] is False and checks["Risque configuré"]["ok"]
-    assert rp.check_log(str(log), now)["ok"] is True and "[CYCLE] × 1" in rp.check_log(str(log), now)["detail"]
+    assert rph.check_log(str(log), now)["ok"] is True and "[CYCLE] × 1" in rph.check_log(str(log), now)["detail"]
 
 
 def test_unsent_telegram_alerts_are_not_bot_errors_and_precision_is_information(tmp_path):
@@ -223,16 +226,16 @@ def test_unsent_telegram_alerts_are_not_bot_errors_and_precision_is_information(
                    "2026-09-30 00:03:00,000 [ERROR] [NOTIFY] ⚠️ TrendGuard a été arrêté\n"
                    "2026-09-30 00:03:00,000 [ERROR] [NOTIFIER-OFF] ⚠️ TrendGuard a été arrêté\n",
                    encoding="utf-8")
-    c = rp.check_log(str(log), datetime(2026, 9, 30, 0, 31, tzinfo=timezone.utc))
+    c = rph.check_log(str(log), datetime(2026, 9, 30, 0, 31, tzinfo=timezone.utc))
     assert c["ok"] is True and "0 erreur(s)" in c["detail"]
     assert "1 coupure(s) d'Internet ou de Binance" in c["detail"]
     assert "1 alerte(s) critique(s) émise(s) (Telegram non configuré)" in c["detail"]
     log.write_text("2026-09-30 00:05:00,000 [ERROR] [CYCLE] KO: division par zéro\n", encoding="utf-8")
-    bad = rp.check_log(str(log), datetime(2026, 9, 30, 0, 31, tzinfo=timezone.utc))
+    bad = rph.check_log(str(log), datetime(2026, 9, 30, 0, 31, tzinfo=timezone.utc))
     assert bad["ok"] is False and "division par zéro" in bad["reco"]
     g = tg.GuardConfig(log_file=str(log), lock_file=str(tmp_path / "tg.lock"), db_file=":memory:")
     few = {"learning": {"brier": {"sell": {"n": 51.0, "raw": 5.0, "cal": 6.0}}}}
-    row = next(c for c in rp.skills_checks(g, few) if c["label"] == "Précision des prévisions")
+    row = next(c for c in rph.skills_checks(g, few) if c["label"] == "Précision des prévisions")
     assert row["ok"] is None and "jugée à partir de 100" in row["detail"] and not row["reco"]
 
 
@@ -280,7 +283,7 @@ def test_report_is_complete_ordered_and_secret_free(root):
     assert r["proposals"] == ["Amélioration quotidienne 2026-09-30 : contrastes — https://x/pr/7"]
     assert r["score"]["total"] == len(labels) and r["verdict"].endswith("à corriger")
     assert "CE QUE LE BOT A FAIT SEUL" in r["text"] and "À FAIRE" in r["text"]
-    assert len(r["short"]) <= rp.SHORT_MAX and r["short"].startswith("🛡️ TrendGuard")
+    assert len(r["short"]) <= rpr.SHORT_MAX and r["short"].startswith("🛡️ TrendGuard")
     assert SECRET not in json.dumps(r, ensure_ascii=False)
 
 
@@ -305,7 +308,7 @@ def test_html_email_is_escaped_and_keeps_a_text_fallback(root):
     r = rp.build(tg.GuardConfig(db_file=":memory:", log_file=os.devnull, lock_file=str(root / "tg.lock")),
                  {}, _deps(root, binance=lambda env, t: rp.chk("Clé API Binance", False, "<script>x</script>",
                                                                "Vérifiez l'IP.")), backups=False)
-    page = rp.render_html(r)
+    page = rpr.render_html(r)
     assert "<script>" not in page and "&lt;script&gt;x&lt;/script&gt;" in page
     assert "À faire, par ordre d'importance" in page and "Vérifiez l&#x27;IP." in page
     sent = {}
@@ -373,14 +376,14 @@ def test_panel_shows_the_report_and_its_delivery(tmp_path):
     assert "Rapport quotidien du" in ans and "Réglages ▸ Rapport quotidien" in ans
     live = ps.build_app(_cfg(tmp_path, evolution=False), demo=False)
     live.hub = SimpleNamespace(last={}, status=lambda: [{"name": "email", "label": "E-mail", "enabled": True}])
-    rp._save_json(rp.paths(live.g)["json"], {"ready": True, "delivery": {
+    rp.autonomy.write_json(rp.paths(live.g)["json"], {"ready": True, "delivery": {
         "email": {"at": 1e12, "ok": False, "error": "mot de passe refusé"}}})
     assert live._alerts_check({})["ok"] is False                    # échec d'envoi du rapport vu
     t = datetime.now(timezone.utc).timestamp()
     st = {"last_cycle_ts": t, "uptime": {"since": t - 60 * 3600, "events": [
         {"start": t - 30 * 3600, "end": t - 5 * 3600, "cause": "off"}]}}
     assert "capot fermé sur « Ne rien faire » quand il est branché" in live._uptime_check(st)["detail"]
-    rp._save_json(rp.paths(live.g)["json"], {"ready": True, "sections": [{"title": "Sécurité", "checks": [
+    rp.autonomy.write_json(rp.paths(live.g)["json"], {"ready": True, "sections": [{"title": "Sécurité", "checks": [
         rp.chk("Veille du PC (sur secteur)", True, "mise en veille : jamais")]}]})
     assert "la mesure remonte jour après jour" in live._uptime_check(st)["detail"]
 
@@ -388,19 +391,50 @@ def test_panel_shows_the_report_and_its_delivery(tmp_path):
 def test_laptop_on_battery_is_flagged():
     """Sur batterie, un portable s'endort capot fermé puis s'éteint : à dire."""
     def source(power):
-        return rp._source_check(rp.Deps(platform="win32", extra={"power": power}))
+        return rps._source_check(rp.Deps(platform="win32", extra={"power": power}))
     on_battery = source({"ac": False, "battery_pct": 85})
     assert on_battery["ok"] is False and "SUR BATTERIE (batterie à 85 %)" in on_battery["detail"]
     assert "chargeur" in on_battery["reco"]
     assert source({"ac": True, "battery_pct": 100})["ok"] is True
     assert source({"ac": True, "battery_pct": None}) is None       # PC fixe : rien à dire
-    assert source(None) is None and rp._source_check(rp.Deps(run=FakeRun(), platform="win32")) is None
+    assert source(None) is None and rps._source_check(rp.Deps(run=FakeRun(), platform="win32")) is None
 
 
 def test_power_check_names_the_power_button_on_a_laptop():
     def run(cmd, **kw):
         idx = {"STANDBYIDLE": 0, "LIDACTION": 0, "PBUTTONACTION": 1}[cmd[-1]]
         return proc(f"Index possible : 000\nAC 0x{idx:08x}\nDC 0x00000001")
-    c = rp._power_check(rp.Deps(run=run, platform="win32"))
+    c = rps._power_check(rp.Deps(run=run, platform="win32"))
     assert c["ok"] is True and "capot fermé : ne rien faire" in c["detail"]
     assert "bouton d'alimentation : veille" in c["detail"] and "fermez le capot" in c["detail"]
+
+
+def test_report_warns_before_the_disk_or_the_memory_is_full(root):
+    def checks(**res):
+        base = {"disk_free": 120.0, "disk_total": 240.0, "memory_used": 12.0, "memory_limit": 22.9}
+        deps = rp.Deps(run=FakeRun(), extra={"resources": dict(base, **res)})
+        return {c["label"]: c for c in rph.resource_checks(deps)}
+    fine = checks()
+    assert fine["Espace disque"]["ok"] and fine["Espace disque"]["detail"] == "120,0 Go libres sur 240 (50 %)"
+    assert fine["Mémoire du PC"]["ok"] and "52 % réservés aux programmes (12,0 Go sur 22,9" in fine["Mémoire du PC"]["detail"]
+    low = checks(disk_free=17.1, disk_total=240.3, memory_used=20.9)
+    assert low["Espace disque"]["ok"] is False and "moins de 10 %" in low["Espace disque"]["reco"]
+    assert low["Mémoire du PC"]["ok"] is False and "Windows peut arrêter le bot" in low["Mémoire du PC"]["reco"]
+    assert checks(disk_free=1.5, disk_total=8.0)["Espace disque"]["ok"] is False      # moins de 2 Go
+    assert list(checks(memory_used=None, memory_limit=None)) == ["Espace disque"]    # hors Windows
+    assert rph.resource_checks(rp.Deps(run=FakeRun())) == []         # commandes simulées : rien de réel
+    real = sy.pc_resources()                                         # la vraie mesure, sur cette machine
+    assert real["disk_total"] > real["disk_free"] > 0
+    if os.name == "nt":
+        assert real["memory_limit"] > real["memory_used"] > 0
+
+
+def test_disk_and_memory_are_part_of_the_bot_s_health(root):
+    g = tg.GuardConfig(db_file=":memory:", log_file=os.devnull, lock_file=str(root / "tg.lock"))
+    full = {"disk_free": 17.1, "disk_total": 240.3, "memory_used": 21.5, "memory_limit": 22.9}
+    r = rp.build(g, {}, _deps(root, extra={"root": str(root), "resources": full}), backups=False)
+    health = next(s for s in r["sections"] if s["title"] == "Santé du bot (le fond)")
+    labels = [c["label"] for c in health["checks"]]
+    assert labels[-2:] == ["Espace disque", "Mémoire du PC"]
+    assert any("Libérez de la place" in x for x in r["recommendations"])
+    assert any("Fermez des programmes" in x for x in r["recommendations"])

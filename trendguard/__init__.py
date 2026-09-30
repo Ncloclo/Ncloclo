@@ -14,6 +14,9 @@ Fonctionnement autonome
   environnement.py     bibliothèques du bot : son environnement propre (.venv)
   autonomy.py          superviseur, démarrage avec l'ordinateur, anti-veille
   alerts.py            alertes Telegram, e-mail et WhatsApp
+  report.py            rapport quotidien (contrôles : report_security.py et
+                       report_health.py ; mise en page : report_render.py)
+  maintenance.py       recommandations sûres appliquées seules
   market_watch.py      veille : annonces officielles de Binance, avis des IA
   watch_claude.py      avis de Claude pour la veille (SDK Anthropic)
 

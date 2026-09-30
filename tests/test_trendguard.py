@@ -519,7 +519,8 @@ def test_verify_fails_when_withdrawals_enabled(logger):
     assert rc == 1 and "OUI ❌ à désactiver" in text
 
 
-def test_verify_reports_rejected_key(logger):
+def test_verify_reports_rejected_key_and_still_checks_the_market(logger, monkeypatch):
+    from trendguard import cli as tgcli
     close, volume = synthetic_market()
     bot, fb = make_bot("paper", close, logger)
 
@@ -527,8 +528,12 @@ def test_verify_reports_rejected_key(logger):
         raise ccxt.AuthenticationError(
             'binance {"code":-2015,"msg":"Invalid API-key, IP, or permissions for action."}')
     fb.sapi_get_account_apirestrictions = refused
+    public = []
+    monkeypatch.setattr(tgcli, "cmd_verify_public",
+                        lambda g, now=None, out=None: public.append(now) or 0)
     rc, text = _verify(bot, fb, close, volume)
-    assert rc == 1 and "adresse IP non autorisée" in text
+    assert rc == 1 and "adresse IP non autorisée" in text         # la clé reste à corriger
+    assert len(public) == 1 and "vérifié sans clé" in text        # mais le marché est vérifié
 
 
 def test_resume_refused_while_bot_runs(tmp_path, monkeypatch, capsys):

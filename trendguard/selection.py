@@ -20,7 +20,7 @@ def read_selection(gcfg: GuardConfig) -> Dict[str, Any]:
       (aucune au départ).
     Sans choix enregistré : la sélection auto."""
     path = autonomy.sidecar(gcfg.lock_file, ".selection.json")
-    data = autonomy._read_json(path) if path else {}
+    data = autonomy.read_json(path) if path else {}
     universe = [b.lower() for b in gcfg.universe]
     mode = "manual" if data.get("mode") == "manual" else "auto"
     manual = data.get("manual")
@@ -41,7 +41,7 @@ def write_selection(gcfg: GuardConfig, mode: str, manual: List[str]) -> Dict[str
     path = autonomy.sidecar(gcfg.lock_file, ".selection.json")
     if not path:
         raise ValueError("sélection impossible : fichier de verrou non défini")
-    autonomy._write_json(path, {"mode": mode, "manual": [a for a in universe if a in
+    autonomy.write_json(path, {"mode": mode, "manual": [a for a in universe if a in
                                                          {str(x).lower() for x in manual}],
                                 "updated": v29._utcnow_iso()})
     return read_selection(gcfg)

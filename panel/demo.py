@@ -361,7 +361,7 @@ class DemoNews:
 def demo_report() -> Dict[str, Any]:
     """Rapport quotidien d'exemple (mode démonstration), même forme que
     trendguard/report.py."""
-    from trendguard import report
+    from trendguard import report, report_render
 
     now = datetime.now(timezone.utc).replace(hour=0, minute=31, second=5, microsecond=0)
     ok, warn, info = True, False, None
@@ -399,6 +399,6 @@ def demo_report() -> Dict[str, Any]:
                      for d, ok_ in ((26, 8), (27, 9), (28, 9), (29, 10))],
          "sections": sections,
          "delivery": {"email": {"at": now.timestamp(), "ok": True, "error": None}}}
-    r["text"] = report.render_text(r)
-    r["short"] = report.render_short(r)
+    r["text"] = report_render.render_text(r)
+    r["short"] = report_render.render_short(r)
     return r

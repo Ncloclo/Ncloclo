@@ -87,6 +87,27 @@ def test_french_number_writing():
         "0,00001", "84 000,1", "5", "−0,5", "0", "353,7"]
 
 
+def test_a_finding_about_the_pc_is_worded_once():
+    """Alimentation, disque, mémoire : le rapport quotidien écrit le constat,
+    le centre de sécurité du panneau le reprend (mêmes seuils, mêmes mots)."""
+    for words in ("SUR BATTERIE", "Go libres sur", "réservés aux programmes"):
+        where = [path.relative_to(ROOT).as_posix() for _pkg, path, _tree in _modules("trendguard", "panel")
+                 if words in path.read_text(encoding="utf-8")]
+        assert len(where) == 1 and where[0].startswith("trendguard/report_"), (words, where)
+
+
+def test_bot_files_are_read_and_written_by_one_pair_of_functions():
+    """Les fichiers JSON du bot (superviseur, évolution, rapport, sélection,
+    pause des alertes) : autonomy.read_json et autonomy.write_json."""
+    own = []
+    for _pkg, path, _tree in _modules("trendguard"):
+        rel = path.relative_to(ROOT).as_posix()
+        text = path.read_text(encoding="utf-8")
+        if rel != "trendguard/autonomy.py" and ("json.dump(" in text or "os.replace(" in text):
+            own.append(rel)
+    assert not own, own
+
+
 def test_code_diagnostic_finds_repeats_unused_names_and_imports(tmp_path):
     block = "\n".join(f"    total_{i} = compute_something(first_argument, second_argument, {i})"
                       for i in range(6))

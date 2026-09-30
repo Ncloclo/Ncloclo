@@ -87,7 +87,7 @@ def fix_power(gcfg: Any, deps: Deps) -> Optional[Check]:
     if not before:
         return None
     if f["restore"]:
-        saved = autonomy._read_json(f["restore"])
+        saved = autonomy.read_json(f["restore"])
         power = saved.get("power") or {}
         for k, v in before.items():
             power.setdefault(k, v)              # valeurs d'origine : jamais écrasées
@@ -105,7 +105,7 @@ def fix_power(gcfg: Any, deps: Deps) -> Optional[Check]:
 def restore_power(gcfg: Any, deps: Deps) -> str:
     """Remet les réglages d'origine et arrête les corrections automatiques."""
     f = _files(gcfg)
-    saved = autonomy._read_json(f["restore"]) if f["restore"] else {}
+    saved = autonomy.read_json(f["restore"]) if f["restore"] else {}
     power = saved.get("power") or {}
     for _sub, key, change, _name in POWER:
         if key in power:

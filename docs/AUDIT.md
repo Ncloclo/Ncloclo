@@ -64,15 +64,15 @@ réglages publics du dépôt GitHub. Heures en UTC.
 
 | N° | Constat | Gravité | Suite |
 | --- | --- | --- | --- |
-| E1 | **Aucune alerte ne vous parvient toujours.** Gmail refuse le mot de passe depuis hier ; après 5 essais en 16 heures (chaque rapport en fait un), il coupe maintenant la connexion | Élevée | Créer le mot de passe d'application (myaccount.google.com/apppasswords) et le saisir dans la fenêtre « TrendGuard - Alertes », rouverte dans la barre des tâches |
-| E2 | **Mémoire du PC presque pleine** : 20,4 Go réservés sur 22,9 possibles (89 %), 2,3 Go libres. Chrome en prend 6,0 Go (44 processus), VS Code 4,8 Go. Le bot et ses compagnons en réservent 1,75 Go, dont 0,65 Go pour la démonstration et la fenêtre des alertes. Si la mémoire sature, Windows peut arrêter le bot (le superviseur le relance) | Moyenne | Vous : fermer des onglets de Chrome, et la démonstration quand elle ne sert plus. Code : alléger le superviseur, qui réserve 324 Mo pour seulement surveiller (plan, ligne 17) |
-| E3 | **Disque presque plein** : 17 Go libres sur 240 (7 %). Le rapport ne le signale que sous 2 Go ; Windows a besoin de place pour ses mises à jour | Moyenne | Vous : libérer de la place. Code : prévenir plus tôt, sous 10 % (plan, ligne 17) |
+| E1 | **Aucune alerte ne vous parvient toujours.** Gmail refuse le mot de passe depuis hier ; après 5 essais en 16 heures (chaque rapport en fait un), il coupe maintenant la connexion | Élevée | Créer le mot de passe d'application (myaccount.google.com/apppasswords) et le saisir dans la fenêtre « TrendGuard - Alertes », rouverte dans la barre des tâches. **Code, fait le 30/09** : après trois refus, un seul essai par jour, pour ne pas faire bloquer votre compte |
+| E2 | **Mémoire du PC presque pleine** : 20,4 Go réservés sur 22,9 possibles (89 %), 2,3 Go libres. Chrome en prend 6,0 Go (44 processus), VS Code 4,8 Go. Le bot et ses compagnons en réservent 1,75 Go, dont 0,65 Go pour la démonstration et la fenêtre des alertes. Si la mémoire sature, Windows peut arrêter le bot (le superviseur le relance) | Moyenne | Vous : fermer des onglets de Chrome, et la démonstration quand elle ne sert plus. **Code, fait le 30/09** : chaque processus du bot réserve trois fois moins de mémoire (104 Mo au lieu de 341), et le rapport comme le centre de sécurité préviennent quand 90 % de la mémoire est réservé |
+| E3 | **Disque presque plein** : 17 Go libres sur 240 (7 %). Le rapport ne le signale que sous 2 Go ; Windows a besoin de place pour ses mises à jour | Moyenne | Vous : libérer de la place. **Code, fait le 30/09** : le rapport et le centre de sécurité préviennent sous 10 % |
 | E4 | **Après un redémarrage de Windows, le bot attend l'ouverture de votre session.** Aucun redémarrage en attente aujourd'hui ; Windows redémarre seul entre 1 h et 8 h après une mise à jour : le bot resterait arrêté jusqu'au matin | Moyenne en paper, bloquant pour le réel | Petit serveur (plan, ligne 13) ; d'ici là, rouvrir la session après chaque mise à jour de Windows |
 | E5 | **Proposition n° 3 devenue inutile et en conflit** : elle retirait du README un nombre de tests périmé, corrigé entre-temps pendant la mise à jour. GitHub ne peut plus la fusionner | Faible | Vous : la fermer sur GitHub (« Close pull request ») |
 | E6 | Horloge de Windows jamais synchronisée (source : horloge interne), en retard de 1,1 s | Faible : le bot prend l'heure de Binance | Plan, ligne 5 |
-| E7 | L'arrêt d'urgence et le profil prudent sont évalués une fois par jour, à la clôture, comme dans le backtest. Entre deux clôtures, ce sont les stops qui protègent. Le panneau affiche donc un « plus haut » de clôture (10 074,83) inférieur au capital en direct | Information | Code : afficher le plus haut en direct (plan, ligne 17) |
-| E8 | `verify` s'arrête dès que la clé est refusée, sans répéter les ordres ; la répétition ci-dessus a dû être lancée sans clé | Faible | Code : continuer en mode public quand la clé est refusée (plan, ligne 17) |
-| E9 | Le dossier `.venv` est utilisé dès qu'il existe, même incomplet (installation interrompue) : le bot ne démarrerait pas | Faible : dossier complet et contrôlé chaque nuit | Code : vérifier qu'il est complet avant d'y passer, sinon bibliothèques du PC (plan, ligne 17) |
+| E7 | L'arrêt d'urgence et le profil prudent sont évalués une fois par jour, à la clôture, comme dans le backtest. Entre deux clôtures, ce sont les stops qui protègent. Le panneau affiche donc un « plus haut » de clôture (10 074,83) inférieur au capital en direct | Information | **Fait le 30/09** : le plus haut affiché n'est jamais sous le capital en direct |
+| E8 | `verify` s'arrête dès que la clé est refusée, sans répéter les ordres ; la répétition ci-dessus a dû être lancée sans clé | Faible | **Fait le 30/09** : la clé refusée est signalée, puis le marché est vérifié sans elle |
+| E9 | Le dossier `.venv` est utilisé dès qu'il existe, même incomplet (installation interrompue) : le bot ne démarrerait pas | Faible : dossier complet et contrôlé chaque nuit | **Fait le 30/09** : un dossier incomplet n'est pas utilisé, le bot garde les bibliothèques du PC |
 | E10 | Branche principale du dépôt non protégée sur GitHub. Le bot n'installe que ce que vous avez fusionné vous-même, et le refuse sinon | Information | Avant le réel : exiger les contrôles GitHub avant toute fusion |
 | E11 | Réseau : Wi-Fi partagé (signal 100 %), adresse publique changeante (160.120.68.43 à 13 h), latence de 330 à 400 ms vers Binance | Information | Confirme D4 : clé à adresse fixe impossible sur cette connexion |
 
@@ -140,8 +140,7 @@ Le bot et le panneau ont été relancés à 12 h 06 avec ces bibliothèques (moi
 d'une minute d'arrêt). Toute commande `python trendguard_bot.py …` passe
 d'elle-même par le dossier `.venv`, le démarrage avec l'ordinateur aussi ; si ce
 dossier disparaît, le bot tourne avec les bibliothèques du PC et le rapport le
-signale.
-Une bibliothèque du PC garde une faille connue, sans effet sur le bot :
+signale. Une bibliothèque du PC garde une faille connue, sans effet sur le bot :
 `curl-cffi`, retenue par yfinance, qui n'accepte pas la version corrigée. La
 liste des versions d'avant est gardée dans le dossier `sauvegardes/` : tout peut
 être remis comme avant.
@@ -385,7 +384,7 @@ Points faibles :
 | 14 | Fermer la proposition n° 3 sur GitHub (devenue inutile, en conflit) ; fermer la démonstration du port 8799 quand elle ne sert plus | Vous | quand vous voulez |
 | 15 | Alimentation du portable signalée (tableau de bord, centre de sécurité, rapport) ; réglage caché du capot lu | Code | fait (30/09) |
 | 16 | Libérer de la mémoire (onglets de Chrome) et de la place sur le disque (17 Go libres sur 240) | Vous | constat du 30/09, 13 h |
-| 17 | Six améliorations du code : superviseur allégé ; rapport qui prévient quand la mémoire ou le disque se remplissent ; `verify` qui continue sans clé ; repli si le dossier `.venv` est incomplet ; « plus haut » en direct dans le panneau ; e-mail mis en pause après trois refus du mot de passe | Code, avec votre accord | à faire (constat du 30/09, 13 h) |
+| 17 | Six améliorations du code : superviseur allégé ; rapport qui prévient quand la mémoire ou le disque se remplissent ; `verify` qui continue sans clé ; repli si le dossier `.venv` est incomplet ; « plus haut » en direct dans le panneau ; e-mail mis en pause après trois refus du mot de passe | Code, avec votre accord | **fait** (30/09) : les six sont en service ; code restructuré (rapport en quatre fichiers, centre de sécurité du panneau à part) et harmonisé, détail dans [`DIAGNOSTIC_CODE.md`](DIAGNOSTIC_CODE.md) |
 
 Fait depuis l'audit du matin : chemins de secours des ordres réels testés (et
 un défaut corrigé), blocage des mots de passe ratés, écriture sûre du choix des

@@ -50,11 +50,13 @@ from __future__ import annotations
 import os
 import sys
 
-if __name__ == "__main__":
-    # Avant tout autre import : les bibliothèques lues ensuite sont celles de
-    # l'environnement propre du bot (trendguard/environnement.py).
-    from trendguard.environnement import relaunch
+from trendguard.environnement import limit_math_threads, relaunch
 
+# Avant tout autre import (trendguard/environnement.py) : numpy ne réserve de
+# la mémoire que pour un fil de calcul, et les bibliothèques lues ensuite
+# sont celles de l'environnement propre du bot.
+limit_math_threads()
+if __name__ == "__main__":
     _code = relaunch(os.path.dirname(os.path.abspath(__file__)), sys.orig_argv[1:])
     if _code is not None:
         sys.exit(_code)

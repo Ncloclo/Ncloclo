@@ -7,8 +7,9 @@ lui-même : le fond (santé, stratégie, compétences acquises), la forme (code,
 journal, panneau) et sa sécurité. Il garde le rapport et vous l'envoie. Si le PC
 était éteint à 00:30, tout est fait dès son retour. Code :
 `trendguard/maintenance.py` (recommandations appliquées) et
-`trendguard/report.py` (analyse et rapport) ; `TG_RAPPORT=false` dans `.env`
-pour l'arrêter.
+`trendguard/report.py` (rapport), avec ses contrôles (`report_security.py`,
+`report_health.py`) et sa mise en page (`report_render.py`) ; `TG_RAPPORT=false`
+dans `.env` pour l'arrêter.
 
 ## Où le lire
 
@@ -22,7 +23,10 @@ pour l'arrêter.
 - **E-mail** : le rapport complet, mis en page (couleurs, sections, lisible sur
   téléphone), avec une version texte pour les messageries qui n'affichent pas
   les pages. **WhatsApp** (et Telegram) : un résumé, avec les trois premières
-  choses à faire.
+  choses à faire. Si le serveur d'e-mail refuse le mot de passe trois fois de
+  suite, l'e-mail n'est plus essayé qu'une fois par jour (chaque essai raté est
+  une connexion refusée sur votre compte) ; il reprend dès qu'un bon mot de
+  passe est enregistré (`python trendguard_bot.py alerts configurer`).
 - `python trendguard_bot.py rapport` : le dernier rapport ; `python
   trendguard_bot.py rapport maintenant` : une analyse tout de suite.
 - Archives : dossier `rapports/` (30 jours) ; aucun secret n'y figure, seulement
@@ -83,7 +87,7 @@ mettre à jour) reste en tête des recommandations, classées par importance.
 | Recommandations appliquées seules | correction de la veille du PC, mise à jour validée installée (ou pourquoi pas) |
 | Sécurité | secrets hors de GitHub (fichier `.env` jamais publié), droits du fichier des secrets, aucune clé ni aucun mot de passe dans les fichiers publiés ni dans les journaux, droits de la clé Binance (retrait interdit, restriction IP), sauvegarde et intégrité de la base, pare-feu et antivirus de Windows, veille du PC, alimentation d'un portable (sur batterie, il s'endort capot fermé puis s'éteint : à brancher), bibliothèques du bot aux versions testées (`requirements-docker.txt`) et sans faille connue (`pip-audit`, sur celles réellement installées là où il tourne) |
 | Centre de sécurité du panneau | accès, mots de passe ratés, alertes (dernier envoi), garde-fou de Rachelle |
-| Santé du bot (le fond) | panneau en marche, bot en marche, dernier cycle, décision du jour à l'heure, disponibilité sur 7 jours, relance automatique, démarrage avec l'ordinateur, arrêt d'urgence, risque configuré dans les limites sages, mode, espace disque |
+| Santé du bot (le fond) | panneau en marche, bot en marche, dernier cycle, décision du jour à l'heure, disponibilité sur 7 jours, relance automatique, démarrage avec l'ordinateur, arrêt d'urgence, risque configuré dans les limites sages, mode, place sur le disque (à corriger sous 10 % ou 2 Go libres) et mémoire du PC (à corriger quand 90 % est réservé aux programmes) |
 | Stratégie (le fond) | le diagnostic expert complet (données, marché, signaux, portefeuille, santé de la stratégie, réel contre attendu, stratégies concurrentes, veille) |
 | Compétences acquises | apprentissage libre (carnets, prévisions, ruse), précision des prévisions avant et après correction, niveau et essais de l'évolution encadrée |
 | Code, journal et panneau (la forme) | erreurs et avertissements du journal sur 24 h, code identique à la version publiée, origine du code, contrôles GitHub de la version installée (tests, qualité, sécurité), qualité du code, propositions d'amélioration en attente de votre validation |

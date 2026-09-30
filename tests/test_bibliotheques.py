@@ -16,16 +16,20 @@ import trendguard_bot as tg
 import v29
 from trendguard import autonomy, environnement
 from trendguard import report as rp
+from trendguard import report_security as rps
 
 PINS = {"ccxt": "4.5.84", "pandas": "3.0.6"}
 
 
-def _own_env(root, windows):
-    """Un environnement propre factice : ses deux Python existent."""
+def _own_env(root, windows, libraries=environnement.CORE_LIBRARIES):
+    """Un environnement propre factice : ses Python et ses bibliothèques."""
     folder = root / ".venv" / ("Scripts" if windows else "bin")
     folder.mkdir(parents=True)
     for name in (("python.exe", "pythonw.exe") if windows else ("python",)):
         (folder / name).write_text("")
+    site = root / ".venv" / ("Lib" if windows else "lib/python3.12") / "site-packages"
+    for lib in libraries:
+        (site / lib).mkdir(parents=True)
     return folder
 
 
@@ -48,6 +52,28 @@ def test_own_python_on_linux_and_macos(tmp_path):
     folder = _own_env(tmp_path, windows=False)
     assert environnement.own_python(str(tmp_path), "/usr/bin/python3", "/usr",
                                     windows=False) == str(folder / "python")
+
+
+@pytest.mark.parametrize("windows", [True, False])
+def test_incomplete_own_environment_is_not_used(tmp_path, windows):
+    """Installation interrompue : il manque des bibliothèques. Le bot garde
+    celles du PC au lieu de ne plus démarrer."""
+    _own_env(tmp_path, windows, libraries=("numpy", "pandas"))
+    assert not environnement.complete(str(tmp_path), windows)
+    assert environnement.own_python(str(tmp_path), "python", "/usr", windows=windows) is None
+    assert environnement.relaunch(str(tmp_path), ["bot.py", "run"], {}, windows=windows,
+                                  popen=None, execv=None) is None
+
+
+def test_bot_processes_reserve_memory_for_one_math_thread_only():
+    env = {}
+    environnement.limit_math_threads(env)
+    assert env == {"OPENBLAS_NUM_THREADS": "1"}
+    chosen = {"OPENBLAS_NUM_THREADS": "4"}              # un choix déjà fait est gardé
+    environnement.limit_math_threads(chosen)
+    assert chosen == {"OPENBLAS_NUM_THREADS": "4"}
+    source = open(os.path.join(v29.APP_DIR, "trendguard_bot.py"), encoding="utf-8").read()
+    assert source.index("limit_math_threads()") < source.index("from trendguard.bot import")
 
 
 def test_autostart_does_not_depend_on_the_own_environment(tmp_path):
@@ -145,58 +171,58 @@ def _deps(answer, installed=None, own=True):
 
 @pytest.fixture
 def root(tmp_path):
-    (tmp_path / rp.PINS_FILE).write_text("# Versions testées.\nccxt==4.5.84\npandas==3.0.6  # tableaux\n"
+    (tmp_path / rps.PINS_FILE).write_text("# Versions testées.\nccxt==4.5.84\npandas==3.0.6  # tableaux\n"
                                          "\nsans-version\n", encoding="utf-8")
     return str(tmp_path)
 
 
 def test_tested_versions_are_read_from_the_pins_file(root, tmp_path):
-    assert rp.read_pins(root) == PINS
-    assert rp.read_pins(str(tmp_path / "absent")) == {}
-    here = rp.read_pins(v29.APP_DIR)            # la liste du dépôt
+    assert rps.read_pins(root) == PINS
+    assert rps.read_pins(str(tmp_path / "absent")) == {}
+    here = rps.read_pins(v29.APP_DIR)            # la liste du dépôt
     assert {"ccxt", "numpy", "pandas", "python-dotenv"} <= set(here)
 
 
 def test_report_confirms_tested_libraries_without_known_flaw(root):
-    versions, flaws = rp.library_checks(root, _deps(_audit()))
+    versions, flaws = rps.library_checks(root, _deps(_audit()))
     assert versions["label"] == "Bibliothèques du bot" and versions["ok"] is True
     assert "environnement propre" in versions["detail"] and "ccxt 4.5.84, pandas 3.0.6" in versions["detail"]
     assert flaws["ok"] is True and flaws["detail"] == "aucune dans les 3 bibliothèques installées"
-    shared, _ = rp.library_checks(root, _deps(_audit(), own=False))
+    shared, _ = rps.library_checks(root, _deps(_audit(), own=False))
     assert shared["ok"] is True and "environnement propre" not in shared["detail"]
 
 
 def test_report_flags_untested_versions(root):
     old = {"ccxt": "4.5.44"}                    # pandas absente
-    versions, _ = rp.library_checks(root, _deps(_audit(), installed=old, own=False))
-    assert versions["ok"] is False and versions["reco"] == rp.LIBRARY_RECO
+    versions, _ = rps.library_checks(root, _deps(_audit(), installed=old, own=False))
+    assert versions["ok"] is False and versions["reco"] == rps.LIBRARY_RECO
     assert "ccxt 4.5.44 au lieu de 4.5.84, pandas absente au lieu de 3.0.6" in versions["detail"]
     assert "bibliothèques du PC" in versions["detail"]
-    own, _ = rp.library_checks(root, _deps(_audit(), installed=old))
+    own, _ = rps.library_checks(root, _deps(_audit(), installed=old))
     assert own["ok"] is False and own["detail"].endswith("dans l'environnement propre du bot")
 
 
 def test_report_names_libraries_with_a_known_flaw(root):
     answer = _audit(("aiohttp", "3.13.3", ["3.9.9", "3.14.3"]), ("pyjwt", "2.12.1", []), n=9)
-    _, flaws = rp.library_checks(root, _deps(answer))
-    assert flaws["ok"] is False and flaws["reco"] == rp.LIBRARY_RECO
+    _, flaws = rps.library_checks(root, _deps(answer))
+    assert flaws["ok"] is False and flaws["reco"] == rps.LIBRARY_RECO
     assert flaws["detail"] == "2 sur 9 : aiohttp 3.13.3 (corrigée en 3.14.3), pyjwt 2.12.1"
 
 
 def test_audit_that_cannot_run_is_information_only(root):
     missing = proc("", 1, "C:\\python.exe: No module named pip_audit")
-    assert rp.library_checks(root, _deps(missing))[1]["detail"] == "pip-audit non installé"
-    offline = rp.library_checks(root, _deps(proc("", 1, "ConnectionError")))[1]
+    assert rps.library_checks(root, _deps(missing))[1]["detail"] == "pip-audit non installé"
+    offline = rps.library_checks(root, _deps(proc("", 1, "ConnectionError")))[1]
     assert offline["ok"] is None and "réseau" in offline["detail"]
 
     def slow(cmd, **kw):
-        raise rp.subprocess.TimeoutExpired(cmd, kw["timeout"])
+        raise rps.subprocess.TimeoutExpired(cmd, kw["timeout"])
     deps = rp.Deps(run=slow, extra={"installed": PINS, "own_env": True})
-    late = rp.library_checks(root, deps)[1]
+    late = rps.library_checks(root, deps)[1]
     assert late["ok"] is None and not late["reco"]
     # Sans liste des versions testées : dit, sans alarme.
-    (versions, _) = rp.library_checks(os.path.join(root, "absent"), _deps(_audit()))
-    assert versions["ok"] is None and rp.PINS_FILE in versions["detail"]
+    (versions, _) = rps.library_checks(os.path.join(root, "absent"), _deps(_audit()))
+    assert versions["ok"] is None and rps.PINS_FILE in versions["detail"]
 
 
 def test_library_checks_are_in_the_security_section(root, tmp_path):
@@ -212,14 +238,14 @@ def test_library_checks_are_in_the_security_section(root, tmp_path):
     security = next(s for s in r["sections"] if s["title"] == "Sécurité")
     labels = [c["label"] for c in security["checks"]]
     assert labels[-2:] == ["Bibliothèques du bot", "Failles connues des bibliothèques"]
-    assert rp.LIBRARY_RECO in r["recommendations"] and "ccxt 4.5.44 au lieu de 4.5.84" in r["text"]
+    assert rps.LIBRARY_RECO in r["recommendations"] and "ccxt 4.5.44 au lieu de 4.5.84" in r["text"]
 
 
 def test_simulated_commands_read_nothing_real(root):
-    assert rp.library_checks(root, rp.Deps(run=lambda cmd, **kw: proc(""))) == []
+    assert rps.library_checks(root, rp.Deps(run=lambda cmd, **kw: proc(""))) == []
 
 
 def test_readme_explains_what_the_report_recommends():
     readme = open(os.path.join(v29.APP_DIR, "README.md"), encoding="utf-8").read()
-    assert "### Bibliothèques du bot" in readme and "« Bibliothèques du bot »" in rp.LIBRARY_RECO
-    assert rp.PINS_FILE in readme and environnement.OWN_DIR in readme
+    assert "### Bibliothèques du bot" in readme and "« Bibliothèques du bot »" in rps.LIBRARY_RECO
+    assert rps.PINS_FILE in readme and environnement.OWN_DIR in readme
