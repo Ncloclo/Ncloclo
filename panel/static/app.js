@@ -156,7 +156,7 @@ async function renderDash() {
   reg.className = S.regime_bull ? "up" : S.regime_bull === false ? "down" : "";
   $("#d-regime-sub").textContent = S.regime_bull ? "achats autorisés" : S.regime_bull === false ? "aucun achat, stops resserrés" : "";
   const dd = $("#d-dd");
-  dd.textContent = S.drawdown_pct == null ? "—" : fpct(S.drawdown_pct);
+  dd.textContent = S.drawdown_pct == null ? "—" : S.drawdown_pct < 0 ? fpct(S.drawdown_pct) : "Aucune";
   dd.className = "num " + (S.drawdown_pct < -10 ? "down" : "");
   $("#d-dd-sub").textContent = `arrêt d'urgence à −${nf(0).format(S.kill_drawdown_pct)} %`;
   $("#d-cycle").textContent = S.last_cycle_age_s == null ? "—" : "il y a " + fage(S.last_cycle_age_s);

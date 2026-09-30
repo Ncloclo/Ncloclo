@@ -203,7 +203,9 @@ def a_status(ctx: Dict[str, Any]) -> str:
         lines.append(f"- Capital : {_num(st['equity'])} USDT{ch}.")
     lines.append(f"- Positions : {st.get('positions', 0)} / {st.get('max_positions', 8)}.")
     if st.get("drawdown_pct") is not None:
-        lines.append(f"- Baisse depuis le plus haut : {_pc(st['drawdown_pct'])}.")
+        lines.append("- Baisse depuis le plus haut : " + (
+            f"{_pc(st['drawdown_pct'])}." if st["drawdown_pct"] < 0
+            else "aucune, le capital est à son plus haut."))
     if st.get("regime_bull") is not None:
         lines.append("- Marché : " + ("haussier, achats autorisés." if st["regime_bull"]
                                       else "baissier, aucun achat."))

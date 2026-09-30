@@ -16,6 +16,7 @@ import pytest
 
 import trendguard_bot as tg
 import v29
+from panel import assistant as pa
 from panel import demo
 from panel import server as ps
 from panel.control import BotControl
@@ -542,6 +543,16 @@ def test_capital_curve_starts_with_the_bot_and_shows_its_first_buys(tmp_path):
     assert eq["buys"] == [{"t": data.t0 + 1, "asset": "aave", "price": 154.0}]
     short = app._equity_view(1)                      # fenêtre qui commence après le départ
     assert len(short["points"]) == 2 and short["buys"] == []
+
+
+def test_drawdown_is_never_positive():
+    assert ps.drawdown_pct(9_000.0, 10_000.0) == -10.0
+    assert ps.drawdown_pct(10_086.86, 10_074.83) == 0.0          # au-dessus du plus haut relevé
+    assert ps.drawdown_pct(None, 10_000.0) is None and ps.drawdown_pct(10_000.0, None) is None
+    status = {"state": "running", "mode": "paper", "equity": 10_086.86, "start_equity": 10_000.0,
+              "positions": 6, "max_positions": 8, "drawdown_pct": 0.0}
+    assert "aucune, le capital est à son plus haut" in pa.a_status({"status": status})
+    assert "−1,2 %" in pa.a_status({"status": dict(status, drawdown_pct=-1.2)})
 
 
 def test_chart_window_is_the_rule_of_the_page():

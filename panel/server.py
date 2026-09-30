@@ -72,6 +72,12 @@ def _clean(obj: Any) -> Any:
     return obj
 
 
+def drawdown_pct(equity: Optional[float], peak: Optional[float]) -> Optional[float]:
+    """Baisse du capital depuis son plus haut, en %. Au-dessus du dernier plus
+    haut relevé (il l'est à chaque décision), c'est le nouveau plus haut : 0."""
+    return round(min(0.0, (equity / peak - 1) * 100), 2) if equity and peak else None
+
+
 def chart_window(entry_date: Any, now: Optional[float] = None) -> Tuple[str, int]:
     """Intervalle et nombre de bougies du graphique d'une position, pour que
     son achat reste visible (même règle que gridInterval, static/js/charts.js)."""
@@ -186,7 +192,7 @@ class PanelApp:
             "testnet": bool(self.g.binance_testnet and self.g.run_mode == "live"),
             "state": self.control.state(),
             "equity": eq, "start_equity": start, "peak": peak,
-            "drawdown_pct": round((eq / peak - 1) * 100, 2) if eq and peak else None,
+            "drawdown_pct": drawdown_pct(eq, peak),
             "halted": bool(st.get("halted")), "halt_reason": st.get("halt_reason"),
             "regime_bull": st.get("last_regime_bull"), "risk_mult": st.get("risk_mult", 1.0),
             "last_decision_day": st.get("last_decision_day"),
