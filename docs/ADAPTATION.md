@@ -130,7 +130,7 @@ septembre 2026, profil prudent et arrêt d'urgence à −40 % du bot).
 
 ### Pas de panne : un budget plein et des stops pas encore touchés
 
-Le 30 septembre, le bot détient 6 positions achetées les 26 et 27 septembre,
+Le 30 septembre, le bot détient 6 positions achetées le 26 septembre,
 chacune risquant environ 1 % : 5,96 % engagés sur les 6 % permis. Un septième
 achat dépasserait le plafond, d'où l'absence d'achat. Aucune vente non plus :
 aucun cours n'a clôturé sous son stop (placés 7 à 11 % sous les prix d'achat).

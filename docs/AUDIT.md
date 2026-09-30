@@ -5,7 +5,8 @@ Cinq diagnostics successifs : l'audit du 28, le diagnostic approfondi du 29
 bibliothèques du PC, état en direct), celui de 13 h, après la mise à jour des
 bibliothèques (PC, contrôles croisés), et celui de 17 h, après la
 restructuration du code (épreuves de résistance). Puis, à 21 h, le palier de
-risque et la reprise prudente de l'arrêt d'urgence. Méthode : diagnostic de la
+risque et la reprise prudente de l'arrêt d'urgence, et à 22 h un sixième
+diagnostic, clé Binance enfin acceptée. Méthode : diagnostic de la
 stratégie sur les données publiques de Binance (`python trendguard_bot.py
 diagnose`), état du bot dans le panneau, journal du bot, du superviseur et de
 Windows, vérification Binance (`verify`, aucun ordre), tests, analyse statique,
@@ -16,13 +17,63 @@ failles connues des dépendances (pip-audit), recherche de secrets dans git.
 **Le bot, sa stratégie et son code sont sains ; ce qui l'entoure ne l'est pas
 encore.** Au 30 septembre, la stratégie est conforme (27 contrôles sur 27), le
 journal ne contient aucune erreur du bot, les tests et les contrôles de GitHub
-sont au vert. Trois faiblesses restent autour du bot : le PC portable (batterie,
-veille, arrêts : 65 % de disponibilité), les alertes qui n'arrivent pas et la
-clé Binance refusée. La quatrième, des bibliothèques Python en retard sur le PC,
-a été corrigée le jour même : le bot a maintenant les siennes, aux versions
-testées. Le bot n'est pas prêt pour de l'argent réel : il lui faut des alertes
+sont au vert. Deux faiblesses restent autour du bot : le PC portable (veille,
+arrêts : 70 % de disponibilité sur 7 jours, 91 % sur 24 heures) et les alertes
+qui n'arrivent pas. La clé Binance est acceptée depuis le 30 septembre au soir,
+et les bibliothèques Python du bot sont à jour, aux versions testées. Le bot
+n'est pas prêt pour de l'argent réel : il lui faut des alertes
 qui arrivent, une machine allumée en permanence avec une adresse fixe, et
 plusieurs semaines de paper avec des trades vendus.
+
+## Diagnostic approfondi du 30 septembre, 22 h
+
+**Verdict : le bot fait exactement ce que dit sa stratégie, sans une erreur
+depuis sa mise à jour de 21 h ; la connexion à Binance est enfin complète.**
+Rapport du bot : 32 contrôles conformes sur 42, 3 à corriger (alertes,
+disponibilité, disque), tous de votre côté ; diagnostic de la stratégie : 27
+sur 27.
+
+### État du bot (30/09, 22 h 15)
+
+- En marche depuis la mise à jour de 21 h 07, relance automatique active (0
+  relance), démarrage avec Windows actif, PC sur secteur (batterie à 100 %).
+- Capital 9 987 USDT (−0,1 % depuis le départ, −0,9 % sous le plus haut) ;
+  6 positions sur 8 : AAVE, ADA, ICP, LINK, LTC, XLM, achetées le 26/09.
+- Budget de risque plein : 6,0 % engagés sur 6 % ; si tous les stops étaient
+  touchés maintenant : −5,4 % du capital.
+- Cette nuit : LTC à 0,4 % au-dessus de son stop, 34 % de chances d'être vendu
+  à la clôture de minuit ; ce serait le premier trade clos (environ −1 %) et
+  une place libérée pour un achat. Les autres stops sont à 4,9 % ou plus
+  sous le cours.
+
+- Palier de risque : 1 % par achat ; 1,25 % refusé ce soir (hasard −39 % pour
+  une limite de −35 %). Arrêt d'urgence prêt, reprise prudente armée.
+- Mémoire : 72 % réservés (contre 83 à 85 % avant le redémarrage de 18 h 20).
+
+### Ce qui a été vérifié et tient
+
+| Contrôle | Résultat |
+| --- | --- |
+| Parité bot ↔ stratégie | le backtest des mêmes jours achète exactement les 6 mêmes cryptos, avec les mêmes stops de départ ; seuls les prix d'achat diffèrent (achat tardif du 26/09 à 22 h 53, recalculé au prix réel) |
+| Stratégie (Binance, 2019 → 29/09) | +33,5 % par an, pire baisse −24,7 %, Sharpe 1,19, 313 trades, espérance +1,12 R ; 24 derniers mois : +1,19 R (intervalle 90 % : +0,37 à +2,11) |
+| Rendement sur 12 mois glissants | +33,3 %, percentile 64 de l'historique |
+| Marché | BTC haussier depuis 42 jours, 18 % au-dessus de sa moyenne 150 jours ; volatilité basse (percentile 26) |
+| Binance | clé acceptée : retrait interdit, trading Spot autorisé, restriction IP active ; validation des ordres OK ; latence 338 ms ; heure corrigée (PC en avance de 0,5 s) |
+| Journal depuis 21 h 07 | aucune erreur, aucun avertissement |
+| Sécurité | secrets hors de GitHub et des journaux, pare-feu et antivirus actifs, panneau limité au PC |
+| Code | identique à la version publiée (68e1077), contrôles GitHub au vert, ruff sans remarque |
+
+### Constats de 22 h
+
+| N° | Constat | Gravité | Suite |
+| --- | --- | --- | --- |
+| E1 | **Aucune alerte n'est jamais arrivée par e-mail.** Dernière cause affichée : « serveur introuvable » (réseau pas encore prêt au réveil du PC, 30/09 à 08 h 29), qui masque la vraie cause, toujours là : Gmail refuse le mot de passe (29/09 à 23 h 02) et exige un « mot de passe d'application ». La fenêtre « alerts configurer » attend ce mot de passe depuis l'après-midi | **Élevée** | Vous : créer le mot de passe d'application Gmail et le saisir dans cette fenêtre. Code : afficher la vraie cause, pas la dernière coupure (E2) |
+| E2 | Une alerte critique ratée à cause d'une coupure du réseau est perdue : l'alerte « le bot a été arrêté 1 h 27 » du réveil de 08 h 29 n'a jamais été renvoyée | Moyenne | Code : garder ces alertes et les renvoyer quand le réseau revient, marquées « en retard » |
+| E3 | Le diagnostic dit « ✅ disque libre 22,5 Go » quand le rapport et le panneau disent « ✗ 20,9 Go (9 %) » : même disque, deux unités (Go décimaux contre binaires) et deux seuils (1 Go contre 10 % ou 2 Go) | Faible | Code : une seule mesure et un seul seuil, ceux du rapport |
+| E4 | Coupures d'Internet ou de Binance : 4 épisodes en 24 h (23 h 15, 08 h 29 au réveil, 19 h 18, et quelques délais dépassés), rattrapés au cycle suivant, sans décision manquée | Faible | Rien à faire ; les surveiller dans le rapport |
+| E5 | La clé API en service est celle dont l'identifiant a été montré dans une conversation (son secret, jamais) | Faible en paper | Avant le réel : en créer une neuve et supprimer celle-ci |
+| E6 | Compte Binance réel : 44,28 TRX (≈ 15 USDT) et 0 USDT | Aucune en paper | Avant le réel : au moins 100 USDT ; vendre les TRX ou les laisser (le bot n'achètera pas de TRX) |
+| E7 | Proposition n° 3 sur GitHub toujours ouverte, en conflit | Aucune | La fermer sur GitHub |
 
 ## Palier de risque et arrêt d'urgence (30 septembre, 21 h)
 
@@ -31,7 +82,7 @@ laisser le bot passer de 1 % à 2 % par achat selon sa propre analyse, et
 inversement, avec prudence et sagesse. Preuves chiffrées :
 [`ADAPTATION.md`](ADAPTATION.md), section 6 (`python -m research.palier`).
 
-**Pas de panne.** Les 6 positions achetées les 26 et 27 septembre risquent
+**Pas de panne.** Les 6 positions achetées le 26 septembre risquent
 chacune environ 1 % : 5,96 % engagés sur 6 % permis, il n'y a pas de place pour
 une septième. Aucun cours n'a clôturé sous son stop, d'où l'absence de vente
 (LTC était sous le sien à 21 h : vendu à la clôture de minuit s'il y reste).
@@ -438,8 +489,8 @@ conforme**.
 | N° | Constat | Gravité | Recommandation |
 | --- | --- | --- | --- |
 | S1 | Clés montrées dans une conversation : l'ancienne clé, puis la nouvelle clé API (collée plusieurs fois ; son secret, lui, n'a pas été montré) | **Élevée avant le réel** | Supprimer ces clés sur Binance et en créer une neuve, saisie avec `set-keys` |
-| S2 | La clé enregistrée n'a pas le droit « Trading Spot » | Aucune en paper | Le mode réel est impossible tant que ce droit n'est pas coché : bien pour l'instant |
-| S3 | Pas de restriction d'adresse IP sur la clé | Moyenne | L'ajouter sur Binance avant le réel |
+| S2 | La clé enregistrée n'a pas le droit « Trading Spot » | Aucune en paper | **Changé le 30/09** : droit coché par vous, avec la restriction IP ; retrait toujours interdit |
+| S3 | Pas de restriction d'adresse IP sur la clé | Moyenne | **Fait le 30/09** : restriction active ; à mettre à jour quand l'adresse de la connexion change |
 | S4 | En paper, les clés du `.env` étaient transmises à Binance : une clé supprimée aurait pu empêcher le bot de redémarrer | Moyenne | **Corrigé** : en paper, aucune clé n'est transmise (test ajouté) |
 | S5 | Accès téléphone en HTTP : le mot de passe circule en clair sur le Wi-Fi | Moyenne | Wi-Fi privé seulement ; à distance, VPN (Tailscale) |
 | S6 | bandit : 57 signalements (1 « élevé », 11 « moyens ») | Aucun réel | Vérifiés : SHA-1 pour éviter les doublons d'alertes, adresses web fixes en HTTPS, XML des actualités (Python 3.13 bloque les « bombes XML »), écoute Wi-Fi volontaire |
@@ -514,7 +565,7 @@ Points faibles :
 | --- | --- | --- | --- |
 | 0 | **Garder le portable branché** | Vous | rebranché le 30/09 pendant le diagnostic (il tournait sur batterie, tombée à 43 %) ; à garder ainsi |
 | 1 | Configurer les alertes (Telegram, e-mail ou WhatsApp) | Vous | **toujours en cours** (30/09) : Gmail refuse le mot de passe habituel ; créer un « mot de passe d'application » (myaccount.google.com/apppasswords), puis `alerts configurer` et « Tester ». Deux alertes critiques ne vous sont pas parvenues |
-| 2 | Clé Binance : de nouvelles clés sont enregistrées (supprimer sur Binance les anciennes, montrées dans la conversation, si ce n'est pas fait) ; la nouvelle est refusée parce que l'adresse du PC sur Internet change | Vous | sans effet en paper ; pour le réel, une machine à adresse fixe (ligne 13) |
+| 2 | Clé Binance : de nouvelles clés sont enregistrées (supprimer sur Binance les anciennes, montrées dans la conversation, si ce n'est pas fait) ; la nouvelle était refusée parce que l'adresse du PC sur Internet change | Vous | **fait** (30/09, 22 h) : adresse du PC autorisée, clé acceptée ; à refaire quand l'adresse change ; pour le réel, une machine à adresse fixe (ligne 13) et une clé neuve (constat E5) |
 | 3 | Laisser tourner en paper jusqu'à 10 à 20 trades vendus, puis comparer à l'attendu (section « Réel vs attendu » du diagnostic) | Vous et le bot | plusieurs semaines |
 | 4 | **Disponibilité** : PC branché et allumé en continu, veille désactivée sur secteur, capot fermé = « Ne rien faire » sur secteur ; ou un petit serveur | Vous et le bot | **en partie fait** : veille sur secteur « Jamais » (29/09), capot fermé « ne rien faire » (30/09, appliqués par le bot). 65 % sur 7 jours au 30/09. Reste à vous : PC branché, et fermer le capot plutôt qu'appuyer sur le bouton d'alimentation |
 | 5 | Synchroniser l'horloge de Windows | Vous | droits d'administrateur nécessaires : le service « Temps Windows » est arrêté (30/09, 17 h) ; le démarrer, le mettre en démarrage automatique, puis Paramètres ▸ Heure et langue ▸ Synchroniser maintenant |
@@ -532,6 +583,8 @@ Points faibles :
 | 17 | Six améliorations du code : superviseur allégé ; rapport qui prévient quand la mémoire ou le disque se remplissent ; `verify` qui continue sans clé ; repli si le dossier `.venv` est incomplet ; « plus haut » en direct dans le panneau ; e-mail mis en pause après trois refus du mot de passe | Code, avec votre accord | **fait** (30/09) : les six sont en service ; code restructuré (rapport en quatre fichiers, centre de sécurité du panneau à part) et harmonisé, détail dans [`DIAGNOSTIC_CODE.md`](DIAGNOSTIC_CODE.md) |
 | 18 | `urllib3` 2.8.0 (trois failles corrigées) avec la version de ccxt qui l'accepte | Code | **en attente de ccxt, suivie seule** (30/09, 17 h 40) : le contrôle signale la faille sans bloquer, et échouera le jour où la correction pourra s'installer |
 | 19 | Palier de risque de 1 % à 2 % choisi par l'analyse du bot, arrêt d'urgence levé seul avec prudence, raisonnement qui dit pourquoi rien ne bouge | Code, à votre demande | **fait** (30/09, 21 h) : en service ; premier examen, le bot garde 1 % ([`ADAPTATION.md`](ADAPTATION.md), section 6) |
+| 20 | Alertes : afficher la vraie cause d'un échec (mot de passe refusé) plutôt que la dernière coupure du réseau ; renvoyer les alertes critiques perdues pendant une coupure | Code, avec votre accord | proposé (30/09, 22 h) : constats E1 et E2 |
+| 21 | Disque : une seule mesure et un seul seuil dans le diagnostic, le rapport et le panneau | Code, avec votre accord | proposé (30/09, 22 h) : constat E3 |
 
 Fait depuis l'audit du matin : chemins de secours des ordres réels testés (et
 un défaut corrigé), blocage des mots de passe ratés, écriture sûre du choix des
