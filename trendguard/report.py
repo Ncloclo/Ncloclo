@@ -430,21 +430,27 @@ def check_log(log_file: str, now: datetime) -> Check:
     lines = _log_tail_24h(log_file, now)
     if not lines:
         return chk("Journal des 24 dernières heures", None, "vide ou illisible")
-    # Alerte critique que Telegram, non configuré, n'a pas envoyée : ce n'est
-    # pas une panne du bot (l'e-mail et WhatsApp ont leur propre contrôle).
-    unsent = [x for x in lines if "[NOTIFIER-OFF]" in x]
-    errors = [x for x in lines if ("[ERROR]" in x or "[CRITICAL]" in x) and x not in unsent]
+    # Ce qui n'est pas une panne du bot : ses alertes critiques (écrites au
+    # journal exprès, [NOTIFY] ; [NOTIFIER-OFF] si Telegram n'est pas
+    # configuré) et les coupures d'Internet ou de Binance, qu'il rattrape seul.
+    grave = [x for x in lines if "[ERROR]" in x or "[CRITICAL]" in x]
+    alerts = [x for x in grave if "[NOTIFY]" in x or "[NOTIFIER-OFF]" in x]
+    network = [x for x in grave if x not in alerts and re.search(
+        r"NetworkError|RequestTimeout|ExchangeNotAvailable|réseau|injoignable", x)]
+    errors = [x for x in grave if x not in alerts and x not in network]
     warns = [x for x in lines if "[WARNING]" in x]
     tags: Dict[str, int] = {}
     for x in warns:
         m = re.search(r"\[WARNING\] (\[[^\]]+\])", x)
         tags[m.group(1) if m else "[?]"] = tags.get(m.group(1) if m else "[?]", 0) + 1
     top = ", ".join(f"{t} × {n}" for t, n in sorted(tags.items(), key=lambda kv: -kv[1])[:3])
+    n_alerts = len([x for x in alerts if "[NOTIFY]" in x]) or len(alerts)
     return chk("Journal des 24 dernières heures", not errors,
                f"{len(lines)} lignes, {len(errors)} erreur(s), {len(warns)} avertissement(s)"
                + (f" ({top})" if top else "")
-               + (f" ; {len(unsent)} alerte(s) critique(s) non envoyée(s) par Telegram (non "
-                  "configuré)" if unsent else ""),
+               + (f" ; {len(network)} coupure(s) d'Internet ou de Binance rattrapée(s)" if network else "")
+               + (f" ; {n_alerts} alerte(s) critique(s) émise(s)" if alerts else "")
+               + (" (Telegram non configuré)" if any("[NOTIFIER-OFF]" in x for x in alerts) else ""),
                "" if not errors else "Erreurs à examiner : " + errors[-1][20:160])
 
 

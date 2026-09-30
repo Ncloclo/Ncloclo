@@ -194,11 +194,18 @@ def test_decision_time_and_bot_health(tmp_path):
 
 def test_unsent_telegram_alerts_are_not_bot_errors_and_precision_is_information(tmp_path):
     log = tmp_path / "bot.log"
-    log.write_text("2026-09-30 00:02:41,000 [INFO] [DAILY]\n"
+    log.write_text("2026-09-30 00:01:00,000 [ERROR] [BOOT] marchés indisponibles (NetworkError): x\n"
+                   "2026-09-30 00:02:41,000 [INFO] [DAILY]\n"
+                   "2026-09-30 00:03:00,000 [ERROR] [NOTIFY] ⚠️ TrendGuard a été arrêté\n"
                    "2026-09-30 00:03:00,000 [ERROR] [NOTIFIER-OFF] ⚠️ TrendGuard a été arrêté\n",
                    encoding="utf-8")
     c = rp.check_log(str(log), datetime(2026, 9, 30, 0, 31, tzinfo=timezone.utc))
-    assert c["ok"] is True and "1 alerte(s) critique(s) non envoyée(s) par Telegram" in c["detail"]
+    assert c["ok"] is True and "0 erreur(s)" in c["detail"]
+    assert "1 coupure(s) d'Internet ou de Binance" in c["detail"]
+    assert "1 alerte(s) critique(s) émise(s) (Telegram non configuré)" in c["detail"]
+    log.write_text("2026-09-30 00:05:00,000 [ERROR] [CYCLE] KO: division par zéro\n", encoding="utf-8")
+    bad = rp.check_log(str(log), datetime(2026, 9, 30, 0, 31, tzinfo=timezone.utc))
+    assert bad["ok"] is False and "division par zéro" in bad["reco"]
     g = tg.GuardConfig(log_file=str(log), lock_file=str(tmp_path / "tg.lock"), db_file=":memory:")
     few = {"learning": {"brier": {"sell": {"n": 51.0, "raw": 5.0, "cal": 6.0}}}}
     row = next(c for c in rp.skills_checks(g, few) if c["label"] == "Précision des prévisions")
