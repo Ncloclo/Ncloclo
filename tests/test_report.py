@@ -20,6 +20,7 @@ import v29
 from panel import assistant as pa
 from panel import server as ps
 from trendguard import alerts
+from trendguard import evolution as ev
 from trendguard import report as rp
 from trendguard import report_health as rph
 from trendguard import report_render as rpr
@@ -216,6 +217,12 @@ def test_decision_time_and_bot_health(tmp_path):
     checks = {c["label"]: c for c in rph.bot_checks(g, {}, status, now)}
     assert checks["Bot en marche"]["ok"] and checks["Décision du jour"]["ok"]
     assert checks["Disponibilité (7 jours)"]["ok"] is False and checks["Risque configuré"]["ok"]
+    assert "1 % par achat (2 % au plus si l'analyse du bot le justifie)" in checks["Risque configuré"]["detail"]
+    assert "reprise automatique après 60 jours" in checks["Arrêt d'urgence"]["detail"]
+    halted = {"halted": True, "halt_reason": "baisse de 41 %", "resume_note": "reprise automatique "
+              "possible à partir du 2026-11-29 si le marché est haussier"}
+    row = {c["label"]: c for c in rph.bot_checks(g, halted, status, now)}["Arrêt d'urgence"]
+    assert row["ok"] is False and "2026-11-29" in row["detail"] and "resume" in row["reco"]
     assert rph.check_log(str(log), now)["ok"] is True and "[CYCLE] × 1" in rph.check_log(str(log), now)["detail"]
 
 
@@ -237,6 +244,13 @@ def test_unsent_telegram_alerts_are_not_bot_errors_and_precision_is_information(
     few = {"learning": {"brier": {"sell": {"n": 51.0, "raw": 5.0, "cal": 6.0}}}}
     row = next(c for c in rph.skills_checks(g, few) if c["label"] == "Précision des prévisions")
     assert row["ok"] is None and "jugée à partir de 100" in row["detail"] and not row["reco"]
+    evo = tg.GuardConfig(log_file=str(log), lock_file=str(tmp_path / "tg.lock"), db_file=":memory:",
+                         evolution=True)
+    with open(ev.state_path(evo), "w", encoding="utf-8") as fh:
+        json.dump({"risk": {"step": 1.25, "last_text": "Essai du palier 1,25 % par achat, jour 3 sur 30."}}, fh)
+    row = next(c for c in rph.skills_checks(evo, few) if c["label"] == "Palier de risque")
+    assert row["ok"] is None and row["detail"].startswith("1,25 % par achat (2 % au plus")
+    assert "jour 3 sur 30" in row["detail"]
 
 
 def fake_gh(url):

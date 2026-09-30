@@ -4,7 +4,8 @@ Cinq diagnostics successifs : l'audit du 28, le diagnostic approfondi du 29
 (disponibilité, robustesse, alertes), celui du 30 à 10 h (alimentation,
 bibliothèques du PC, état en direct), celui de 13 h, après la mise à jour des
 bibliothèques (PC, contrôles croisés), et celui de 17 h, après la
-restructuration du code (épreuves de résistance). Méthode : diagnostic de la
+restructuration du code (épreuves de résistance). Puis, à 21 h, le palier de
+risque et la reprise prudente de l'arrêt d'urgence. Méthode : diagnostic de la
 stratégie sur les données publiques de Binance (`python trendguard_bot.py
 diagnose`), état du bot dans le panneau, journal du bot, du superviseur et de
 Windows, vérification Binance (`verify`, aucun ordre), tests, analyse statique,
@@ -22,6 +23,43 @@ a été corrigée le jour même : le bot a maintenant les siennes, aux versions
 testées. Le bot n'est pas prêt pour de l'argent réel : il lui faut des alertes
 qui arrivent, une machine allumée en permanence avec une adresse fixe, et
 plusieurs semaines de paper avec des trades vendus.
+
+## Palier de risque et arrêt d'urgence (30 septembre, 21 h)
+
+Votre demande : corriger « la panne » d'absence d'achats et de ventes, et
+laisser le bot passer de 1 % à 2 % par achat selon sa propre analyse, et
+inversement, avec prudence et sagesse. Preuves chiffrées :
+[`ADAPTATION.md`](ADAPTATION.md), section 6 (`python -m research.palier`).
+
+**Pas de panne.** Les 6 positions achetées les 26 et 27 septembre risquent
+chacune environ 1 % : 5,96 % engagés sur 6 % permis, il n'y a pas de place pour
+une septième. Aucun cours n'a clôturé sous son stop, d'où l'absence de vente
+(LTC était sous le sien à 21 h : vendu à la clôture de minuit s'il y reste).
+Libérer le budget quand les stops montent ferait acheter plus, mais moins bien
+(Calmar 1,29 au lieu de 1,54 sur 2018-2022, 1,05 au lieu de 1,33 depuis 2023) :
+écarté. Le raisonnement du jour, dans le panneau, le dit désormais : budget de
+risque plein, et vente la plus proche.
+
+**Palier de risque (en service).** Le bot peut porter son risque par achat de
+1 % à 2 %, un cran de 0,25 % à la fois, seulement si son analyse de la nuit le
+justifie : meilleur sur les deux époques, pire baisse rejouée d'au plus 30 %,
+pire baisse du hasard d'au plus 35 % (1 fois sur 20 en trois ans), capital à
+moins de 5 % de son plus haut, marché haussier ; puis 30 jours d'essai. Il
+redescend aussitôt à 1 % à 10 % de baisse, en marché baissier ou à l'arrêt
+d'urgence. Premier examen : 1,25 % rapporterait plus sur les deux époques, mais
+un tirage malchanceux sur 20 ferait perdre 39 %, presque l'arrêt d'urgence :
+le bot garde 1 % et refait l'examen chaque nuit. Rejouée pas à pas de 2020 à
+2026, l'analyse sans ces garde-fous aurait monté le risque 64 % du temps, pour
+le même rendement depuis 2023 et une pire baisse de −29 % au lieu de −25 %.
+
+**Arrêt d'urgence levé seul, avec prudence.** Il bloquait les achats jusqu'à
+une commande manuelle, bot arrêté (703 jours sans achat dans l'essai « 5 % /
+20 % / 20 » depuis 2023). Il se lève maintenant seul après 60 jours, si le
+marché est redevenu haussier et que l'auto-diagnostic ne conclut pas à la perte
+de l'avantage de la stratégie, une fois par an au plus, avec un risque divisé
+par deux pendant 90 jours. Dans cet essai : 43 689 USDT au lieu de 18 810 depuis
+
+2023. Aux réglages du bot, il ne s'est jamais déclenché depuis 2018.
 
 ## Diagnostic approfondi du 30 septembre, 17 h
 
@@ -492,6 +530,7 @@ Points faibles :
 | 16 | Libérer de la mémoire (onglets de Chrome) et de la place sur le disque | Vous | **en partie fait** (30/09, 17 h 40) : 4,1 Go de fichiers temporaires et de caches retirés, 18,7 Go libres sur 240 ; il en faut 24 pour repasser au-dessus de 10 % |
 | 17 | Six améliorations du code : superviseur allégé ; rapport qui prévient quand la mémoire ou le disque se remplissent ; `verify` qui continue sans clé ; repli si le dossier `.venv` est incomplet ; « plus haut » en direct dans le panneau ; e-mail mis en pause après trois refus du mot de passe | Code, avec votre accord | **fait** (30/09) : les six sont en service ; code restructuré (rapport en quatre fichiers, centre de sécurité du panneau à part) et harmonisé, détail dans [`DIAGNOSTIC_CODE.md`](DIAGNOSTIC_CODE.md) |
 | 18 | `urllib3` 2.8.0 (trois failles corrigées) avec la version de ccxt qui l'accepte | Code | **en attente de ccxt, suivie seule** (30/09, 17 h 40) : le contrôle signale la faille sans bloquer, et échouera le jour où la correction pourra s'installer |
+| 19 | Palier de risque de 1 % à 2 % choisi par l'analyse du bot, arrêt d'urgence levé seul avec prudence, raisonnement qui dit pourquoi rien ne bouge | Code, à votre demande | **fait** (30/09, 21 h) : en service ; premier examen, le bot garde 1 % ([`ADAPTATION.md`](ADAPTATION.md), section 6) |
 
 Fait depuis l'audit du matin : chemins de secours des ordres réels testés (et
 un défaut corrigé), blocage des mots de passe ratés, écriture sûre du choix des

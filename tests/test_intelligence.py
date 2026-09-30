@@ -52,6 +52,28 @@ def test_explain_decision_gives_a_reason_for_every_asset():
     assert any("Profil prudent" in line for line in full["lines"])
 
 
+def test_reasoning_says_why_nothing_moves():
+    """Budget de risque plein, vente la plus proche, palier de risque : le
+    raisonnement dit pourquoi le bot n'achète ni ne vend."""
+    held = {a: ts.Holding(a, qty=1, entry=100.0, stop=stop, high=110.0, entry_date=None,
+                          risk_quote=100.0, cost=100.0) for a, stop in (("eth", 90.0), ("xrp", 99.0))}
+    snap = {"eth": _snap(close=105.0, prior_high=110.0), "xrp": _snap(close=100.0, prior_high=110.0),
+            "ada": _snap()}
+    p = dataclasses.replace(P, max_total_risk=0.02)              # 2 positions à 1 % : plein
+    r = tg.explain_decision("d", True, 3.0, snap, held, [], [], {}, False, 1.0, p, 10_000.0)
+    text = " ".join(r["lines"])
+    assert "Budget de risque plein : 2,0 % engagés sur 2 % permis, 2 position(s)" in text
+    assert "Vente la plus proche : XRP, stop à −1,0 % du cours" in text
+    assert r["assets"]["ada"]["status"] == "full"
+    r = tg.explain_decision("d", True, 3.0, snap, held, [], ["ada"], {}, False, 1.0, p, 10_000.0,
+                            boost=1.5, extra=["Palier de risque : 1,5 % par achat."])
+    assert "1,5 % du capital risqué" in r["assets"]["ada"]["text"]
+    assert r["lines"][-1] == "Palier de risque : 1,5 % par achat."
+    bear = tg.explain_decision("d", False, -3.0, snap, held, [], [], {}, False, 1.0, p, 10_000.0)
+    assert not any("Budget" in line for line in bear["lines"])   # marché baissier : autre raison
+    assert any("Vente la plus proche" in line for line in bear["lines"])
+
+
 def test_daily_decision_records_its_reasoning(logger):
     close, volume = synthetic_market()
     bot, fb = make_bot("paper", close, logger)

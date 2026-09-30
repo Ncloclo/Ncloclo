@@ -15,8 +15,9 @@ Libre, rapide et précis : chaque relevé est appris et appliqué aussitôt.
 - Ruse : bilan des achats différés (achetés plus tard et à quel prix, ou
   abandonnés).
 
-Ce qui n'est pas libre : les règles (cassure, stops, lecture du marché) ne
-changent que par l'évolution encadrée (evolution.py), et le risque jamais.
+Ce qui n'est pas libre : les règles (cassure, stops, lecture du marché) et le
+palier de risque (1 à 2 % par achat) ne changent que par l'évolution encadrée
+(evolution.py).
 L'apprentissage ne peut que rendre le bot plus prudent : un seuil appris
 n'est jamais plus large que le seuil fixe, et les probabilités corrigées
 n'avancent aucune décision (c'est la clôture qui décide).

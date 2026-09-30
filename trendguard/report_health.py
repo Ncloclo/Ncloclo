@@ -145,17 +145,25 @@ def bot_checks(gcfg: Any, st: Dict[str, Any], status: Optional[Dict[str, Any]],
                    + (" (en retard : PC éteint ou en veille à minuit)" if late else ""),
                    "" if not late else "Laissez le PC allumé la nuit, sur secteur."))
     halted = bool(st.get("halted"))
-    out.append(chk("Arrêt d'urgence", not halted, f"déclenché : {st.get('halt_reason')}" if halted
-                   else f"prêt (−{gcfg.kill_drawdown * 100:.0f} % depuis le plus haut)",
-                   "" if not halted else "Lisez la cause, puis python trendguard_bot.py resume."))
-    wise = p.risk_pct <= 0.01 and p.max_total_risk <= 0.06 and p.max_positions <= 8 \
-        and gcfg.kill_drawdown <= 0.40
+    resume_days = getattr(gcfg, "kill_resume_days", 0)
+    out.append(chk("Arrêt d'urgence", not halted,
+                   f"déclenché : {st.get('halt_reason')}"
+                   + (f" ; {st['resume_note']}" if st.get("resume_note") else "") if halted
+                   else f"prêt (−{gcfg.kill_drawdown * 100:.0f} % depuis le plus haut ; "
+                        + (f"reprise automatique après {resume_days} jours si le marché redevient "
+                           "haussier)" if resume_days > 0 else "levé par la commande resume)"),
+                   "" if not halted else "Lisez la cause ; pour relancer les achats sans attendre : "
+                                         "arrêtez le bot puis python trendguard_bot.py resume."))
+    top = getattr(gcfg, "risk_max_pct", p.risk_pct)
+    wise = p.risk_pct <= 0.01 and top <= 0.02 and p.max_total_risk <= 0.06 \
+        and p.max_positions <= 8 and gcfg.kill_drawdown <= 0.40
     out.append(chk("Risque configuré", wise,
-                   f"{fr(p.risk_pct * 100, 'g')} % par achat, {fr(p.max_total_risk * 100, 'g')} % "
+                   f"{fr(p.risk_pct * 100, 'g')} % par achat ({fr(min(top, 2 * p.risk_pct) * 100, 'g')} % "
+                   f"au plus si l'analyse du bot le justifie), {fr(p.max_total_risk * 100, 'g')} % "
                    f"cumulé, {p.max_positions} positions, arrêt d'urgence à "
                    f"−{fr(gcfg.kill_drawdown * 100, 'g')} %",
-                   "" if wise else "Revenez aux limites sages : 1 % par achat, 6 % cumulé, 8 "
-                                   "positions, arrêt à −40 % (fichier .env)."))
+                   "" if wise else "Revenez aux limites sages : 1 % par achat (2 % au plus par "
+                                   "palier), 6 % cumulé, 8 positions, arrêt à −40 % (fichier .env)."))
     out.append(chk("Mode", None if gcfg.run_mode == "live" else True,
                    "RÉEL" if gcfg.run_mode == "live" else "paper : aucun argent réel en jeu"))
     return out
@@ -274,4 +282,8 @@ def skills_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
         changes = ", ".join(f"{c['param']} {c['from']} → {c['to']}" for c in ev["changes"]) or "réglages d'origine"
         out.append(chk("Évolution encadrée", None, f"niveau {ev['level']}/{ev['levels']} ({ev['name']}) ; "
                                                    f"{changes}" + (f" ; {ev['last_text']}" if ev.get("last_text") else "")))
+        r = ev["risk"]
+        out.append(chk("Palier de risque", None, f"{fr(r['pct'], 'g')} % par achat ({fr(r['max_pct'], 'g')} % "
+                                                 "au plus, selon l'analyse du bot)"
+                       + (f" ; {r['last_text']}" if r.get("last_text") else "")))
     return out

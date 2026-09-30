@@ -59,7 +59,7 @@ jour des uns ne casse plus les autres.
 | `trendguard/` | le bot TrendGuard |
 | `v29/` | moteur d'exécution Binance (ordres, stops, base, verrou) ; ancien bot V29.6 rangé dans `v29/intraday/` |
 | `panel/` | panneau de contrôle (serveur local et interface web) |
-| `research/` | études reproductibles, lecture seule : adaptation, sélection, robustesse, examen ; `commun.py` leur donne les mêmes données, options et écriture du rapport |
+| `research/` | études reproductibles, lecture seule : adaptation, palier de risque, sélection, robustesse, examen ; `commun.py` leur donne les mêmes données, options et écriture du rapport |
 | `tests/` | tests Python (`pytest`) et navigateur (`tests/web/`, Playwright) |
 | `templates/` | gabarit de la page d'animation du rejeu |
 | `docs/` | rapports de recherche, audit, revues hebdomadaires ; sommaire dans `docs/README.md` |
@@ -163,6 +163,7 @@ recopier :
 | --- | --- |
 | profil prudent, espérance récente, corrélation, entrées par jour (`research/adaptation.py`) | `risk_cap`, `filter_plans` |
 | auto-sélection des plus rentables, prise de bénéfice (`research/selection.py`) | `choose`, `take_profit` |
+| palier de risque rejoué pas à pas, arrêt d'urgence levé seul (`research/palier.py`) | `risk_scale` |
 | variantes de tendance et de régime (`trendguard/strategy_lab.py`) | paramètres et régime |
 
 Seules les deux stratégies aux règles différentes du laboratoire (rotation,

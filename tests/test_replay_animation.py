@@ -42,7 +42,8 @@ def test_replay_matches_backtest_and_is_consistent(replay):
     # Réglages montrés par la page : ceux du rejeu, arrêt d'urgence compris ;
     # un jour sous arrêt d'urgence est marqué (ici, jamais).
     assert data["params"]["risk_pct"] == 0.01 and data["params"]["kill_drawdown"] == 0.40
-    assert not any(ev.get("h") for ev in data["events"])
+    assert data["params"]["kill_resume_days"] == 60
+    assert not any(ev.get("h") or ev.get("r") for ev in data["events"])
 
 
 def _page(data, **extra):

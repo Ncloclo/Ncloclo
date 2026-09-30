@@ -4,7 +4,7 @@ Partie du bot TrendGuard (paquet trendguard, point d'entrée : trendguard_bot.py
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from . import trend_strategy as ts
 from .texte import fr
@@ -36,7 +36,7 @@ def _explain_asset(a: str, s: Dict[str, float], gap: Optional[float], bull: bool
         return "sold", "Vendue : " + EXIT_WHY.get(sold[a], sold[a].lower())
     if a in bought:
         return "bought", (f"Achetée : cassure de son plus haut de {p.breakout_n} jours, tendance "
-                          f"de fond positive, {fr(p.risk_pct * 100, 'g')} % du capital risqué")
+                          f"de fond positive, {fr(p.risk_pct * mult * 100, 'g')} % du capital risqué")
     if a in holdings:
         h, close = holdings[a], s.get("close")
         if ts._finite(close) and close > 0:
@@ -82,22 +82,48 @@ def _explain_asset(a: str, s: Dict[str, float], gap: Optional[float], bull: bool
     return "full", "Signal d'achat, mais plafond atteint (positions, risque total ou liquidités)"
 
 
+def _waiting_lines(snap: Dict[str, Dict[str, float]], holdings: Dict[str, ts.Holding],
+                   p: ts.TrendParams, equity: Optional[float], eff: float) -> List[str]:
+    """Pourquoi rien ne se passe : budget de risque plein (prochain achat
+    après une vente) et vente la plus proche (stop le plus près du cours)."""
+    out = []
+    if equity and (len(holdings) >= p.max_positions or
+                   sum(h.risk_quote for h in holdings.values()) + p.risk_pct * equity * eff
+                   > p.max_total_risk * equity * eff + 1e-9):
+        engaged = sum(h.risk_quote for h in holdings.values()) / equity * 100
+        out.append(f"Budget de risque plein : {fr(engaged, '.1f')} % engagés sur "
+                   f"{fr(p.max_total_risk * eff * 100, 'g')} % permis, {len(holdings)} position(s) ; "
+                   f"prochain achat dès qu'une position sera vendue.")
+    gaps = [(h.stop / snap[a]["close"] - 1, a) for a, h in holdings.items()
+            if ts._finite((snap.get(a) or {}).get("close")) and snap[a]["close"] > 0]
+    if gaps:
+        g, a = max(gaps)
+        out.append(f"Vente la plus proche : {a.upper()}, stop à {_pc(g)} du cours ; vendue si la "
+                   f"clôture de 00:00 UTC passe dessous.")
+    return out
+
+
 def explain_decision(day: str, bull: bool, btc_gap: Optional[float],
                      snap: Dict[str, Dict[str, float]], holdings: Dict[str, ts.Holding],
                      exits: List[Tuple[str, str]], bought: List[str],
                      notes: Dict[str, Tuple[str, str]], halted: bool, mult: float,
-                     p: ts.TrendParams, equity: Optional[float] = None) -> Dict[str, Any]:
+                     p: ts.TrendParams, equity: Optional[float] = None, boost: float = 1.0,
+                     extra: Sequence[str] = ()) -> Dict[str, Any]:
     """Raisonnement de la décision du jour, actif par actif : ce que le bot
-    a fait, pourquoi il n'a pas acheté les autres, et ce qu'il guette.
-    Mêmes règles que la décision elle-même (trend_strategy.entry_signal)."""
+    a fait, pourquoi il n'a pas acheté les autres, ce qu'il guette et
+    pourquoi rien ne bouge (budget plein, vente la plus proche). `mult` :
+    profil prudent ; `boost` : palier de risque et reprise en douceur ;
+    `extra` : lignes ajoutées par le bot. Mêmes règles que la décision
+    elle-même (trend_strategy.entry_signal)."""
     sold = dict(exits)
+    eff = mult * boost
     assets: Dict[str, Dict[str, Any]] = {}
     for a in sorted(set(snap) | set(holdings) | set(sold)):
         s = snap.get(a) or {}
         close, hi = s.get("close"), s.get("prior_high")
         gap = (hi / close - 1) * 100 if ts._finite(close, hi) and close > 0 else None
         status, text = _explain_asset(a, s, gap, bull, holdings, sold, bought, notes, halted, p,
-                                      equity, mult)
+                                      equity, eff)
         assets[a] = {"status": status, "text": text,
                      "breakout_gap_pct": round(gap, 2) if gap is not None else None}
     radar = sorted((a for a, x in assets.items() if x["status"] == "watch"),
@@ -118,6 +144,9 @@ def explain_decision(day: str, bull: bool, btc_gap: Optional[float],
         lines.append(f"Aujourd'hui : aucun changement, {len(holdings)} position(s) conservée(s).")
     else:
         lines.append("Aujourd'hui : aucun achat, capital à l'abri en USDT.")
+    if holdings:
+        lines.extend(_waiting_lines(snap, holdings, p, equity, eff) if bull and not halted
+                     else _waiting_lines(snap, holdings, p, None, eff))
     deferred = [a.upper() for a, (st, _t) in sorted(notes.items()) if st == "deferred"]
     if deferred:
         lines.append(f"Ruse : achat de {', '.join(deferred)} différé (conditions d'achat "
@@ -130,6 +159,7 @@ def explain_decision(day: str, bull: bool, btc_gap: Optional[float],
         lines.append(f"Profil prudent actif : risque par trade × {fr(mult, 'g')}.")
     if halted:
         lines.append("Arrêt d'urgence actif : aucun achat.")
+    lines.extend(extra)
     return {"day": day, "bull": bull,
             "btc_gap_pct": round(btc_gap, 2) if btc_gap is not None else None,
             "lines": lines, "assets": assets, "radar": radar[:5]}

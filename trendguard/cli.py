@@ -758,6 +758,7 @@ def _status(gcfg: GuardConfig, resume: bool) -> int:
     if resume:
         state["halted"] = False
         state["halt_reason"] = None
+        state["halted_at"] = state["resume_note"] = None
         state["peak_equity"] = state.get("last_equity")
         store.set_kv(TrendGuardBot.STATE_KEY, state)
         print("✅ Arrêt d'urgence levé (plus haut du capital remis au niveau actuel).")

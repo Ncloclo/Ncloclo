@@ -203,6 +203,8 @@ class PanelApp(SecurityCenter):
             "equity": eq, "start_equity": start, "peak": shown_peak(eq, peak),
             "drawdown_pct": drawdown_pct(eq, peak),
             "halted": bool(st.get("halted")), "halt_reason": st.get("halt_reason"),
+            "resume_note": st.get("resume_note") if st.get("halted") else None,
+            "kill_resume_days": getattr(self.g, "kill_resume_days", 0),
             "regime_bull": st.get("last_regime_bull"), "risk_mult": st.get("risk_mult", 1.0),
             "last_decision_day": st.get("last_decision_day"),
             "last_buy": self._last_buy(st),
@@ -212,6 +214,9 @@ class PanelApp(SecurityCenter):
             "last_cycle_age_s": int(time.time() - float(last_cycle)) if last_cycle else None,
             "positions": len(self.data.holdings(st)), "max_positions": p.max_positions,
             "risk_pct": p.risk_pct * 100, "max_total_risk_pct": p.max_total_risk * 100,
+            # Risque par achat de la dernière décision : palier de risque,
+            # profil prudent et reprise en douceur compris.
+            "risk_now_pct": p.risk_pct * float(st.get("risk_mult", 1.0) or 1.0) * 100,
             "dd_throttle": [list(x) for x in p.dd_throttle],
             "kill_drawdown_pct": self.g.kill_drawdown * 100,
             "universe": [b.lower() for b in self.g.universe],

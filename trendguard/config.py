@@ -37,6 +37,8 @@ TG_ENV_DOC: Dict[str, str] = {
     "TG_MAX_POSITIONS": "Nombre maximum de positions simultanées",
     "TG_MAX_TOTAL_RISK": "Risque initial cumulé maximum (0.06 = 6 %)",
     "TG_KILL_DRAWDOWN": "Drawdown depuis le pic qui bloque les entrées (0.40)",
+    "TG_KILL_RESUME_DAYS": "Arrêt d'urgence : reprise automatique prudente après N jours si le marché est redevenu haussier (0 = seulement par la commande resume)",
+    "TG_RISK_MAX_PCT": "Palier de risque : risque par achat que le bot peut choisir lui-même si son analyse le justifie (0.02 = 2 % au plus ; 0.01 = jamais plus de 1 %)",
     "TG_HEARTBEAT_MIN": "Intervalle du battement de cœur dans le journal (min, 0 = off)",
     "TG_MAX_CAPITAL": "Capital max géré par le bot en USDT (0 = tout le compte)",
     "TG_DD_THROTTLE": "Profil prudent : baisse:multiplicateur (ex. 0.10:0.5) ; vide = off",
@@ -93,6 +95,12 @@ class GuardConfig:
     loop_interval_sec: int = 60
     ohlcv_limit: int = 1000
     kill_drawdown: float = 0.40
+    # Arrêt d'urgence : reprise automatique et prudente après N jours si le
+    # marché est redevenu haussier (0 = seulement par la commande resume).
+    kill_resume_days: int = 60
+    # Palier de risque (evolution.py) : risque par achat que le bot peut
+    # choisir lui-même, au plus le double de TG_RISK_PCT et jamais plus de 2 %.
+    risk_max_pct: float = 0.02
     heartbeat_min: int = 15
     clock_resync_min: int = 60          # bot remis à l'heure de Binance
     auto_diagnose_days: int = 7         # 0 = désactivé
@@ -146,6 +154,10 @@ class GuardConfig:
             raise ValueError("TG_MAX_CAPITAL doit être >= 0.")
         if not (0 < self.kill_drawdown < 1):
             raise ValueError("TG_KILL_DRAWDOWN doit être dans ]0, 1[.")
+        if self.kill_resume_days < 0:
+            raise ValueError("TG_KILL_RESUME_DAYS doit être >= 0.")
+        if not (0 < self.risk_max_pct <= 0.02):
+            raise ValueError("TG_RISK_MAX_PCT doit être dans ]0, 0.02] (2 % au plus).")
         if self.catastrophe_atr <= 0:
             raise ValueError("catastrophe_atr > 0 requis.")
         if not (0 < self.max_spread < 0.2):
@@ -191,7 +203,9 @@ def parse_dd_throttle(raw: str) -> Tuple[Tuple[float, float], ...]:
 def load_guard_config_from_env() -> GuardConfig:
     """Configuration du bot lue dans l'environnement (.env) ; chaque variable
     est documentée dans TG_ENV_DOC. Par défaut : paper, 1 % de risque par
-    achat, 6 % cumulé, 8 positions, arrêt d'urgence à −40 %."""
+    achat (2 % au plus si l'analyse du bot le justifie), 6 % cumulé, 8
+    positions, arrêt d'urgence à −40 % levé seul après 60 jours si le marché
+    est redevenu haussier."""
     uni = tuple(a.strip().upper() for a in
                 v29._env_s("TG_UNIVERSE", ",".join(LIVE_UNIVERSE_DEFAULT)).split(",")
                 if a.strip())
@@ -205,6 +219,8 @@ def load_guard_config_from_env() -> GuardConfig:
         run_mode=v29._env_s("RUN_MODE", "paper").lower(),
         universe=uni, params=params,
         kill_drawdown=v29._env_f("TG_KILL_DRAWDOWN", 0.40),
+        kill_resume_days=v29._env_i("TG_KILL_RESUME_DAYS", 60),
+        risk_max_pct=v29._env_f("TG_RISK_MAX_PCT", 0.02),
         heartbeat_min=v29._env_i("TG_HEARTBEAT_MIN", 15),
         auto_diagnose_days=v29._env_i("TG_AUTO_DIAGNOSE_DAYS", 7),
         watch=v29._env_b("TG_VEILLE", True),

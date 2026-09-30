@@ -109,6 +109,7 @@ def build_replay(close: pd.DataFrame, volume: pd.DataFrame, start: str,
             book = bot.state["paper"]
             n_trades = len(bot.state["trades"])
             before = set(book["holdings"])
+            was_halted = bool(bot.state.get("halted"))
             bot.run_cycle(now=now)
             exits, entries = [], []
             for t in bot.state["trades"][n_trades:]:
@@ -143,6 +144,8 @@ def build_replay(close: pd.DataFrame, volume: pd.DataFrame, start: str,
                                              for h in book["holdings"].values()), 2)})
             if bot.state.get("halted"):
                 events[-1]["h"] = 1         # arrêt d'urgence : plus aucun achat
+            elif was_halted:
+                events[-1]["r"] = 1         # arrêt d'urgence levé seul (reprise prudente)
     finally:
         bot.store.close()
 
@@ -169,7 +172,8 @@ def build_replay(close: pd.DataFrame, volume: pd.DataFrame, start: str,
                    "max_positions": p.max_positions,
                    "max_total_risk": p.max_total_risk,
                    "min_volume_usd": p.min_volume_usd,
-                   "kill_drawdown": bot.g.kill_drawdown},
+                   "kill_drawdown": bot.g.kill_drawdown,
+                   "kill_resume_days": bot.g.kill_resume_days},
     }
 
 

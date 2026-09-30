@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 
 import v29
 from trendguard import evolution, report, report_health, report_security, uptime
+from trendguard.texte import fr
 
 
 class SecurityCenter:
@@ -193,22 +194,29 @@ class SecurityCenter:
         return self._check("Rapport quotidien", None, detail)
 
     def _evolution_check(self) -> Dict[str, Any]:
-        """Évolution encadrée : niveau atteint, et rappel de ce qui reste
-        hors de sa portée (information)."""
+        """Évolution encadrée : niveau atteint, palier de risque, et rappel de
+        ce qui reste hors de sa portée (information)."""
         ev = evolution.summary(self.g)
         if not ev["enabled"]:
             return self._check("Évolution encadrée", None, "désactivée : réglages fixes (TG_EVOLUTION=false)")
+        r = ev["risk"]
         return self._check("Évolution encadrée", None,
-                           f"niveau {ev['level']} sur {ev['levels']} ({ev['name']}) ; ne touche jamais au "
-                           "risque, aux plafonds, à l'arrêt d'urgence ni au mode réel")
+                           f"niveau {ev['level']} sur {ev['levels']} ({ev['name']}) ; palier de risque "
+                           f"{fr(r['pct'], 'g')} % par achat ({fr(r['max_pct'], 'g')} % au plus, selon "
+                           "son analyse) ; ne touche jamais au nombre de positions, à l'arrêt d'urgence "
+                           "ni au mode réel")
 
     def _runtime_checks(self, st: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Arrêt d'urgence, relance automatique, disponibilité, alertes,
         garde-fou."""
         if st.get("halted"):
-            halt = f"déclenché : {st.get('halt_reason')}"
+            halt = f"déclenché : {st.get('halt_reason')}" + (
+                f" ; {st['resume_note']}" if st.get("resume_note") else "")
         else:
+            days = getattr(self.g, "kill_resume_days", 0)
             halt = (f"prêt, à −{self.g.kill_drawdown * 100:.0f} % depuis le plus haut"
+                    + (f" ; reprise automatique après {days} jours si le marché redevient haussier"
+                       if days > 0 else " ; levé seulement par la commande resume")
                     + (" ; profil prudent actif" if self.g.params.dd_throttle else ""))
         try:
             sup = self.control.autonomy().get("supervisor") or {}

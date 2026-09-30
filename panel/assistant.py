@@ -181,8 +181,8 @@ def a_objectives(ctx: Dict[str, Any]) -> str:
         f"- Achat quand une crypto casse son plus haut des {r['breakout_n']} derniers jours et "
         "que sa tendance de fond (90 jours) est positive, seulement si le bitcoin est au-dessus "
         f"de sa moyenne {r['regime_sma']} jours (marché haussier).\n"
-        "- Chaque achat risque 1 % du capital au plus ; 8 positions maximum, 6 % de risque "
-        "cumulé au plus.\n"
+        "- Chaque achat risque 1 % du capital ; le bot peut monter à 2 % par paliers si son "
+        "analyse le justifie, et redescend à 1 % à la première alerte ; 8 positions maximum.\n"
         "- Vente quand le cours clôture sous un stop qui monte avec le prix ; stop "
         "catastrophe posé chez Binance contre les krachs ; arrêt d'urgence à −40 %.\n"
         "- Historique réel (frais compris) : environ +37 % par an de 2023 à 2026, avec une "
@@ -372,11 +372,15 @@ GLOSSARY = {
                "achat et stops resserrés pour protéger les gains."),
     "risk": ("**Risque de 1 %** : la taille de chaque achat est calculée pour qu'en touchant son "
              "stop, la perte soit d'environ 1 % du capital. Une crypto agitée reçoit donc une "
-             "position plus petite qu'une crypto calme."),
+             "position plus petite qu'une crypto calme. Le bot peut porter ce risque à 2 % au "
+             "plus, un palier de 0,25 % à la fois, seulement si son analyse le justifie, et "
+             "revient à 1 % à la première alerte (baisse de 10 %, marché baissier)."),
     "r": ("**R** : multiple du risque pris. +3 R = un gain égal à trois fois la perte prévue au "
           "départ ; −1 R = la perte prévue."),
     "drawdown": ("**Baisse depuis le plus haut (drawdown)** : écart entre le capital actuel et "
-                 "son record. Au-delà de −40 %, l'arrêt d'urgence bloque les achats."),
+                 "son record. Au-delà de −40 %, l'arrêt d'urgence bloque les achats ; il se lève "
+                 "seul après 60 jours si le marché est redevenu haussier (une fois par an), avec "
+                 "un risque divisé par deux pendant 90 jours."),
     "paper": ("**Mode paper** : le bot suit les vrais prix de Binance mais avec de l'argent "
               "fictif. Le mode réel exige des clés, une double confirmation dans le .env, et "
               "une confirmation dans le panneau."),
@@ -472,6 +476,10 @@ def a_anticipation(ctx: Dict[str, Any]) -> str:
 
 def a_risk(ctx: Dict[str, Any]) -> str:
     text = GLOSSARY["risk"]
+    pal = ((ctx.get("status") or {}).get("evolution") or {}).get("risk")
+    if pal:
+        text += (f"\nPalier actuel : {_num(pal['pct'], 2)} % par achat ({_num(pal['max_pct'], 2)} % au "
+                 f"plus)." + (f" Dernière analyse : {pal['last_text']}" if pal.get("last_text") else ""))
     f = ctx.get("anticipation") or {}
     r = f.get("risk") or {}
     if f.get("ready") and r:
@@ -549,8 +557,8 @@ def a_learning(ctx: Dict[str, Any]) -> str:
         "- Prévisions : chaque probabilité annoncée est comparée à la clôture ; les suivantes "
         "sont corrigées par cette expérience.",
         "- Veille : annonces officielles de Binance relues toutes les heures.",
-        "- Les règles (cassure, stops, lecture du marché) ne changent que par l'évolution "
-        "encadrée, avec épreuves et essai de 30 jours ; le risque, jamais.",
+        "- Les règles (cassure, stops, lecture du marché) et le palier de risque (1 à 2 % par "
+        "achat) ne changent que par l'évolution encadrée, avec épreuves et essai de 30 jours.",
     ]
     if lr.get("text"):
         lines.append(f"- Ce qu'il sait déjà : {lr['text']}.")
@@ -558,6 +566,8 @@ def a_learning(ctx: Dict[str, Any]) -> str:
 
 
 def a_evolution(ctx: Dict[str, Any]) -> str:
+    """Évolution encadrée : niveau, épreuves, palier de risque (1 à 2 % par
+    achat) et ce qui reste hors de sa portée."""
     ev = (ctx.get("status") or {}).get("evolution") or {}
     if not ev.get("enabled"):
         return ("**Évolution encadrée** : désactivée (TG_EVOLUTION=false). Le bot garde ses "
@@ -572,10 +582,17 @@ def a_evolution(ctx: Dict[str, Any]) -> str:
         "- Le plus simple qui les réussit toutes est adopté, puis mis à l'essai 30 jours. "
         "Réussi : il monte de niveau (plus de liberté, épreuves plus dures). Raté : retour aux "
         "anciens réglages et un niveau de moins.",
-        "- Hors de sa portée : risque par trade, nombre de positions, risque cumulé, arrêt "
-        "d'urgence et passage en réel.",
+        "- Palier de risque : il peut porter son risque par achat de 1 % à 2 %, un cran de "
+        "0,25 % à la fois, si son analyse le justifie (meilleur sur les deux époques, pire "
+        "baisse loin de l'arrêt d'urgence), le capital près de son plus haut et le marché "
+        "haussier ; retour à 1 % à la première alerte.",
+        "- Hors de sa portée : nombre de positions, arrêt d'urgence et passage en réel.",
         f"- Réglages changés : {changes or 'aucun, réglages d’origine'}.",
     ]
+    pal = ev.get("risk")
+    if pal:
+        lines.append(f"- Palier actuel : {_num(pal['pct'], 2)} % par achat ({_num(pal['max_pct'], 2)} % "
+                     f"au plus)." + (f" {pal['last_text']}" if pal.get("last_text") else ""))
     if ev.get("probation"):
         lines.append(f"- En essai depuis le {ev['probation']['since']} : {ev['probation']['text']}.")
     if ev.get("last_text"):

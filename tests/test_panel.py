@@ -67,6 +67,7 @@ def test_api_endpoints_answer(demo_server):
     code, st = _json(base + "/api/status")
     assert code == 200 and st["demo"] and st["state"] == "running" and len(st["universe"]) == 21
     assert st["max_positions"] == 8 and st["risk_pct"] == pytest.approx(1.0)
+    assert st["risk_now_pct"] == pytest.approx(1.0) and st["kill_resume_days"] == 60
     assert _json(base + "/api/positions")[1]["positions"][0]["price"] > 0
     assert len(_json(base + "/api/assets")[1]["assets"]) == 21
     code, c = _json(base + "/api/candles?asset=aave&interval=4h&limit=50")

@@ -21,11 +21,46 @@ s'informer sont libres, rapides et précis
 | Stop en marché baissier (× volatilité ; 0 = non resserré) | 0 ; 1,5 ; 2 ; 2,5 ; 3 | 2 |
 | Lecture du marché : moyenne de BTC (jours) | 100, 125, 150, 175, 200 | 150 |
 
-**Hors de sa portée, à tout niveau** : risque par trade (1 %), nombre de
-positions (8), risque cumulé (6 %), arrêt d'urgence (−40 %), filtres de
-liquidité et d'ancienneté, frais, profil prudent, sélection des cryptos, passage
-en réel, clés API. Même un fichier d'état modifié à la main ne peut rien forcer
-d'autre : seules les valeurs du tableau sont acceptées.
+Depuis le 30 septembre 2026, il peut aussi régler son **palier de risque** : de
+1 % à 2 % par achat, un cran de 0,25 % à la fois (section suivante).
+
+**Hors de sa portée, à tout niveau** : tout risque par achat au-delà de 2 % (ou
+de `TG_RISK_MAX_PCT`), nombre de positions (8), arrêt d'urgence (−40 %),
+filtres de liquidité et d'ancienneté, frais, profil prudent, sélection des
+cryptos, passage en réel, clés API. Même un fichier d'état modifié à la main ne
+peut rien forcer d'autre : seules les valeurs du tableau et les paliers permis
+sont acceptés.
+
+## Le palier de risque : de 1 % à 2 % par achat
+
+Le risque par achat part de `TG_RISK_PCT` (1 %) et peut monter jusqu'au double,
+jamais au-delà de 2 % ni de `TG_RISK_MAX_PCT` (`0.01` : jamais plus de 1 %).
+Le risque cumulé monte d'autant : le nombre de positions ne change pas, chacune
+est un peu plus grosse.
+
+**Monter d'un cran** (+0,25 %), seulement si tout est réuni :
+
+- marché haussier, capital à moins de 5 % de son plus haut, aucun réglage ni
+  palier à l'essai ;
+- trois épreuves face au palier actuel : **deux époques** (Calmar au moins égal
+  et rendement supérieur, sur 2018-2022 et depuis 2023), **pire baisse**
+  rejouée depuis 2018 d'au plus 30 %, **hasard** : pire baisse atteinte 1 fois
+  sur 20 en trois ans d'au plus 35 %, 5 points sous l'arrêt d'urgence ;
+- puis 30 jours d'essai sur le vrai marché, jugés comme ceux des réglages.
+
+**Redescendre** :
+
+- aussitôt au premier palier, à la décision même : baisse de 10 % depuis le
+  plus haut, marché baissier, arrêt d'urgence ou reprise en douceur ; 60 jours
+  de repos après une alerte ;
+- d'un cran quand l'analyse de la nuit ne justifie plus le palier (30 jours de
+  repos), ou après un essai raté (60 jours).
+
+**Premier examen** (30 septembre 2026) : 1,25 % réussit les deux époques et la
+pire baisse (−28 %), mais pas le hasard (−39 % pour une limite de −35 %). Le
+bot garde 1 %. Rejoué pas à pas de 2020 à 2026, ce palier ne serait jamais
+monté ; sans garde-fou, il aurait fait moins bien depuis 2023
+([`ADAPTATION.md`](ADAPTATION.md), section 6).
 
 ## La routine de chaque jour
 
@@ -80,8 +115,10 @@ Un essai raté coûte un niveau.
 1. Dans le doute, ne rien changer : un nouveau réglage doit faire nettement
    mieux, pas de justesse.
 2. Un seul changement à la fois, puis 30 jours d'essai sur le vrai marché.
-3. Jamais plus de risque : risque par trade, nombre de positions, risque cumulé,
-   arrêt d'urgence et passage en réel restent hors de portée.
+3. Le risque ne monte que par petits paliers, de 1 % à 2 % par achat au plus,
+   quand l'analyse le justifie, et redescend aussitôt à la première alerte ;
+   nombre de positions, arrêt d'urgence et passage en réel restent hors de
+   portée.
 4. Un plateau, pas un pic : les réglages voisins doivent aussi tenir.
 5. Les crises passées sont des énigmes : ne pas y perdre plus que les réglages
    actuels.
@@ -109,12 +146,14 @@ un stop un peu plus serré en marché baissier (1,5 au lieu de 2), meilleur sur
 
 - Panneau : Réglages ▸ Autonomie (ligne « Évolution encadrée ») et centre de
   sécurité ; Rachelle répond à « Le bot peut-il évoluer ? ».
-- `python trendguard_bot.py evolution` : niveau, réglages changés, historique et
-  règles.
-- `python trendguard_bot.py evolution examen` : les épreuves du jour, sans rien
-  changer.
+- `python trendguard_bot.py evolution` : niveau, réglages changés, palier de
+  risque, historique et règles.
+- `python trendguard_bot.py evolution examen` : les épreuves du jour, réglages
+  et palier de risque, sans rien changer.
 - `python trendguard_bot.py evolution revenir` : retour aux réglages d'origine
-  (niveau 1, 30 jours de repos).
+  et à 1 % par achat (niveau 1, 30 jours de repos).
+- Panneau : Réglages ▸ Bot (ligne « Palier de risque », dernière analyse dans
+  « Détails ») ; le raisonnement du jour dit quand le palier dépasse 1 %.
 - `TG_EVOLUTION=false` dans `.env`, puis ARRÊTER et AUTO : réglages fixes.
 - Journal : `trendguard_paper.evolution.log` ; état :
   `trendguard_paper.evolution.json`.

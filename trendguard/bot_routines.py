@@ -68,9 +68,15 @@ class RoutinesMixin:
     def _apply_evolution(self) -> None:
         """Réglages choisis par l'évolution encadrée, pris en compte au
         démarrage et juste avant la décision quotidienne, jamais en cours de
-        journée. Seuls cassure, stops et lecture du marché peuvent changer."""
+        journée : cassure, stops, lecture du marché, et palier de risque
+        (1 à 2 × le risque par achat du .env, appliqué à la décision)."""
         if not self.g.evolution:
             return
+        step = evolution.risk_step_for(self.g)
+        if step != self.risk_step:
+            self.logger.info(f"[PALIER] palier de risque en vigueur : "
+                             f"{fr(self.g.params.risk_pct * step * 100, 'g')} % par achat")
+            self.risk_step = step
         p = evolution.params_for(self.g)
         if p == self.p:
             return
@@ -88,8 +94,16 @@ class RoutinesMixin:
         peak, eq = self.state.get("peak_equity"), self.state.get("last_equity")
         storm = bool(self.state.get("halted")) or bool(
             peak and eq and float(eq) < float(peak) * (1 - evolution.STORM_DD))
-        if autonomy.launch_tool(self.g, ["evolution", "quotidien"] + (["--tempete"] if storm else []),
-                                ".evolution.log"):
+        # Situation du bot pour le palier de risque : baisse depuis le plus
+        # haut et marché lus à la décision qui vient d'être prise.
+        facts = []
+        if peak and eq and float(peak) > 0:
+            facts += ["--baisse", f"{max(0.0, 1 - float(eq) / float(peak)):.4f}"]
+        bull = self.state.get("last_regime_bull")
+        if bull is not None:
+            facts += ["--marche", "haussier" if bull else "baissier"]
+        if autonomy.launch_tool(self.g, ["evolution", "quotidien"] + (["--tempete"] if storm else [])
+                                + facts, ".evolution.log"):
             self.logger.info("[ÉVOLUTION] épreuves du jour lancées"
                              + (" (tempête : aucun changement permis)" if storm else ""))
         else:
@@ -269,6 +283,10 @@ class RoutinesMixin:
             return
         v = dg.verdict(findings)
         self.state["last_auto_diag_verdict"] = v
+        # Avantage de la stratégie disparu ou résultats réels incompatibles
+        # avec l'historique : l'arrêt d'urgence ne se lèvera pas seul.
+        self.state["edge_alert"] = any(f.level == "ALERTE" and f.section in ("Stratégie", "Réel vs attendu")
+                                       for f in findings)
         self._save_state()
         self.logger.info("[DIAG]\n" + dg.render(findings, f"(auto, {day})"))
         if v in ("ATTENTION", "ALERTE"):

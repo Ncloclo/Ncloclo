@@ -317,6 +317,73 @@ def test_kill_switch_blocks_entries(logger):
     assert bot.state["paper"]["holdings"] == {}
 
 
+def test_emergency_stop_lifts_itself_prudently_once_a_year(logger):
+    """Arrêt d'urgence : levé seul après 60 jours de marché redevenu
+    haussier (plus haut remis au capital, risque divisé par deux pendant 90
+    jours), mais pas une deuxième fois dans l'année."""
+    close, volume = synthetic_market()
+    bot, fb = make_bot("paper", close, logger, kill_drawdown=0.01)
+    bot.boot()
+    sent = []
+    bot.notifier = lambda text, **kw: sent.append((text, kw.get("critical")))
+    bot.state["peak_equity"] = 50_000.0
+    run_days(bot, fb, close, volume, SIM_FROM, SIM_FROM + 60)
+    d0 = str(close.index[SIM_FROM].date())
+    assert bot.state["halted"] and bot.state["halted_at"] == d0
+    assert "reprise automatique possible à partir du" in bot.state["resume_note"]
+    assert "Reprise automatique au plus tôt dans 60 jours" in sent[0][0] and sent[0][1]
+    assert bot.state["reasoning"]["lines"][-1].startswith("Arrêt d'urgence : reprise automatique")
+    run_days(bot, fb, close, volume, SIM_FROM + 60, SIM_FROM + 61)   # 60 jours, marché haussier
+    assert bot.state["auto_resumed_at"] == str(close.index[SIM_FROM + 60].date())
+    assert bot.state["peak_equity"] < 50_000.0 and any("arrêt d'urgence levé" in t for t, _c in sent)
+    assert not bot.state["halted"] or bot.state.get("halted_at") == bot.state["auto_resumed_at"]
+    run_days(bot, fb, close, volume, SIM_FROM + 61, SIM_FROM + 200)
+    assert bot.state["halted"] and "deuxième arrêt en moins d'un an" in bot.state["resume_note"]
+
+
+def test_emergency_stop_waits_for_the_market_and_the_diagnostic(logger):
+    close, _volume = synthetic_market()
+    bot, _fb = make_bot("paper", close, logger)
+    bot.state = {"halted": True, "halted_at": "2026-01-01"}
+    bot.g = tg.GuardConfig(**{**bot.g.__dict__, "kill_resume_days": 0})
+    assert not bot._auto_resume("2026-06-01", 9_000.0, True)
+    assert "seulement par la commande resume" in bot.state["resume_note"]
+    bot.g = tg.GuardConfig(**{**bot.g.__dict__, "kill_resume_days": 60})
+    bot.state["edge_alert"] = True
+    assert not bot._auto_resume("2026-06-01", 9_000.0, True) and "avantage" in bot.state["resume_note"]
+    bot.state["edge_alert"] = False
+    assert not bot._auto_resume("2026-02-01", 9_000.0, True) and "2026-03-02" in bot.state["resume_note"]
+    assert not bot._auto_resume("2026-06-01", 9_000.0, False) and "haussier" in bot.state["resume_note"]
+    assert bot._auto_resume("2026-06-01", 9_000.0, True)
+    assert not bot.state["halted"] and bot.state["peak_equity"] == 9_000.0
+    assert bot._gentle("2026-06-01") == 0.5 and bot._gentle("2026-08-30") == 1.0
+
+
+def test_decision_buys_at_the_risk_step_of_the_day(logger, monkeypatch):
+    """Le palier choisi par l'évolution multiplie le risque de chaque achat
+    et le plafond cumulé ; une baisse de 10 % le ramène aussitôt à 1."""
+    close, volume = synthetic_market()
+    bot, fb = make_bot("paper", close, logger)
+    bot.boot()
+    bot.risk_step = 2.0
+    seen = []
+    real = ts.plan_entries
+
+    def spy(holdings, snap, bull, equity, cash, p, risk_mult=1.0):
+        dd = 1 - equity / bot.state["peak_equity"]
+        seen.append((risk_mult, 1.0 if dd >= 0.10 or not bull else 2.0))
+        return real(holdings, snap, bull, equity, cash, p, risk_mult)
+    monkeypatch.setattr(ts, "plan_entries", spy)
+    run_days(bot, fb, close, volume, SIM_FROM, SIM_FROM + 40)
+    assert seen and all(got == want for got, want in seen) and seen[0][0] == 2.0
+    held = bot.state["paper"]["holdings"]
+    assert held and max(h["risk_quote"] for h in held.values()) > 0.015 * 10_000
+    assert "Palier de risque : 2 % par achat" in " ".join(bot.state["reasoning"]["lines"])
+    bot.state["peak_equity"] = bot.state["last_equity"] / 0.85          # baisse de 15 %
+    run_days(bot, fb, close, volume, SIM_FROM + 40, SIM_FROM + 41)
+    assert seen[-1][0] == 1.0 and bot.state["risk_step"] == 1.0
+
+
 def test_live_requires_confirmation():
     with pytest.raises(ValueError):
         tg.GuardConfig(run_mode="live", enable_live_trading=True)

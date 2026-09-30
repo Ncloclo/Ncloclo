@@ -29,7 +29,7 @@ diagnostic du code dans [`docs/DIAGNOSTIC_CODE.md`](docs/DIAGNOSTIC_CODE.md).
 | `trendguard/` | le bot TrendGuard : stratégie, décision, anticipation, autonomie, alertes, veille, diagnostic |
 | `v29/` | moteur d'exécution Binance commun (ordres, stops, base, verrou) et bot V29.6 |
 | `panel/` | panneau de contrôle : serveur local, Rachelle, interface web |
-| `research/` | études reproductibles (adaptation, sélection, robustesse, examen) et diagnostic du code |
+| `research/` | études reproductibles (adaptation, palier de risque, sélection, robustesse, examen) et diagnostic du code |
 | `tests/` | tests Python et tests dans le navigateur |
 | `docs/` | rapports, études, audit, diagnostic du code, revues hebdomadaires |
 | `templates/` | gabarit de la page d'animation du rejeu |
@@ -91,9 +91,10 @@ puis **gelés** et testés une seule fois sur 2023→mai 2026 :
 Le bot relance ce diagnostic tous les 7 jours (`TG_AUTO_DIAGNOSE_DAYS`) et
 notifie en cas d'alerte.
 
-Aucune règle ne s'auto-modifie : sur données réelles, les adaptations « apprises
-des résultats récents » font moins bien hors échantillon. Seul un **profil
-prudent** optionnel est proposé (`TG_DD_THROTTLE=0.10:0.5` : risque divisé par 2
+Les règles ne changent que par l'évolution encadrée, après des épreuves
+strictes : sur données réelles, les adaptations « apprises des résultats
+récents » font moins bien hors échantillon. Seul un **profil prudent**
+optionnel est proposé (`TG_DD_THROTTLE=0.10:0.5` : risque divisé par 2
 au-delà de 10 % de baisse). Il réduit la pire baisse de −33,6 % à −24,2 % sur
 2023-2026, pour +32 % par an au lieu de +37 %.
 
@@ -285,9 +286,16 @@ cinq épreuves : deux époques, frais doublés, énigmes des crises passées, pl
 et hasard. Le plus simple qui les réussit toutes est adopté, puis mis à l'essai
 30 jours. Réussi, le bot monte de niveau (Apprenti, Compagnon, Expert, Maître :
 plus de liberté, épreuves plus dures) ; raté, retour aux anciens réglages et un
-niveau de moins. Le risque, les plafonds, l'arrêt d'urgence et le passage en
-réel restent hors de sa portée. `python trendguard_bot.py evolution` affiche le
-niveau et l'historique ; `TG_EVOLUTION=false` garde des réglages fixes.
+niveau de moins. Il peut aussi porter son risque par achat de 1 % à 2 %, un
+cran de 0,25 % à la fois, seulement si son analyse le justifie (meilleur sur
+les deux époques, pire baisse et hasard loin de l'arrêt d'urgence), le capital
+près de son plus haut et le marché haussier ; il redescend aussitôt à 1 % à la
+première alerte (`TG_RISK_MAX_PCT=0.01` : jamais plus de 1 %). Premier examen,
+le 30 septembre 2026 : il garde 1 %, car un tirage malchanceux sur 20 à 1,25 %
+frôlerait l'arrêt d'urgence ([`docs/ADAPTATION.md`](docs/ADAPTATION.md),
+section 6). Nombre de positions, arrêt d'urgence et passage en réel restent
+hors de sa portée. `python trendguard_bot.py evolution` affiche le niveau, le
+palier et l'historique ; `TG_EVOLUTION=false` garde des réglages fixes.
 
 **Rapport quotidien et recommandations appliquées** (`report.py`,
 `maintenance.py`, [`docs/RAPPORT.md`](docs/RAPPORT.md)). Chaque jour à 00:30
@@ -445,6 +453,7 @@ python trendguard_bot.py verify                                 # sans clé : te
 python trendguard_bot.py set-keys                               # clés API vérifiées par Binance, saisie masquée
 python trendguard_bot.py lab --cache data_binance               # tournoi des stratégies + méta-apprentissage
 python -m research.selection --cache data_binance               # auto-sélection et prise de bénéfice
+python -m research.palier --cache data_binance                  # palier de risque 1 → 2 %, arrêt d'urgence
 python -m research.robustness --cache data_binance              # robustesse : coûts, réglages, hasard
 python -m research.exam --cache data_binance                    # examen : intelligence et ruse
 python trendguard_bot.py animation                              # animation du bot sur les prix réels Binance
@@ -522,7 +531,13 @@ Chaque position est protégée à deux niveaux :
   bas, remonté avec le trailing. Il protège d'un krach entre deux clôtures.
 
 Au-delà de 40 % de baisse depuis le plus haut, l'arrêt d'urgence bloque les
-achats (`TG_KILL_DRAWDOWN`). Pour le lever, arrêtez le bot puis lancez `python
+achats (`TG_KILL_DRAWDOWN`) ; les positions restent protégées par leurs stops.
+Il se lève seul, avec prudence, après 60 jours (`TG_KILL_RESUME_DAYS` ; `0` :
+jamais seul) si le marché est redevenu haussier et que le dernier
+auto-diagnostic ne conclut pas à la perte de l'avantage de la stratégie : le
+plus haut repart du capital actuel et le risque par achat reste divisé par deux
+pendant 90 jours. Une seule fois par an : un deuxième arrêt dans l'année attend
+votre décision. Pour le lever sans attendre, arrêtez le bot puis lancez `python
 trendguard_bot.py resume` : la commande est refusée tant que le bot tourne, car
 il réécrirait son état au cycle suivant.
 

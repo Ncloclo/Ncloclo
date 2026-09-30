@@ -17,14 +17,24 @@ un processus séparé : la surveillance des stops n'est jamais ralentie.
 Plus le bot monte de niveau, plus il a de liberté (paramètres changés à la
 fois, taille des pas) et plus les épreuves sont exigeantes.
 
-Hors de sa portée à tout niveau : risque par trade, nombre de positions,
-risque cumulé, arrêt d'urgence, filtres de liquidité, frais, passage en
-réel. Il ne règle que la cassure, les stops et la lecture du marché.
+3. Palier de risque : le bot peut aussi porter son risque par achat de 1 %
+   à 2 % (le double de TG_RISK_PCT au plus, TG_RISK_MAX_PCT), un cran de
+   0,25 % à la fois, seulement si son analyse le justifie (meilleur sur les
+   deux époques, pire baisse et hasard loin de l'arrêt d'urgence), le
+   capital près de son plus haut et le marché haussier ; 30 jours d'essai.
+   Il redescend aussitôt à 1 % à la première alerte (baisse de 10 %, marché
+   baissier, arrêt d'urgence) et d'un cran quand l'analyse ne le justifie
+   plus (docs/ADAPTATION.md, section 6).
+
+Hors de sa portée à tout niveau : nombre de positions, arrêt d'urgence,
+filtres de liquidité, frais, passage en réel, et tout risque par achat
+au-delà du palier permis. Il ne règle que la cassure, les stops, la lecture
+du marché et son palier de risque.
 
   python trendguard_bot.py evolution            # statut, règles et historique
   python trendguard_bot.py evolution examen     # épreuves du jour, sans rien changer
   python trendguard_bot.py evolution quotidien  # la routine du jour (lancée par le bot)
-  python trendguard_bot.py evolution revenir    # retour aux réglages d'origine
+  python trendguard_bot.py evolution revenir    # retour aux réglages d'origine (et à 1 %)
 """
 
 from __future__ import annotations
@@ -111,7 +121,8 @@ CRISES = [
 WISDOM = [
     "Dans le doute, ne rien changer : un nouveau réglage doit faire nettement mieux, pas de justesse.",
     "Un seul changement à la fois, puis 30 jours d'essai sur le vrai marché.",
-    "Jamais plus de risque : risque par trade, nombre de positions, risque cumulé, arrêt "
+    "Le risque ne monte que par petits paliers, de 1 % à 2 % par achat au plus, quand l'analyse "
+    "le justifie, et redescend aussitôt à la première alerte ; nombre de positions, arrêt "
     "d'urgence et passage en réel restent hors de portée.",
     "Un plateau, pas un pic : les réglages voisins doivent aussi tenir.",
     "Les crises passées sont des énigmes : ne pas y perdre plus que les réglages actuels.",
@@ -409,18 +420,211 @@ def search(j: Judge, cur: ts.TrendParams, lv: Level) -> Dict[str, Any]:
 
 
 # ══════════════════════════════════════════════════════════════════════
+# Palier de risque : de 1 % à 2 % par achat, selon l'analyse du bot
+# ══════════════════════════════════════════════════════════════════════
+
+RISK_STEPS = (1.0, 1.25, 1.5, 1.75, 2.0)   # × le risque par achat du .env
+RISK_UP_DD = 0.05          # monter : capital à moins de 5 % de son plus haut
+RISK_DOWN_DD = 0.10        # retour immédiat au premier palier : baisse de 10 %
+RISK_DD_ROOM = 0.10        # pire baisse rejouée : 10 points sous l'arrêt d'urgence
+RISK_LUCK_ROOM = 0.05      # pire baisse 1 fois sur 20 : 5 points sous l'arrêt d'urgence
+RISK_REST_DOWN = 60        # jours de repos après une alerte ou un essai raté
+RISK_REST_ANALYSIS = 30    # … après une descente décidée par l'analyse
+
+
+def risk_steps(p: ts.TrendParams, max_pct: float = 0.02) -> List[float]:
+    """Paliers permis : le risque par achat du .env multiplié par 1 à 2,
+    jamais au-delà de `max_pct` (TG_RISK_MAX_PCT) ni de 2 %."""
+    top = min(max_pct, 0.02) + 1e-12
+    return [s for s in RISK_STEPS if p.risk_pct * s <= top] or [1.0]
+
+
+def at_step(p: ts.TrendParams, step: float) -> ts.TrendParams:
+    """Réglages au palier `step` : risque par achat et risque cumulé
+    multipliés ensemble, le nombre de positions ne change pas."""
+    if step == 1.0:
+        return p
+    return dataclasses.replace(p, risk_pct=p.risk_pct * step,
+                               max_total_risk=p.max_total_risk * step)
+
+
+def risk_state(st: Dict[str, Any], steps: List[float]) -> Dict[str, Any]:
+    """Palier enregistré, borné aux paliers permis : un fichier modifié à la
+    main ne peut rien forcer de plus que TG_RISK_MAX_PCT."""
+    r = st.get("risk") if isinstance(st.get("risk"), dict) else {}
+    step = r.get("step")
+    ok = isinstance(step, (int, float)) and not isinstance(step, bool) and float(step) in steps
+    r["step"] = float(step) if ok else 1.0
+    pr = r.get("probation")
+    if not (isinstance(pr, dict) and pr.get("new") == r["step"] and pr.get("old") in steps
+            and isinstance(pr.get("since"), str)):
+        r["probation"] = None
+    if not isinstance(r.get("history"), list):
+        r["history"] = []
+    st["risk"] = r
+    return r
+
+
+def risk_step_for(gcfg: Any) -> float:
+    """Palier de risque en vigueur (1.0 si l'évolution est désactivée) :
+    lu par le bot juste avant la décision quotidienne."""
+    if not getattr(gcfg, "evolution", False) or not state_path(gcfg):
+        return 1.0
+    steps = risk_steps(gcfg.params, getattr(gcfg, "risk_max_pct", 0.02))
+    return risk_state(load_state(state_path(gcfg)), steps)["step"]
+
+
+def _pct(p: ts.TrendParams, step: float) -> str:
+    return fr(p.risk_pct * step * 100, "g") + " %"
+
+
+def risk_trials(j: Judge, cur: ts.TrendParams, lo: float, hi: float,
+                kill: float) -> List[Trial]:
+    """Épreuves du palier `hi` face au palier `lo`, mêmes réglages : Calmar
+    au moins égal ET rendement meilleur sur les deux époques, pire baisse
+    rejouée et pire baisse du hasard loin de l'arrêt d'urgence (jamais plus
+    loin que −40 % : relever TG_KILL_DRAWDOWN n'assouplit rien). S'arrête à
+    la première épreuve ratée."""
+    a, b = at_step(cur, lo), at_step(cur, hi)
+    room = min(kill, 0.40)
+    ok, parts = True, []
+    for i, label in enumerate(("2018-22", "2023 →")):
+        ml, mh = j.period(a, i), j.period(b, i)
+        good = mh["calmar"] >= ml["calmar"] and mh["cagr_pct"] > ml["cagr_pct"]
+        ok = ok and good
+        parts.append(f"{label} : Calmar {fr(mh['calmar'])} contre {fr(ml['calmar'])}, rendement "
+                     f"{fr(mh['cagr_pct'], '+.1f')} % contre {fr(ml['cagr_pct'], '+.1f')} %")
+    out: List[Trial] = [("Deux époques", ok, " ; ".join(parts))]
+    if not ok:
+        return out
+    eq = j.equity(b)
+    worst = float((1 - eq / eq.cummax()).max() * 100)
+    limit = (room - RISK_DD_ROOM) * 100
+    out.append(("Pire baisse", worst <= limit, f"−{fr(worst, '.0f')} % rejoué depuis 2018 "
+                                               f"(limite −{fr(limit, '.0f')} %)"))
+    if not out[-1][1]:
+        return out
+    _med, luck = block_luck(eq)
+    limit = (room - RISK_LUCK_ROOM) * 100
+    out.append(("Hasard", luck <= limit, f"pire baisse 1 fois sur 20 en 3 ans −{fr(luck, '.0f')} % "
+                                         f"(limite −{fr(limit, '.0f')} %, arrêt d'urgence à "
+                                         f"−{fr(kill * 100, '.0f')} %)"))
+    return out
+
+
+def run_risk(st: Dict[str, Any], cur: ts.TrendParams, today: date,
+             judge: Callable[[], Judge], steps: List[float], kill: float,
+             dd: Optional[float], bull: Optional[bool], storm: bool = False,
+             busy: bool = False, notify: Callable[[str], None] = lambda _t: None) -> None:
+    """Routine quotidienne du palier de risque (après celle des réglages).
+    Descente aussitôt au premier palier à la première alerte (tempête,
+    baisse de 10 %, marché baissier) ; essai de 30 jours jugé à son terme ;
+    descente d'un cran si l'analyse ne justifie plus le palier ; montée
+    d'un cran si le marché est haussier, le capital à moins de 5 % de son
+    plus haut, aucun autre changement à l'essai et toutes les épreuves
+    réussies. `dd` et `bull` : situation du bot (None si inconnue). Met à
+    jour st["risk"]."""
+    r = risk_state(st, steps)
+    day = today.isoformat()
+    step = r["step"]
+    k = steps.index(step)
+    base = _pct(cur, 1.0)
+
+    def note(text: str, action: str, alert: bool = False) -> None:
+        r["history"] = r["history"][-(HISTORY_MAX - 1):] + [
+            {"day": day, "action": action, "step": r["step"], "text": text}]
+        r["last_text"] = text
+        if alert:
+            notify(text)
+
+    alarm = storm or (dd is not None and dd >= RISK_DOWN_DD)
+    if step > 1.0 and (alarm or bull is False):
+        r.update(step=1.0, probation=None)
+        if alarm:
+            r["rest_until"] = (today + timedelta(days=RISK_REST_DOWN)).isoformat()
+        why = ("tempête (arrêt d'urgence ou forte baisse)" if storm else
+               f"baisse de {fr(dd * 100, '.1f')} % depuis le plus haut" if alarm else "marché baissier")
+        note(f"Retour immédiat à {base} par achat : {why}."
+             + (f" Repos jusqu'au {r['rest_until']}." if alarm else ""), "descend", alert=True)
+        return
+    pr = r.get("probation")
+    if pr:
+        elapsed = (today - date.fromisoformat(pr["since"])).days
+        if elapsed < PROBATION_DAYS:
+            note(f"Essai du palier {_pct(cur, step)} par achat, jour {elapsed} sur "
+                 f"{PROBATION_DAYS}.", "essai")
+            return
+        j = judge()
+        rn = j.window_return(at_step(cur, pr["new"]), pr["since"], day)
+        ro = j.window_return(at_step(cur, pr["old"]), pr["since"], day)
+        r["probation"] = None
+        versus = (f"{fr(rn, '+.1f')} % en {elapsed} jours, contre {fr(ro, '+.1f')} % à "
+                  f"{_pct(cur, pr['old'])}")
+        if rn >= ro - PROBATION_TOL:
+            r["rest_until"] = (today + timedelta(days=REST_AFTER_CONFIRM)).isoformat()
+            note(f"Essai réussi : palier {_pct(cur, step)} par achat confirmé ({versus}).",
+                 "confirme", alert=True)
+        else:
+            r.update(step=float(pr["old"]),
+                     rest_until=(today + timedelta(days=RISK_REST_DOWN)).isoformat())
+            note(f"Essai raté : retour à {_pct(cur, pr['old'])} par achat ({versus}). Repos "
+                 f"jusqu'au {r['rest_until']}.", "annule", alert=True)
+        return
+    if r.get("rest_until") and day < r["rest_until"]:
+        note(f"Repos jusqu'au {r['rest_until']} : le palier reste à {_pct(cur, step)} par achat.",
+             "repos")
+        return
+    if k > 0:
+        t = risk_trials(judge(), cur, steps[k - 1], step, kill)
+        r["last_trials"] = [list(x) for x in t]
+        if not all(x[1] for x in t):
+            r.update(step=steps[k - 1],
+                     rest_until=(today + timedelta(days=RISK_REST_ANALYSIS)).isoformat())
+            note(f"L'analyse ne justifie plus {_pct(cur, step)} (épreuve « {t[-1][0]} » : "
+                 f"{t[-1][2]}) : retour à {_pct(cur, steps[k - 1])} par achat.", "descend", alert=True)
+            return
+    if k + 1 >= len(steps):
+        note(f"Palier le plus haut permis : {_pct(cur, step)} par achat.", "garde")
+        return
+    if busy:
+        note(f"Un réglage est à l'essai : un seul changement à la fois, le palier reste à "
+             f"{_pct(cur, step)} par achat.", "attend")
+        return
+    if bull is not True or dd is None or dd > RISK_UP_DD:
+        why = ("marché baissier" if bull is False else "situation du bot inconnue" if dd is None
+               or bull is None else f"capital à {fr(dd * 100, '.1f')} % sous son plus haut "
+                                    f"(au plus {fr(RISK_UP_DD * 100, '.0f')} % pour monter)")
+        note(f"Le bot garde {_pct(cur, step)} par achat : {why}.", "garde")
+        return
+    nxt = steps[k + 1]
+    t = risk_trials(judge(), cur, step, nxt, kill)
+    r["last_trials"] = [list(x) for x in t]
+    if all(x[1] for x in t):
+        r.update(step=nxt, probation={"since": day, "old": step, "new": nxt})
+        note(f"Palier relevé à {_pct(cur, nxt)} par achat à la prochaine décision : épreuves "
+             f"réussies ({', '.join(x[0] for x in t)}). Essai de {PROBATION_DAYS} jours ; retour "
+             f"immédiat à {base} à la première alerte.", "monte", alert=True)
+    else:
+        note(f"Le bot garde {_pct(cur, step)} par achat : {_pct(cur, nxt)} refusé, épreuve "
+             f"« {t[-1][0]} » ratée ({t[-1][2]}).", "garde")
+
+
+# ══════════════════════════════════════════════════════════════════════
 # La routine quotidienne
 # ══════════════════════════════════════════════════════════════════════
 
 def run_daily(base: ts.TrendParams, path: str, today: date,
               judge_factory: Callable[[], Judge], storm: bool = False,
               notify: Callable[[str], None] = lambda _t: None,
-              force: bool = False) -> Dict[str, Any]:
+              force: bool = False, risk: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Routine quotidienne de l'évolution encadrée (une fois par jour, sauf
     `force`) : rien par tempête ; l'essai en cours est jugé à son terme
     (confirmé ou annulé) ; sinon, après le repos, des réglages voisins sont
     éprouvés et un seul n'est adopté que s'il réussit toutes les épreuves.
-    État enregistré dans `path`, puis renvoyé."""
+    Puis, si `risk` est donné (paliers permis, arrêt d'urgence, baisse et
+    marché du bot, alerte), la routine du palier de risque (run_risk) : un
+    seul changement à l'essai à la fois, réglage ou palier. État enregistré
+    dans `path`, puis renvoyé."""
     st = load_state(path)
     day = today.isoformat()
     if st.get("last_run") == day and not force:
@@ -428,6 +632,13 @@ def run_daily(base: ts.TrendParams, path: str, today: date,
     lv = LEVELS[st["level"] - 1]
     cur = apply(base, st["params"])
     report: Dict[str, Any] = {}
+    judges: List[Judge] = []
+
+    def judge() -> Judge:
+        """Un seul chargement de l'historique pour toute la routine."""
+        if not judges:
+            judges.append(judge_factory())
+        return judges[0]
 
     def note(text: str, action: str, alert: bool = False) -> None:
         st["history"] = (st.get("history") or [])[-(HISTORY_MAX - 1):] + [
@@ -437,6 +648,7 @@ def run_daily(base: ts.TrendParams, path: str, today: date,
             notify(text)
 
     pr = st.get("probation")
+    risk_trial = isinstance((st.get("risk") or {}).get("probation"), dict)
     if storm:
         note("Tempête (arrêt d'urgence ou baisse de plus de 15 %) : aucun changement "
              "aujourd'hui, par sagesse.", "tempete")
@@ -445,7 +657,7 @@ def run_daily(base: ts.TrendParams, path: str, today: date,
         if elapsed < PROBATION_DAYS:
             note(f"Période d'essai, jour {elapsed} sur {PROBATION_DAYS} : {pr['text']}.", "essai")
         else:
-            j = judge_factory()
+            j = judge()
             rn = j.window_return(apply(base, pr["new"]), pr["since"], day)
             ro = j.window_return(apply(base, pr["old"]), pr["since"], day)
             st["probation"] = None
@@ -473,8 +685,11 @@ def run_daily(base: ts.TrendParams, path: str, today: date,
     elif st.get("rest_until") and day < st["rest_until"]:
         note(f"Repos jusqu'au {st['rest_until']} : on laisse le marché juger le dernier "
              "changement.", "repos")
+    elif risk_trial:
+        note("Le palier de risque est à l'essai : un seul changement à la fois, les réglages "
+             "attendent la fin de l'essai.", "attend")
     else:
-        res = search(judge_factory(), cur, lv)
+        res = search(judge(), cur, lv)
         report = {"tried": res["tried"], "passed_first": res["passed_first"],
                   "trials": [list(t) for t in res.get("trials", [])]}
         if res["chosen"]:
@@ -491,6 +706,11 @@ def run_daily(base: ts.TrendParams, path: str, today: date,
                    else f" {res['failures'][0]}." if res["failures"] else "")
             note(f"{res['tried']} réglages essayés au niveau {lv.name} ; aucun ne réussit toutes "
                  f"les épreuves : le bot garde les siens.{why}", "garde")
+    if risk is not None:
+        run_risk(st, apply(base, st["params"]), today, judge, risk["steps"], risk["kill"],
+                 risk.get("dd"), risk.get("bull"), storm=storm,
+                 busy=isinstance(st.get("probation"), dict),
+                 notify=risk.get("notify") or (lambda _t: None))
     st["last_run"] = day
     st["last_report"] = report
     save_state(path, st)
@@ -502,7 +722,11 @@ def reset(path: str, today: date) -> Dict[str, Any]:
     st = load_state(path)
     st.update(params={}, probation=None, level=1, xp=0,
               rest_until=(today + timedelta(days=REST_AFTER_RESET)).isoformat())
-    text = "Retour aux réglages d'origine demandé : niveau 1, Apprenti, 30 jours de repos."
+    r = risk_state(st, [1.0])
+    r.update(step=1.0, probation=None, rest_until=st["rest_until"],
+             last_text="Retour aux réglages d'origine demandé : palier de risque ramené au premier.")
+    text = ("Retour aux réglages d'origine demandé : niveau 1, Apprenti, palier de risque au "
+            "premier, 30 jours de repos.")
     st["history"] = st["history"][-(HISTORY_MAX - 1):] + [
         {"day": today.isoformat(), "action": "revenir", "level": 1, "text": text}]
     st["last_text"] = text
@@ -511,17 +735,24 @@ def reset(path: str, today: date) -> Dict[str, Any]:
 
 
 def summary(gcfg: Any) -> Dict[str, Any]:
-    """Pour le panneau : niveau, réglages changés, essai en cours."""
+    """Pour le panneau et le rapport : niveau, réglages changés, essai en
+    cours, palier de risque (en %, avec le plus haut permis)."""
     if not getattr(gcfg, "evolution", False) or not state_path(gcfg):
         return {"enabled": False}
     st = load_state(state_path(gcfg))
     lv = LEVELS[st["level"] - 1]
+    steps = risk_steps(gcfg.params, getattr(gcfg, "risk_max_pct", 0.02))
+    r = risk_state(st, steps)
+    base = gcfg.params.risk_pct * 100
     return {"enabled": True, "level": st["level"], "levels": len(LEVELS), "name": lv.name,
             "xp": st["xp"], "promote_after": lv.promote_after,
             "changes": [{"param": LABELS[k], "from": fmt_value(k, getattr(gcfg.params, k)),
                          "to": fmt_value(k, v)} for k, v in st["params"].items()],
             "probation": st.get("probation"), "rest_until": st.get("rest_until"),
-            "last_run": st.get("last_run"), "last_text": st.get("last_text")}
+            "last_run": st.get("last_run"), "last_text": st.get("last_text"),
+            "risk": {"step": r["step"], "pct": base * r["step"], "base_pct": base,
+                     "max_pct": base * steps[-1], "probation": r.get("probation"),
+                     "rest_until": r.get("rest_until"), "last_text": r.get("last_text")}}
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -569,6 +800,28 @@ def _print_rules(say: Callable[[str], None]) -> None:
             f"Calmar +{lv.margin * 100:.0f} % exigé ; "
             + (f"monte après {lv.promote_after} réglage(s) confirmé(s)" if lv.promote_after
                else "niveau le plus haut"))
+    say("\nPalier de risque (1 % → 2 % par achat, un cran de 0,25 % à la fois) :")
+    say(f"  monter : marché haussier, capital à moins de {RISK_UP_DD * 100:.0f} % de son plus "
+        "haut, aucun autre essai en cours, et trois épreuves : meilleur sur les deux époques, "
+        f"pire baisse rejouée à {RISK_DD_ROOM * 100:.0f} points de l'arrêt d'urgence, pire baisse "
+        f"du hasard à {RISK_LUCK_ROOM * 100:.0f} points ; puis {PROBATION_DAYS} jours d'essai.")
+    say(f"  redescendre : aussitôt au premier palier à {RISK_DOWN_DD * 100:.0f} % de baisse, en "
+        "marché baissier ou à l'arrêt d'urgence ; d'un cran si l'analyse ne le justifie plus.")
+
+
+def _risk_examen(j: Judge, cur: ts.TrendParams, st: Dict[str, Any], gcfg: Any) -> None:
+    """Examen du palier de risque (sans rien changer), pour la commande
+    evolution examen."""
+    steps = risk_steps(gcfg.params, gcfg.risk_max_pct)
+    step = risk_state(st, steps)["step"]
+    k = steps.index(step)
+    print(f"\nPalier de risque : {_pct(cur, step)} par achat (au plus {_pct(cur, steps[-1])}).")
+    pairs = ([(steps[k - 1], step)] if k > 0 else []) + (
+        [(step, steps[k + 1])] if k + 1 < len(steps) else [])
+    for lo, hi in pairs:
+        print(f"  {_pct(cur, hi)} face à {_pct(cur, lo)} :")
+        for t in risk_trials(j, cur, lo, hi, gcfg.kill_drawdown):
+            print(f"    {'✓' if t[1] else '✗'} {t[0]} : {t[2]}")
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -582,6 +835,10 @@ def main(argv: Optional[List[str]] = None) -> int:
                     choices=["statut", "quotidien", "examen", "revenir", "regles"])
     ap.add_argument("--tempete", action="store_true", help="(quotidien) forte baisse en cours")
     ap.add_argument("--force", action="store_true", help="(quotidien) refaire la routine du jour")
+    ap.add_argument("--baisse", type=float, default=None,
+                    help="(quotidien) baisse du capital depuis son plus haut (0.05 = 5 %%)")
+    ap.add_argument("--marche", choices=["haussier", "baissier"], default=None,
+                    help="(quotidien) marché lu par le bot à la décision")
     ap.add_argument("--cache", default=os.path.join(v29.APP_DIR, "data_evolution"))
     args = ap.parse_args(argv)
     v29.ensure_utf8_stdio()
@@ -606,7 +863,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.action == "examen":
             st = load_state(path)
             lv = LEVELS[st["level"] - 1]
-            res = search(judge(), apply(gcfg.params, st["params"]), lv)
+            j = judge()
+            res = search(j, apply(gcfg.params, st["params"]), lv)
             print(f"Niveau {st['level']} ({lv.name}) : {res['tried']} réglages essayés, "
                   f"{res['passed_first']} passent la première épreuve.")
             for t in res.get("trials", []):
@@ -617,16 +875,22 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print(f"  - {f}")
             if res.get("near"):
                 print(f"  Le plus proche : {res['near']}")
+            _risk_examen(j, apply(gcfg.params, st["params"]), st, gcfg)
             return 0
         hub = alerts.build_notifier()
+        risk = {"steps": risk_steps(gcfg.params, gcfg.risk_max_pct), "kill": gcfg.kill_drawdown,
+                "dd": args.baisse, "bull": {"haussier": True, "baissier": False}.get(args.marche),
+                "notify": lambda t: hub(f"🎚️ TrendGuard — palier de risque : {t}",
+                                        dedup_key=f"palier-{today}", critical=True, sync=True)}
         try:
             st = run_daily(gcfg.params, path, today, judge, storm=args.tempete, force=args.force,
                            notify=lambda t: hub(f"🧬 TrendGuard — évolution : {t}",
                                                 dedup_key=f"evolution-{today}", critical=True,
-                                                sync=True))
+                                                sync=True), risk=risk)
         finally:
             hub.close()
         print(f"{stamp} {st.get('last_text', '')}")
+        print(f"{stamp} Palier de risque : {(st.get('risk') or {}).get('last_text', '')}")
         return 0
     st = load_state(path)
     lv = LEVELS[st["level"] - 1]
@@ -638,6 +902,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     if st.get("probation"):
         print(f"En essai depuis le {st['probation']['since']} : {st['probation']['text']}")
     for h in st["history"][-10:]:
+        print(f"  {h['day']} · {h['text']}")
+    steps = risk_steps(gcfg.params, gcfg.risk_max_pct)
+    r = risk_state(st, steps)
+    print(f"\nPalier de risque : {_pct(gcfg.params, r['step'])} par achat (au plus "
+          f"{_pct(gcfg.params, steps[-1])}, TG_RISK_MAX_PCT)")
+    for h in r["history"][-5:]:
         print(f"  {h['day']} · {h['text']}")
     print()
     _print_rules(print)

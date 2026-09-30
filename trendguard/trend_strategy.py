@@ -455,6 +455,10 @@ class BacktestHooks:
                                     List[Dict[str, Any]]]] = None
     # Prise de bénéfice : (gain en R qui déclenche la vente, part vendue).
     take_profit: Optional[Tuple[float, float]] = None
+    # Multiplicateur du risque du jour, après le profil prudent : (indice du
+    # jour, capital, plus haut) → multiplicateur ≥ 0 (palier de risque,
+    # arrêt d'urgence simulé ; 0 = aucun achat ce jour-là).
+    risk_scale: Optional[Callable[[int, float, float], float]] = None
 
 
 @dataclass
@@ -559,6 +563,8 @@ def backtest(close: pd.DataFrame, volume: Optional[pd.DataFrame], p: TrendParams
             cap = hooks.risk_cap(trades)
             if cap is not None:
                 mult = min(mult, cap)
+        if hooks.risk_scale is not None:
+            mult *= hooks.risk_scale(i, equity, peak)
         eligible = snap if hooks.choose is None else hooks.choose(i, snap)
         plans = plan_entries(holdings, eligible, bull, equity, cash, p, mult)
         if hooks.filter_plans is not None:

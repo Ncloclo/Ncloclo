@@ -17,7 +17,7 @@ import pandas as pd
 
 import v29
 
-from . import anticipation, autonomy, learning
+from . import anticipation, autonomy, evolution, learning
 from . import trend_strategy as ts
 from .bot_execution import ExecutionMixin
 from .bot_routines import RoutinesMixin
@@ -64,6 +64,8 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         # Notes d'exécution du jour (achat différé, annulé) pour le raisonnement.
         self._entry_notes: Dict[str, Tuple[str, str]] = {}
         self._last_close: Optional[pd.DataFrame] = None   # apprentissage de la veille
+        # Palier de risque choisi par l'évolution encadrée (1 à 2 × TG_RISK_PCT).
+        self.risk_step = 1.0
 
     @property
     def live(self) -> bool:
@@ -522,11 +524,79 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         return (max(0.0, min(equity, bot_equity)),
                 max(0.0, min(cash, bot_equity - invested)))
 
+    # Arrêt d'urgence : une seule reprise automatique par an, puis risque
+    # par achat divisé par deux pendant 90 jours (reprise en douceur).
+    RESUME_ONCE_DAYS = 365
+    GENTLE_DAYS = 90
+
+    def _gentle(self, day: str) -> float:
+        """0.5 pendant la reprise en douceur qui suit une reprise automatique
+        après un arrêt d'urgence, 1.0 sinon."""
+        last = self.state.get("auto_resumed_at")
+        if last and (pd.Timestamp(day) - pd.Timestamp(last)).days < self.GENTLE_DAYS:
+            return 0.5
+        return 1.0
+
+    def _auto_resume(self, day: str, equity: float, bull: bool) -> bool:
+        """Arrêt d'urgence déclenché : reprise automatique et prudente après
+        TG_KILL_RESUME_DAYS jours, si le marché est redevenu haussier, que
+        le dernier auto-diagnostic n'a pas conclu à la perte de l'avantage
+        de la stratégie et pas plus d'une fois par an. Le plus haut est remis
+        au capital actuel (comme la commande resume) et le risque par achat
+        reste divisé par deux pendant 90 jours. Sinon, la raison de
+        l'attente est gardée pour le panneau et le rapport. True si levé."""
+        if not self.state.get("halted"):
+            return False
+        since = self.state.get("halted_at") or day
+        self.state["halted_at"] = since
+        wait, d = self.g.kill_resume_days, pd.Timestamp(day)
+        last = self.state.get("auto_resumed_at")
+        waited = (d - pd.Timestamp(since)).days
+        if wait <= 0:
+            note = "levé seulement par la commande resume (TG_KILL_RESUME_DAYS=0)"
+        elif last and (d - pd.Timestamp(last)).days < self.RESUME_ONCE_DAYS:
+            note = (f"deuxième arrêt en moins d'un an (reprise automatique le {last}) : levé "
+                    f"seulement par la commande resume")
+        elif self.state.get("edge_alert"):
+            note = ("le dernier auto-diagnostic conclut que la stratégie a perdu son avantage : "
+                    "levé seulement par la commande resume")
+        elif waited < wait:
+            note = (f"reprise automatique possible à partir du "
+                    f"{(pd.Timestamp(since) + pd.Timedelta(days=wait)).date()} si le marché est "
+                    f"haussier")
+        elif not bull:
+            note = "délai écoulé : reprise automatique dès que le marché redevient haussier"
+        else:
+            until = (d + pd.Timedelta(days=self.GENTLE_DAYS)).date().isoformat()
+            self.state.update(halted=False, halt_reason=None, halted_at=None, resume_note=None,
+                              peak_equity=equity, auto_resumed_at=day)
+            text = (f"reprise automatique après {waited} jours d'arrêt, marché redevenu haussier ; "
+                    f"plus haut remis au capital actuel ({fr(equity, ',.0f')} {self.g.quote}), risque "
+                    f"par achat divisé par deux jusqu'au {until}")
+            self.logger.critical(f"[KILL] {text}")
+            self.notifier(f"✅ TrendGuard, arrêt d'urgence levé : {text}.", critical=True)
+            return True
+        self.state["resume_note"] = note
+        return False
+
+    def _risk_step(self, day: str, equity: float, peak: float, bull: bool) -> float:
+        """Palier de risque du jour : celui choisi par l'évolution encadrée,
+        ramené aussitôt au premier à la moindre alerte (arrêt d'urgence,
+        baisse de 10 % ou plus, marché baissier, reprise en douceur), sans
+        attendre la routine de la nuit."""
+        step = float(self.risk_step or 1.0)
+        dd = 1.0 - equity / peak if peak > 0 else 0.0
+        if (step <= 1.0 or self.state.get("halted") or dd >= evolution.RISK_DOWN_DD or not bull
+                or self._gentle(day) < 1.0):
+            return 1.0
+        return step
+
     def daily_decision(self, now: datetime, day: str) -> None:
         """Décision quotidienne sur la bougie close `day` : jours manqués
-        rattrapés, ventes sur stop, stops remontés, arrêt d'urgence si la
-        baisse dépasse la limite, puis achats du jour (cryptos sélectionnées,
-        sans veto), expliqués et résumés."""
+        rattrapés, ventes sur stop, stops remontés, reprise prudente ou
+        déclenchement de l'arrêt d'urgence, puis achats du jour (cryptos
+        sélectionnées, sans veto, au palier de risque du jour), expliqués et
+        résumés."""
         p = self.p
         close, feats, regime = self._load_market(now)
         self._last_close = close
@@ -569,21 +639,37 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         self.state["last_equity"] = equity
         self._log_equity(equity, cash)
         self.state["last_regime_bull"] = bull
+        if self._auto_resume(day, equity, bull):
+            peak = equity
         if not self.state.get("halted") and equity < peak * (1 - self.g.kill_drawdown):
             self.state["halted"] = True
+            self.state["halted_at"] = day
             self.state["halt_reason"] = (f"baisse de {fr((1 - equity / peak) * 100, '.1f')} % depuis "
                                          f"le plus haut (limite {fr(self.g.kill_drawdown * 100, '.0f')} %)")
             self.logger.critical(f"[KILL] arrêt d'urgence : {self.state['halt_reason']} → plus "
                                  "aucun achat")
+            later = (f" Reprise automatique au plus tôt dans {self.g.kill_resume_days} jours, si le "
+                     "marché est redevenu haussier ; sinon : commande resume."
+                     if self.g.kill_resume_days > 0 else " Pour le lever : commande resume.")
             self.notifier(f"🛑 TrendGuard, arrêt d'urgence : {self.state['halt_reason']}. Plus aucun "
-                          "achat ; les positions restent protégées par leurs stops.", critical=True)
+                          "achat ; les positions restent protégées par leurs stops." + later,
+                          critical=True)
+            self._auto_resume(day, equity, bull)      # raison de l'attente, pour le panneau
         entries: List[Dict[str, Any]] = []
         mult = ts.risk_multiplier(equity, peak, p)
-        self.state["risk_mult"] = mult
+        step, gentle = self._risk_step(day, equity, peak, bull), self._gentle(day)
+        self.state["risk_mult"] = mult * step * gentle
+        self.state["risk_step"] = step
         if mult < 1.0:
             self.logger.warning(
                 f"[PRUDENT] baisse de {fr((1 - equity / peak) * 100, '.1f')} % depuis le "
                 f"pic → risque par trade × {fr(mult, 'g')}")
+        if step > 1.0:
+            self.logger.info(f"[PALIER] risque par achat {fr(p.risk_pct * step * 100, 'g')} % "
+                             "(palier choisi par l'analyse du bot)")
+        if gentle < 1.0:
+            self.logger.info("[REPRISE] reprise en douceur après l'arrêt d'urgence : risque par "
+                             "achat × 0,5")
         if not self.state.get("halted"):
             eligible = {a: s for a, s in snap.items()
                         if self._can_enter(a) and a in allowed}
@@ -593,7 +679,7 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
                     self.logger.warning(f"[VEILLE] achat de {a.upper()} bloqué : {v['reason']}")
             cash_left = cash
             for plan in ts.plan_entries(holdings, eligible, bull, equity, cash,
-                                        p, mult):
+                                        p, mult * step * gentle):
                 done = self._execute_entry(plan, equity, now, cash_left)
                 if done is not None:
                     entries.append(done)
@@ -629,10 +715,24 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
                 notes[a] = ("unselected", "Non cochée dans la sélection manuelle : "
                                           "le bot ne l'achète pas")
         notes.update(self._entry_notes)
+        step, gentle = float(self.state.get("risk_step") or 1.0), self._gentle(day)
+        extra = []
+        if step > 1.0:
+            extra.append(f"Palier de risque : {fr(self.p.risk_pct * step * 100, 'g')} % par achat, "
+                         f"choisi par l'analyse du bot ; retour immédiat à "
+                         f"{fr(self.p.risk_pct * 100, 'g')} % à la première alerte.")
+        if gentle < 1.0:
+            until = (pd.Timestamp(self.state["auto_resumed_at"])
+                     + pd.Timedelta(days=self.GENTLE_DAYS)).date().isoformat()
+            extra.append(f"Reprise en douceur après l'arrêt d'urgence : risque par achat divisé "
+                         f"par deux jusqu'au {until}.")
+        if self.state.get("halted") and self.state.get("resume_note"):
+            extra.append(f"Arrêt d'urgence : {self.state['resume_note']}.")
         r = explain_decision(day, bull, self._btc_gap(close, day), snap, holdings, exits,
                              [e["asset"] for e in entries], notes,
                              bool(self.state.get("halted")), mult, self.p,
-                             float(self.state.get("last_equity") or 0.0) or None)
+                             float(self.state.get("last_equity") or 0.0) or None,
+                             boost=step * gentle, extra=extra)
         r["at"] = now.isoformat()
         self.state["reasoning"] = r
         hist = self.state.get("reasoning_log") or []

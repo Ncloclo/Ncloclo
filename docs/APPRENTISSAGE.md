@@ -35,9 +35,10 @@ aide vraiment.
 - **Avancer une décision** : les probabilités corrigées préparent la clôture,
   elles ne décident rien. C'est la clôture de 00:00 UTC qui décide, avec les
   règles.
-- **Changer une règle ou le risque** : cassure, stops et lecture du marché ne
-  changent que par l'évolution encadrée ; risque par trade, nombre de positions,
-  risque cumulé, arrêt d'urgence et passage en réel restent hors de portée.
+- **Changer une règle ou le risque** : cassure, stops, lecture du marché et
+  palier de risque (1 à 2 % par achat) ne changent que par l'évolution
+  encadrée ; nombre de positions, arrêt d'urgence et passage en réel restent
+  hors de portée.
 - **Bloquer le trading** : un relevé impossible (réseau, carnet illisible) est
   simplement sauté ; le relevé horaire des carnets dure au plus 20 secondes.
 

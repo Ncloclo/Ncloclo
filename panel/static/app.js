@@ -7,6 +7,8 @@ import { $, $$, api, CANDIDATE, countUp, cssVar, el, fage, fdate, fdur, fpct, fp
 import { addPositionLines, buyMarkersOn, candleData, chartOptions, charts, COLORS, dropChart, gridInterval, legend, makeChart, tradeMarkers, uniq } from "./js/charts.js";
 import { closeChat } from "./js/assistant.js";
 import { renderReport, renderSecurity } from "./js/rapport.js";
+// Pourcentages de risque : 1 → « 1 », 1,25 → « 1,25 ».
+const fmax2 = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 });
 
 onUnauthorized(() => showLogin());      // session expirée
 
@@ -150,7 +152,7 @@ async function renderDash() {
     dashChart.timeScale().fitContent();
   }
   countUp($("#d-pos"), S.positions, (v) => `${Math.round(v)} / ${S.max_positions}`);
-  $("#d-pos-sub").textContent = `${nf(1).format(S.risk_pct)} % du capital risqué par trade`;
+  $("#d-pos-sub").textContent = `${fmax2.format(S.risk_now_pct ?? S.risk_pct)} % du capital risqué par achat`;
   const reg = $("#d-regime");
   reg.textContent = S.regime_bull == null ? "—" : S.regime_bull ? "Haussier" : "Baissier";
   reg.className = S.regime_bull ? "up" : S.regime_bull === false ? "down" : "";
@@ -1032,6 +1034,14 @@ function evolutionText(ev) {
   const trial = ev.probation ? ` · en essai depuis le ${fdate(ev.probation.since)}` : "";
   return `niveau ${ev.level}/${ev.levels} · ${ev.name} · ${changes}${trial}`;
 }
+// Palier de risque : choisi par l'analyse du bot entre 1 et 2 fois le risque
+// par achat du .env ; le compte rendu de la dernière analyse est dans « Détails ».
+function riskStepText(S) {
+  const r = (S.evolution || {}).risk;
+  if (!r) return "désactivé : évolution encadrée arrêtée";
+  const trial = r.probation ? ` · en essai depuis le ${fdate(r.probation.since)}` : "";
+  return `${fmax2.format(r.pct)} % par achat · ${fmax2.format(r.max_pct)} % au plus, selon son analyse${trial}`;
+}
 // Lignes libellé / valeur : une valeur longue passe sous son libellé, sur
 // toute la largeur ; un complément se replie dans « Détails ».
 function dlRows(rows) {
@@ -1071,11 +1081,13 @@ async function renderSettings() {
   $("#s-auto").replaceChildren(...dlRows(autoRows));
   const dl = $("#s-bot");
   const rows = [["Mode", S.demo ? "Démonstration" : S.mode === "live" ? (S.testnet ? "Réel (testnet)" : "Réel") : "Paper (argent fictif)"],
-    ["Risque par trade", `${nf(1).format(S.risk_pct)} %`], ["Positions au plus", String(S.max_positions)],
+    ["Risque par achat", `${fmax2.format(S.risk_now_pct ?? S.risk_pct)} % à la dernière décision`], ["Positions au plus", String(S.max_positions)],
+    ["Palier de risque", riskStepText(S), ((S.evolution || {}).risk || {}).last_text || null],
     ["Risque cumulé au plus", `${nf(0).format(S.max_total_risk_pct)} %`],
     ["Profil prudent", S.dd_throttle.length ? S.dd_throttle.map(([t, m]) => `risque × ${nf(1).format(m)} au-delà de ${nf(0).format(t * 100)} % de baisse`).join(" ; ") : "désactivé"],
-    ["Arrêt d'urgence", `baisse de ${nf(0).format(S.kill_drawdown_pct)} %`], ["Cryptos suivies", String(S.universe.length)]];
-  dl.replaceChildren(...rows.flatMap(([k, v]) => [el("dt", "", k), el("dd", "", v)]));
+    ["Arrêt d'urgence", `baisse de ${nf(0).format(S.kill_drawdown_pct)} %` + (S.kill_resume_days > 0 ? ` · reprise automatique après ${S.kill_resume_days} jours si le marché redevient haussier` : " · levé par la commande resume")],
+    ["Cryptos suivies", String(S.universe.length)]];
+  dl.replaceChildren(...dlRows(rows));
   const list = $("#s-alerts");
   const chans = S.alerts.length ? S.alerts : [{ name: "demo", label: "Aucun canal (démonstration)", enabled: false }];
   list.replaceChildren(...chans.map((c) => {
