@@ -108,6 +108,26 @@ alertes, qui attend toujours le mot de passe d'application Gmail, ont été
 rouvertes ; la démonstration reste fermée. Le service « Temps Windows » est
 toujours arrêté après le redémarrage (F4) : il ne démarre pas seul sur ce PC.
 
+### Essai « 5 % par achat, 20 % cumulé, 20 positions » (votre question du 30/09)
+
+Simulé sur l'historique réel de Binance, sans rien changer au bot, puis
+confirmé par le vrai bot rejoué jour par jour depuis le 01/01/2023 (page locale
+http://127.0.0.1:8899, dossier `rapports/essai-5-20-20/`) :
+
+| Depuis le 01/01/2018, 10 000 USDT au départ | Gain par an | Pire baisse | Capital final |
+| --- | --- | --- | --- |
+| Réglages actuels (1 %, 6 %, 8 positions) | +29,8 % | −24,7 % | 97 686 USDT |
+| Réglages demandés, sur le papier | +55,3 % | −41,5 % | 467 797 USDT |
+| Réglages demandés, avec l'arrêt d'urgence du bot | +28,2 % | −40,7 % | 87 527 USDT |
+
+Avec ces réglages, l'arrêt d'urgence (−40 %) se déclenche : le 22/03/2023 en
+partant de 2018, le 25/10/2024 en partant de 2023 ; ensuite, plus aucun achat.
+Le bot ne tient jamais 20 positions (6 au plus : 20 % divisé par 5 %, et 25 % du
+capital par position), et son code refuse plus de 2 % par achat. Conclusion :
+même stratégie avec un levier plus fort, qui bute sur l'arrêt d'urgence ; les
+réglages actuels sont gardés. Au passage, la page du rejeu affiche maintenant
+la vraie taille des achats et l'arrêt d'urgence quand c'est lui qui bloque.
+
 ## Diagnostic approfondi du 30 septembre, 13 h
 
 **Verdict : la mise à jour des bibliothèques n'a rien cassé, et la stratégie
