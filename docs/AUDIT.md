@@ -77,7 +77,7 @@ code ; les autres logiciels gardent les leurs.
 | --- | --- | --- |
 | Bibliothèques du bot | celles du PC : ccxt 4.5.44, numpy 2.4.3, pandas 2.3.3 | les siennes, aux versions testées : ccxt 4.5.84, numpy 2.5.3, pandas 3.0.6 |
 | Failles connues dans ce que le bot utilise | 6 bibliothèques | aucune (70 bibliothèques contrôlées) |
-| Tests sur le PC avec ces bibliothèques | jamais lancés avec les versions testées | 493 réussis, aucun échec |
+| Tests sur le PC avec ces bibliothèques | jamais lancés avec les versions testées | 495 réussis, aucun échec |
 | Bibliothèques du PC (autres logiciels) | 15 sur 226 avec une faille connue | 1 sur 226 : 14 corrections compatibles installées ; les logiciels qui en dépendent se chargent comme avant (73 modules essayés avant et après) |
 | Rapport quotidien | ne contrôlait pas les bibliothèques du PC | deux contrôles : « Bibliothèques du bot » (versions testées) et « Failles connues des bibliothèques » |
 
@@ -90,6 +90,11 @@ Une bibliothèque du PC garde une faille connue, sans effet sur le bot :
 `curl-cffi`, retenue par yfinance, qui n'accepte pas la version corrigée. La
 liste des versions d'avant est gardée dans le dossier `sauvegardes/` : tout peut
 être remis comme avant.
+
+Le premier rapport généré ensuite a montré un défaut resté caché : lancé depuis
+un terminal PowerShell 7, le bot ne pouvait plus lire les droits du fichier des
+secrets (« vérification impossible »). Corrigé le jour même : ce contrôle
+fonctionne de nouveau, quelle que soit la façon dont le bot a été lancé.
 
 ### Stratégie (clôture du 29, données Binance) : tout est conforme
 

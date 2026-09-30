@@ -629,8 +629,12 @@ sert : `python -m v29 bot | backtest | walkforward | status | resume` (voir
 ## Tests
 
 ```bash
-python -m pytest tests -q      # 376 tests, simulateurs Binance Spot mono et multi-paires
+python -m pytest tests -q      # plus de 500 tests, simulateurs Binance Spot mono et multi-paires
 ```
+
+Sur un PC qui a le dossier `.venv`, lancez-les avec son Python
+(`.venv\Scripts\python -m pytest tests -q` sous Windows) : ils tournent alors
+avec les bibliothèques du bot.
 
 À chaque envoi sur GitHub, `.github/workflows/checks.yml` lance ces tests, puis
 vérifie la page d'animation et le panneau de contrôle dans Chromium : ESLint sur
