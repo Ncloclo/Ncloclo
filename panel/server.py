@@ -410,7 +410,14 @@ class PanelApp:
             detail += (f" ; dernier arrêt : {uptime.fdur(e['end'] - e['start'])} le "
                        f"{self._when(e['start'])}, {e['text']}")
         if pct < uptime.GOOD_PCT:
-            detail += " ; PC branché et mise en veille sur « Jamais » quand il est branché"
+            # Veille déjà corrigée par le bot (rapport de la nuit) : le conseil
+            # devient une bonne nouvelle, la mesure sur 7 jours remonte.
+            fixed = any(c.get("label") == "Veille du PC (sur secteur)" and c.get("ok") is True
+                        for s in (report.load_latest(self.g) or {}).get("sections") or []
+                        for c in s.get("checks") or [])
+            detail += (" ; veille du PC désormais réglée sur « Jamais » quand il est branché : "
+                       "la mesure remonte jour après jour" if fixed else
+                       " ; PC branché et mise en veille sur « Jamais » quand il est branché")
         return self._check("Disponibilité du bot (7 j)", pct >= uptime.GOOD_PCT, detail)
 
     def report_view(self) -> Dict[str, Any]:

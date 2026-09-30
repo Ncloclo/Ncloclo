@@ -79,12 +79,18 @@ class EmailChannel:
     def secrets(self) -> List[str]:
         return [self.password]
 
-    def send(self, subject: str, text: str) -> None:
+    supports_html = True
+
+    def send(self, subject: str, text: str, html: Optional[str] = None) -> None:
+        """Texte brut, et page mise en forme en plus si `html` est donné (la
+        messagerie affiche la page, ou le texte si elle ne lit pas le HTML)."""
         msg = EmailMessage()
         msg["Subject"] = subject
         msg["From"] = self.user or self.to
         msg["To"] = self.to
         msg.set_content(text)
+        if html:
+            msg.add_alternative(html, subtype="html")
         context = ssl.create_default_context()
         if self.smtp_factory is not None:
             smtp = self.smtp_factory(self.host, self.port)
@@ -256,17 +262,23 @@ class AlertHub:
             self._note(ch.name, results[ch.name])
         return results
 
-    def send_report(self, subject: str, full: str, short: str) -> Dict[str, Optional[str]]:
+    def send_report(self, subject: str, full: str, short: str,
+                    html: Optional[str] = None) -> Dict[str, Optional[str]]:
         """Rapport quotidien, quel que soit le niveau d'alerte : complet par
-        e-mail, résumé par WhatsApp et Telegram. Résultat par canal (None =
-        envoyé)."""
+        e-mail (mis en forme si `html`), résumé par WhatsApp et Telegram.
+        Résultat par canal (None = envoyé)."""
         results: Dict[str, Optional[str]] = {}
         if getattr(self.telegram, "enabled", False):
             ok = bool(self.telegram(f"{subject}\n{short}", dedup_key=f"rapport-{subject}", sync=True))
             results["telegram"] = None if ok else "envoi Telegram refusé"
         for ch in self.channels:
             try:
-                ch.send(subject, full if ch.name == "email" else short)
+                if ch.name != "email":
+                    ch.send(subject, short)
+                elif html and getattr(ch, "supports_html", False):
+                    ch.send(subject, full, html=html)
+                else:
+                    ch.send(subject, full)
                 results[ch.name] = None
             except Exception as e:
                 results[ch.name] = v29.scrub_secrets(explain_send_error(e, getattr(ch, "host", "")),

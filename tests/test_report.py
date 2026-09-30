@@ -274,6 +274,50 @@ def test_generate_saves_sends_and_refuses_a_second_run(root):
         rp.generate(g, {}, deps=_deps(root), hub=hub)
 
 
+def test_html_email_is_escaped_and_keeps_a_text_fallback(root):
+    r = rp.build(tg.GuardConfig(db_file=":memory:", log_file=os.devnull, lock_file=str(root / "tg.lock")),
+                 {}, _deps(root, binance=lambda env, t: rp.chk("Clé API Binance", False, "<script>x</script>",
+                                                               "Vérifiez l'IP.")), backups=False)
+    page = rp.render_html(r)
+    assert "<script>" not in page and "&lt;script&gt;x&lt;/script&gt;" in page
+    assert "À faire, par ordre d'importance" in page and "Vérifiez l&#x27;IP." in page
+    sent = {}
+
+    class Smtp:
+        def __init__(self, host, port):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def starttls(self, context=None):
+            pass
+
+        def login(self, user, password):
+            pass
+
+        def send_message(self, msg):
+            sent["html"] = msg.get_body(preferencelist=("html",)).get_content()
+            sent["text"] = msg.get_body(preferencelist=("plain",)).get_content()
+
+    email = alerts.EmailChannel("smtp.example.com", 587, "moi@example.com", "mdp", "moi@example.com",
+                                smtp_factory=Smtp)
+    hub = alerts.AlertHub(FakeTelegram(enabled=False), [email], async_mode=False)
+    assert hub.send_report("Sujet", r["text"], r["short"], page) == {"email": None}
+    assert sent["html"].startswith("<div") and "CE QUE LE BOT A FAIT SEUL" in sent["text"]
+
+
+def test_score_history_gives_the_trend(root):
+    g = tg.GuardConfig(db_file=":memory:", log_file=os.devnull, lock_file=str(root / "tg.lock"))
+    for day, ok in (("2026-09-29", 26), ("2026-09-30", 27), ("2026-09-30", 28)):
+        rp.save(g, {"day": day, "score": {"ok": ok, "warn": 3, "info": 5, "total": 36}, "text": "x"})
+    hist = rp.load_latest(g)["history"]
+    assert [(h["day"], h["ok"]) for h in hist] == [("2026-09-29", 26), ("2026-09-30", 28)]
+
+
 def test_bot_launches_the_report_once_after_0030(tmp_path, monkeypatch):
     lg = logging.getLogger("test.report")
     g = tg.GuardConfig(universe=("BTC",), db_file=":memory:", log_file=os.devnull,
@@ -305,3 +349,10 @@ def test_panel_shows_the_report_and_its_delivery(tmp_path):
     rp._save_json(rp.paths(live.g)["json"], {"ready": True, "delivery": {
         "email": {"at": 1e12, "ok": False, "error": "mot de passe refusé"}}})
     assert live._alerts_check({})["ok"] is False                    # échec d'envoi du rapport vu
+    t = datetime.now(timezone.utc).timestamp()
+    st = {"last_cycle_ts": t, "uptime": {"since": t - 60 * 3600, "events": [
+        {"start": t - 30 * 3600, "end": t - 5 * 3600, "cause": "off"}]}}
+    assert "Jamais » quand il est branché" in live._uptime_check(st)["detail"]
+    rp._save_json(rp.paths(live.g)["json"], {"ready": True, "sections": [{"title": "Sécurité", "checks": [
+        rp.chk("Veille du PC (sur secteur)", True, "mise en veille : jamais")]}]})
+    assert "la mesure remonte jour après jour" in live._uptime_check(st)["detail"]

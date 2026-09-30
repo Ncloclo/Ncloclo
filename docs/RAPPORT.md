@@ -12,11 +12,17 @@ pour l'arrêter.
 
 ## Où le lire
 
-- **Panneau ▸ Réglages ▸ Rapport quotidien** : score, points à corriger, bouton
-  « Rapport complet », et « Générer maintenant ». Le centre de sécurité affiche
-  aussi la date et le verdict du dernier rapport.
-- **E-mail** : le rapport complet. **WhatsApp** (et Telegram) : un résumé, avec
-  les trois premières choses à faire.
+- **Panneau ▸ Réglages**, en tête de page : le **Rapport quotidien** montre le
+  verdict, le score, l'envoi par canal (e-mail, WhatsApp : reçu, refusé ou non
+  configuré, avec la marche à suivre si le rapport ne vous parvient pas), les
+  trois premières choses à faire, la tendance des derniers jours et les
+  améliorations du code qui attendent votre validation ; boutons « Rapport
+  complet » et « Générer maintenant ». Le centre de sécurité, juste à côté,
+  affiche aussi la date et le verdict du dernier rapport.
+- **E-mail** : le rapport complet, mis en page (couleurs, sections, lisible sur
+  téléphone), avec une version texte pour les messageries qui n'affichent pas
+  les pages. **WhatsApp** (et Telegram) : un résumé, avec les trois premières
+  choses à faire.
 - `python trendguard_bot.py rapport` : le dernier rapport ; `python
   trendguard_bot.py rapport maintenant` : une analyse tout de suite.
 - Archives : dossier `rapports/` (30 jours) ; aucun secret n'y figure, seulement

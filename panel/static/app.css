@@ -343,6 +343,14 @@ tbody tr.click:hover { background: var(--surface-2); }
 .dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin: 0; font-size: 14px; }
 .dl dt { color: var(--muted); }
 .dl dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+/* Valeur longue : sous son libellé, sur toute la largeur, alignée à gauche */
+.dl .wide { grid-column: 1 / -1; }
+.dl dd.wide { text-align: left; margin-top: -4px; color: var(--ink-2); font-size: 13.5px; }
+.dl details { margin-top: 4px; }
+.dl details summary, .channel-list details summary { cursor: pointer; color: var(--accent-2); font-size: 12.5px; }
+.dl details p, .channel-list details p { margin: 4px 0 0; color: var(--muted); font-size: 12.5px; }
+/* Réglages : chaque carte garde sa hauteur, sans grands vides */
+#page-settings .grid-2 { align-items: start; }
 .channel-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; }
 .channel-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; background: var(--surface-2); }
 .links { padding-left: 18px; margin: 14px 0; display: grid; gap: 6px; font-size: 14px; }
@@ -367,6 +375,19 @@ dialog[open] { animation: pop .35s var(--ease); }
 
 /* Rapport quotidien (Réglages) */
 .rep-actions { margin-top: 12px; flex-wrap: wrap; }
+.rep-verdict { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); font-weight: 600; font-size: 15px; }
+.rep-verdict.good { color: var(--up); }
+.rep-verdict.bad { color: var(--down); }
+.rep-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+.chip { font-size: 12px; padding: 3px 10px; border-radius: 999px; background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--border); }
+.chip.ok { color: var(--up); }
+.chip.bad { color: var(--down); }
+.rep-help { margin: 10px 0 0; padding: 9px 12px; border-left: 3px solid var(--down); border-radius: 8px; background: color-mix(in srgb, var(--down) 9%, transparent); font-size: 13px; color: var(--ink); }
+.rep-help code { font-size: 12px; }
+.rep-todo { margin: 12px 0 0; padding-left: 22px; display: grid; gap: 6px; font-size: 13.5px; }
+.rep-todo:empty { display: none; }
+.rep-trend { margin: 10px 0 0; font-size: 12.5px; color: var(--muted); }
+.rep-trend a { color: var(--accent-2); }
 #report { width: min(860px, calc(100vw - 32px)); max-height: calc(100vh - 32px); }
 .report-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 18px 20px 12px; border-bottom: 1px solid var(--border); }
 .report-head h2 { margin: 0; }
@@ -466,6 +487,11 @@ dialog[open] { animation: pop .35s var(--ease); }
   .toasts { bottom: 84px; }
   .ticker { grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 8px 12px; }
   .anticip-cols { grid-template-columns: minmax(0, 1fr); }
+  /* Téléphone : chaque libellé au-dessus de sa valeur (plus de colonne étroite) */
+  .dl { grid-template-columns: minmax(0, 1fr); gap: 2px 0; }
+  .dl dt { font-size: 12.5px; margin-top: 8px; }
+  .dl dt:first-child { margin-top: 0; }
+  .dl dd, .dl dd.wide { text-align: left; margin-top: 0; }
   .a-row { grid-template-columns: 52px minmax(0, 1fr) 42px; }
   .a-bar { display: none; }
   .loader:not(.in-dialog) { left: 0; }

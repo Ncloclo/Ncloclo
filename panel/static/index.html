@@ -250,6 +250,23 @@
       <!-- Réglages -->
       <section class="page" id="page-settings" data-title="Réglages">
         <div class="grid-2">
+          <div class="card" id="s-report">
+            <div class="card-head"><h2>Rapport quotidien</h2><strong class="sel-count" id="s-rep-score">—</strong></div>
+            <div class="rep-verdict" id="s-rep-verdict" role="status">Sécurité et diagnostic expert, chaque jour à 00:30 UTC.</div>
+            <p class="sub" id="s-rep-when">Envoyé par e-mail (complet) et WhatsApp (résumé).</p>
+            <ul class="rep-chips" id="s-rep-chips" aria-label="Envoi du rapport"></ul>
+            <p class="rep-help" id="s-rep-help" hidden></p>
+            <ol class="rep-todo" id="s-rep-todo" aria-label="À faire"></ol>
+            <p class="rep-trend" id="s-rep-trend"></p>
+            <div class="row-end rep-actions">
+              <button class="btn small ghost" type="button" id="s-rep-run">Générer maintenant</button>
+              <button class="btn small" type="button" id="s-rep-open" disabled>Rapport complet</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h2>Sécurité</h2><strong class="sel-count" id="s-sec-score">—</strong></div>
+            <ul class="sec-list" id="s-sec"></ul>
+          </div>
           <div class="card">
             <div class="card-head"><h2>Autonomie</h2><span class="sub" id="s-auto-os"></span></div>
             <label class="switch">
@@ -260,19 +277,6 @@
             <dl id="s-auto" class="dl"></dl>
           </div>
           <div class="card"><div class="card-head"><h2>Bot</h2></div><dl id="s-bot" class="dl"></dl></div>
-          <div class="card">
-            <div class="card-head"><h2>Sécurité</h2><strong class="sel-count" id="s-sec-score">—</strong></div>
-            <ul class="sec-list" id="s-sec"></ul>
-          </div>
-          <div class="card" id="s-report">
-            <div class="card-head"><h2>Rapport quotidien</h2><strong class="sel-count" id="s-rep-score">—</strong></div>
-            <p class="sub" id="s-rep-when">Sécurité et diagnostic expert, chaque jour à 00:30 UTC, envoyés par e-mail et WhatsApp.</p>
-            <ul class="sec-list" id="s-rep-top"></ul>
-            <div class="row-end rep-actions">
-              <button class="btn small ghost" type="button" id="s-rep-run">Générer maintenant</button>
-              <button class="btn small" type="button" id="s-rep-open" disabled>Rapport complet</button>
-            </div>
-          </div>
           <div class="card">
             <div class="card-head"><h2>Alertes</h2></div>
             <ul id="s-alerts" class="channel-list"></ul>

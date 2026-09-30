@@ -1006,21 +1006,69 @@ function deliveryText(r) {
   if (!d.length) return "pas encore envoyé";
   return d.map(([k, v]) => `${names[k] || k} ${v.ok ? "✓" : "✗"}`).join(" · ");
 }
+// Envoi du rapport, canal par canal : ✓ reçu, ✗ refusé, ou pas encore configuré.
+function deliveryChips(r) {
+  const configured = new Set((S && S.alerts ? S.alerts : []).filter((c) => c.enabled).map((c) => c.name));
+  const d = r.delivery || {};
+  return [["email", "E-mail"], ["whatsapp", "WhatsApp"], ["telegram", "Telegram"]]
+    .filter(([k]) => k !== "telegram" || configured.has(k) || d[k])
+    .map(([k, label]) => {
+      if (d[k]) return { k, label, ok: d[k].ok, text: `${label} ${d[k].ok ? "✓ reçu" : "✗ refusé"}` };
+      if (configured.has(k)) return { k, label, ok: null, text: `${label} : au prochain rapport` };
+      return { k, label, ok: false, text: `${label} : non configuré` };
+    });
+}
 async function renderReport() {
   const r = await api("/api/report");
   REPORT = r.ready ? r : null;
   $("#s-rep-open").disabled = !REPORT;
   $("#s-rep-run").disabled = !!r.running;
+  const verdict = $("#s-rep-verdict");
   if (!r.ready) {
     $("#s-rep-score").textContent = "—";
-    $("#s-rep-when").textContent = r.running ? "Analyse en cours : le rapport arrive dans quelques minutes." : "Sécurité et diagnostic expert, chaque jour à 00:30 UTC, envoyés par e-mail et WhatsApp. Le premier arrive cette nuit, ou tout de suite avec « Générer maintenant ».";
-    $("#s-rep-top").replaceChildren();
+    verdict.className = "rep-verdict";
+    verdict.textContent = r.running ? "Analyse en cours…" : "Premier rapport cette nuit à 00:30 UTC";
+    $("#s-rep-when").textContent = "Ou tout de suite avec « Générer maintenant ». Envoyé par e-mail (complet) et WhatsApp (résumé).";
+    [$("#s-rep-chips"), $("#s-rep-todo")].forEach((n) => n.replaceChildren());
+    $("#s-rep-help").hidden = true;
+    $("#s-rep-trend").textContent = "";
     return;
   }
   $("#s-rep-score").textContent = `${r.score.ok} / ${r.score.total}`;
-  $("#s-rep-when").textContent = `${repWhen(r)} · ${r.verdict} · envoi : ${deliveryText(r)}${r.running ? " · nouvelle analyse en cours" : ""}`;
-  const worst = r.sections.flatMap((s) => s.checks).filter((c) => c.ok === false).slice(0, 4);
-  $("#s-rep-top").replaceChildren(...(worst.length ? worst.map(checkRow) : [checkRow({ ok: true, label: "Tout est en ordre", detail: "aucun point à corriger" })]));
+  verdict.className = "rep-verdict " + (r.score.warn ? "bad" : "good");
+  verdict.textContent = r.score.warn ? `${r.score.warn} point(s) à corriger` : "✓ Tout est en ordre";
+  $("#s-rep-when").textContent = `${repWhen(r)} UTC · ${r.score.ok} contrôles conformes sur ${r.score.total}${r.running ? " · nouvelle analyse en cours" : ""}`;
+  const chips = deliveryChips(r);
+  $("#s-rep-chips").replaceChildren(...chips.map((c) => el("li", "chip " + (c.ok === true ? "ok" : c.ok === false ? "bad" : ""), c.text)));
+  // Le rapport ne vous parvient pas : on le dit, et on dit comment y remédier.
+  const missing = chips.filter((c) => c.ok === false && c.k !== "telegram");
+  const help = $("#s-rep-help");
+  help.hidden = !missing.length;
+  if (missing.length) {
+    const how = { email: "mot de passe d'application Gmail (myaccount.google.com/apppasswords)", whatsapp: "WhatsApp gratuit avec CallMeBot (callmebot.com)" };
+    help.replaceChildren(`Le rapport ne vous parvient pas encore par ${missing.map((c) => c.label).join(" ni par ")}. Pour le recevoir : lancez la tâche « Alertes — configurer » (ou `,
+      el("code", "", "python trendguard_bot.py alerts configurer"),
+      ") : " + missing.map((c) => how[c.k]).join(", puis ") + ".");
+  }
+  $("#s-rep-todo").replaceChildren(...r.recommendations.slice(0, 3).map((t) => el("li", "", t)));
+  const trend = $("#s-rep-trend");
+  const parts = [];
+  const hist = (r.history || []).slice(-5);
+  if (hist.length > 1) parts.push("Tendance : " + hist.map((h) => `${h.ok}/${h.total}`).join(" → "));
+  const pending = r.proposals || [];
+  trend.replaceChildren(parts.join(""));
+  if (pending.length) {
+    const url = (pending[0].split(" — ")[1] || "").trim();
+    trend.append(parts.length ? " · " : "", `${pending.length} amélioration(s) du code attend(ent) votre validation `);
+    if (/^https:\/\/github\.com\//.test(url)) {
+      const a = el("a", "", "sur GitHub");
+      a.href = url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      trend.append(a);
+    } else trend.append("sur GitHub");
+    trend.append(" (installée seule la nuit suivante).");
+  }
 }
 function openReport() {
   const r = REPORT;
@@ -1052,12 +1100,27 @@ $("#s-rep-run").addEventListener("click", async (ev) => {
   }
   renderReport().catch(() => { b.disabled = false; });
 });
-// Évolution encadrée : niveau, réglages changés par le bot, essai en cours.
+// Évolution encadrée : niveau, réglages changés par le bot, essai en cours ;
+// le compte rendu du dernier examen est replié dans « Détails ».
 function evolutionText(ev) {
   if (!ev.enabled) return "désactivée : réglages fixes";
   const changes = ev.changes.length ? ev.changes.map((c) => `${c.param} ${c.from} → ${c.to}`).join(", ") : "réglages d'origine";
   const trial = ev.probation ? ` · en essai depuis le ${fdate(ev.probation.since)}` : "";
-  return `niveau ${ev.level}/${ev.levels} · ${ev.name} · ${changes}${trial}${ev.last_text ? " — " + ev.last_text : ""}`;
+  return `niveau ${ev.level}/${ev.levels} · ${ev.name} · ${changes}${trial}`;
+}
+// Lignes libellé / valeur : une valeur longue passe sous son libellé, sur
+// toute la largeur ; un complément se replie dans « Détails ».
+function dlRows(rows) {
+  return rows.flatMap(([k, v, more]) => {
+    const wide = more != null || String(v).length > 48;
+    const dd = el("dd", wide ? "wide" : "", v);
+    if (more) {
+      const d = el("details");
+      d.append(el("summary", "", "Détails"), el("p", "", more));
+      dd.append(d);
+    }
+    return [el("dt", wide ? "wide" : "", k), dd];
+  });
 }
 async function renderSettings() {
   if (!S) await refreshStatus();
@@ -1077,11 +1140,11 @@ async function renderSettings() {
     ["Temps de marche (24 h · 7 j)", ut.tracked ? `${pct(ut.day_pct)} · ${pct(ut.week_pct)} (hors arrêts demandés)` : "mesuré dès le prochain cycle du bot"],
     ["Dernier arrêt non demandé (> 1 h)", gap ? `${ftime(gap.start)} → ${gap.ongoing ? "en cours" : ftime(gap.end)} (${fdur(gap.end - gap.start)}) · ${gap.text}` : "aucun"],
     ["Apprentissage libre", (S.learning && S.learning.text) || "premiers relevés dans l'heure"],
-    ["Évolution encadrée", evolutionText(S.evolution || {})],
+    ["Évolution encadrée", evolutionText(S.evolution || {}), (S.evolution || {}).last_text || null],
     ["Mise en veille du PC", au.keep_awake ? "bloquée tant que le bot tourne" : "autorisée"],
     ["Bouton ARRÊTER", "aucune relance, même au démarrage du PC"],
   ];
-  $("#s-auto").replaceChildren(...autoRows.flatMap(([k, v]) => [el("dt", "", k), el("dd", "", v)]));
+  $("#s-auto").replaceChildren(...dlRows(autoRows));
   const dl = $("#s-bot");
   const rows = [["Mode", S.demo ? "Démonstration" : S.mode === "live" ? (S.testnet ? "Réel (testnet)" : "Réel") : "Paper (argent fictif)"],
     ["Risque par trade", `${nf(1).format(S.risk_pct)} %`], ["Positions au plus", String(S.max_positions)],
@@ -1107,8 +1170,13 @@ async function renderSettings() {
       b.disabled = false;
     });
     const t = el("span"), r = c.last;
-    const state = !c.enabled ? "non configuré" : !r ? "configuré" : r.ok ? `dernier envoi réussi le ${ftime(r.at)}` : `dernier envoi RATÉ le ${ftime(r.at)} : ${r.error || "cause inconnue"}`;
+    const state = !c.enabled ? "non configuré" : !r ? "configuré" : r.ok ? `dernier envoi réussi le ${ftime(r.at)}` : `dernier envoi RATÉ le ${ftime(r.at)}`;
     t.append(el("strong", "", c.label), el("span", "sub" + (r && !r.ok ? " down" : ""), " · " + state));
+    if (r && !r.ok) {                  // la cause, repliée : la liste reste lisible
+      const d = el("details");
+      d.append(el("summary", "", "Pourquoi et comment corriger"), el("p", "", r.error || "cause inconnue"));
+      t.append(d);
+    }
     li.append(t, b);
     return li;
   }));

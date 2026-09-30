@@ -379,6 +379,8 @@ def demo_report() -> Dict[str, Any]:
          "actions": [c["action"] for c in allc if c.get("action")],
          "recommendations": [c["reco"] for c in allc if c.get("reco")],
          "proposals": ["Amélioration quotidienne (exemple) — https://github.com/"],
+         "history": [{"day": f"2026-09-{d:02d}", "ok": ok_, "warn": 1, "total": 12}
+                     for d, ok_ in ((26, 8), (27, 9), (28, 9), (29, 10))],
          "sections": sections,
          "delivery": {"email": {"at": now.timestamp(), "ok": True, "error": None}}}
     r["text"] = report.render_text(r)

@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import glob
+import html
 import json
 import os
 import pathlib
@@ -719,8 +720,71 @@ def render_short(r: Dict[str, Any]) -> str:
     return text if len(text) <= SHORT_MAX else text[:SHORT_MAX - 1] + "…"
 
 
+_COLORS = {True: ("#15803d", "#dcfce7", "✓"), False: ("#b91c1c", "#fee2e2", "!"),
+           None: ("#1d4ed8", "#dbeafe", "i")}
+
+
+def render_html(r: Dict[str, Any]) -> str:
+    """Le rapport complet en page e-mail : styles en ligne (seuls lus par les
+    messageries), une colonne lisible sur téléphone, tout texte échappé."""
+    esc = html.escape
+    s = r["score"]
+    bad = s["warn"] > 0
+    when = r["generated_at"][:16].replace("T", " à ")
+    head_color = "#b91c1c" if bad else "#15803d"
+
+    def items(values: List[str], ordered: bool) -> str:
+        tag = "ol" if ordered else "ul"
+        return (f"<{tag} style='margin:6px 0 0;padding-left:22px'>"
+                + "".join(f"<li style='margin:4px 0'>{esc(v)}</li>" for v in values) + f"</{tag}>")
+
+    def row(c: Check) -> str:
+        fg, bg, icon = _COLORS[c["ok"]]
+        return ("<tr><td style='width:26px;vertical-align:top;padding:6px 0'>"
+                f"<span style='display:inline-block;width:20px;height:20px;border-radius:10px;"
+                f"background:{bg};color:{fg};font-weight:700;text-align:center;line-height:20px;"
+                f"font-size:12px'>{icon}</span></td><td style='padding:6px 0;font-size:14px'>"
+                f"<b>{esc(c['label'])}</b> <span style='color:#475569'>· {esc(c['detail'])}</span>"
+                "</td></tr>")
+
+    parts = [
+        "<div style='font-family:Segoe UI,Arial,sans-serif;background:#f1f5f9;padding:16px'>",
+        "<div style='max-width:680px;margin:0 auto;background:#ffffff;border-radius:14px;"
+        "overflow:hidden;border:1px solid #e2e8f0'>",
+        f"<div style='background:{head_color};color:#ffffff;padding:18px 22px'>"
+        f"<div style='font-size:13px;opacity:.9'>TrendGuard · rapport quotidien du {esc(r['day'])}</div>"
+        f"<div style='font-size:22px;font-weight:700;margin-top:4px'>{esc(r['verdict'])}</div>"
+        f"<div style='font-size:13px;margin-top:4px'>{s['ok']} contrôles conformes sur {s['total']} · "
+        f"{esc(when)} UTC · mode {esc(r['mode'])}</div></div>",
+        "<div style='padding:6px 22px 20px;color:#0f172a'>",
+        "<h3 style='margin:18px 0 0;font-size:15px'>À faire, par ordre d'importance</h3>",
+        items(r["recommendations"] or ["Rien : tout est en ordre."], True),
+        "<h3 style='margin:18px 0 0;font-size:15px'>Ce que le bot a fait seul</h3>",
+        items(r["actions"] or ["Rien à corriger automatiquement."], False),
+    ]
+    for sec in r["sections"]:
+        parts.append(f"<h3 style='margin:20px 0 4px;font-size:15px;border-top:1px solid #e2e8f0;"
+                     f"padding-top:14px'>{esc(sec['title'])}</h3><table style='width:100%;"
+                     "border-collapse:collapse'>" + "".join(row(c) for c in sec["checks"]) + "</table>")
+    if r["proposals"]:
+        parts.append("<h3 style='margin:20px 0 0;font-size:15px'>Améliorations à valider sur GitHub</h3>"
+                     + items(r["proposals"], False))
+    parts += ["<p style='margin:20px 0 0;font-size:12px;color:#64748b'>Le bot applique seul les "
+              "protections sûres et réversibles, et installe seul les améliorations que vous avez "
+              "validées. Il ne touche jamais aux règles, au risque, aux clés ni au mode réel. Aucun "
+              "secret ne figure dans ce rapport. Rapport complet : panneau ▸ Réglages ▸ Rapport "
+              "quotidien.</p>", "</div></div></div>"]
+    return "".join(parts)
+
+
 def save(gcfg: Any, report: Dict[str, Any], keep: int = KEEP_REPORTS) -> None:
+    """Rapport gardé (panneau), historique des scores (tendance) et archive."""
     p = paths(gcfg)
+    prev = load_latest(gcfg) or {}
+    hist = [h for h in prev.get("history") or [] if isinstance(h, dict) and h.get("day") != report["day"]]
+    s = report["score"]
+    report["history"] = hist[-(KEEP_REPORTS - 1):] + [
+        {"day": report["day"], "ok": s["ok"], "warn": s["warn"], "total": s["total"]}]
     if p["json"]:
         _save_json(p["json"], report)
     os.makedirs(p["archive"], exist_ok=True)
@@ -735,9 +799,10 @@ def save(gcfg: Any, report: Dict[str, Any], keep: int = KEEP_REPORTS) -> None:
 
 
 def deliver(report: Dict[str, Any], hub: Any) -> Dict[str, Dict[str, Any]]:
-    """E-mail : rapport complet ; WhatsApp et Telegram : résumé."""
+    """E-mail : rapport complet (page mise en forme, texte en secours) ;
+    WhatsApp et Telegram : résumé."""
     subject = f"TrendGuard — rapport du {report['day']} : {report['verdict']}"
-    res = hub.send_report(subject, report["text"], report["short"])
+    res = hub.send_report(subject, report["text"], report["short"], render_html(report))
     at = time.time()
     return {name: {"at": at, "ok": err is None, "error": err} for name, err in res.items()}
 
