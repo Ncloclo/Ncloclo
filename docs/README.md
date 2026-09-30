@@ -33,6 +33,6 @@ diagnostics : aucune étude ne change une règle du bot.
 
 | Document | Ce qu'on y trouve |
 | --- | --- |
-| [`AUDIT.md`](AUDIT.md) | audit et diagnostic expert des 28 et 29 septembre 2026 |
+| [`AUDIT.md`](AUDIT.md) | audit et diagnostic expert du 28 au 30 septembre 2026 : état, constats, plan d'action |
 | [`DIAGNOSTIC_CODE.md`](DIAGNOSTIC_CODE.md) | analyse du code du 30 septembre 2026 : mesures, harmonisation, structure |
 | [`revues/`](revues/) | revues hebdomadaires écrites par la routine du lundi |

@@ -1,25 +1,99 @@
-# Audit et diagnostic expert de TrendGuard — 28 et 29 septembre 2026
+# Audit et diagnostic expert de TrendGuard — 28 au 30 septembre 2026
 
-Mise à jour de l'audit du matin, après les changements de la journée :
-anticipation, centre de sécurité, code rangé par rôle, ancien bot V29 mis à
-part, boucle de backtest unique, sélection des cryptos, clé Binance. Méthode :
-diagnostic de la stratégie sur les données publiques de Binance (`python
-trendguard_bot.py diagnose`), état du bot dans le panneau, journal des deux
-premiers jours, vérification Binance avec la clé (`verify`, aucun ordre),
-tests avec mesure de couverture, analyse statique (ruff, radon, bandit),
-failles connues des dépendances (pip-audit), recherche de secrets dans git.
+Trois diagnostics successifs : l'audit du 28, le diagnostic approfondi du 29
+(disponibilité, robustesse, alertes) et celui du 30 (alimentation, bibliothèques
+du PC, état en direct). Méthode : diagnostic de la stratégie sur les données
+publiques de Binance (`python trendguard_bot.py diagnose`), état du bot dans le
+panneau, journal du bot, du superviseur et de Windows, vérification Binance
+(`verify`, aucun ordre), tests, analyse statique, failles connues des
+dépendances (pip-audit), recherche de secrets dans git.
 
 ## Verdict
 
-**Le bot est sain, prudent et conforme, mais pas encore prêt pour de l'argent
-réel.** La stratégie est en bonne santé (diagnostic « tout est conforme ») et
-le journal ne contient aucune erreur. Les 411 tests et les contrôles de GitHub
-sont au vert, et les dépendances n'ont aucune faille connue. Avant le réel, il
-manque trois choses qui dépendent de vous : les alertes (aucune n'est
-configurée), une clé Binance neuve avec le droit de trading, et quelques
-semaines de paper puis de testnet. Un risque de démarrage trouvé pendant ce
-diagnostic est déjà corrigé : en paper, le bot ne transmet plus les clés à
-Binance.
+**Le bot, sa stratégie et son code sont sains ; ce qui l'entoure ne l'est pas
+encore.** Au 30 septembre, la stratégie est conforme (27 contrôles sur 27), le
+journal ne contient aucune erreur du bot, les 491 tests et les contrôles de
+GitHub sont au vert. Les quatre faiblesses sont autour du bot : le PC portable
+(batterie, veille, arrêts : 65 % de disponibilité), les alertes qui n'arrivent
+pas, la clé Binance refusée, et des bibliothèques Python en retard sur le PC.
+Le bot n'est pas prêt pour de l'argent réel : il lui faut des alertes qui
+arrivent, une machine allumée en permanence avec une adresse fixe, et plusieurs
+semaines de paper avec des trades vendus.
+
+## Diagnostic approfondi du 30 septembre
+
+**Verdict du jour : rien à corriger dans la stratégie ni dans le code ; deux
+faiblesses matérielles (alimentation, veille) et un angle mort.** Méthode : les
+649 lignes du journal du bot et les 116 du superviseur relues une à une, journal
+de Windows (veilles, réveils, démarrages), processus, ports et mémoire en
+direct, diagnostic complet de la stratégie, rapport quotidien (38 contrôles),
+mesures du code (`python -m research.diagnostic_code`), contrôles GitHub, audit
+des bibliothèques installées sur le PC, comparaison au marché. Heures en UTC.
+
+### État du bot (30/09, 10 h)
+
+| Mesure | Valeur |
+| --- | --- |
+| Mode | paper, depuis le 26 septembre à 22 h 53 (3,5 jours) |
+| Capital | 10 076,50 USDT (+0,77 %) ; pire baisse relevée −3,1 % (plus bas 9 692, plus haut 10 292) |
+| Marché sur la même période | BTC −0,6 % ; moyenne des 21 cryptos −2,0 % ; moyenne des 6 détenues +2,0 % |
+| Positions | 6 sur 8 : ICP +7,7 %, XLM +5,4 %, AAVE +4,4 %, LINK +2,0 %, ADA −1,7 %, LTC −7,0 % |
+| Prochaine clôture | LTC à 0,9 % de son stop : vente possible ce soir (36 %), ce serait le premier trade clos, environ −1 R |
+| Risque engagé | 6 % sur 6 % permis : aucun achat possible (DOT signalé, bloqué) |
+| Décisions de clôture | 3 sur 4 à l'heure (entre 00 h 02 et 00 h 04) ; celle du 27 avec 16 h de retard (PC éteint) |
+| Journal | 0 erreur du bot ; coupures de réseau par salves, toutes rattrapées (29/09 : 12 h 29 à 12 h 41, 15 h 04 à 16 h, 23 h 15) |
+| Réseau et horloge | latence vers Binance 410 ms ; horloge du PC en retard de 1,0 s, compensée |
+| Processus | bot 0,1 % d'un cœur et 89 Mo ; panneau 1,8 % et 80 Mo ; ports ouverts sur ce PC seulement (127.0.0.1) |
+
+Trois jours et demi ne disent rien de la stratégie : le bot fait mieux que le
+marché sur la période, mais sans aucun trade vendu, cela ne prouve rien.
+
+### Constats
+
+| N° | Constat | Gravité | Suite |
+| --- | --- | --- | --- |
+| D1 | **Le portable tournait sur batterie** : de 90 % à 43 % en 1 h 45 pendant l'analyse. Batterie vide, le PC s'éteint et le bot s'arrête | **Critique** | **Chargeur rebranché pendant l'analyse** (batterie à 43 %). À garder branché : le tableau de bord, le centre de sécurité et le rapport signalent désormais un PC sur batterie |
+| D2 | **Disponibilité : 65 % sur 7 jours** (84 % sur 24 h). Causes relevées dans le journal de Windows : PC éteint la nuit du 26 au 27 (16,7 h), mises en veille par le capot ou le bouton d'alimentation (29/09 à 21 h 33, 30/09 à 07 h 02), arrêt le 29 au matin | Élevée | **Corrigé en partie le 30/09** : Windows cachait le réglage du capot, le bot ne le voyait pas ; capot fermé sur secteur = « ne rien faire ». Reste à vous : PC branché ; ne pas appuyer sur le bouton d'alimentation (il met en veille) |
+| D3 | **Aucune alerte ne vous parvient** : Gmail refuse le mot de passe (il faut un mot de passe d'application), WhatsApp et Telegram ne sont pas configurés. Deux alertes critiques sont restées dans le journal (arrêts du 29 et du 30). La fenêtre « Alertes — configurer » est ouverte depuis 01 h 45, sans saisie | Élevée | `python trendguard_bot.py alerts configurer`, puis « Tester » dans Réglages |
+| D4 | **Clé Binance refusée** (erreur −2015). L'adresse du PC sur Internet change (102.209.218.110 à la première vérification, 160.120.68.43 le 30) : une clé limitée à une adresse ne peut pas tenir sur cette connexion | Aucune en paper ; bloquante pour le réel | Pour le réel : une machine à adresse fixe (petit serveur), qui règle aussi D2 |
+| D5 | **Bibliothèques Python du PC en retard** sur celles que GitHub teste : pandas 2.3.3 (testée : 3.0.6), ccxt 4.5.44 (4.5.84), numpy 2.4.3 (2.5.3). Et 15 paquets installés sur 226 ont des failles connues, dont 6 utilisés par le bot : aiohttp, cryptography, requests, urllib3, anyio, setuptools | Moyenne : le bot n'écoute que sur ce PC, mais il parle à Binance avec ces bibliothèques | Mettre le PC aux versions testées, puis relancer le bot (plan, ligne 11) |
+| D6 | **Angle mort du rapport quotidien** : « tests, qualité et sécurité au vert » décrit les contrôles de GitHub, faits avec des bibliothèques à jour ; celles du PC ne sont pas contrôlées | Moyenne | Ajouter ce contrôle au rapport (plan, ligne 12) |
+| D7 | Apprentissage : erreur de prévision 0,002 sur 51 prévisions. Le chiffre ne dit encore rien : aucune vente ni aucun achat n'a eu lieu depuis qu'il mesure | Information | Jugé à partir de 100 prévisions, comme prévu |
+| D8 | Évolution encadrée : niveau 1, 10 réglages essayés chaque nuit, aucun adopté | Information | Le garde-fou tient : rien ne change sans réussir toutes les épreuves |
+| D9 | Sauvegardes de la base sur le même disque que la base (2 jours gardés) | Faible en paper | Avant le réel : une copie hors du PC |
+| D10 | Dépôt GitHub public : le code est visible de tous | Information | Aucun secret dedans (vérifié) ; base, journaux, rapports et `.env` ne sont jamais publiés |
+| D11 | Proposition n° 3 en attente sur GitHub ; démonstration encore ouverte sur le port 8799 (126 Mo) | Faible | Fusionner ou fermer la proposition ; fermer la démonstration quand elle ne sert plus |
+
+### Stratégie (clôture du 29, données Binance) : tout est conforme
+
+| Mesure | Valeur |
+| --- | --- |
+| Backtest 2019 → 2026 (réglages actuels) | +33,5 % par an, pire baisse −24,7 %, Sharpe 1,19, 313 trades, 41 % gagnants, +1,12 R par trade |
+| 12 derniers mois | +33,3 % (percentile 64 de l'historique) |
+| 79 trades des 24 derniers mois | +1,19 R en moyenne (intervalle à 90 % : +0,37 à +2,11 R) |
+| Marché | BTC haussier depuis 42 jours, +18,1 % au-dessus de sa moyenne 150 jours ; volatilité calme (41 % par an) |
+| Portefeuille | perte si tous les stops sont touchés : 6,2 % du capital ; positions liées (corrélation 0,61) |
+| Krach sans exécution des stops | −20 % : −13,2 % du capital ; −35 % : −23,0 % |
+| Tournoi des 7 stratégies sur 2 ans | TrendGuard 3e ; écart faible avec les deux premières, aucun motif de changer |
+
+### Code
+
+64 modules Python, 23 510 lignes ; 491 tests Python et 18 tests navigateur,
+tous au vert sur GitHub pour la version installée ; ruff : aucun problème ;
+aucune fonction publique longue sans explication, aucun code inutilisé hors du
+moteur `v29`, dépendances dans un seul sens (`tests/test_structure.py`). Détail
+dans [`DIAGNOSTIC_CODE.md`](DIAGNOSTIC_CODE.md). Le même jour, le panneau réel a
+été rendu aussi rapide que la démonstration (0,01 s par page au lieu de 1,5 à
+7 s).
+
+### Prêt pour l'argent réel ? Non, pas encore
+
+1. des alertes qui arrivent (D3) ;
+2. une machine allumée en permanence, à adresse fixe (D2, D4) ;
+3. une clé Binance acceptée, avec le droit de trading et sans retrait (D4) ;
+4. des bibliothèques à jour sur la machine qui tourne (D5) ;
+5. 10 à 20 trades vendus en paper, conformes à l'attendu, puis quelques jours
+   de testnet.
 
 ## Diagnostic approfondi du 29 septembre
 
@@ -207,16 +281,22 @@ Points faibles :
 
 | Priorité | Action | Qui | Quand |
 | --- | --- | --- | --- |
-| 1 | Configurer les alertes (Telegram, e-mail ou WhatsApp) | Vous | **en cours** (29/09) : e-mail enregistré, serveur corrigé (`pop3` → `smtp.gmail.com`), mais Gmail refuse le mot de passe habituel : créer un « mot de passe d'application » puis relancer `alerts configurer`. La configuration refuse désormais un serveur de réception et explique chaque échec en clair |
-| 2 | Supprimer sur Binance les clés montrées dans la conversation ; en créer une neuve (lecture, et Trading Spot le jour du testnet), sans retrait, limitée à votre adresse IP | Vous | avant le testnet |
+| 0 | **Garder le portable branché** | Vous | rebranché le 30/09 pendant le diagnostic (il tournait sur batterie, tombée à 43 %) ; à garder ainsi |
+| 1 | Configurer les alertes (Telegram, e-mail ou WhatsApp) | Vous | **toujours en cours** (30/09) : Gmail refuse le mot de passe habituel ; créer un « mot de passe d'application » (myaccount.google.com/apppasswords), puis `alerts configurer` et « Tester ». Deux alertes critiques ne vous sont pas parvenues |
+| 2 | Clé Binance : de nouvelles clés sont enregistrées (supprimer sur Binance les anciennes, montrées dans la conversation, si ce n'est pas fait) ; la nouvelle est refusée parce que l'adresse du PC sur Internet change | Vous | sans effet en paper ; pour le réel, une machine à adresse fixe (ligne 13) |
 | 3 | Laisser tourner en paper jusqu'à 10 à 20 trades vendus, puis comparer à l'attendu (section « Réel vs attendu » du diagnostic) | Vous et le bot | plusieurs semaines |
-| 4 | **Disponibilité** : PC branché et allumé en continu, veille désactivée sur secteur, capot fermé = « Ne rien faire » sur secteur ; ou un petit serveur | Vous | **priorité n° 1** (29/09 : 58 % de disponibilité) |
+| 4 | **Disponibilité** : PC branché et allumé en continu, veille désactivée sur secteur, capot fermé = « Ne rien faire » sur secteur ; ou un petit serveur | Vous et le bot | **en partie fait** : veille sur secteur « Jamais » (29/09), capot fermé « ne rien faire » (30/09, appliqués par le bot). 65 % sur 7 jours au 30/09. Reste à vous : PC branché, et fermer le capot plutôt qu'appuyer sur le bouton d'alimentation |
 | 5 | Synchroniser l'horloge de Windows | Vous | droits d'administrateur nécessaires : Paramètres ▸ Heure et langue ▸ Synchroniser maintenant |
 | 6 | Découper les fonctions les plus complexes et `app.js` | Code | **fait** : les six plus lourdes découpées, `app.js` en quatre modules ; un test d'horodatage fragile rendu fiable |
 | 7 | Décider du sort de l'ancien bot V29 (le supprimer allégerait le dépôt) | Code | **décidé : gardé à part.** Son moteur d'exécution est aussi celui de TrendGuard ; le supprimer obligerait à retoucher le code des ordres réels pour peu de gain |
 | 8 | Avant le réel : `verify` complet, quelques jours de testnet, au moins 100 USDT | Vous | le moment venu |
 | 9 | Mesurer la disponibilité du bot dans le panneau et prévenir quand il a été arrêté plus d'une heure | Code | fait (29/09) |
 | 10 | Centre de sécurité : « Alertes » à corriger si le dernier envoi a échoué | Code | fait (29/09) |
+| 11 | Mettre les bibliothèques Python du PC aux versions testées sur GitHub, et corriger les 6 qui ont des failles connues (aiohttp, cryptography, requests, urllib3, anyio, setuptools) ; tests, puis relance du bot | Code, avec votre accord | à faire (constat du 30/09) |
+| 12 | Rapport quotidien : contrôler les bibliothèques installées sur le PC (versions testées, failles connues) | Code | à faire (constat du 30/09) |
+| 13 | Avant le réel : faire tourner le bot sur une machine allumée en permanence, à adresse fixe (petit serveur) | Vous | le moment venu ; règle la disponibilité et la clé Binance |
+| 14 | Fusionner ou fermer la proposition n° 3 sur GitHub ; fermer la démonstration du port 8799 quand elle ne sert plus | Vous | quand vous voulez |
+| 15 | Alimentation du portable signalée (tableau de bord, centre de sécurité, rapport) ; réglage caché du capot lu | Code | fait (30/09) |
 
 Fait depuis l'audit du matin : chemins de secours des ordres réels testés (et
 un défaut corrigé), blocage des mots de passe ratés, écriture sûre du choix des
