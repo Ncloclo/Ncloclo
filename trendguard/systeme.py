@@ -33,6 +33,8 @@ def chk(label: str, ok: Optional[bool], detail: str, reco: str = "", action: str
 def run(cmd: List[str], cwd: Optional[str] = None, env: Optional[Dict[str, str]] = None,
         timeout: int = 60) -> subprocess.CompletedProcess:
     """Commande système sans fenêtre, sortie texte capturée."""
+    if cmd and os.path.basename(cmd[0]).lower() in ("powershell", "powershell.exe"):
+        env = autonomy.powershell_env(env)
     kw: Dict[str, Any] = {"cwd": cwd, "env": env, "capture_output": True, "text": True,
                           "timeout": timeout, "encoding": "utf-8", "errors": "replace"}
     if os.name == "nt":

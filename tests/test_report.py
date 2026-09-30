@@ -21,6 +21,7 @@ from panel import assistant as pa
 from panel import server as ps
 from trendguard import alerts
 from trendguard import report as rp
+from trendguard import systeme as sy
 from trendguard.diagnostics import Finding
 
 SECRET = "UnSecretTresLong123456"
@@ -174,6 +175,30 @@ def test_acl_check_retries_a_slow_powershell(root):
     never = rp.check_env_permissions(str(root), rp.Deps(
         run=lambda cmd, **kw: proc("", 1, "Accès refusé"), platform="win32"))
     assert never["ok"] is None and "Accès refusé" in never["detail"]
+
+
+def test_windows_powershell_does_not_inherit_the_modules_of_powershell_7(monkeypatch):
+    """Bot lancé depuis un terminal PowerShell 7 : sa variable PSModulePath
+    empêchait Windows PowerShell de lire les droits du fichier des secrets."""
+    seen = []
+    monkeypatch.setattr(sy.subprocess, "run", lambda cmd, **kw: seen.append(kw["env"]) or proc("ok"))
+    monkeypatch.setenv("PSModulePath", r"c:\program files\powershell\7\Modules")
+    sy.run(["powershell", "-NoProfile", "-Command", "Get-Acl x"])
+    sy.run(["powershell", "-Command", "x"], env={"PSMODULEPATH": "ps7", "TG_ACL_PATH": "fichier"})
+    sy.run(["git", "status"])
+    clean, given, untouched = seen
+    assert clean and "PATH" in {k.upper() for k in clean}
+    assert not any(k.upper() == "PSMODULEPATH" for k in clean)
+    assert given == {"TG_ACL_PATH": "fichier"}
+    assert untouched is None                                        # les autres commandes : rien ne change
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows PowerShell")
+def test_acl_is_read_even_when_started_from_powershell_7(root, monkeypatch):
+    monkeypatch.setenv("PSModulePath", r"c:\program files\powershell\7\Modules;"
+                       + os.environ.get("PSModulePath", ""))
+    acl, err = rp._win_acl(str(root / ".env"), rp.Deps())
+    assert acl and not err
 
 
 def test_decision_time_and_bot_health(tmp_path):

@@ -163,6 +163,15 @@ def request_restart(gcfg: Any) -> bool:
     return True
 
 
+def powershell_env(environ: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+    """Environnement d'une commande Windows PowerShell : sans PSModulePath.
+    Hérité d'un terminal PowerShell 7 (VS Code, Windows Terminal), il lui
+    fait chercher les modules de l'autre version, et Get-Acl échoue ; sans
+    lui, Windows PowerShell retrouve les siens."""
+    environ = dict(os.environ) if environ is None else environ
+    return {k: v for k, v in environ.items() if k.upper() != "PSMODULEPATH"}
+
+
 def restart_panel(run: Callable[..., Any] = subprocess.run,
                   popen: Callable[..., Any] = subprocess.Popen,
                   platform: str = sys.platform) -> bool:
@@ -176,7 +185,7 @@ def restart_panel(run: Callable[..., Any] = subprocess.run,
           "} | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }")
     try:
         run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
-            capture_output=True, timeout=60, creationflags=CREATE_NO_WINDOW)
+            capture_output=True, timeout=60, creationflags=CREATE_NO_WINDOW, env=powershell_env())
         popen([gui_python(sys.executable), BOT_SCRIPT, "panel", "--login"], cwd=ROOT,
               stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
               creationflags=CREATE_NO_WINDOW)
