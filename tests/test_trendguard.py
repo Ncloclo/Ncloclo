@@ -402,7 +402,7 @@ def test_heartbeat_logged_once_per_interval(caplog):
         run_days(bot, fb, close, volume, SIM_FROM, SIM_FROM + 3)
     beats = [r.getMessage() for r in caplog.records if "[HEARTBEAT]" in r.getMessage()]
     assert len(beats) == 1                          # 15 min pas encore écoulées
-    assert "equity" in beats[0] and "prochaine décision dans" in beats[0]
+    assert "capital" in beats[0] and "prochaine décision dans" in beats[0]
 
 
 def test_set_env_var_replaces_and_keeps_file_private(tmp_path):
@@ -506,7 +506,7 @@ def test_verify_places_no_order_and_reports_plan(logger):
     assert rc == 0, text
     assert "✅ Prêt pour le mode réel." in text
     assert "Retrait autorisé      : non ✓" in text
-    assert "Valeur totale estimée : 10,000.00 USDT" in text
+    assert "Valeur totale estimée : 10 000,00 USDT" in text      # nombres à la française
     assert not fb.open_orders() and all(not f.orders for f in fb.fakes.values())
     assert fb.free["USDT"] == pytest.approx(10_000.0)
 
@@ -785,7 +785,7 @@ def test_repository_markdown_is_formatted():
     docs = ["README.md"] + [os.path.join("docs", n) for n in (
         "TRENDGUARD_REPORT.md", "ADAPTATION.md", "STRATEGIES.md", "SELECTION.md", "AUDIT.md",
         "ARCHITECTURE.md", "ROBUSTESSE.md", "EXAMEN.md", "EVOLUTION.md", "APPRENTISSAGE.md",
-        "RAPPORT.md")]
+        "RAPPORT.md", "DIAGNOSTIC_CODE.md", "README.md")]
     names = [n for n in docs if os.path.exists(os.path.join(root, n))]
     if not names:
         pytest.skip("documentation absente (image Docker)")

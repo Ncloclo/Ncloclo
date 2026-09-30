@@ -19,7 +19,10 @@ sécurisé :
 
 Une seule commande à retenir : `python trendguard_bot.py <commande>` (liste
 complète : `python trendguard_bot.py --help`). Le code est rangé par rôle ;
-détail module par module dans [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+détail module par module dans [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md),
+sommaire de tous les documents dans [`docs/README.md`](docs/README.md),
+dernier diagnostic du code dans
+[`docs/DIAGNOSTIC_CODE.md`](docs/DIAGNOSTIC_CODE.md).
 
 | Dossier | Contenu |
 | --- | --- |
@@ -27,9 +30,9 @@ détail module par module dans [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 | `trendguard/` | le bot TrendGuard : stratégie, décision, anticipation, autonomie, alertes, veille, diagnostic |
 | `v29/` | moteur d'exécution Binance commun (ordres, stops, base, verrou) et bot V29.6 |
 | `panel/` | panneau de contrôle : serveur local, Rachelle, interface web |
-| `research/` | études reproductibles (adaptation, sélection des cryptos) |
+| `research/` | études reproductibles (adaptation, sélection, robustesse, examen) et diagnostic du code |
 | `tests/` | tests Python et tests dans le navigateur |
-| `docs/` | rapports, études, audit, revues hebdomadaires |
+| `docs/` | rapports, études, audit, diagnostic du code, revues hebdomadaires |
 | `templates/` | gabarit de la page d'animation du rejeu |
 
 ## TrendGuard
@@ -480,7 +483,7 @@ Compte réel :
    de prix réels (capital simulé : `TG_MAX_CAPITAL` ou `TG_PAPER_CAPITAL`).
 4. Fixez `TG_MAX_CAPITAL`, le capital en USDT confié au bot. Le bot gère alors
    un sous-compte virtuel (ce plafond, plus ses propres gains et pertes), quel
-   que soit le solde réel du compte. Le kill-switch s'applique à ce capital.
+   que soit le solde réel du compte. L'arrêt d'urgence s'applique à ce capital.
 
 Le bot prend ses décisions une fois par jour, juste après la clôture de 00:00
 UTC. Il appelle **exactement les mêmes fonctions** que le backtest. Un test
@@ -497,7 +500,8 @@ Chaque position est protégée à deux niveaux :
 - un **stop catastrophe** `STOP_LOSS` posé sur Binance, 1 × volatilité plus
   bas, remonté avec le trailing. Il protège d'un krach entre deux clôtures.
 
-Au-delà de 40 % de drawdown, un kill-switch bloque les entrées
+Au-delà de 40 % de baisse depuis le plus haut, l'arrêt d'urgence bloque les
+achats
 (`TG_KILL_DRAWDOWN`). Pour le lever, arrêtez le bot puis lancez
 `python trendguard_bot.py resume` : la commande est refusée tant que le bot
 tourne, car il réécrirait son état au cycle suivant.
@@ -570,14 +574,14 @@ docker compose up -d --build      # construit l'image (tests inclus) et démarre
 | Santé (`healthy` / `unhealthy`) | `docker compose ps` |
 | Mettre à jour | `git pull && docker compose up -d --build` |
 | Arrêter (état conservé) | `docker compose down` |
-| Lever le kill-switch | `docker compose stop && docker compose run --rm trendguard resume && docker compose start` |
+| Lever l'arrêt d'urgence | `docker compose stop && docker compose run --rm trendguard resume && docker compose start` |
 | Repartir de zéro (efface le portefeuille paper) | `docker compose down -v` |
 
 - L'image ne se construit que si toute la suite de tests passe.
 - Le conteneur redémarre tout seul après un crash ou un redémarrage du serveur.
   L'état (base SQLite, logs) est conservé dans le volume `trendguard-data`.
 - Docker considère le bot en mauvaise santé (`unhealthy`) si aucun cycle n'a
-  réussi depuis 10 minutes, ou si le kill-switch est déclenché.
+  réussi depuis 10 minutes, ou si l'arrêt d'urgence est déclenché.
 - Serveur conseillé : un petit VPS allumé en permanence (1 vCPU, 1 Go de RAM ;
   le bot utilise environ 230 Mo), situé dans un pays où Binance n'est pas
   restreint. Binance refuse notamment les adresses IP des États-Unis.

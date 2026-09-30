@@ -20,7 +20,6 @@ import v29
 from panel import assistant as pa
 from panel import server as ps
 from trendguard import alerts
-from trendguard import bot as bot_module
 from trendguard import report as rp
 from trendguard.diagnostics import Finding
 
@@ -324,7 +323,7 @@ def test_bot_launches_the_report_once_after_0030(tmp_path, monkeypatch):
                        lock_file=str(tmp_path / "tg.lock"), daily_report=True)
     bot = tg.TrendGuardBot(g, lg, None, v29.Store(":memory:", lg), lambda *a, **k: True)
     launched = []
-    monkeypatch.setattr(bot_module.report, "launch", lambda gc, action: launched.append(action) or True)
+    monkeypatch.setattr(rp, "launch", lambda gc, action: launched.append(action) or True)
     bot._launch_report(datetime(2026, 9, 30, 0, 40, tzinfo=timezone.utc))
     assert launched == []                                           # cycle isolé : jamais
     bot.track_uptime = True

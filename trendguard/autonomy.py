@@ -370,6 +370,10 @@ class Supervisor:
         return self.stop_wanted()
 
     def run(self) -> int:
+        """Boucle du superviseur : lance le bot et le relance après une erreur
+        (attente croissante, alerte), aussitôt après un redémarrage prévu ;
+        laisse tourner un bot lancé ailleurs ; s'arrête sur demande (bouton
+        ARRÊTER)."""
         self.log.info(f"[SUPERVISEUR] démarré (pid {os.getpid()}) : le bot est relancé "
                       f"automatiquement s'il s'arrête sur une erreur")
         try:
@@ -592,6 +596,9 @@ class Autostart:
         return bool(st) and all(st.values())
 
     def enable(self) -> Tuple[bool, str]:
+        """Démarrage avec l'ordinateur du bot et du panneau : clé Run (Windows),
+        LaunchAgents (macOS) ou services systemd de l'utilisateur (Linux).
+        Renvoie (réussi, message)."""
         cmds = self.commands()
         root = os.path.dirname(self.script) or "."
         if self.kind == "windows":
@@ -718,6 +725,9 @@ class KeepAwake:
         return int(k.SetThreadExecutionState(flags))
 
     def start(self) -> bool:
+        """Bloque la mise en veille automatique : SetThreadExecutionState
+        (Windows), caffeinate (macOS) ou systemd-inhibit (Linux). False si
+        aucun moyen n'est disponible."""
         try:
             if self.platform.startswith("win"):
                 self._win = self._set_state(self.ES_CONTINUOUS | self.ES_SYSTEM_REQUIRED) != 0

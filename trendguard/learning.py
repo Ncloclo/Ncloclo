@@ -25,7 +25,7 @@ n'avancent aucune décision (c'est la clôture qui décide).
 from __future__ import annotations
 
 import statistics
-from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, Optional, Tuple
 
 from .texte import fr
 
@@ -114,8 +114,8 @@ def depth_drained(L: Dict[str, Any], asset: str, depth: float, quote: str = "USD
     b = _normal(L, asset)
     if b is None or depth >= DEPTH_DRAIN * b["depth"]:
         return None
-    return (f"carnet d'ordres vidé ({depth:,.0f} {quote} proposés à moins de 1 % du prix, "
-            f"contre {b['depth']:,.0f} d'habitude)").replace(",", " ")
+    return (f"carnet d'ordres vidé ({fr(depth, ',.0f')} {quote} proposés à moins de 1 % du "
+            f"prix, contre {fr(b['depth'], ',.0f')} d'habitude)")
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -235,6 +235,9 @@ def note_deferral(L: Dict[str, Any], outcome: str, gain: Optional[float] = None)
 # ══════════════════════════════════════════════════════════════════════
 
 def summary(L: Any) -> Dict[str, Any]:
+    """Ce que le bot a appris, pour le panneau et le rapport : normale des
+    carnets, précision des prévisions (brute et corrigée), résultats de la
+    ruse, écarts les plus larges, et une phrase de synthèse."""
     L = ensure(dict(L) if isinstance(L, dict) else {})
     books = L["books"]
     learned = {a: b for a, b in books.items() if b.get("spread") is not None}
@@ -263,13 +266,3 @@ def summary(L: Any) -> Dict[str, Any]:
             "ruse_gain_pct": gain,
             "widest": [{"asset": a, "spread_pct": round(s * 100, 4)} for a, s in tight],
             "text": " · ".join(parts)}
-
-
-def lessons_text(L: Any) -> List[str]:
-    """Ce que le bot a appris, en phrases (Rachelle)."""
-    s = summary(L)
-    out = [s["text"]]
-    if s["widest"]:
-        out.append("Écarts normaux les plus larges : " + ", ".join(
-            f"{w['asset'].upper()} {fr(w['spread_pct'], '.3f')} %" for w in s["widest"]) + ".")
-    return out

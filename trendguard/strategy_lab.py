@@ -583,6 +583,9 @@ OUTRO = """## Ce que le bot en retient
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    """Ligne de commande du laboratoire : compare les stratégies sur les
+    données Binance des paires du bot (et Coin Metrics avec --cm) ;
+    rapport écrit dans docs/STRATEGIES.md."""
     ap = argparse.ArgumentParser(description="Laboratoire de stratégies TrendGuard")
     ap.add_argument("--cache", default="data_binance",
                     help="dossier des données Binance (téléchargées si absentes)")
@@ -590,9 +593,11 @@ def main(argv: Optional[List[str]] = None) -> int:
                     help="dossier Coin Metrics (optionnel, actifs effondrés inclus)")
     ap.add_argument("--out", default="docs/STRATEGIES.md")
     args = ap.parse_args(argv)
-    from research import adaptation as ra
+    from . import evolution  # import tardif : evolution → diagnostics → strategy_lab
+    from .config import LIVE_UNIVERSE_DEFAULT
     parts = [INTRO]
-    close, volume = ra.load_binance(args.cache)
+    close, volume = evolution.load_history(args.cache, list(LIVE_UNIVERSE_DEFAULT),
+                                           max_age_days=None)
     parts.append(lab_report(close, volume, "Binance, paires tradées par le bot"))
     if args.cm:
         c2, v2 = ts.load_coinmetrics(args.cm, ts.DEFAULT_UNIVERSE)

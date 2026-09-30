@@ -4,12 +4,11 @@ Partie du bot TrendGuard (paquet trendguard, point d'entrée : trendguard_bot.py
 """
 from __future__ import annotations
 
-import logging
 import math
 import os
 import sys
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 import ccxt
 import pandas as pd
@@ -19,6 +18,8 @@ import v29
 from . import trend_strategy as ts
 from .bot import TrendGuardBot
 from .config import DAY_MS, GuardConfig
+from .journal import silent_logger
+from .texte import fr
 
 
 class HistoricalExchange:
@@ -87,6 +88,27 @@ class HistoricalExchange:
         return {"last": px, "bid": px, "ask": px}
 
 
+def simulated_bot(close: pd.DataFrame, volume: pd.DataFrame, first_day: pd.Timestamp,
+                  capital: float, name: str, **overrides: Any
+                  ) -> Tuple[TrendGuardBot, HistoricalExchange]:
+    """Le VRAI bot en mode paper sur un marché historique (aucune bougie
+    future visible), sans journal, fichier ni notification, démarré à la
+    décision du premier jour. `overrides` : réglages propres à la
+    simulation (paramètres de stratégie, par exemple)."""
+    hx = HistoricalExchange(close, volume)
+    g = GuardConfig(run_mode="paper", universe=tuple(a.upper() for a in close.columns),
+                    paper_capital=capital, db_file=":memory:", log_file=os.devnull,
+                    lock_file=os.devnull, auto_diagnose_days=0, heartbeat_min=0,
+                    **overrides)
+    lg = silent_logger(name)
+    bot = TrendGuardBot(g, lg, hx, v29.Store(":memory:", lg), v29.Notifier("", "", logger=lg))
+    bot.sleep = lambda s: None
+    hx.set_now(first_day.to_pydatetime() + timedelta(days=1, minutes=5))
+    if not bot.boot():
+        raise RuntimeError("Démarrage du bot impossible")
+    return bot, hx
+
+
 def replay(data_dir: str, start: str, end: Optional[str] = None,
            capital: float = 10_000.0, verbose: bool = True,
            out=None) -> Dict[str, Any]:
@@ -98,22 +120,7 @@ def replay(data_dir: str, start: str, end: Optional[str] = None,
     days = days[close["btc"].reindex(days).notna().values]
     if len(days) == 0:
         raise ValueError("Aucune donnée sur la période demandée.")
-    hx = HistoricalExchange(close, volume)
-    g = GuardConfig(run_mode="paper",
-                    universe=tuple(a.upper() for a in close.columns),
-                    paper_capital=capital, db_file=":memory:",
-                    log_file=os.devnull, lock_file=os.devnull,
-                    auto_diagnose_days=0)
-    lg = logging.getLogger("trendguard.replay")
-    lg.handlers.clear()
-    lg.addHandler(logging.NullHandler())
-    lg.propagate = False
-    store = v29.Store(":memory:", lg)
-    bot = TrendGuardBot(g, lg, hx, store, v29.Notifier("", "", logger=lg))
-    bot.sleep = lambda s: None
-    hx.set_now(days[0].to_pydatetime() + timedelta(days=1, minutes=5))
-    if not bot.boot():
-        raise RuntimeError("Démarrage du bot impossible")
+    bot, hx = simulated_bot(close, volume, days[0], capital, "trendguard.replay")
     curve = []
     last_month = None
     for d in days:
@@ -127,20 +134,20 @@ def replay(data_dir: str, start: str, end: Optional[str] = None,
         for t in bot.state["trades"][n_tr:]:
             if verbose:
                 print(f"{d.date()}  ↘ VENTE  {t['asset'].upper():<5} "
-                      f"{t['reason']:<13} PnL {t['pnl']:+9.2f} USDT "
-                      f"({t['r']:+.2f} R)", file=out)
+                      f"{t['reason']:<13} PnL {fr(t['pnl'], '+9.2f')} USDT "
+                      f"({fr(t['r'], '+.2f')} R)", file=out)
         for a in set(book["holdings"]) - before_h:
             h = book["holdings"][a]
             if verbose:
-                print(f"{d.date()}  ↗ ACHAT  {a.upper():<5} @ {h['entry']:.6g} "
-                      f"stop {h['stop']:.6g}  risque {h['risk_quote']:.2f} USDT",
+                print(f"{d.date()}  ↗ ACHAT  {a.upper():<5} @ {fr(h['entry'], '.6g')} "
+                      f"stop {fr(h['stop'], '.6g')}  risque {fr(h['risk_quote'], '.2f')} USDT",
                       file=out)
         eq = book["cash"] + sum(h["qty"] * float(px[a])
                                 for a, h in book["holdings"].items())
         curve.append(eq)
         month = d.strftime("%Y-%m")
         if verbose and month != last_month and last_month is not None:
-            print(f"── {last_month} clôturé : equity {curve[-2]:,.2f} USDT", file=out)
+            print(f"── {last_month} clôturé : equity {fr(curve[-2], ',.2f')} USDT", file=out)
         last_month = month
     equity = pd.Series(curve, index=days)
     metrics = ts.compute_metrics(equity, bot.state["trades"])

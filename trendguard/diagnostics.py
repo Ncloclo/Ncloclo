@@ -42,6 +42,7 @@ import v29
 
 from . import strategy_lab as sl
 from . import trend_strategy as ts
+from .texte import fr
 
 DAY_MS = 86_400_000
 LEVELS = ("OK", "INFO", "ATTENTION", "ALERTE")
@@ -134,6 +135,9 @@ def bootstrap_mean_ci(x: np.ndarray, level: float = 0.90, n: int = 4000,
 def check_system(exchange: Any, state: Dict[str, Any], expected_day: str,
                  db_file: str, running: Optional[bool],
                  now: datetime) -> List[Finding]:
+    """Contrôles du système : Python, horloge et latence vers Binance, bot en
+    marche, dernier cycle, décision du jour, arrêt d'urgence, base et
+    espace disque."""
     S = "Système"
     out: List[Finding] = []
     out.append(Finding(S, "INFO", f"Python {platform.python_version()} "
@@ -206,8 +210,8 @@ def check_system(exchange: Any, state: Dict[str, Any], expected_day: str,
         free = shutil.disk_usage(os.path.dirname(os.path.abspath(db_file))).free
         size = os.path.getsize(db_file)
         lvl = "OK" if free > 1e9 else "ATTENTION"
-        out.append(Finding(S, lvl, f"Base {size / 1e6:.1f} Mo, disque libre "
-                           f"{free / 1e9:.1f} Go",
+        out.append(Finding(S, lvl, f"Base {fr(size / 1e6, '.1f')} Mo, disque libre "
+                           f"{fr(free / 1e9, '.1f')} Go",
                            "" if lvl == "OK" else "Libérer de l'espace disque."))
     return out
 
@@ -219,6 +223,9 @@ def check_system(exchange: Any, state: Dict[str, Any], expected_day: str,
 def check_data(close: pd.DataFrame, volume: pd.DataFrame, p: ts.TrendParams,
                expected_day: str, errors: Dict[str, str],
                held: List[str]) -> List[Finding]:
+    """Qualité des données : historiques indisponibles, bougies en retard,
+    jours manquants, prix aberrants, variations suspectes et paires trop
+    peu liquides."""
     S = "Données"
     out: List[Finding] = []
     for a, err in errors.items():
@@ -248,7 +255,7 @@ def check_data(close: pd.DataFrame, volume: pd.DataFrame, p: ts.TrendParams,
         v30 = volume[a].rolling(30, min_periods=10).mean().iloc[-1] \
             if a in volume else np.nan
         if not (np.isfinite(v30) and v30 >= p.min_volume_usd):
-            illiquid.append(f"{a.upper()} ({(v30 if np.isfinite(v30) else 0) / 1e6:.1f} M$)")
+            illiquid.append(f"{a.upper()} ({fr((v30 if np.isfinite(v30) else 0) / 1e6, '.1f')} M$)")
     n = len(close.columns)
     out.append(Finding(S, "ALERTE" if stale else "OK",
                        f"Bougie du {expected_day} disponible pour "
@@ -277,6 +284,8 @@ def check_data(close: pd.DataFrame, volume: pd.DataFrame, p: ts.TrendParams,
 # ══════════════════════════════════════════════════════════════════════
 
 def check_market(close: pd.DataFrame, p: ts.TrendParams) -> List[Finding]:
+    """Régime du marché : BTC au-dessus ou au-dessous de sa moyenne, depuis
+    combien de jours, et changements de régime fréquents."""
     S = "Marché"
     btc = close["btc"].dropna()
     sma = btc.rolling(p.regime_sma, min_periods=p.regime_sma).mean()
@@ -287,8 +296,8 @@ def check_market(close: pd.DataFrame, p: ts.TrendParams) -> List[Finding]:
     gap = (btc.iloc[-1] / sma.iloc[-1] - 1) * 100
     out = [Finding(S, "INFO",
                    f"Régime BTC {'HAUSSIER (achats autorisés)' if bull.iloc[-1] else 'BAISSIER (aucun achat, stops resserrés)'}"
-                   f" depuis {int(run.iloc[-1])} j — BTC {btc.iloc[-1]:,.0f} vs "
-                   f"moyenne {p.regime_sma} j {sma.iloc[-1]:,.0f} ({gap:+.1f} %)")]
+                   f" depuis {int(run.iloc[-1])} j — BTC {fr(btc.iloc[-1], ',.0f')} vs "
+                   f"moyenne {p.regime_sma} j {fr(sma.iloc[-1], ',.0f')} ({fr(gap, '+.1f')} %)")]
     if flips >= 4:
         out.append(Finding(S, "ATTENTION", f"Régime hésitant : {flips} changements en 120 j",
                            "Marché sans tendance : faux départs plus fréquents, "
@@ -315,7 +324,8 @@ def today_signals(close: pd.DataFrame, volume: pd.DataFrame,
                 ("close", "vol", "prior_high", "mom", "age", "vol30")}
         why = []
         if not snap["close"] > snap["prior_high"]:
-            why.append(f"pas de cassure ({(snap['close'] / snap['prior_high'] - 1) * 100:+.1f} %)")
+            gap = (snap["close"] / snap["prior_high"] - 1) * 100
+            why.append(f"pas de cassure ({fr(gap, '+.1f')} %)")
         if not snap["mom"] > 0:
             why.append("momentum négatif")
         if not (np.isfinite(snap["vol30"]) and snap["vol30"] >= p.min_volume_usd):
@@ -333,7 +343,7 @@ def check_signals(close: pd.DataFrame, volume: pd.DataFrame,
     S = "Signaux"
     bull, rows = today_signals(close, volume, p)
     buys = [r["asset"].upper() for r in rows if r["signal"] and r["asset"] not in held]
-    near = [f"{r['asset'].upper()} ({(r['close'] / r['prior_high'] - 1) * 100:+.1f} %)"
+    near = [f"{r['asset'].upper()} ({fr((r['close'] / r['prior_high'] - 1) * 100, '+.1f')} %)"
             for r in rows if not r["signal"] and np.isfinite(r["prior_high"])
             and r["close"] > 0.97 * r["prior_high"] and r["mom"] > 0]
     if not bull:
@@ -366,7 +376,8 @@ def check_portfolio(holdings: List[Dict[str, Any]], close: pd.DataFrame,
         a = h["asset"]
         px = prices.get(a) or h["entry"]
         dist = (px / h["stop"] - 1) * 100 if h["stop"] > 0 else float("nan")
-        lines.append(f"{a.upper()} {(px / h['entry'] - 1) * 100:+.1f} % (stop à {dist:.1f} %)")
+        lines.append(f"{a.upper()} {fr((px / h['entry'] - 1) * 100, '+.1f')} % "
+                     f"(stop à {fr(dist, '.1f')} %)")
         if px <= h["stop"]:
             below.append(a.upper())
         risk_now = max(h["qty"] * (px - h["stop"]), 0.0)
@@ -396,15 +407,15 @@ def check_portfolio(holdings: List[Dict[str, Any]], close: pd.DataFrame,
     # Le plafond borne le risque À L'ENTRÉE ; quand les positions gagnent,
     # l'écart au stop grandit (gains latents exposés) : marge de 50 %.
     lvl = "OK" if tot / eq <= max_total_risk * 1.5 else "ATTENTION"
-    out.append(Finding(S, lvl, f"Perte si tous les stops sont touchés : {tot:,.0f} USDT "
-                       f"({tot / eq * 100:.1f} % du capital, plafond à l'entrée "
+    out.append(Finding(S, lvl, f"Perte si tous les stops sont touchés : {fr(tot, ',.0f')} USDT "
+                       f"({fr(tot / eq * 100, '.1f')} % du capital, plafond à l'entrée "
                        f"{max_total_risk * 100:.0f} %) ; risque ajusté des "
-                       f"corrélations {corr_risk / eq * 100:.1f} %",
+                       f"corrélations {fr(corr_risk / eq * 100, '.1f')} %",
                        "" if lvl == "OK" else "Risque engagé nettement au-dessus du "
                        "plafond : vérifier les stops posés sur Binance."))
     if len(names) > 1:
         lvl = "ATTENTION" if avg > 0.7 else "INFO"
-        out.append(Finding(S, lvl, f"Corrélation moyenne des positions (90 j) : {avg:.2f}",
+        out.append(Finding(S, lvl, f"Corrélation moyenne des positions (90 j) : {fr(avg, '.2f')}",
                            "Positions très liées : elles risquent d'être stoppées le "
                            "même jour (déjà vu : -6,7 R le 10/10/2025)." if lvl != "INFO" else ""))
     for shock in (0.20, 0.35):
@@ -413,8 +424,8 @@ def check_portfolio(holdings: List[Dict[str, Any]], close: pd.DataFrame,
         # Scénario de stress : n'alerte que s'il approcherait l'arrêt
         # d'urgence (TG_KILL_DRAWDOWN).
         lvl = "INFO" if loss / eq < kill_drawdown * 0.75 else "ATTENTION"
-        out.append(Finding(S, lvl, f"Krach instantané de -{shock * 100:.0f} % sans "
-                           f"exécution des stops (gap) : -{loss / eq * 100:.1f} % "
+        out.append(Finding(S, lvl, f"Krach instantané de −{shock * 100:.0f} % sans "
+                           f"exécution des stops (gap) : −{fr(loss / eq * 100, '.1f')} % "
                            f"du capital",
                            "" if lvl == "INFO" else "Exposition très forte : un krach "
                            "avec gap approcherait l'arrêt d'urgence ; envisager "
@@ -429,14 +440,18 @@ def check_portfolio(holdings: List[Dict[str, Any]], close: pd.DataFrame,
 def strategy_health(close: pd.DataFrame, volume: pd.DataFrame,
                     p: ts.TrendParams, start: str = "2019-01-01"
                     ) -> Tuple[List[Finding], ts.PortfolioResult]:
+    """Santé de la stratégie : backtest Binance depuis `start` avec les
+    paramètres actuels, rendements sur 12 mois glissants et espérance des
+    trades des 24 derniers mois. Renvoie les constats et le backtest."""
     S = "Stratégie"
     last = str(close.index[-1].date())
     res = ts.backtest(close, volume, p, start, last)
     m = res.metrics
     out = [Finding(S, "INFO", f"Backtest Binance {start} → {last} (paramètres actuels) : "
-                   f"{m['cagr_pct']:+.1f} %/an, baisse max {m['max_dd_pct']:.1f} %, "
-                   f"Sharpe {m['sharpe']:.2f}, {m['trades']} trades, "
-                   f"{m['win_rate_pct']:.0f} % gagnants, espérance {m['expectancy_r']:+.2f} R")]
+                   f"{fr(m['cagr_pct'], '+.1f')} %/an, baisse max {fr(m['max_dd_pct'], '.1f')} %, "
+                   f"Sharpe {fr(m['sharpe'], '.2f')}, {m['trades']} trades, "
+                   f"{m['win_rate_pct']:.0f} % gagnants, espérance "
+                   f"{fr(m['expectancy_r'], '+.2f')} R")]
     eq = res.equity
     r12 = (eq / eq.shift(365) - 1).dropna() * 100
     if len(r12) > 100:
@@ -444,9 +459,9 @@ def strategy_health(close: pd.DataFrame, volume: pd.DataFrame,
         pct = float((r12 <= cur).mean() * 100)
         p10 = float(r12.quantile(0.10))
         lvl = "OK" if cur >= p10 else "ATTENTION"
-        out.append(Finding(S, lvl, f"Rendement sur 12 mois glissants : {cur:+.1f} % "
-                           f"(percentile {pct:.0f} ; historique : P10 {p10:+.1f} %, "
-                           f"médiane {r12.median():+.1f} %, "
+        out.append(Finding(S, lvl, f"Rendement sur 12 mois glissants : {fr(cur, '+.1f')} % "
+                           f"(percentile {pct:.0f} ; historique : P10 {fr(p10, '+.1f')} %, "
+                           f"médiane {fr(r12.median(), '+.1f')} %, "
                            f"{(r12 < 0).mean() * 100:.0f} % des fenêtres négatives)",
                            "" if lvl == "OK" else "Année parmi les 10 % les plus faibles : "
                            "surveiller, sans conclure seul (ces années existent)."))
@@ -462,7 +477,8 @@ def strategy_health(close: pd.DataFrame, volume: pd.DataFrame,
                            "garantie ; trade par trade : 35-50 % de gagnants)"))
     dd_now = float((eq.iloc[-1] / eq.cummax().iloc[-1] - 1) * 100)
     lvl = "OK" if dd_now > -15 else "ATTENTION" if dd_now > -30 else "ALERTE"
-    out.append(Finding(S, lvl, f"Baisse actuelle de la stratégie depuis son pic : {dd_now:.1f} %"))
+    out.append(Finding(S, lvl, "Baisse actuelle de la stratégie depuis son pic : "
+                       f"{fr(dd_now, '.1f')} %"))
     cut = eq.index[-1] - pd.Timedelta(days=730)
     recent = np.array([t["r"] for t in res.trades if t["exit_date"] >= cut])
     if len(recent) >= 15:
@@ -477,7 +493,8 @@ def strategy_health(close: pd.DataFrame, volume: pd.DataFrame,
         else:
             lvl, reco = "OK", ""
         out.append(Finding(S, lvl, f"Espérance des {len(recent)} trades des 24 derniers mois : "
-                           f"{mean:+.2f} R (intervalle 90 % : {lo:+.2f} à {hi:+.2f} R)", reco))
+                           f"{fr(mean, '+.2f')} R (intervalle 90 % : {fr(lo, '+.2f')} à "
+                           f"{fr(hi, '+.2f')} R)", reco))
     else:
         out.append(Finding(S, "INFO", f"Seulement {len(recent)} trades sur 24 mois : "
                            f"espérance récente non mesurable"))
@@ -493,7 +510,7 @@ def check_alternatives(close: pd.DataFrame, volume: pd.DataFrame,
     board = sl.tournament_recent(sl.Lab(close, volume, p), days=days)
     ref = board[board["name"] == sl.REF].iloc[0]
     rank = int(board.index[board["name"] == sl.REF][0]) + 1
-    lines = [f"{k + 1}. {r.name} : Sharpe {r.sharpe:.2f}, {r.total_pct:+.0f} %, "
+    lines = [f"{k + 1}. {r.name} : Sharpe {fr(r.sharpe, '.2f')}, {fr(r.total_pct, '+.0f')} %, "
              f"{r.trades} trades, {r.win_rate_pct:.0f} % gagnants"
              for k, r in enumerate(board.itertuples())]
     out = [Finding(S, "INFO", f"Tournoi des {len(board)} stratégies sur "
@@ -534,7 +551,7 @@ def check_watch(state: Dict[str, Any], held: List[str],
     n, tot = last.get("providers", 0), last.get("providers_total", 0)
     who = f"{n}/{tot} IA" if tot else "mots-clés seulement (aucune IA configurée)"
     out.append(Finding(S, "INFO", f"Dernière veille {last.get('day')} : climat "
-                       f"{last.get('sentiment', 0):+.2f} ({who})"
+                       f"{fr(last.get('sentiment', 0), '+.2f')} ({who})"
                        + ("".join(f"\n      • {t}" for t in last.get("alerts") or []))))
     if tot and n == 0:
         out.append(Finding(S, "ATTENTION", "Aucune IA n'a répondu à la dernière veille",
@@ -544,6 +561,8 @@ def check_watch(state: Dict[str, Any], held: List[str],
 
 def live_vs_expected(bot_trades: List[Dict[str, Any]],
                      reference: List[Dict[str, Any]]) -> List[Finding]:
+    """Trades réels du bot face à l'historique : R moyen, série de pertes en
+    cours et probabilité qu'un résultat aussi faible sorte de l'historique."""
     S = "Réel vs attendu"
     rs = np.array([float(t["r"]) for t in bot_trades if "r" in t])
     ref = np.array([float(t["r"]) for t in reference])
@@ -555,7 +574,7 @@ def live_vs_expected(bot_trades: List[Dict[str, Any]],
             break
         streak += 1
     msg = (f"{len(rs)} trade(s) clos : {int((rs > 0).sum())} gagnant(s), R moyen "
-           f"{rs.mean():+.2f} (historique {ref.mean():+.2f} R) ; série de pertes "
+           f"{fr(rs.mean(), '+.2f')} (historique {fr(ref.mean(), '+.2f')} R) ; série de pertes "
            f"en cours : {streak}")
     if len(rs) < 8 or len(ref) < 30:
         return [Finding(S, "INFO", msg + " — trop peu de trades pour conclure")]
@@ -596,6 +615,9 @@ def run_diagnosis(exchange: Any, p: ts.TrendParams, bases: List[str],
                   sections: Tuple[str, ...] = (
                       "system", "data", "market", "signals", "portfolio",
                       "strategy", "live", "alternatives", "watch")) -> List[Finding]:
+    """Diagnostic complet en lecture seule, par sections (`sections`) :
+    système, veille, données, marché, signaux, portefeuille, stratégie,
+    réel face à l'attendu et stratégies alternatives."""
     findings: List[Finding] = []
     if "system" in sections:
         findings += check_system(exchange, state, expected_day, db_file, running, now)

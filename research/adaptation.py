@@ -16,7 +16,6 @@ Protocole : sélection sur 2018-2022 (IS), vérification 2023 → aujourd'hui
 
 from __future__ import annotations
 
-import argparse
 import dataclasses
 import math
 import sys
@@ -25,16 +24,9 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
 
-import v29
-from trendguard import evolution
+from research.commun import load_binance, study_args
 from trendguard import trend_strategy as ts
-from trendguard.config import LIVE_UNIVERSE_DEFAULT
-
-
-def load_binance(cache: str) -> tuple:
-    """Clôtures/volumes Binance, mis en cache au format Coin Metrics
-    (téléchargés une fois ; jamais rafraîchis : études reproductibles)."""
-    return evolution.load_history(cache, list(LIVE_UNIVERSE_DEFAULT), max_age_days=None)
+from trendguard.texte import fr
 
 
 def run_variant(close: pd.DataFrame, volume: pd.DataFrame, pre, p: ts.TrendParams,
@@ -79,10 +71,10 @@ def run_variant(close: pd.DataFrame, volume: pd.DataFrame, pre, p: ts.TrendParam
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    ap = argparse.ArgumentParser(description="Étude d'adaptation TrendGuard")
-    ap.add_argument("--cache", default="data_binance")
-    args = ap.parse_args(argv)
-    v29.ensure_utf8_stdio()
+    """Étude d'adaptation : variantes de réduction du risque (profil prudent,
+    espérance récente, corrélation, entrées par jour, risque fixe)
+    comparées en 2018-2022 et depuis 2023 ; tableau Markdown affiché."""
+    args = study_args("Étude d'adaptation TrendGuard", None, argv)
     close, volume = load_binance(args.cache)
     base = ts.TrendParams()
     pre = ts.precompute(close, volume, base)
@@ -100,12 +92,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     for k in (2, 3):
         V[f"max {k} entrées / jour"] = (base, {"daily": k})
     for r in (0.005, 0.007):
-        V[f"risque fixe {r * 100:.1f} %"] = (
+        V[f"risque fixe {fr(r * 100, '.1f')} %"] = (
             dataclasses.replace(base, risk_pct=r, max_total_risk=6 * r), {})
 
     def f(m):
-        return (f"{m['cagr_pct']:+6.1f} % | {m['max_dd_pct']:6.1f} % | "
-                f"{m['sharpe']:4.2f} | {m['calmar']:4.2f} | {m['worst_month_pct']:6.1f} %")
+        return (f"{fr(m['cagr_pct'], '+6.1f')} % | {fr(m['max_dd_pct'], '6.1f')} % | "
+                f"{fr(m['sharpe'], '4.2f')} | {fr(m['calmar'], '4.2f')} | "
+                f"{fr(m['worst_month_pct'], '6.1f')} %")
     print("| Variante | IS CAGR | IS DD | IS Sharpe | IS Calmar | IS pire mois | "
           "OOS CAGR | OOS DD | OOS Sharpe | OOS Calmar | OOS pire mois |")
     print("|---|---|---|---|---|---|---|---|---|---|---|")

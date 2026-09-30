@@ -20,7 +20,7 @@ Commandes :
   python trendguard_bot.py run       # boucle continue (paper par défaut)
   python trendguard_bot.py once      # un seul cycle (cron)
   python trendguard_bot.py status    # état du portefeuille
-  python trendguard_bot.py resume    # lève le kill-switch après audit
+  python trendguard_bot.py resume    # lève l'arrêt d'urgence après audit
   python trendguard_bot.py supervise # bot relancé seul en cas de plantage
   python trendguard_bot.py stop      # arrêt propre de l'automatisation
   python trendguard_bot.py autostart on|off   # démarrage avec l'ordinateur
@@ -33,6 +33,8 @@ Outils (mêmes options qu'avant, après le nom de l'outil) :
   python trendguard_bot.py strategy download|research   # stratégie
   python trendguard_bot.py lab --cache data_binance     # laboratoire
   python trendguard_bot.py animation                    # page du rejeu
+  python trendguard_bot.py evolution [examen|regles]    # évolution encadrée
+  python trendguard_bot.py rapport [maintenant]         # rapport quotidien
 
 Ce fichier est le seul point d'entrée : le code est rangé dans le paquet
 trendguard/ (voir docs/ARCHITECTURE.md) et tous ses noms restent

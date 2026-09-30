@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import logging
 import os
 import sqlite3
 import sys
@@ -33,8 +32,9 @@ import v29
 from . import diagnostics as dg
 from . import trend_strategy as ts
 from .bot import TrendGuardBot
-from .config import GuardConfig, load_guard_config_from_env
-from .replay import HistoricalExchange
+from .config import load_guard_config_from_env
+from .replay import simulated_bot
+from .texte import fr
 
 TEMPLATE = os.path.join(v29.APP_DIR, "templates", "rejeu_trendguard.html")
 DEFAULT_OUT = os.path.join(v29.APP_DIR, "rejeu_trendguard.html")
@@ -86,20 +86,7 @@ def build_replay(close: pd.DataFrame, volume: pd.DataFrame, start: str,
     days = days[close["btc"].reindex(days).notna().values]
     if len(days) == 0:
         raise ValueError("Aucune clôture BTC sur la période demandée.")
-    hx = HistoricalExchange(close, volume)
-    g = GuardConfig(run_mode="paper", universe=tuple(a.upper() for a in close.columns),
-                       params=p, paper_capital=capital, db_file=":memory:",
-                       log_file=os.devnull, lock_file=os.devnull,
-                       auto_diagnose_days=0, heartbeat_min=0)
-    lg = logging.getLogger("trendguard.animation")
-    lg.handlers[:] = [logging.NullHandler()]
-    lg.propagate = False
-    store = v29.Store(":memory:", lg)
-    bot = TrendGuardBot(g, lg, hx, store, v29.Notifier("", "", logger=lg))
-    bot.sleep = lambda s: None
-    hx.set_now(days[0].to_pydatetime() + timedelta(days=1, minutes=5))
-    if not bot.boot():
-        raise RuntimeError("Démarrage du bot impossible")
+    bot, hx = simulated_bot(close, volume, days[0], capital, "trendguard.animation", params=p)
 
     # Signaux affichés (achats possibles non exécutés) : mêmes fonctions que
     # le bot, calculées une fois sur tout l'historique (indicateurs causaux).
@@ -155,7 +142,7 @@ def build_replay(close: pd.DataFrame, volume: pd.DataFrame, start: str,
                            "risk": round(sum(h["risk_quote"]
                                              for h in book["holdings"].values()), 2)})
     finally:
-        store.close()
+        bot.store.close()
 
     metrics = ts.compute_metrics(pd.Series(equity, index=days), bot.state["trades"])
     last = close.index.get_loc(days[-1])
@@ -237,6 +224,8 @@ def render_html(data: Dict[str, Any], template: str = TEMPLATE) -> str:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    """Ligne de commande de l'animation : rejoue le bot sur les clôtures
+    publiques de Binance depuis `--start`, écrit la page HTML et l'ouvre."""
     v29.ensure_utf8_stdio()
     ap = argparse.ArgumentParser(description="Animation du rejeu TrendGuard (HTML)")
     ap.add_argument("--start", default="2025-01-01", help="premier jour rejoué")
@@ -267,8 +256,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     m = data["metrics"]
     btc = data["close"]["btc"]
     print(f"✅ {args.out}\n   {data['start']} → {data['end']} : bot "
-          f"{m['total_return_pct']:+.1f} % (pire baisse {m['max_dd_pct']:.1f} %), "
-          f"BTC conservé {(btc[-1] / btc[0] - 1) * 100:+.1f} %, {m['trades']} trades, "
+          f"{fr(m['total_return_pct'], '+.1f')} % (pire baisse {fr(m['max_dd_pct'], '.1f')} %), "
+          f"BTC conservé {fr((btc[-1] / btc[0] - 1) * 100, '+.1f')} %, {m['trades']} trades, "
           f"{m['win_rate_pct']:.0f} % gagnants")
     if not args.no_open:
         webbrowser.open("file:///" + os.path.abspath(args.out).replace(os.sep, "/"))

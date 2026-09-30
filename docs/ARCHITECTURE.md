@@ -30,10 +30,10 @@ clé « Démarrer avec l'ordinateur » et les tâches VS Code ne changent pas.
 | `trendguard/` | le bot TrendGuard |
 | `v29/` | moteur d'exécution Binance (ordres, stops, base, verrou) ; ancien bot V29.6 rangé dans `v29/intraday/` |
 | `panel/` | panneau de contrôle (serveur local et interface web) |
-| `research/` | études reproductibles, lecture seule : adaptation, sélection, robustesse, examen |
+| `research/` | études reproductibles, lecture seule : adaptation, sélection, robustesse, examen ; `commun.py` leur donne les mêmes données, options et écriture du rapport |
 | `tests/` | tests Python (`pytest`) et navigateur (`tests/web/`, Playwright) |
 | `templates/` | gabarit de la page d'animation du rejeu |
-| `docs/` | rapports de recherche, audit, revues hebdomadaires |
+| `docs/` | rapports de recherche, audit, revues hebdomadaires ; sommaire dans `docs/README.md` |
 
 Les fichiers de fonctionnement (base `*.db`, journaux `*.log`, verrous,
 choix du panneau) restent à la racine, à côté de `trendguard_bot.py`, et ne
@@ -46,7 +46,10 @@ sont jamais envoyés sur GitHub. VS Code les masque dans l'explorateur
 | --- | --- |
 | `trend_strategy.py` | règles d'achat et de vente, backtest de recherche, sélection des cryptos |
 | `config.py` | configuration (`GuardConfig`), variables d'environnement documentées, fichier `.env`, journal |
-| `bot.py` | `TrendGuardBot` : décision quotidienne, ordres, stops, reprise après arrêt |
+| `bot.py` | `TrendGuardBot` : démarrage, cycle, décision quotidienne, sélection, boucle |
+| `bot_routines.py` | routines du cycle : disponibilité, veille, horloge, évolution et rapport lancés, anticipation, apprentissage, heartbeat |
+| `bot_execution.py` | exécution : entretien des positions, ventes, stops remontés, achats rusés (carnet anormal, achat différé) |
+| `bot_types.py` | types partagés du bot : `Slot`, `DecisionDeferred`, `last_closed_day` |
 | `selection.py` | cryptos achetables, choisies dans le panneau |
 | `explain.py` | raisonnement du jour, en phrases simples |
 | `anticipation.py` | ventes, achats et risques probables à la prochaine clôture |
@@ -57,13 +60,14 @@ sont jamais envoyés sur GitHub. VS Code les masque dans l'explorateur
 | `report.py` | rapport quotidien : sécurité, diagnostic du fond et de la forme, protections sûres, envoi |
 | `maintenance.py` | recommandations appliquées seules : veille du PC, mises à jour validées par le propriétaire |
 | `systeme.py` | accès au système partagé : commandes, git, GitHub, réglages de Windows, état en lecture seule |
-| `texte.py` | nombres écrits à la française, partagés par les rapports et les études |
+| `texte.py` | nombres écrits à la française (`fr`, `fr_plain`) pour le bot, le panneau, les rapports et les études |
+| `journal.py` | journaux muets des simulations et des vérifications (`silent_logger`) |
 | `alerts.py` | alertes Telegram, e-mail et WhatsApp |
 | `market_watch.py` | veille : annonces officielles de Binance, actualités, avis des IA |
 | `watch_claude.py` | avis de Claude pour la veille |
 | `diagnostics.py` | auto-diagnostic hebdomadaire (lecture seule) |
 | `strategy_lab.py` | laboratoire des stratégies |
-| `replay.py` | rejeu paper sur un historique réel |
+| `replay.py` | rejeu paper sur un historique réel ; bot simulé commun au rejeu et à l'animation (`simulated_bot`) |
 | `replay_animation.py` | page d'animation du rejeu |
 | `cli.py` | ligne de commande |
 
@@ -80,6 +84,7 @@ sont jamais envoyés sur GitHub. VS Code les masque dans l'explorateur
 | `static/js/core.js` | outils communs : formats, DOM, temps de chargement, API, notifications |
 | `static/js/charts.js` | graphiques, flèches d'achats et de ventes, niveaux d'entrée et de stop |
 | `static/js/assistant.js` | fenêtre de Rachelle, garde-fou des secrets côté navigateur |
+| `static/js/rapport.js` | rapport quotidien et centre de sécurité (onglet Réglages) |
 
 ## Le paquet `v29/`
 
@@ -148,9 +153,13 @@ trendguard_bot.py ─► trendguard
   l'anticipation, la veille et le diagnostic ; `cli.py` assemble le tout et
   n'est importé que par les points d'entrée (`trendguard_bot.py`,
   `python -m panel`).
+- Le bot est une seule classe en trois fichiers : `bot.py` (le cœur),
+  `bot_routines.py` et `bot_execution.py` (deux parties ajoutées par
+  héritage), avec les types communs dans `bot_types.py`.
 - Le panneau lit la base du bot sans la modifier et ne passe aucun ordre.
-- Dans le code du bot, `research` n'est importé que par le laboratoire, au
-  moment de le lancer.
+- Le code du bot n'importe jamais `research` : le laboratoire et les études
+  chargent leurs données par la même fonction (`evolution.load_history`, via
+  `research/commun.py` pour les études).
 
 ## Règles communes
 
@@ -162,6 +171,15 @@ trendguard_bot.py ─► trendguard
   inutilisés et les erreurs courantes.
 - **Journaux** : une étiquette entre crochets par sujet (`[ORD]`, `[STOP]`,
   `[VEILLE]`, `[RUSE]`, `[ANTICIPATION]`…).
+- **Nombres** : dans une phrase affichée, écrits à la française par
+  `texte.fr` (virgule décimale, espace des milliers, vrai signe moins). Le
+  point décimal reste dans les journaux techniques de la forme `clé=valeur`,
+  la consigne envoyée aux IA et les nombres envoyés à Binance.
+- **Simulations** : un seul bot simulé (`replay.simulated_bot`) et un seul
+  journal muet (`journal.silent_logger`) pour le rejeu, l'animation et les
+  vérifications.
+- **Fonctions** : une docstring en français pour toute fonction publique
+  longue ; une fonction qui dépasse une centaine de lignes est découpée.
 - **Configuration** : chaque variable d'environnement lue est documentée
   (`TG_ENV_DOC` dans `trendguard/config.py`, `ENV_DOC` dans
   `v29/constants.py`) ; un test vérifie qu'aucune n'est oubliée.

@@ -22,18 +22,15 @@ dégradent ? Mêmes données et même protocole que les autres études (Binance,
 
 from __future__ import annotations
 
-import argparse
 import dataclasses
 import itertools
-import os
 import sys
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 
-import v29
-from research import adaptation as ra
+from research.commun import load_binance, study_args, write_report
 from trendguard import trend_strategy as ts
 from trendguard.texte import fr
 
@@ -158,6 +155,9 @@ def _verdict_costs(x2, x3) -> str:
 
 
 def report(close: pd.DataFrame, volume: pd.DataFrame) -> str:
+    """Étude de robustesse complète (docs/ROBUSTESSE.md) : coûts et profil
+    prudent, paramètres voisins, gagnants retirés, années une à une et
+    Monte-Carlo des trades."""
     p = ts.TrendParams()
     pre = ts.precompute(close, volume, p)
     _is_p, oos_p = periods(close)
@@ -181,7 +181,7 @@ def report(close: pd.DataFrame, volume: pd.DataFrame) -> str:
     survives = no_top3[0]["cagr_pct"] > 0 and no_top3[1]["cagr_pct"] > 0
     down_years = [y for y, v in years.items() if v < 0]
     plateau = both_ok >= 22
-    money = lambda v: f"{v:+,.0f}".replace(",", " ").replace("-", "−") + " $"  # noqa: E731
+    money = lambda v: fr(v, "+,.0f") + " $"  # noqa: E731
     lines = [
         "# TrendGuard — les résultats tiennent-ils quand tout se dégrade ?",
         "",
@@ -302,18 +302,8 @@ def report(close: pd.DataFrame, volume: pd.DataFrame) -> str:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    ap = argparse.ArgumentParser(description="Étude de robustesse de TrendGuard")
-    ap.add_argument("--cache", default="data_binance")
-    ap.add_argument("--out", default="docs/ROBUSTESSE.md")
-    args = ap.parse_args(argv)
-    v29.ensure_utf8_stdio()
-    close, volume = ra.load_binance(args.cache)
-    text = report(close, volume)
-    os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
-    with open(args.out, "w", encoding="utf-8") as fh:
-        fh.write(text + "\n")
-    print(text)
-    print(f"\nRapport écrit : {args.out}")
+    args = study_args("Étude de robustesse de TrendGuard", "docs/ROBUSTESSE.md", argv)
+    write_report(report(*load_binance(args.cache)), args.out)
     return 0
 
 

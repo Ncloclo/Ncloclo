@@ -117,6 +117,10 @@ def _when(raw: str) -> Optional[datetime]:
 
 def parse_feed(xml_bytes: bytes, source: str, category: str, lang: str,
                universe: Tuple[str, ...] = ()) -> List[Dict[str, Any]]:
+    """Articles d'un flux RSS, du plus récent au plus ancien : titre et résumé
+    nettoyés, liens web seulement, vrai média pour Google Actualités,
+    sujets, cryptos citées, et alerte si le titre cite une crypto du bot
+    et un sujet sensible."""
     root = ET.fromstring(xml_bytes)
     out: List[Dict[str, Any]] = []
     for it in root.iter("item"):

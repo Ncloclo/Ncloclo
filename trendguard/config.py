@@ -189,6 +189,9 @@ def parse_dd_throttle(raw: str) -> Tuple[Tuple[float, float], ...]:
 
 
 def load_guard_config_from_env() -> GuardConfig:
+    """Configuration du bot lue dans l'environnement (.env) ; chaque variable
+    est documentée dans TG_ENV_DOC. Par défaut : paper, 1 % de risque par
+    achat, 6 % cumulé, 8 positions, arrêt d'urgence à −40 %."""
     uni = tuple(a.strip().upper() for a in
                 v29._env_s("TG_UNIVERSE", ",".join(LIVE_UNIVERSE_DEFAULT)).split(",")
                 if a.strip())

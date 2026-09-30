@@ -416,6 +416,11 @@ def run_daily(base: ts.TrendParams, path: str, today: date,
               judge_factory: Callable[[], Judge], storm: bool = False,
               notify: Callable[[str], None] = lambda _t: None,
               force: bool = False) -> Dict[str, Any]:
+    """Routine quotidienne de l'évolution encadrée (une fois par jour, sauf
+    `force`) : rien par tempête ; l'essai en cours est jugé à son terme
+    (confirmé ou annulé) ; sinon, après le repos, des réglages voisins sont
+    éprouvés et un seul n'est adopté que s'il réussit toutes les épreuves.
+    État enregistré dans `path`, puis renvoyé."""
     st = load_state(path)
     day = today.isoformat()
     if st.get("last_run") == day and not force:
@@ -567,6 +572,9 @@ def _print_rules(say: Callable[[str], None]) -> None:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    """Ligne de commande de l'évolution encadrée : statut (défaut), routine
+    quotidienne, examen (épreuves sans rien changer), retour aux réglages
+    d'origine ou rappel des règles."""
     from . import alerts
     from .config import load_guard_config_from_env
     ap = argparse.ArgumentParser(description="Évolution encadrée du bot TrendGuard")

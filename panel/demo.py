@@ -10,6 +10,8 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Tuple
 
+from trendguard.texte import fr
+
 from .data import merge_buys, reasoning_view
 from .market import INTERVALS
 
@@ -105,6 +107,7 @@ class DemoData:
                            {"start": now - 9 * 3600, "end": now - 7.5 * 3600, "cause": "asleep"}]}
 
     def state(self) -> Dict[str, Any]:
+        """État fictif du bot pour la démonstration, au format de la base."""
         eq = 10_000 + 180 * math.sin(time.time() / 600) + 420
         return {"last_decision_day": (datetime.now(timezone.utc) - timedelta(days=1)).date().isoformat(),
                 "last_equity": round(eq, 2), "start_equity": 10_000.0, "peak_equity": 10_650.0,
@@ -165,7 +168,7 @@ class DemoData:
         reg = self.market.regime()[0]
         last = reg["points"][-1]
         gap = (last["close"] / last["sma"] - 1) * 100
-        txt = f"{gap:+.1f} %".replace(".", ",")
+        txt = fr(gap, "+.1f") + " %"
         first = (f"Marché haussier : BTC au-dessus de sa moyenne 150 jours ({txt}), achats autorisés."
                  if reg["bull"] else
                  f"Marché baissier : BTC sous sa moyenne 150 jours ({txt}), aucun achat et stops "
@@ -239,7 +242,8 @@ class DemoData:
 
     def log_tail(self, lines: int = 300) -> List[str]:
         now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-        return [f"{now},000 [INFO] [HEARTBEAT] equity 10 420 USDT | régime BTC HAUSSIER (démonstration)",
+        return [f"{now},000 [INFO] [HEARTBEAT] capital 10 420,00 USDT (+4,20 %) | régime BTC HAUSSIER "
+                "(démonstration)",
                 f"{now},000 [WARNING] [PAPER] ADA/USDT : prix indisponible (exemple)",
                 f"{now},000 [INFO] [DAILY] TrendGuard — 6 positions (exemple)"]
 
@@ -310,6 +314,7 @@ DEMO_QUOTES = (("sp500", "S&P 500", "", 7743.0, 0.42), ("nasdaq", "Nasdaq", "", 
 
 class DemoNews:
     def snapshot(self) -> Dict[str, Any]:
+        """Actualités et marchés fictifs du mode démonstration."""
         now = datetime.now(timezone.utc)
         items = []
         for k, (cat, lang, src, title, assets, topics) in enumerate(DEMO_NEWS):

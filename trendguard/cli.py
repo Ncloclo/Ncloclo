@@ -33,7 +33,9 @@ from .config import (
     load_guard_config_from_env,
     set_env_var,
 )
+from .journal import silent_logger
 from .replay import replay
+from .texte import fr, fr_plain
 
 
 def _build(gcfg: GuardConfig) -> TrendGuardBot:
@@ -308,20 +310,8 @@ def _verify_balances(exchange: Any, say: Callable[..., None]) -> None:
             except Exception:
                 px = 0.0
         value += qty * px
-        say(f"  {asset:<8} {qty:>18.8f}  ≈ {qty * px:>12,.2f} USDT")
-    say(f"  Valeur totale estimée : {value:,.2f} USDT")
-
-
-def _quiet_logger(out: Any) -> logging.Logger:
-    """Journal de la vérification : seules les causes d'échec s'affichent."""
-    quiet = logging.getLogger("trendguard.verify")
-    reasons = logging.StreamHandler(out)
-    reasons.setLevel(logging.WARNING)
-    reasons.setFormatter(logging.Formatter("  ⚠️  %(message)s"))
-    quiet.handlers[:] = [reasons]
-    quiet.setLevel(logging.WARNING)
-    quiet.propagate = False
-    return quiet
+        say(f"  {asset:<8} {fr(qty, '>18.8f')}  ≈ {fr(qty * px, '>12,.2f')} USDT")
+    say(f"  Valeur totale estimée : {fr(value, ',.2f')} USDT")
 
 
 def _verify_decision(gcfg: GuardConfig, exchange: Any, rights: Optional[Dict[str, Any]],
@@ -334,7 +324,7 @@ def _verify_decision(gcfg: GuardConfig, exchange: Any, rights: Optional[Dict[str
                                live_confirmation="I_UNDERSTAND_RISK",
                                db_file=":memory:", log_file=os.devnull,
                                lock_file=os.devnull)
-    quiet = _quiet_logger(out)
+    quiet = silent_logger("trendguard.verify", out)
     store = v29.Store(":memory:", quiet)
     bot = TrendGuardBot(live, quiet, exchange, store,
                         v29.Notifier("", "", logger=quiet))
@@ -368,7 +358,8 @@ def _report_decision(d: Dict[str, Any], say: Callable[..., None]) -> bool:
     """Affiche la décision simulée ; False si le capital est insuffisant."""
     say(f"  Bougie du {d['day']} | régime BTC : "
         f"{'HAUSSIER' if d['bull'] else 'BAISSIER (aucun achat)'}")
-    say(f"  Capital géré : {d['equity']:,.2f} USDT | USDT disponible : {d['cash']:,.2f}")
+    say(f"  Capital géré : {fr(d['equity'], ',.2f')} USDT | USDT disponible : "
+        f"{fr(d['cash'], ',.2f')}")
     ok = d["equity"] >= MIN_LIVE_CAPITAL
     if not ok:
         say(f"  ❌ Capital insuffisant : Binance impose ~5 USDT minimum par ordre ; "
@@ -381,11 +372,11 @@ def _report_decision(d: Dict[str, Any], say: Callable[..., None]) -> bool:
     spent = 0.0
     for p in d["plans"]:
         spent += p["cost"]
-        say(f"  ↗ achat prévu {p['asset'].upper():<5} {p['qty']:.6g} ≈ "
-            f"{p['cost']:,.2f} USDT | stop {p['stop']:.6g} | "
-            f"risque {p['risk_quote']:.2f} USDT")
+        say(f"  ↗ achat prévu {p['asset'].upper():<5} {fr(p['qty'], '.6g')} ≈ "
+            f"{fr(p['cost'], ',.2f')} USDT | stop {fr(p['stop'], '.6g')} | "
+            f"risque {fr(p['risk_quote'], '.2f')} USDT")
     if d["plans"]:
-        say(f"  Total : {spent:,.2f} USDT ({spent / max(d['equity'], 1e-9) * 100:.0f} % "
+        say(f"  Total : {fr(spent, ',.2f')} USDT ({spent / max(d['equity'], 1e-9) * 100:.0f} % "
             f"du capital géré)")
     else:
         say("  Aucun achat prévu aujourd'hui.")
@@ -433,7 +424,6 @@ def cmd_verify_public(gcfg: GuardConfig, exchange: Any = None,
     mais jamais envoyées). Retourne 0 si tout est conforme."""
     out = out or sys.stdout
     say = lambda msg="": print(msg, file=out)       # noqa: E731
-    ok = True
     exchange = exchange or v29.make_binance(testnet=gcfg.binance_testnet)
     _forbid_orders(exchange)
     say(f"Vérification {'TESTNET' if gcfg.binance_testnet else 'BINANCE RÉEL'} "
@@ -453,13 +443,7 @@ def cmd_verify_public(gcfg: GuardConfig, exchange: Any = None,
                               db_file=":memory:", log_file=os.devnull,
                               lock_file=os.devnull, auto_diagnose_days=0,
                               heartbeat_min=0)
-    quiet = logging.getLogger("trendguard.verify")
-    reasons = logging.StreamHandler(out)
-    reasons.setLevel(logging.WARNING)
-    reasons.setFormatter(logging.Formatter("  ⚠️  %(message)s"))
-    quiet.handlers[:] = [reasons]
-    quiet.setLevel(logging.WARNING)
-    quiet.propagate = False
+    quiet = silent_logger("trendguard.verify", out)
     store = v29.Store(":memory:", quiet)
     bot = TrendGuardBot(sim, quiet, exchange, store,
                         v29.Notifier("", "", logger=quiet))
@@ -468,23 +452,8 @@ def cmd_verify_public(gcfg: GuardConfig, exchange: Any = None,
         if not bot.boot():
             say("  ❌ Chargement des marchés impossible (causes ci-dessus).")
             return 1
-        say(f"  Marchés chargés en {time.time() - t0:.1f} s ✓")
-
-        say("\n── 2. Règles Binance des paires")
-        missing = [b for b in gcfg.universe if b not in bot.slots]
-        if missing:
-            ok = False
-            say(f"  ❌ Paires absentes ou suspendues : {', '.join(missing)}")
-        for base, sl in sorted(bot.slots.items()):
-            r = sl.ex.rules
-            try:
-                stop = sl.ex.stop_order_type
-            except Exception as e:
-                ok = False
-                say(f"  ❌ {base:<5} aucun ordre stop disponible ({e})")
-                continue
-            say(f"  ✓ {base:<5} stop {stop:<15} minimum {r.min_cost:g} USDT, "
-                f"pas de quantité {r.step_size:g}, pas de prix {r.tick_size:g}")
+        say(f"  Marchés chargés en {fr(time.time() - t0, '.1f')} s ✓")
+        ok = _verify_pair_rules(gcfg, bot, say)
 
         now = now or v29._utcnow()
         day = last_closed_day(now, sim.decision_delay_sec)
@@ -495,7 +464,7 @@ def cmd_verify_public(gcfg: GuardConfig, exchange: Any = None,
             return 1
         plans = ts.plan_entries({}, snap, bull, capital, capital, sim.params)
         say(f"\n── 3. Ordres que le bot passerait aujourd'hui (capital simulé "
-            f"{capital:,.2f} USDT, bougie du {day}, régime BTC "
+            f"{fr(capital, ',.2f')} USDT, bougie du {day}, régime BTC "
             f"{'HAUSSIER' if bull else 'BAISSIER'})")
         if capital < MIN_LIVE_CAPITAL:
             ok = False
@@ -504,48 +473,11 @@ def cmd_verify_public(gcfg: GuardConfig, exchange: Any = None,
         build = getattr(exchange, "create_order_request", None)
         cash = capital
         for plan in plans:
-            a = plan["asset"].upper()
-            sl = bot.slots[a]
-            t = sl.ex.get_ticker()
-            adj = ts.reprice_entry(plan, float(t["ask"]), capital, cash, sim.params)
-            if adj is None:
-                say(f"  ↷ {a:<5} achat annulé : prix actuel trop proche du stop")
-                continue
-            errors: List[str] = []
-            qty = sl.ex.round_amount(adj["qty"])
-            notional = qty * float(t["ask"])
-            if qty <= 0 or notional < sl.ex.min_notional() * 1.05:
-                errors.append(f"achat de {notional:.2f} USDT sous le minimum "
-                              f"({sl.ex.min_notional():g} USDT)")
-            net = sl.ex.round_amount(qty * (1 - sim.params.fee))  # frais en base
-            disaster = adj["stop"] - gcfg.catastrophe_atr * adj["vol"]
-            if disaster <= 0:
-                disaster = adj["stop"] * 0.5
-            stop_px = sl.ex.round_price(disaster, "down")
-            if not 0 < stop_px < float(t["last"]):
-                errors.append(f"stop {stop_px:g} au-dessus du prix actuel")
-            try:
-                stop_type = sl.ex.stop_order_type
-                if callable(build):
-                    build(sl.symbol, "market", "buy", qty, None,
-                          {"newClientOrderId": "TGVERIFY"})
-                    params: Dict[str, Any] = {"stopPrice": stop_px}
-                    price = None
-                    if stop_type == "STOP_LOSS_LIMIT":
-                        price = sl.ex.round_price(
-                            stop_px * (1 - sl.cfg.stop_limit_offset_pct), "down")
-                        params["timeInForce"] = "GTC"
-                    build(sl.symbol, stop_type, "sell", net, price, params)
-            except Exception as e:
-                errors.append(f"requête refusée : {type(e).__name__}: {str(e)[:100]}")
-            if errors:
-                ok = False
-                say(f"  ❌ {a:<5} " + " ; ".join(errors))
-            else:
-                say(f"  ✓ {a:<5} achat {qty:g} ≈ {notional:,.2f} USDT, puis stop "
-                    f"{stop_type} de {net:g} à {stop_px:g} (stop de clôture "
-                    f"{adj['stop']:.6g}, risque {adj['risk_quote']:.2f} USDT)")
-            cash -= adj["cost"]
+            checked = _verify_order(gcfg, sim.params, bot.slots[plan["asset"].upper()], plan,
+                                    capital, cash, build, say)
+            if checked is not None:
+                ok = checked[0] and ok
+                cash -= checked[1]
         if not plans:
             say("  Aucun achat prévu aujourd'hui.")
     finally:
@@ -558,9 +490,78 @@ def cmd_verify_public(gcfg: GuardConfig, exchange: Any = None,
     return 0 if ok else 1
 
 
+def _verify_pair_rules(gcfg: GuardConfig, bot: TrendGuardBot, say: Callable[..., None]) -> bool:
+    """Vérification publique, étape 2 : chaque paire est cotée et accepte un
+    ordre stop ; affiche ses règles (minimum, pas de quantité et de prix)."""
+    say("\n── 2. Règles Binance des paires")
+    ok = True
+    missing = [b for b in gcfg.universe if b not in bot.slots]
+    if missing:
+        ok = False
+        say(f"  ❌ Paires absentes ou suspendues : {', '.join(missing)}")
+    for base, sl in sorted(bot.slots.items()):
+        r = sl.ex.rules
+        try:
+            stop = sl.ex.stop_order_type
+        except Exception as e:
+            ok = False
+            say(f"  ❌ {base:<5} aucun ordre stop disponible ({e})")
+            continue
+        say(f"  ✓ {base:<5} stop {stop:<15} minimum {fr_plain(r.min_cost)} USDT, "
+            f"pas de quantité {fr_plain(r.step_size)}, pas de prix {fr_plain(r.tick_size)}")
+    return ok
+
+
+def _verify_order(gcfg: GuardConfig, params: ts.TrendParams, sl: Any, plan: Dict[str, Any],
+                  capital: float, cash: float, build: Optional[Callable[..., Any]],
+                  say: Callable[..., None]) -> Optional[Tuple[bool, float]]:
+    """Vérification publique, étape 3, pour un achat prévu : quantité arrondie
+    au pas Binance, montant minimum, stop catastrophe sous le prix, puis
+    requêtes ccxt préparées (jamais envoyées). None si l'achat est annulé au
+    prix actuel ; sinon (conforme, coût de l'achat)."""
+    a = plan["asset"].upper()
+    t = sl.ex.get_ticker()
+    adj = ts.reprice_entry(plan, float(t["ask"]), capital, cash, params)
+    if adj is None:
+        say(f"  ↷ {a:<5} achat annulé : prix actuel trop proche du stop")
+        return None
+    errors: List[str] = []
+    qty = sl.ex.round_amount(adj["qty"])
+    notional = qty * float(t["ask"])
+    if qty <= 0 or notional < sl.ex.min_notional() * 1.05:
+        errors.append(f"achat de {fr(notional, '.2f')} USDT sous le minimum "
+                      f"({fr_plain(sl.ex.min_notional())} USDT)")
+    net = sl.ex.round_amount(qty * (1 - params.fee))  # frais en base
+    disaster = adj["stop"] - gcfg.catastrophe_atr * adj["vol"]
+    if disaster <= 0:
+        disaster = adj["stop"] * 0.5
+    stop_px = sl.ex.round_price(disaster, "down")
+    if not 0 < stop_px < float(t["last"]):
+        errors.append(f"stop {fr_plain(stop_px)} au-dessus du prix actuel")
+    try:
+        stop_type = sl.ex.stop_order_type
+        if callable(build):
+            build(sl.symbol, "market", "buy", qty, None, {"newClientOrderId": "TGVERIFY"})
+            order: Dict[str, Any] = {"stopPrice": stop_px}
+            price = None
+            if stop_type == "STOP_LOSS_LIMIT":
+                price = sl.ex.round_price(stop_px * (1 - sl.cfg.stop_limit_offset_pct), "down")
+                order["timeInForce"] = "GTC"
+            build(sl.symbol, stop_type, "sell", net, price, order)
+    except Exception as e:
+        errors.append(f"requête refusée : {type(e).__name__}: {str(e)[:100]}")
+    if errors:
+        say(f"  ❌ {a:<5} " + " ; ".join(errors))
+    else:
+        say(f"  ✓ {a:<5} achat {fr_plain(qty)} ≈ {fr(notional, ',.2f')} USDT, puis stop "
+            f"{stop_type} de {fr_plain(net)} à {fr_plain(stop_px)} (stop de clôture "
+            f"{fr(adj['stop'], '.6g')}, risque {fr(adj['risk_quote'], '.2f')} USDT)")
+    return not errors, adj["cost"]
+
+
 def health_check(gcfg: GuardConfig, max_age_sec: int) -> int:
-    """0 si le dernier cycle réussi date de moins de `max_age_sec` et que le
-    kill-switch n'est pas déclenché ; 1 sinon (contrôle de santé Docker)."""
+    """0 si le dernier cycle réussi date de moins de `max_age_sec` et que
+    l'arrêt d'urgence n'est pas déclenché ; 1 sinon (contrôle de santé Docker)."""
     try:
         store = v29.Store(gcfg.db_file, logging.getLogger("trendguard.health"))
         try:
@@ -579,7 +580,7 @@ def health_check(gcfg: GuardConfig, max_age_sec: int) -> int:
         print(f"KO : dernier cycle il y a {age:.0f} s (> {max_age_sec} s)")
         return 1
     if state.get("halted"):
-        print(f"KO : kill-switch — {state.get('halt_reason')}")
+        print(f"KO : arrêt d'urgence — {state.get('halt_reason')}")
         return 1
     print(f"OK : dernier cycle il y a {age:.0f} s, décision du "
           f"{state.get('last_decision_day')}")
@@ -613,9 +614,7 @@ def diagnose_findings(gcfg: GuardConfig, exchange: Any = None, now: Optional[dat
     if now is None:
         v29.sync_exchange_clock(exchange, samples=3)     # heure de Binance
         now = v29._utcnow()
-    quiet = logging.getLogger("trendguard.diagnose")
-    quiet.handlers[:] = [logging.NullHandler()]
-    quiet.propagate = False
+    quiet = silent_logger("trendguard.diagnose")
     state: Dict[str, Any] = {}
     holdings: List[Dict[str, Any]] = []
     if gcfg.db_file != ":memory:" and os.path.exists(gcfg.db_file):
@@ -711,22 +710,22 @@ def _print_replay(args: argparse.Namespace) -> int:
     print("\n" + "═" * 64)
     print(f"REJEU PAPER {args.start} → {res['last_day']} (prix réels)")
     print("═" * 64)
-    print(f"Capital : {args.capital:,.2f} → {res['equity'].iloc[-1]:,.2f} USDT "
-          f"({m['total_return_pct']:+.1f} %)")
-    print(f"Max drawdown : {m['max_dd_pct']:.1f} %  |  Sharpe : {m['sharpe']:.2f}")
-    print(f"Trades clos : {m['trades']}  |  gagnants : {m['win_rate_pct']:.0f} %"
-          f"  |  gain moy. {m['avg_win_r']:+.2f} R  |  perte moy. "
-          f"{m['avg_loss_r']:+.2f} R")
-    print(f"Régime BTC au dernier jour : "
-          f"{'HAUSSIER' if res['regime_bull'] else 'BAISSIER (aucune entrée)'}")
+    print(f"Capital : {fr(args.capital, ',.2f')} → {fr(res['equity'].iloc[-1], ',.2f')} USDT "
+          f"({fr(m['total_return_pct'], '+.1f')} %)")
+    print(f"Pire baisse : {fr(m['max_dd_pct'], '.1f')} %  |  Sharpe : {fr(m['sharpe'], '.2f')}")
+    print(f"Trades clos : {m['trades']}  |  gagnants : {fr(m['win_rate_pct'], '.0f')} %"
+          f"  |  gain moyen {fr(m['avg_win_r'], '+.2f')} R  |  perte moyenne "
+          f"{fr(m['avg_loss_r'], '+.2f')} R")
+    print("Marché au dernier jour : "
+          f"{'haussier' if res['regime_bull'] else 'baissier (aucun achat)'}")
     if not res["holdings"]:
         print("Positions ouvertes : aucune (100 % USDT)")
         return 0
     print("Positions ouvertes :")
     for a, h in res["holdings"].items():
         px = float(res["prices"][a])
-        print(f"  {a.upper():<5} entrée {h['entry']:.6g} → {px:.6g} "
-              f"({(px / h['entry'] - 1) * 100:+.1f} %)  stop {h['stop']:.6g}")
+        print(f"  {a.upper():<5} achat {fr(h['entry'], '.6g')} → {fr(px, '.6g')} "
+              f"({fr((px / h['entry'] - 1) * 100, '+.1f')} %)  stop {fr(h['stop'], '.6g')}")
     return 0
 
 
@@ -737,7 +736,7 @@ def _print_docs() -> int:
 
 
 def _status(gcfg: GuardConfig, resume: bool) -> int:
-    """État du portefeuille ; `resume` lève aussi le kill-switch."""
+    """État du portefeuille ; `resume` lève aussi l'arrêt d'urgence."""
     locks: List[v29.ProcessLock] = []
     if resume:
         # resume modifie l'état : interdit pendant que le bot tourne (il
@@ -756,19 +755,21 @@ def _status(gcfg: GuardConfig, resume: bool) -> int:
         state["halt_reason"] = None
         state["peak_equity"] = state.get("last_equity")
         store.set_kv(TrendGuardBot.STATE_KEY, state)
-        print("✅ Kill-switch levé (pic d'equity réinitialisé).")
+        print("✅ Arrêt d'urgence levé (plus haut du capital remis au niveau actuel).")
     trades = state.get("trades", [])
     wins = [t for t in trades if t["pnl"] > 0]
-    print(f"Dernière décision : {state.get('last_decision_day')}")
-    print(f"Equity            : {state.get('last_equity')}")
-    print(f"Pic               : {state.get('peak_equity')}")
-    print(f"Halt              : {state.get('halted')} {state.get('halt_reason') or ''}")
-    print(f"Trades clos       : {len(trades)} (gagnants {len(wins)})")
+    money = lambda v: f"{fr(float(v), ',.2f')} {gcfg.quote}" if v is not None else "–"  # noqa: E731
+    print(f"Dernière décision : bougie du {state.get('last_decision_day') or '–'}")
+    print(f"Capital           : {money(state.get('last_equity'))}")
+    print(f"Plus haut         : {money(state.get('peak_equity'))}")
+    print("Arrêt d'urgence   : " + (f"DÉCLENCHÉ — {state.get('halt_reason')}"
+                                    if state.get("halted") else "prêt, non déclenché"))
+    print(f"Trades clos       : {len(trades)} (gagnants : {len(wins)})")
     if trades:
-        print(f"R moyen           : {sum(t['r'] for t in trades)/len(trades):+.2f}")
+        print(f"R moyen           : {fr(sum(t['r'] for t in trades) / len(trades), '+.2f')} R")
     if "paper" in state:
-        print(f"Paper cash        : {state['paper']['cash']:.2f} | positions : "
-              f"{', '.join(a.upper() for a in state['paper']['holdings']) or '-'}")
+        print(f"Liquidités paper  : {money(state['paper']['cash'])} | positions : "
+              f"{', '.join(a.upper() for a in state['paper']['holdings']) or 'aucune'}")
     store.close()
     v29.release_locks(locks)
     return 0
@@ -783,7 +784,7 @@ def _run(gcfg: GuardConfig, once: bool) -> int:
         bot.logger.info(f"TrendGuard — {gcfg.run_mode.upper()}"
                         f"{' TESTNET' if gcfg.binance_testnet and gcfg.run_mode == 'live' else ''} — "
                         f"{len(gcfg.universe)} actifs, risque "
-                        f"{gcfg.params.risk_pct*100:.2f} %/trade")
+                        f"{fr(gcfg.params.risk_pct*100, '.2f')} %/trade")
         signal.signal(signal.SIGINT, _bot._stop)
         signal.signal(signal.SIGTERM, _bot._stop)
         if once:
@@ -819,6 +820,9 @@ def _run(gcfg: GuardConfig, once: bool) -> int:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    """Point d'entrée de `python trendguard_bot.py <commande>` : outils
+    (alertes, veille, stratégie…), commandes utilisables sans configuration
+    (clés, mot de passe, démarrage avec l'ordinateur), puis celles du bot."""
     v29.ensure_utf8_stdio()
     argv = sys.argv[1:] if argv is None else list(argv)
     if argv and argv[0] in TOOLS:

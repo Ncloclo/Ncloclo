@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 
 import v29
 from trendguard import market_watch as mw
+from trendguard.journal import silent_logger
 
 from .market import Market
 
@@ -119,7 +120,7 @@ class BotData:
             return out
         if not os.path.exists(self.g.db_file):
             return out
-        store = v29.Store(self.g.db_file, _quiet_logger())
+        store = v29.Store(self.g.db_file, silent_logger("trendguard.panel.store"))
         try:
             for base in self.g.universe:
                 ctx = store.load_context(key=f"ctx:{base}/{self.g.quote}")
@@ -197,11 +198,3 @@ class BotData:
             fh.seek(max(0, size - 256_000))
             data = fh.read().decode("utf-8", "replace")
         return data.splitlines()[-max(10, min(2000, lines)):]
-
-
-def _quiet_logger():
-    import logging
-    lg = logging.getLogger("trendguard.panel.store")
-    lg.handlers[:] = [logging.NullHandler()]
-    lg.propagate = False
-    return lg

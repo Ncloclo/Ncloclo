@@ -32,6 +32,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional
 import pandas as pd
 
 from . import trend_strategy as ts
+from .texte import fr
 
 SQRT_PI_2 = math.sqrt(math.pi / 2)     # |Δ| moyen → écart-type (loi normale)
 
@@ -208,7 +209,7 @@ def forecast(basis: Dict[str, Any], prices: Dict[str, float], holdings: List[Dic
 
 
 def _fr(x: float, d: int = 1) -> str:
-    return f"{x:,.{d}f}".replace(",", " ").replace(".", ",")
+    return fr(x, f",.{d}f")
 
 
 def _px(v: float) -> str:

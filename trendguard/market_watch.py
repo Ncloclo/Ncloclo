@@ -51,6 +51,8 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
 
 import v29
 
+from .texte import fr
+
 DEFAULT_DB = os.path.join(v29.APP_DIR, "trendguard_veille.db")
 UA = "Mozilla/5.0 (TrendGuard veille; lecture seule)"
 BINANCE_CMS = "https://www.binance.com/bapi/composite/v1/public/cms/article"
@@ -274,10 +276,6 @@ class Item:
     source: str
     published: str          # ISO UTC
 
-    def as_dict(self) -> Dict[str, str]:
-        return {"title": self.title, "url": self.url, "source": self.source,
-                "published": self.published}
-
 
 def parse_rss(xml_bytes: bytes, source: str) -> List[Item]:
     root = ET.fromstring(xml_bytes)
@@ -445,6 +443,9 @@ SYSTEM = (
 
 def build_prompt(day: str, universe: List[str], held: List[str], items: List[Item],
                  indicators: Dict[str, Any], memory: List[Dict[str, Any]], web: bool) -> str:
+    """Consigne envoyée aux IA de la veille : date, cryptos suivies et
+    détenues, indicateurs, mémoire des jours précédents et actualités du
+    jour."""
     lines = [f"Date : {day} (UTC).",
              "Cryptos suivies : " + ", ".join(f"{a} ({ASSET_NAMES.get(a, (a,))[0]})"
                                              for a in universe) + ".",
@@ -619,6 +620,9 @@ def provider_weights(opinions: List[Tuple[str, str, str, float]], close: Any,
 
 
 def consensus(results: Dict[str, Dict[str, Any]], weights: Dict[str, Dict[str, float]]) -> Dict[str, Any]:
+    """Consensus des IA pondéré par leur fiabilité : climat moyen, avis par
+    crypto, événements regroupés par crypto et catégorie (gravité médiane)
+    et résumé de l'IA la plus fiable."""
     ok = {n: r["data"] for n, r in results.items() if r.get("ok")}
     if not ok:
         return {"providers": 0, "sentiment": 0.0, "summary": "", "events": [], "views": {}}
@@ -682,6 +686,9 @@ def daily_report(universe: Iterable[str], held: Iterable[str], now: datetime, me
                  fetch_json: Callable[[str], Any] = http_json,
                  fetch_bytes: Callable[[str], bytes] = http_get,
                  call: Callable[..., Tuple[str, Set[str]]] = call_provider) -> Dict[str, Any]:
+    """Veille du jour : annonces officielles de Binance (vetos d'achat),
+    actualités, indicateurs et avis des IA réunis en consensus ; alertes
+    triées par gravité. Rapport gardé en mémoire, puis renvoyé."""
     universe = [a.lower() for a in universe]
     held = [a.lower() for a in held]
     day = now.date().isoformat()
@@ -728,7 +735,8 @@ def daily_report(universe: Iterable[str], held: Iterable[str], now: datetime, me
                            "url": (e["sources"] or [""])[0]})
     peg = indicators.get("usdc_usdt")
     if peg is not None and abs(peg - 1) > 0.005:
-        alerts.append({"level": 3, "text": f"Parité USDC/USDT à {peg:.4f} : un stablecoin décroche",
+        alerts.append({"level": 3,
+                       "text": f"Parité USDC/USDT à {fr(peg, '.4f')} : un stablecoin décroche",
                        "url": ""})
     alerts.sort(key=lambda a: -a["level"])
     report = {
@@ -742,18 +750,23 @@ def daily_report(universe: Iterable[str], held: Iterable[str], now: datetime, me
 
 
 def render(report: Dict[str, Any]) -> str:
+    """Veille du jour en texte : climat selon les IA, Fear & Greed, vetos,
+    alertes, événements, avis par crypto, état de chaque IA et sources
+    indisponibles."""
     c = report["consensus"]
     ind = report["indicators"]
     lines = [f"VEILLE DU MARCHÉ — {report['day']} ({report['items']} actualités)"]
     mood = c["sentiment"]
     label = "positif" if mood > 0.2 else "négatif" if mood < -0.2 else "neutre"
     if c["providers"]:
-        lines.append(f"Climat selon {c['providers']} IA : {label} ({mood:+.2f}). {c['summary']}")
+        lines.append(f"Climat selon {c['providers']} IA : {label} ({fr(mood, '+.2f')}). "
+                     f"{c['summary']}")
     else:
         lines.append("Aucune IA configurée ou disponible : signaux par mots-clés seulement.")
     if "fear_greed" in ind:
         lines.append(f"Fear & Greed : {ind['fear_greed']} ({ind['fear_greed_label']})"
-                     + (f" · USDC/USDT {ind['usdc_usdt']:.4f}" if "usdc_usdt" in ind else ""))
+                     + (f" · USDC/USDT {fr(ind['usdc_usdt'], '.4f')}" if "usdc_usdt" in ind
+                        else ""))
     if report["vetoes"]:
         lines.append("Achats bloqués (annonces officielles Binance) : "
                      + ", ".join(f"{a.upper()} jusqu'au {v['until']}" for a, v in sorted(report["vetoes"].items())))
@@ -766,7 +779,8 @@ def render(report: Dict[str, Any]) -> str:
                          f"{', '.join(e['providers'])}) : {e['summary']}")
     if c.get("views"):
         top = sorted(c["views"].items(), key=lambda kv: kv[1])
-        lines.append("Avis par crypto : " + ", ".join(f"{a.upper()} {s:+.1f}" for a, s in top))
+        lines.append("Avis par crypto : "
+                     + ", ".join(f"{a.upper()} {fr(s, '+.1f')}" for a, s in top))
     if report["providers"]:
         parts = []
         for n, r in sorted(report["providers"].items()):
@@ -803,7 +817,7 @@ def cmd_check(env: Optional[Dict[str, str]] = None, call: Callable[..., Tuple[st
         r = results[p.name]
         ok += bool(r["ok"])
         print(f"  {'✓' if r['ok'] else '✗'} {p.label:<11} {model:<24} "
-              + (f"{r['seconds']:.1f} s" if r["ok"] else r["error"]), file=out)
+              + (f"{fr(r['seconds'], '.1f')} s" if r["ok"] else r["error"]), file=out)
     return 0 if ok == len(providers) else 1
 
 
@@ -832,6 +846,8 @@ def cmd_set_key(name: str, env_path: Optional[str] = None,
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    """Ligne de commande de la veille : rapport du jour (défaut), test des IA
+    configurées ou saisie masquée d'une clé d'IA (set-key)."""
     v29.ensure_utf8_stdio()
     ap = argparse.ArgumentParser(description="Veille de marché TrendGuard (conseil + veto officiel)")
     ap.add_argument("cmd", nargs="?", default="report", choices=["report", "check", "set-key"])

@@ -428,6 +428,9 @@ def _log_tail_24h(path: str, now: datetime) -> List[str]:
 
 
 def check_log(log_file: str, now: datetime) -> Check:
+    """Journal des 24 dernières heures : erreurs du bot, séparées de ses
+    alertes critiques et des coupures d'Internet ou de Binance, et
+    avertissements."""
     lines = _log_tail_24h(log_file, now)
     if not lines:
         return chk("Journal des 24 dernières heures", None, "vide ou illisible")
@@ -466,6 +469,9 @@ def decision_time(log_file: str, now: datetime) -> Optional[str]:
 
 def bot_checks(gcfg: Any, st: Dict[str, Any], status: Optional[Dict[str, Any]],
                now: datetime) -> List[Check]:
+    """Santé du bot pour le rapport : marche, dernier cycle, disponibilité sur
+    7 jours, relance automatique, démarrage avec l'ordinateur, décision du
+    jour, arrêt d'urgence, risque, mode et espace disque."""
     p = gcfg.params
     out = []
     if status:
@@ -480,7 +486,7 @@ def bot_checks(gcfg: Any, st: Dict[str, Any], status: Optional[Dict[str, Any]],
         u = status.get("uptime") or {}
         week = u.get("week_pct")
         out.append(chk("Disponibilité (7 jours)", None if week is None else week >= 95,
-                       "mesure en cours" if week is None else f"{week:.0f} % du temps".replace(".", ","),
+                       "mesure en cours" if week is None else f"{fr(week, '.0f')} % du temps",
                        "" if week is None or week >= 95 else
                        f"Laissez le PC allumé et branché en continu : le bot n'a tourné que "
                        f"{week:.0f} % du temps sur 7 jours."))
@@ -504,15 +510,15 @@ def bot_checks(gcfg: Any, st: Dict[str, Any], status: Optional[Dict[str, Any]],
     wise = p.risk_pct <= 0.01 and p.max_total_risk <= 0.06 and p.max_positions <= 8 \
         and gcfg.kill_drawdown <= 0.40
     out.append(chk("Risque configuré", wise,
-                   f"{p.risk_pct * 100:g} % par achat, {p.max_total_risk * 100:g} % cumulé, "
-                   f"{p.max_positions} positions, arrêt d'urgence à −{gcfg.kill_drawdown * 100:g} %"
-                   .replace(".", ","),
+                   f"{fr(p.risk_pct * 100, 'g')} % par achat, {fr(p.max_total_risk * 100, 'g')} % "
+                   f"cumulé, {p.max_positions} positions, arrêt d'urgence à "
+                   f"−{fr(gcfg.kill_drawdown * 100, 'g')} %",
                    "" if wise else "Revenez aux limites sages : 1 % par achat, 6 % cumulé, 8 "
                                    "positions, arrêt à −40 % (fichier .env)."))
     out.append(chk("Mode", None if gcfg.run_mode == "live" else True,
                    "RÉEL" if gcfg.run_mode == "live" else "paper : aucun argent réel en jeu"))
     free = shutil.disk_usage(v29.APP_DIR).free / 1e9
-    out.append(chk("Espace disque", free >= 2, f"{free:.1f} Go libres".replace(".", ","),
+    out.append(chk("Espace disque", free >= 2, f"{fr(free, '.1f')} Go libres",
                    "" if free >= 2 else "Libérez de l'espace disque (moins de 2 Go)."))
     return out
 
@@ -854,6 +860,10 @@ def launch(gcfg: Any, action: str = "quotidien") -> bool:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    """Ligne de commande du rapport : afficher le dernier (défaut), le générer
+    maintenant ou comme la routine de 00:30 (quotidien), installer une mise
+    à jour validée, remettre les réglages de veille d'origine (restaurer)
+    ou reprendre les corrections automatiques (corriger)."""
     from .config import load_guard_config_from_env
     ap = argparse.ArgumentParser(description="Rapport quotidien : sécurité et diagnostic expert")
     ap.add_argument("action", nargs="?", default="dernier",

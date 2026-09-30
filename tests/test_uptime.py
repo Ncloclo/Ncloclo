@@ -43,12 +43,12 @@ def _bot(tmp_path, logger, sent):
 def test_log_backfill_finds_stops_and_tells_requested_ones_apart(tmp_path):
     t0 = time.time() - 30 * H
     _write_log(tmp_path / "tg.log", [
-        (t0, "TrendGuard — PAPER — 21 actifs"), (t0 + 900, "[HEARTBEAT] equity"),
+        (t0, "TrendGuard — PAPER — 21 actifs"), (t0 + 900, "[HEARTBEAT] capital"),
         (t0 + 3 * H, "TrendGuard — PAPER — 21 actifs"),                 # 2 h 45 de silence : panne
         (t0 + 3 * H + 60, "[ARRÊT] demandé depuis le panneau de contrôle : arrêt propre"),
         (t0 + 8 * H, "TrendGuard — PAPER — 21 actifs"),                 # arrêt demandé
-        (t0 + 8 * H + 900, "[HEARTBEAT] equity"),
-        (t0 + 8 * H + 1800, "[HEARTBEAT] equity"),                      # 30 min : normal
+        (t0 + 8 * H + 900, "[HEARTBEAT] capital"),
+        (t0 + 8 * H + 1800, "[HEARTBEAT] capital"),                      # 30 min : normal
         (t0 + 20 * H, "TrendGuard — PAPER — 21 actifs"),                # trou en cours : noté par le bot
     ])
     up = uptime.from_log(str(tmp_path / "tg.log"), until=t0 + 10 * H)
@@ -88,8 +88,8 @@ def test_bot_notes_an_unrequested_stop_and_warns(tmp_path, logger):
     now = time.time()
     # Une panne de 2 h 45 dans le journal, puis une ligne par quart d'heure.
     _write_log(tmp_path / "tg.log", [(now - 30 * H, "TrendGuard — PAPER"),
-                                     (now - 29.75 * H, "[HEARTBEAT] equity")]
-               + [(now - 27 * H + k * 900, "[HEARTBEAT] equity") for k in range(98)])
+                                     (now - 29.75 * H, "[HEARTBEAT] capital")]
+               + [(now - 27 * H + k * 900, "[HEARTBEAT] capital") for k in range(98)])
     sent = []
     bot = _bot(tmp_path, logger, sent)
     bot.state = {"last_cycle_ts": now - 2.5 * H}

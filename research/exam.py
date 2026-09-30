@@ -33,7 +33,7 @@ import numpy as np
 import pandas as pd
 
 import v29
-from research import adaptation as ra
+from research.commun import load_binance, study_args, write_report
 from research.robustness import cell, fr, periods
 from trendguard import learning
 from trendguard import trend_strategy as ts
@@ -139,6 +139,8 @@ def verdict(ref: Pair, var: Pair) -> Tuple[Tuple[bool, bool], str]:
 
 def intelligence(close: pd.DataFrame, volume: pd.DataFrame, p: ts.TrendParams,
                  pers: Optional[Periods] = None) -> Dict[str, Any]:
+    """Chaque règle retirée tour à tour, l'élan remplacé par le hasard et des
+    achats tirés au hasard, face au bot complet et à l'achat conservé."""
     pers = pers or periods(close)
     pre = ts.precompute(close, volume, p)
     ref = run(close, volume, p, pre, pers=pers)
@@ -308,13 +310,16 @@ def live_books(assets: List[str], notional: float, exchange: Any = None
 # ══════════════════════════════════════════════════════════════════════
 
 def _money(v: float) -> str:
-    return f"{v:,.0f}".replace(",", " ") + " $"
+    return fr(v, ",.0f") + " $"
 
 
 def report(close: pd.DataFrame, volume: pd.DataFrame,
            traps: Optional[List[Tuple[str, str, int, int]]],
            books: Optional[Tuple[str, List[Dict[str, Any]]]], notional: float,
            pers: Optional[Periods] = None) -> str:
+    """Examen complet (docs/EXAMEN.md) : l'intelligence (chaque règle retirée
+    tour à tour, face au hasard et à l'achat conservé), la ruse (pièges et
+    carnets réels) et ce que le bot ne sait pas faire."""
     p = ts.TrendParams()
     pers = pers or periods(close)
     it = intelligence(close, volume, p, pers)
@@ -441,17 +446,17 @@ def report(close: pd.DataFrame, volume: pd.DataFrame,
     return ts.format_markdown("\n".join(lines))
 
 
-def main(argv: Optional[List[str]] = None) -> int:
-    ap = argparse.ArgumentParser(description="Examen de TrendGuard : intelligence et ruse")
-    ap.add_argument("--cache", default="data_binance")
-    ap.add_argument("--out", default="docs/EXAMEN.md")
+def _options(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--notional", type=float, default=2_500.0,
                     help="montant d'achat testé sur les carnets réels (USDT)")
     ap.add_argument("--no-traps", action="store_true", help="sans les pièges (tests)")
     ap.add_argument("--offline", action="store_true", help="sans les carnets réels")
-    args = ap.parse_args(argv)
-    v29.ensure_utf8_stdio()
-    close, volume = ra.load_binance(args.cache)
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    args = study_args("Examen de TrendGuard : intelligence et ruse", "docs/EXAMEN.md", argv,
+                      _options)
+    close, volume = load_binance(args.cache)
     traps = None if args.no_traps else run_traps()
     books = None
     if not args.offline:
@@ -459,12 +464,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             books = live_books(list(close.columns), args.notional)
         except Exception as e:
             print(f"Carnets réels indisponibles : {type(e).__name__}")
-    text = report(close, volume, traps, books, args.notional)
-    os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
-    with open(args.out, "w", encoding="utf-8") as fh:
-        fh.write(text + "\n")
-    print(text)
-    print(f"\nRapport écrit : {args.out}")
+    write_report(report(close, volume, traps, books, args.notional), args.out)
     return 0
 
 

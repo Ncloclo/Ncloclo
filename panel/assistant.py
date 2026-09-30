@@ -28,6 +28,7 @@ import unicodedata
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from trendguard import market_watch as mw
+from trendguard.texte import fr
 
 NAME = "Rachelle"
 WELCOME = (f"Je suis {NAME}, ravie de vous accueillir. Comment puis-je vous aider "
@@ -153,14 +154,14 @@ def redact(text: str) -> str:
 
 def _pc(v: Any, d: int = 1) -> str:
     try:
-        return f"{float(v):+.{d}f} %".replace(".", ",")
+        return fr(float(v), f"+.{d}f") + " %"
     except (TypeError, ValueError):
         return "–"
 
 
 def _num(v: Any, d: int = 2) -> str:
     try:
-        return f"{float(v):,.{d}f}".replace(",", " ").replace(".", ",")
+        return fr(float(v), f",.{d}f")
     except (TypeError, ValueError):
         return "–"
 
@@ -213,6 +214,8 @@ def a_status(ctx: Dict[str, Any]) -> str:
 
 
 def a_crypto_market(ctx: Dict[str, Any]) -> str:
+    """Rachelle : le marché crypto du moment (bitcoin, capitalisation,
+    dominance, Peur & Avidité…)."""
     news = ctx.get("news") or {}
     m = news.get("markets") or {}
     c, f = m.get("crypto"), m.get("fear_greed")
@@ -399,7 +402,7 @@ def _rules(ctx: Dict[str, Any]) -> Dict[str, Any]:
     r = dict(RULES_DEFAULT, **((ctx.get("status") or {}).get("rules") or {}))
 
     def num(v: Any) -> str:
-        return f"{float(v):g}".replace(".", ",")
+        return fr(float(v), "g")
     bear = (f"{num(r['bear_trail_atr'])} × en marché baissier" if float(r["bear_trail_atr"]) > 0
             else "le même en marché baissier")
     return {"breakout_n": int(r["breakout_n"]), "regime_sma": int(r["regime_sma"]),
@@ -432,6 +435,8 @@ def _hm(hours: Any) -> str:
 
 
 def a_anticipation(ctx: Dict[str, Any]) -> str:
+    """Rachelle : ventes et achats probables à la prochaine clôture, avec les
+    cours du moment."""
     f = ctx.get("anticipation") or {}
     if not f.get("ready"):
         return ("L'anticipation sera disponible après la première décision du bot (clôture "
@@ -883,6 +888,9 @@ class Assistant:
         return {"name": NAME, "ai": label, "suggestions": SUGGESTIONS, "welcome": WELCOME}
 
     def reply(self, message: Any, history: Any, ctx_fn: Callable[[], Dict[str, Any]]) -> Dict[str, Any]:
+        """Réponse de Rachelle : garde-fou des secrets d'abord, puis réponse
+        intégrée tirée de l'état du bot, reformulée par l'IA configurée si
+        elle répond (historique court, filtré)."""
         message = str(message or "").strip()[:MAX_MESSAGE]
         if not message:
             return {"answer": "Je vous écoute : que souhaitez-vous savoir ?", "actions": [],

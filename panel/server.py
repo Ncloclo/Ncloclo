@@ -33,6 +33,7 @@ from urllib.parse import parse_qs, urlparse
 
 from trendguard import anticipation, evolution, learning, report, uptime
 from trendguard import market_watch as mw
+from trendguard.texte import fr
 
 from .assistant import AIHelper, Assistant
 from .control import BotControl
@@ -48,6 +49,8 @@ LOGIN_MAX_FAILS = 5         # essais ratés tolérés par adresse…
 LOGIN_WINDOW_SEC = 600      # … sur 10 minutes,
 LOGIN_LOCK_SEC = 300        # puis 5 minutes de blocage
 CHAT_PER_MINUTE = 20        # questions à l'assistant (coût d'une IA éventuelle)
+MAX_BODY = 32_000           # octets acceptés dans le corps d'une requête
+MAX_DISCARD = 1_000_000     # corps démesuré : lu sans être gardé jusqu'à 1 Mo, puis refusé
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
        "img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; "
        "base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
@@ -149,6 +152,9 @@ class PanelApp:
     # ---------- Données ----------
 
     def status(self) -> Dict[str, Any]:
+        """État du bot pour le panneau (relu toutes les 5 s) : capital et baisse,
+        régime, prochaine décision, risque, positions, vetos, alertes,
+        disponibilité, évolution, apprentissage et autonomie."""
         st = self.data.state()
         now = datetime.now(timezone.utc)
         nxt = datetime.combine(now.date(), datetime.min.time(), tzinfo=timezone.utc) \
@@ -226,6 +232,8 @@ class PanelApp:
                 "cost": b.get("cost"), "note": b.get("note"), "count": len(buys)}
 
     def assets(self) -> Dict[str, Any]:
+        """Onglet Cryptos : pour chaque crypto de l'univers, cours, position
+        détenue, veto, sélection et raison du jour."""
         st = self.data.state()
         universe = [b.lower() for b in self.g.universe]
         held = {h["asset"] for h in self.data.holdings(st)}
@@ -508,6 +516,8 @@ class PanelApp:
                                          self.assistant_context)
 
     def candles(self, asset: str, interval: str, limit: int) -> Dict[str, Any]:
+        """Bougies d'une crypto de l'univers pour les graphiques, avec la position
+        en cours et les achats et ventes placés sur leur bougie."""
         asset = asset.lower()
         if asset not in {b.lower() for b in self.g.universe}:
             raise ValueError("crypto inconnue")
@@ -543,7 +553,7 @@ class PanelApp:
         for tr in self.data.trades(st):
             t = snap(tr.get("date")) if tr.get("asset") == asset else None
             if t is not None:
-                r = f"{float(tr.get('r') or 0):+.2f}".replace(".", ",")
+                r = fr(float(tr.get("r") or 0), "+.2f")
                 markers.append({"t": t, "type": "sell", "price": tr.get("exit"),
                                 "date": tr.get("date"), "text": f"Vente {r} R"})
         markers.sort(key=lambda m: (m["t"], m["type"] != "buy"))
@@ -636,145 +646,169 @@ class PanelApp:
             return 502, {"error": f"{type(e).__name__} : {str(e)[:200]}"}
 
 
-def make_handler(app: PanelApp):
-    class Handler(BaseHTTPRequestHandler):
-        server_version = "TrendGuard-panneau"
-        sys_version = ""
+class PanelHandler(BaseHTTPRequestHandler):
+    """Requêtes HTTP du panneau : en-têtes de sécurité, contrôles d'accès
+    (hôte, origine, session), API et fichiers de l'interface. L'application
+    servie (`app`) est fixée par `make_handler`."""
 
-        def log_message(self, fmt: str, *args: Any) -> None:     # journal silencieux
-            pass
+    app: PanelApp
+    server_version = "TrendGuard-panneau"
+    sys_version = ""
 
-        # ---------- Réponses ----------
+    def log_message(self, fmt: str, *args: Any) -> None:     # journal silencieux
+        pass
 
-        def _headers(self, code: int, ctype: str, length: int, extra: Optional[Dict[str, str]] = None,
-                     cache: str = "no-store") -> None:
-            self.send_response(code)
-            self.send_header("Content-Type", ctype)
-            self.send_header("Content-Length", str(length))
-            self.send_header("Cache-Control", cache)
-            self.send_header("Content-Security-Policy", CSP)
-            self.send_header("X-Content-Type-Options", "nosniff")
-            self.send_header("X-Frame-Options", "DENY")
-            self.send_header("Referrer-Policy", "no-referrer")
-            # Aucune fenêtre d'un autre site ne peut piloter ou lire le panneau,
-            # et aucune fonction sensible du navigateur ne lui est ouverte.
-            self.send_header("Cross-Origin-Opener-Policy", "same-origin")
-            self.send_header("Cross-Origin-Resource-Policy", "same-origin")
-            self.send_header("Permissions-Policy",
-                             "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
-            for k, v in (extra or {}).items():
-                self.send_header(k, v)
-            self.end_headers()
+    # ---------- Réponses ----------
 
-        def _json(self, code: int, payload: Dict[str, Any], extra: Optional[Dict[str, str]] = None) -> None:
-            data = json.dumps(_clean(payload), ensure_ascii=False, allow_nan=False).encode("utf-8")
-            self._headers(code, "application/json; charset=utf-8", len(data), extra)
-            if self.command != "HEAD":
-                self.wfile.write(data)
+    def _headers(self, code: int, ctype: str, length: int, extra: Optional[Dict[str, str]] = None,
+                 cache: str = "no-store") -> None:
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(length))
+        self.send_header("Cache-Control", cache)
+        self.send_header("Content-Security-Policy", CSP)
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "no-referrer")
+        # Aucune fenêtre d'un autre site ne peut piloter ou lire le panneau,
+        # et aucune fonction sensible du navigateur ne lui est ouverte.
+        self.send_header("Cross-Origin-Opener-Policy", "same-origin")
+        self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+        self.send_header("Permissions-Policy",
+                         "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
+        for k, v in (extra or {}).items():
+            self.send_header(k, v)
+        self.end_headers()
 
-        # ---------- Contrôles d'accès ----------
+    def _json(self, code: int, payload: Dict[str, Any], extra: Optional[Dict[str, str]] = None) -> None:
+        data = json.dumps(_clean(payload), ensure_ascii=False, allow_nan=False).encode("utf-8")
+        self._headers(code, "application/json; charset=utf-8", len(data), extra)
+        if self.command != "HEAD":
+            self.wfile.write(data)
 
-        def _host_ok(self) -> bool:
-            if not app.loopback:
-                return True
-            host = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]").lower()
-            return host in LOOPBACK
+    # ---------- Contrôles d'accès ----------
 
-        def _token(self) -> Optional[str]:
-            for part in (self.headers.get("Cookie") or "").split(";"):
-                k, _, v = part.strip().partition("=")
-                if k == "tg_session":
-                    return v
-            return None
+    def _host_ok(self) -> bool:
+        if not self.app.loopback:
+            return True
+        host = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]").lower()
+        return host in LOOPBACK
 
-        def _same_origin(self) -> bool:
-            if self.headers.get("X-TrendGuard") != "1":
-                return False
-            origin = self.headers.get("Origin")
-            return origin is None or origin == f"http://{self.headers.get('Host')}"
+    def _token(self) -> Optional[str]:
+        for part in (self.headers.get("Cookie") or "").split(";"):
+            k, _, v = part.strip().partition("=")
+            if k == "tg_session":
+                return v
+        return None
 
-        # ---------- Méthodes ----------
+    def _same_origin(self) -> bool:
+        if self.headers.get("X-TrendGuard") != "1":
+            return False
+        origin = self.headers.get("Origin")
+        return origin is None or origin == f"http://{self.headers.get('Host')}"
 
-        def do_GET(self) -> None:
-            if not self._host_ok():
-                return self._json(421, {"error": "hôte refusé"})
-            url = urlparse(self.path)
-            if url.path.startswith("/api/"):
-                if url.path != "/api/health" and not app.session_ok(self._token()):
-                    return self._json(401, {"error": "connexion requise"})
-                code, payload = app.api("GET", url.path, parse_qs(url.query), {})
-                return self._json(code, payload)
-            self._static(url.path)
+    # ---------- Méthodes ----------
 
-        do_HEAD = do_GET
-
-        def do_POST(self) -> None:
-            # Corps lu AVANT toute réponse, même un refus : un corps non lu fait
-            # couper la connexion par Windows (le navigateur ne verrait pas
-            # la réponse). Taille bornée ; au-delà, connexion fermée.
-            try:
-                length = max(0, int(self.headers.get("Content-Length") or 0))
-            except ValueError:
-                length = 0
-            if length > 32_000:
-                self.close_connection = True
-                return self._json(413, {"error": "requête trop volumineuse"})
-            raw = self.rfile.read(length) if length else b""
-            if not self._host_ok():
-                return self._json(421, {"error": "hôte refusé"})
-            if not self._same_origin():
-                return self._json(403, {"error": "requête refusée (origine)"})
-            url = urlparse(self.path)
-            try:
-                body = json.loads(raw or b"{}")
-                if not isinstance(body, dict):
-                    body = {}
-            except (ValueError, json.JSONDecodeError):
-                return self._json(400, {"error": "JSON invalide"})
-            if url.path == "/api/login":
-                if not app.password:
-                    return self._json(200, {"ok": True})
-                ip = self.client_address[0]
-                wait = app.login_blocked(ip)
-                if wait:
-                    return self._json(429, {"ok": False, "error": (
-                        f"trop d'essais ratés : réessayez dans {max(1, round(wait / 60))} min")})
-                if hmac.compare_digest(str(body.get("password", "")).encode(), app.password.encode()):
-                    app.login_ok(ip)
-                    token = app.new_session()
-                    cookie = (f"tg_session={token}; HttpOnly; SameSite=Strict; Path=/; "
-                              f"Max-Age={SESSION_DAYS * 86400}")
-                    return self._json(200, {"ok": True}, {"Set-Cookie": cookie})
-                left = app.login_failed(ip)
-                time.sleep(1.0)                          # freine les essais en rafale
-                warn = ("" if left > 2 else " : accès bloqué 5 min" if not left else
-                        f" ({left} essai{'s' if left > 1 else ''} avant blocage de 5 min)")
-                return self._json(401, {"ok": False, "error": "mot de passe incorrect" + warn})
-            if url.path == "/api/logout":
-                app.drop_session(self._token())
-                return self._json(200, {"ok": True},
-                                  {"Set-Cookie": "tg_session=; Max-Age=0; Path=/; SameSite=Strict"})
-            if not app.session_ok(self._token()):
+    def do_GET(self) -> None:
+        if not self._host_ok():
+            return self._json(421, {"error": "hôte refusé"})
+        url = urlparse(self.path)
+        if url.path.startswith("/api/"):
+            if url.path != "/api/health" and not self.app.session_ok(self._token()):
                 return self._json(401, {"error": "connexion requise"})
-            code, payload = app.api("POST", url.path, {}, body)
-            self._json(code, payload)
+            code, payload = self.app.api("GET", url.path, parse_qs(url.query), {})
+            return self._json(code, payload)
+        self._static(url.path)
 
-        def _static(self, path: str) -> None:
-            rel = {"/": "index.html", "": "index.html"}.get(path, path.lstrip("/"))
-            full = os.path.realpath(os.path.join(STATIC_DIR, rel))
-            if not full.startswith(os.path.realpath(STATIC_DIR) + os.sep) or not os.path.isfile(full):
-                return self._json(404, {"error": "introuvable"})
-            ext = os.path.splitext(full)[1].lower()
-            ctype = TYPES.get(ext) or mimetypes.guess_type(full)[0] or "application/octet-stream"
-            with open(full, "rb") as fh:
-                data = fh.read()
-            cache = "no-cache" if ext in (".html", ".js", ".css", ".webmanifest") else "max-age=86400"
-            extra = {"Service-Worker-Allowed": "/"} if rel == "sw.js" else None
-            self._headers(200, ctype, len(data), extra, cache)
-            if self.command != "HEAD":
-                self.wfile.write(data)
+    do_HEAD = do_GET
 
-    return Handler
+    def do_POST(self) -> None:
+        raw = self._read_body()
+        if raw is None:
+            return self._json(413, {"error": "requête trop volumineuse"})
+        if not self._host_ok():
+            return self._json(421, {"error": "hôte refusé"})
+        if not self._same_origin():
+            return self._json(403, {"error": "requête refusée (origine)"})
+        try:
+            body = json.loads(raw or b"{}")
+        except ValueError:                   # JSON illisible (ou pas en UTF-8)
+            return self._json(400, {"error": "JSON invalide"})
+        body = body if isinstance(body, dict) else {}
+        path = urlparse(self.path).path
+        if path == "/api/login":
+            return self._login(body)
+        if path == "/api/logout":
+            self.app.drop_session(self._token())
+            return self._json(200, {"ok": True},
+                              {"Set-Cookie": "tg_session=; Max-Age=0; Path=/; SameSite=Strict"})
+        if not self.app.session_ok(self._token()):
+            return self._json(401, {"error": "connexion requise"})
+        code, payload = self.app.api("POST", path, {}, body)
+        self._json(code, payload)
+
+    def _read_body(self) -> Optional[bytes]:
+        """Corps lu AVANT toute réponse, même un refus : un corps non lu fait
+        couper la connexion par Windows (le navigateur ne verrait pas la
+        réponse). Un corps démesuré est lu sans être gardé, jusqu'à 1 Mo,
+        puis refusé (None) et la connexion fermée."""
+        try:
+            length = max(0, int(self.headers.get("Content-Length") or 0))
+        except ValueError:
+            length = 0
+        if length <= MAX_BODY:
+            return self.rfile.read(length) if length else b""
+        self.close_connection = True
+        left = min(length, MAX_DISCARD)
+        while left > 0:
+            chunk = self.rfile.read(min(65_536, left))
+            if not chunk:
+                break
+            left -= len(chunk)
+        return None
+
+    def _login(self, body: Dict[str, Any]) -> None:
+        """Connexion par mot de passe : cookie de session HttpOnly si le mot
+        de passe est bon ; après plusieurs essais ratés, l'adresse est
+        bloquée 5 minutes."""
+        if not self.app.password:
+            return self._json(200, {"ok": True})
+        ip = self.client_address[0]
+        wait = self.app.login_blocked(ip)
+        if wait:
+            return self._json(429, {"ok": False, "error": (
+                f"trop d'essais ratés : réessayez dans {max(1, round(wait / 60))} min")})
+        if hmac.compare_digest(str(body.get("password", "")).encode(), self.app.password.encode()):
+            self.app.login_ok(ip)
+            cookie = (f"tg_session={self.app.new_session()}; HttpOnly; SameSite=Strict; Path=/; "
+                      f"Max-Age={SESSION_DAYS * 86400}")
+            return self._json(200, {"ok": True}, {"Set-Cookie": cookie})
+        left = self.app.login_failed(ip)
+        time.sleep(1.0)                          # freine les essais en rafale
+        warn = ("" if left > 2 else " : accès bloqué 5 min" if not left else
+                f" ({left} essai{'s' if left > 1 else ''} avant blocage de 5 min)")
+        return self._json(401, {"ok": False, "error": "mot de passe incorrect" + warn})
+
+    def _static(self, path: str) -> None:
+        rel = {"/": "index.html", "": "index.html"}.get(path, path.lstrip("/"))
+        full = os.path.realpath(os.path.join(STATIC_DIR, rel))
+        if not full.startswith(os.path.realpath(STATIC_DIR) + os.sep) or not os.path.isfile(full):
+            return self._json(404, {"error": "introuvable"})
+        ext = os.path.splitext(full)[1].lower()
+        ctype = TYPES.get(ext) or mimetypes.guess_type(full)[0] or "application/octet-stream"
+        with open(full, "rb") as fh:
+            data = fh.read()
+        cache = "no-cache" if ext in (".html", ".js", ".css", ".webmanifest") else "max-age=86400"
+        extra = {"Service-Worker-Allowed": "/"} if rel == "sw.js" else None
+        self._headers(200, ctype, len(data), extra, cache)
+        if self.command != "HEAD":
+            self.wfile.write(data)
+
+
+
+def make_handler(app: PanelApp) -> type:
+    """Classe de requêtes liée à `app` : une par serveur."""
+    return type("Handler", (PanelHandler,), {"app": app})
 
 
 def build_app(gcfg: Any, demo: bool = False, password: str = "", loopback: bool = True,
@@ -810,6 +844,9 @@ def serve(app: PanelApp, host: str, port: int) -> ThreadingHTTPServer:
 
 def main(gcfg: Any, host: str = "127.0.0.1", port: int = 8765, demo: bool = False,
          open_browser: bool = True) -> int:
+    """Lance le panneau : accès réseau refusé sans mot de passe, adresses
+    affichées, navigateur ouvert ; Ctrl+C ferme le panneau sans arrêter
+    le bot."""
     password = os.environ.get("PANEL_PASSWORD", "")
     loopback = host in LOOPBACK
     if not loopback and not password:

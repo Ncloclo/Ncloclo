@@ -89,11 +89,6 @@ class TrendParams:
                                  "0 < multiplicateur <= 1) attendus.")
         return self
 
-    @property
-    def warmup_days(self) -> int:
-        return max(self.regime_sma, self.mom_n, self.breakout_n,
-                   self.atr_n, self.min_history) + 5
-
 
 # ══════════════════════════════════════════════════════════════════════
 # DONNÉES (Coin Metrics community data, clôtures USD 00:00 UTC)
@@ -592,6 +587,9 @@ def backtest(close: pd.DataFrame, volume: Optional[pd.DataFrame], p: TrendParams
 
 def compute_metrics(equity: pd.Series, trades: List[Dict[str, Any]]
                     ) -> Dict[str, float]:
+    """Mesures d'une courbe de capital et de ses trades : rendement, CAGR,
+    baisse maximale, Sharpe, Sortino, Calmar, gagnants, R moyens,
+    espérance, facteur de profit et durée moyenne. Vide sous deux points."""
     if len(equity) < 2:
         return {}
     rets = equity.pct_change().dropna()
@@ -822,6 +820,10 @@ def format_markdown(text: str, width: int = 80) -> str:
 
 def research_report(data_dir: str, out_path: str,
                     oos_end: Optional[str] = None) -> str:
+    """Rapport de recherche (docs/TRENDGUARD_REPORT.md) sur les clôtures Coin
+    Metrics, actifs effondrés compris : protocole, paramètres retenus,
+    robustesse de la grille, résultats en 2018-2022 et hors échantillon
+    (2023 → `oos_end`). Écrit dans `out_path`, puis renvoyé."""
     close, volume = load_coinmetrics(data_dir, DEFAULT_UNIVERSE)
     oos_end = oos_end or str(close["btc"].dropna().index[-1].date())
     oos = ("2023-01-01", oos_end)
@@ -952,6 +954,8 @@ def research_report(data_dir: str, out_path: str,
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    """Ligne de commande de la recherche : téléchargement Coin Metrics,
+    rapport de recherche ou backtest avec les paramètres gelés."""
     for stream in (sys.stdout, sys.stderr):      # Windows : sortie redirigée
         if hasattr(stream, "reconfigure"):
             try:

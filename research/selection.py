@@ -18,17 +18,15 @@ aujourd'hui, frais 0,1 % et glissement 0,1 % par côté) :
 
 from __future__ import annotations
 
-import argparse
-import os
 import sys
 from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
 
-import v29
-from research import adaptation as ra
+from research.commun import load_binance, study_args, write_report
 from trendguard import trend_strategy as ts
+from trendguard.texte import fr
 
 
 def run(close: pd.DataFrame, pre, records, p: ts.TrendParams, start: str, end: str,
@@ -74,14 +72,15 @@ VARIANTS = (
 
 
 def report(close: pd.DataFrame, volume: pd.DataFrame) -> str:
+    """Étude de sélection (docs/SELECTION.md) : auto-sélection des cryptos les
+    plus rentables et prises de bénéfice, face à la référence, en
+    2018-2022 et depuis 2023."""
     p = ts.TrendParams()
     pre = ts.precompute(close, volume, p)
     records = ts.asset_track_records(pre[0], pre[1], p)
     is_p, oos_p = ("2018-01-01", "2022-12-31"), ("2023-01-01", str(close.index[-1].date()))
     rows, res = [], {}
 
-    def fr(x: float, spec: str) -> str:
-        return format(x, spec).replace(".", ",").replace("-", "−")
     for name, kw in VARIANTS:
         a = run(close, pre, records, p, *is_p, **kw)
         b = run(close, pre, records, p, *oos_p, **kw)
@@ -149,17 +148,8 @@ def report(close: pd.DataFrame, volume: pd.DataFrame) -> str:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    ap = argparse.ArgumentParser(description="Étude de sélection et de prise de bénéfice")
-    ap.add_argument("--cache", default="data_binance")
-    ap.add_argument("--out", default="docs/SELECTION.md")
-    args = ap.parse_args(argv)
-    v29.ensure_utf8_stdio()
-    close, volume = ra.load_binance(args.cache)
-    text = report(close, volume)
-    os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
-    with open(args.out, "w", encoding="utf-8") as fh:
-        fh.write(text + "\n")
-    print(text)
+    args = study_args("Étude de sélection et de prise de bénéfice", "docs/SELECTION.md", argv)
+    write_report(report(*load_binance(args.cache)), args.out)
     return 0
 
 
