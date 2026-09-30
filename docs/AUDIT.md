@@ -29,7 +29,9 @@ plusieurs semaines de paper avec des trades vendus.
 erreur, et il se relève seul d'un plantage en 45 secondes.** Ce passage-ci a
 surtout cherché ce que les changements du jour auraient pu abîmer : rien. Il a
 aussi trouvé 2,8 Go laissés sur le disque par les vérifications des jours
-précédents, retirés. Heures en UTC.
+précédents, retirés. Enfin, trois failles publiées cet après-midi dans une
+bibliothèque de connexion font passer les contrôles GitHub au rouge (F9) : pas
+encore corrigeables, peu exploitables contre ce bot. Heures en UTC.
 
 ### État du bot (30/09, 17 h)
 
@@ -42,7 +44,7 @@ précédents, retirés. Heures en UTC.
 | Windows depuis midi | aucune mise en veille, aucun plantage de Python, aucun redémarrage en attente |
 | Disponibilité | 87,7 % sur 24 h, 67,9 % sur 7 jours |
 | Mémoire du PC | 85 % réservés (89 % à 13 h) ; bot, superviseur et panneau : 100 à 210 Mo chacun, au lieu de 325 à 430 |
-| Code | 69 modules, 24 023 lignes ; 520 tests (507 réussis, 13 sans objet sur ce PC), ruff sans remarque, contrôles GitHub au vert |
+| Code | 69 modules, 24 023 lignes ; 520 tests (507 réussis, 13 sans objet sur ce PC), ruff sans remarque ; contrôles GitHub au vert jusqu'à 17 h 10, puis rouges à cause de F9 |
 
 ### Ce qui a été éprouvé
 
@@ -67,6 +69,7 @@ précédents, retirés. Heures en UTC.
 | F6 | Deux fichiers annexes vides laissés dans `sauvegardes/` par la relecture de 13 h | Faible | **Corrigé** : retirés ; la relecture se fait maintenant sur une copie en mémoire |
 | F7 | Trois fenêtres ou pages d'essai restent ouvertes : démonstration (port 8799), page de l'essai « 5 % / 20 % / 20 » (port 8899), fenêtre des alertes (324 Mo réservés) | Faible | À fermer quand elles ne servent plus |
 | F8 | Le compteur du superviseur affiche « 1 relance » : c'est l'exercice de 17 h 03, pas une panne | Information | Revient à zéro à la prochaine relance du superviseur |
+| F9 | **Trois failles publiées cet après-midi dans `urllib3` 2.7.0**, la bibliothèque de connexion utilisée pour parler à Binance ; corrigées en 2.8.0. Les contrôles GitHub passent au rouge à 17 h 10 (étape pip-audit). Impossible à corriger aujourd'hui : ccxt 4.5.84, la dernière version, exige exactement `urllib3` 2.7.0 | Faible en pratique : deux failles touchent les proxys HTTPS (le bot n'en utilise pas), une la lecture de très grosses réponses (le bot ne parle qu'à Binance, en HTTPS). Mais tant que les contrôles sont rouges, une mise à jour validée ne s'installe pas seule | Mettre ccxt et `urllib3` à jour dès que ccxt accepte la 2.8.0 (plan, ligne 18) ; d'ici là, à votre choix : attendre, ou accepter ces trois failles pour quelques jours, par écrit, pour que les contrôles repassent au vert |
 
 ## Diagnostic approfondi du 30 septembre, 13 h
 
@@ -431,6 +434,7 @@ Points faibles :
 | 15 | Alimentation du portable signalée (tableau de bord, centre de sécurité, rapport) ; réglage caché du capot lu | Code | fait (30/09) |
 | 16 | Libérer de la mémoire (onglets de Chrome) et de la place sur le disque | Vous | **en partie fait** (30/09, 17 h) : 2,8 Go de fichiers temporaires des vérifications retirés, 17,9 Go libres sur 240 ; il en faut 24 pour repasser au-dessus de 10 % |
 | 17 | Six améliorations du code : superviseur allégé ; rapport qui prévient quand la mémoire ou le disque se remplissent ; `verify` qui continue sans clé ; repli si le dossier `.venv` est incomplet ; « plus haut » en direct dans le panneau ; e-mail mis en pause après trois refus du mot de passe | Code, avec votre accord | **fait** (30/09) : les six sont en service ; code restructuré (rapport en quatre fichiers, centre de sécurité du panneau à part) et harmonisé, détail dans [`DIAGNOSTIC_CODE.md`](DIAGNOSTIC_CODE.md) |
+| 18 | `urllib3` 2.8.0 (trois failles corrigées) avec la version de ccxt qui l'accepte ; d'ici là, décider d'attendre ou d'accepter ces failles quelques jours | Code, avec votre accord | constat du 30/09, 17 h 10 : aucune version de ccxt ne l'accepte encore |
 
 Fait depuis l'audit du matin : chemins de secours des ordres réels testés (et
 un défaut corrigé), blocage des mots de passe ratés, écriture sûre du choix des
