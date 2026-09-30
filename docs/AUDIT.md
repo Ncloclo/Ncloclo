@@ -1,13 +1,14 @@
 # Audit et diagnostic expert de TrendGuard — 28 au 30 septembre 2026
 
-Quatre diagnostics successifs : l'audit du 28, le diagnostic approfondi du 29
+Cinq diagnostics successifs : l'audit du 28, le diagnostic approfondi du 29
 (disponibilité, robustesse, alertes), celui du 30 à 10 h (alimentation,
-bibliothèques du PC, état en direct) et celui du 30 à 13 h, après la mise à jour
-des bibliothèques (PC, contrôles croisés). Méthode : diagnostic de la stratégie
-sur les données publiques de Binance (`python trendguard_bot.py diagnose`), état
-du bot dans le panneau, journal du bot, du superviseur et de Windows,
-vérification Binance (`verify`, aucun ordre), tests, analyse statique, failles
-connues des dépendances (pip-audit), recherche de secrets dans git.
+bibliothèques du PC, état en direct), celui de 13 h, après la mise à jour des
+bibliothèques (PC, contrôles croisés), et celui de 17 h, après la
+restructuration du code (épreuves de résistance). Méthode : diagnostic de la
+stratégie sur les données publiques de Binance (`python trendguard_bot.py
+diagnose`), état du bot dans le panneau, journal du bot, du superviseur et de
+Windows, vérification Binance (`verify`, aucun ordre), tests, analyse statique,
+failles connues des dépendances (pip-audit), recherche de secrets dans git.
 
 ## Verdict
 
@@ -21,6 +22,51 @@ a été corrigée le jour même : le bot a maintenant les siennes, aux versions
 testées. Le bot n'est pas prêt pour de l'argent réel : il lui faut des alertes
 qui arrivent, une machine allumée en permanence avec une adresse fixe, et
 plusieurs semaines de paper avec des trades vendus.
+
+## Diagnostic approfondi du 30 septembre, 17 h
+
+**Verdict : trois heures après la restructuration, le bot tourne sans une seule
+erreur, et il se relève seul d'un plantage en 45 secondes.** Ce passage-ci a
+surtout cherché ce que les changements du jour auraient pu abîmer : rien. Il a
+aussi trouvé 2,8 Go laissés sur le disque par les vérifications des jours
+précédents, retirés. Heures en UTC.
+
+### État du bot (30/09, 17 h)
+
+| Mesure | Valeur |
+| --- | --- |
+| Capital | 10 093,46 USDT (+0,9 %) ; plus haut du jour 10 232, plus bas 9 972 |
+| Positions | ICP +9,2 %, AAVE +4,2 %, XLM +4,4 %, LINK +2,6 %, ADA −1,4 %, LTC −6,7 % |
+| Ce soir | LTC à 1,1 % de son stop : vente probable à 28 % (ce serait le premier trade clos, environ −100 USDT) ; DOT à 2,1 % d'un signal, bloqué par le plafond de risque |
+| Journal depuis midi | aucun avertissement, aucune erreur ; aucune remarque des nouvelles bibliothèques dans la sortie du bot |
+| Windows depuis midi | aucune mise en veille, aucun plantage de Python, aucun redémarrage en attente |
+| Disponibilité | 87,7 % sur 24 h, 67,9 % sur 7 jours |
+| Mémoire du PC | 85 % réservés (89 % à 13 h) ; bot, superviseur et panneau : 100 à 210 Mo chacun, au lieu de 325 à 430 |
+| Code | 69 modules, 24 023 lignes ; 520 tests (507 réussis, 13 sans objet sur ce PC), ruff sans remarque, contrôles GitHub au vert |
+
+### Ce qui a été éprouvé
+
+| Épreuve | Résultat |
+| --- | --- |
+| Plantage simulé : le processus du bot arrêté de force à 17 h 03 | le superviseur le voit en 3 secondes, le relance 10 secondes plus tard ; le bot reprend ses cycles 45 secondes après l'arrêt, avec ses 6 positions |
+| Répétition de la nuit, étape évolution (`evolution examen`, sans rien changer) | mêmes résultats, au chiffre près, que la nuit dernière avec les anciennes bibliothèques : 10 réglages essayés, aucun adopté |
+| Répétition de la nuit, étape rapport (14 h 01, sans envoi) | 32 contrôles conformes sur 41 ; les quatre fichiers du rapport restructuré fonctionnent en conditions réelles |
+| Décisions quotidiennes avec les nouvelles bibliothèques | 1 365 jours rejoués par le vrai bot (du 01/01/2023 au 27/09/2026) sans incident |
+| Suite de tests complète sur la version en service | 507 réussis, aucun échec |
+| Sauvegardes | relues : intégrité correcte, 6 positions |
+
+### Constats de 17 h
+
+| N° | Constat | Gravité | Suite |
+| --- | --- | --- | --- |
+| F1 | **2,8 Go laissés sur le disque par les vérifications** : 31 profils temporaires du navigateur (2,3 Go) créés par les captures d'écran des 29 et 30, et le cache de téléchargement de pip (0,5 Go) | Moyenne : le disque était tombé à 15,2 Go libres | **Corrigé** : retirés, 17,9 Go libres ; les outils de capture nettoient désormais derrière eux |
+| F2 | **Disque toujours à 7 % de libre** : le rapport et le centre de sécurité le signalent maintenant | Moyenne | Vous : libérer de la place (téléchargements, corbeille, nettoyage de disque de Windows) |
+| F3 | **Aucune alerte ne vous parvient** (inchangé) | Élevée | Mot de passe d'application Gmail, dans la fenêtre « TrendGuard - Alertes » |
+| F4 | **Le service « Temps Windows » est arrêté** : l'horloge du PC ne se synchronise jamais | Faible : le bot prend l'heure de Binance | Vous, avec les droits d'administrateur : démarrer le service « Temps Windows » et le mettre en démarrage automatique (plan, ligne 5) |
+| F5 | Proposition n° 3 toujours ouverte et en conflit sur GitHub | Faible | Vous : « Close pull request » |
+| F6 | Deux fichiers annexes vides laissés dans `sauvegardes/` par la relecture de 13 h | Faible | **Corrigé** : retirés ; la relecture se fait maintenant sur une copie en mémoire |
+| F7 | Trois fenêtres ou pages d'essai restent ouvertes : démonstration (port 8799), page de l'essai « 5 % / 20 % / 20 » (port 8899), fenêtre des alertes (324 Mo réservés) | Faible | À fermer quand elles ne servent plus |
+| F8 | Le compteur du superviseur affiche « 1 relance » : c'est l'exercice de 17 h 03, pas une panne | Information | Revient à zéro à la prochaine relance du superviseur |
 
 ## Diagnostic approfondi du 30 septembre, 13 h
 
@@ -372,7 +418,7 @@ Points faibles :
 | 2 | Clé Binance : de nouvelles clés sont enregistrées (supprimer sur Binance les anciennes, montrées dans la conversation, si ce n'est pas fait) ; la nouvelle est refusée parce que l'adresse du PC sur Internet change | Vous | sans effet en paper ; pour le réel, une machine à adresse fixe (ligne 13) |
 | 3 | Laisser tourner en paper jusqu'à 10 à 20 trades vendus, puis comparer à l'attendu (section « Réel vs attendu » du diagnostic) | Vous et le bot | plusieurs semaines |
 | 4 | **Disponibilité** : PC branché et allumé en continu, veille désactivée sur secteur, capot fermé = « Ne rien faire » sur secteur ; ou un petit serveur | Vous et le bot | **en partie fait** : veille sur secteur « Jamais » (29/09), capot fermé « ne rien faire » (30/09, appliqués par le bot). 65 % sur 7 jours au 30/09. Reste à vous : PC branché, et fermer le capot plutôt qu'appuyer sur le bouton d'alimentation |
-| 5 | Synchroniser l'horloge de Windows | Vous | droits d'administrateur nécessaires : Paramètres ▸ Heure et langue ▸ Synchroniser maintenant |
+| 5 | Synchroniser l'horloge de Windows | Vous | droits d'administrateur nécessaires : le service « Temps Windows » est arrêté (30/09, 17 h) ; le démarrer, le mettre en démarrage automatique, puis Paramètres ▸ Heure et langue ▸ Synchroniser maintenant |
 | 6 | Découper les fonctions les plus complexes et `app.js` | Code | **fait** : les six plus lourdes découpées, `app.js` en quatre modules ; un test d'horodatage fragile rendu fiable |
 | 7 | Décider du sort de l'ancien bot V29 (le supprimer allégerait le dépôt) | Code | **décidé : gardé à part.** Son moteur d'exécution est aussi celui de TrendGuard ; le supprimer obligerait à retoucher le code des ordres réels pour peu de gain |
 | 8 | Avant le réel : `verify` complet, quelques jours de testnet, au moins 100 USDT | Vous | le moment venu |
@@ -383,7 +429,7 @@ Points faibles :
 | 13 | Avant le réel : faire tourner le bot sur une machine allumée en permanence, à adresse fixe (petit serveur) | Vous | le moment venu ; règle la disponibilité et la clé Binance |
 | 14 | Fermer la proposition n° 3 sur GitHub (devenue inutile, en conflit) ; fermer la démonstration du port 8799 quand elle ne sert plus | Vous | quand vous voulez |
 | 15 | Alimentation du portable signalée (tableau de bord, centre de sécurité, rapport) ; réglage caché du capot lu | Code | fait (30/09) |
-| 16 | Libérer de la mémoire (onglets de Chrome) et de la place sur le disque (17 Go libres sur 240) | Vous | constat du 30/09, 13 h |
+| 16 | Libérer de la mémoire (onglets de Chrome) et de la place sur le disque | Vous | **en partie fait** (30/09, 17 h) : 2,8 Go de fichiers temporaires des vérifications retirés, 17,9 Go libres sur 240 ; il en faut 24 pour repasser au-dessus de 10 % |
 | 17 | Six améliorations du code : superviseur allégé ; rapport qui prévient quand la mémoire ou le disque se remplissent ; `verify` qui continue sans clé ; repli si le dossier `.venv` est incomplet ; « plus haut » en direct dans le panneau ; e-mail mis en pause après trois refus du mot de passe | Code, avec votre accord | **fait** (30/09) : les six sont en service ; code restructuré (rapport en quatre fichiers, centre de sécurité du panneau à part) et harmonisé, détail dans [`DIAGNOSTIC_CODE.md`](DIAGNOSTIC_CODE.md) |
 
 Fait depuis l'audit du matin : chemins de secours des ordres réels testés (et
