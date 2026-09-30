@@ -55,10 +55,12 @@ def _env(env: Dict[str, str], name: str, default: str = "") -> str:
     return (env.get(name) or default).strip()
 
 
-def refused(e: Exception) -> bool:
-    """Le serveur refuse le mot de passe, ou coupe la connexion, ce que fait
-    Gmail après plusieurs refus."""
-    return isinstance(e, (smtplib.SMTPAuthenticationError, smtplib.SMTPServerDisconnected))
+def refused(e: Exception, already: int = 0) -> bool:
+    """Le serveur refuse le mot de passe. Une connexion coupée ne compte
+    qu'après un premier refus (`already`) : c'est ce que fait Gmail quand
+    les refus se répètent ; seule, c'est une panne passagère."""
+    return isinstance(e, smtplib.SMTPAuthenticationError) or (
+        already > 0 and isinstance(e, smtplib.SMTPServerDisconnected))
 
 
 class Pause:
@@ -89,16 +91,16 @@ class Pause:
     def note(self, name: str, error: Optional[Exception]) -> None:
         """Résultat d'un essai : réussi (None), mot de passe refusé, ou autre
         panne (réseau…), qui ne compte pas."""
-        if error is not None and not refused(error):
-            return
         state = autonomy.read_json(self.path)
+        already = int((state.get(name) or {}).get("refusals") or 0)
         if error is None:
             if name not in state:
                 return
             del state[name]
+        elif refused(error, already):
+            state[name] = {"refusals": already + 1, "last_try": self.clock()}
         else:
-            state[name] = {"refusals": int((state.get(name) or {}).get("refusals") or 0) + 1,
-                           "last_try": self.clock()}
+            return
         try:
             if state:
                 autonomy.write_json(self.path, state)

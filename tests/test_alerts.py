@@ -241,12 +241,18 @@ def test_pause_ignores_network_failures_and_a_requested_test_always_goes(tmp_pat
     for k in range(5):
         hub(f"alerte {k}", critical=True)
     assert RefusingSMTP.tries == 5 and hub.pause.held("email") is None
-    RefusingSMTP.error = smtplib.SMTPServerDisconnected("fermé")     # Gmail, après plusieurs refus
+    RefusingSMTP.error = smtplib.SMTPServerDisconnected("fermé")     # coupure seule : panne passagère
     for k in range(3):
+        hub(f"coupure {k}", critical=True)
+    assert RefusingSMTP.tries == 8 and hub.pause.held("email") is None
+    RefusingSMTP.error = smtplib.SMTPAuthenticationError(535, b"refuse")
+    hub("premier refus", critical=True)
+    RefusingSMTP.error = smtplib.SMTPServerDisconnected("fermé")     # Gmail, quand les refus se répètent
+    for k in range(2):
         hub(f"refus {k}", critical=True)
-    assert hub.pause.held("email") and RefusingSMTP.tries == 8
+    assert hub.pause.held("email") and RefusingSMTP.tries == 11
     ok, err = hub.test("email")                                     # test demandé : envoyé malgré la pause
-    assert RefusingSMTP.tries == 9 and not ok and "coupé la connexion" in err
+    assert RefusingSMTP.tries == 12 and not ok and "coupé la connexion" in err
     RefusingSMTP.error = None
     assert hub.test("email") == (True, "") and hub.pause.held("email") is None
 

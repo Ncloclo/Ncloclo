@@ -23,6 +23,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from . import autonomy
 
 Check = Dict[str, Any]
+GB = 2 ** 30
 
 
 def chk(label: str, ok: Optional[bool], detail: str, reco: str = "", action: str = "") -> Check:
@@ -116,17 +117,18 @@ def power_source(deps: Optional[Deps] = None) -> Optional[Dict[str, Any]]:
 
 
 def pc_resources(deps: Optional[Deps] = None, root: str = "") -> Optional[Dict[str, Any]]:
-    """Place sur le disque du bot et mémoire du PC, en Go :
-    {"disk_free", "disk_total", "memory_used", "memory_limit"} ; la mémoire
-    est celle que Windows a réservée aux programmes et le plus qu'il peut
-    leur réserver (None ailleurs). None avec des commandes simulées (tests)."""
+    """Place sur le disque du bot et mémoire du PC, en Go comme Windows les
+    affiche (1 Go = 2^30 octets) : {"disk_free", "disk_total", "memory_used",
+    "memory_limit"} ; la mémoire est celle que Windows a réservée aux
+    programmes et le plus qu'il peut leur réserver (None ailleurs). None avec
+    des commandes simulées (tests)."""
     if deps is not None:
         if "resources" in deps.extra:
             return deps.extra["resources"]
         if deps.run is not run:
             return None
     disk = shutil.disk_usage(root or autonomy.ROOT)
-    out: Dict[str, Any] = {"disk_free": disk.free / 1e9, "disk_total": disk.total / 1e9,
+    out: Dict[str, Any] = {"disk_free": disk.free / GB, "disk_total": disk.total / GB,
                            "memory_used": None, "memory_limit": None}
     if not sys.platform.startswith("win"):
         return out
@@ -140,7 +142,7 @@ def pc_resources(deps: Optional[Deps] = None, root: str = "") -> Optional[Dict[s
         m = Memory()
         m.size = ctypes.sizeof(m)
         if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(m)) and m.limit:
-            out["memory_used"], out["memory_limit"] = (m.limit - m.limit_free) / 1e9, m.limit / 1e9
+            out["memory_used"], out["memory_limit"] = (m.limit - m.limit_free) / GB, m.limit / GB
     except (OSError, AttributeError):
         pass
     return out
