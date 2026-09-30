@@ -206,7 +206,61 @@ def test_report_names_libraries_with_a_known_flaw(root):
     answer = _audit(("aiohttp", "3.13.3", ["3.9.9", "3.14.3"]), ("pyjwt", "2.12.1", []), n=9)
     _, flaws = rps.library_checks(root, _deps(answer))
     assert flaws["ok"] is False and flaws["reco"] == rps.LIBRARY_RECO
-    assert flaws["detail"] == "2 sur 9 : aiohttp 3.13.3 (corrigée en 3.14.3), pyjwt 2.12.1"
+    assert flaws["detail"] == ("2 sur 9 : aiohttp 3.13.3 (corrigée en 3.14.3), "
+                               "pyjwt 2.12.1 (aucune correction publiée)")
+
+
+def test_the_fix_is_the_smallest_newer_version_that_covers_every_flaw():
+    flaws = [{"fix_versions": ["46.0.6", "48.0.1"]}, {"fix_versions": ["49.0.0"]}, {"fix_versions": []}]
+    assert rps.needed_fix("46.0.5", flaws) == "49.0.0"
+    assert rps.needed_fix("48.5.0", [{"fix_versions": ["46.0.6", "50.0.0"]}]) == "50.0.0"
+    assert rps.needed_fix("1.0", [{"fix_versions": []}]) is None
+
+
+CCXT_PINS = {"ccxt": ("4.5.84", ["requests<3,>=2.32", "urllib3==2.7.0", 'pytest; extra == "dev"']),
+             "requests": ("2.34.2", ["urllib3<3,>=1.26"])}
+
+
+def _pinned(pypi):
+    answer = _audit(("urllib3", "2.7.0", ["2.8.0"]), n=70)
+    return rp.Deps(run=lambda cmd, **kw: answer, platform="linux",
+                   extra={"installed": PINS, "own_env": True, "requirements": CCXT_PINS, "pypi": pypi})
+
+
+def test_flaw_that_ccxt_prevents_fixing_is_information_until_it_can_be_fixed(root):
+    """ccxt épingle urllib3 à une version exacte : tant que sa dernière
+    version n'accepte pas la correction, rien n'est à faire ; dès qu'elle
+    l'accepte, le rapport le dit (et le contrôle de GitHub échoue)."""
+    assert rps.blockers("urllib3", "2.8.0", CCXT_PINS) == [("ccxt", "4.5.84", "urllib3==2.7.0")]
+    assert rps.blockers("urllib3", "2.7.0", CCXT_PINS) == []
+    same = {"info": {"version": "4.5.84", "requires_dist": ["urllib3==2.7.0"]}}
+    _, waiting = rps.library_checks(root, _pinned(lambda name: same))
+    assert waiting["ok"] is None and not waiting["reco"]
+    assert ("urllib3 2.7.0 (corrigée en 2.8.0, mais ccxt 4.5.84, sa dernière version, exige "
+            "urllib3==2.7.0)") in waiting["detail"] and "le rapport dira quand" in waiting["detail"]
+    newer = {"info": {"version": "4.5.90", "requires_dist": ["urllib3==2.8.0", 'x; extra == "dev"']}}
+    _, ready = rps.library_checks(root, _pinned(lambda name: newer))
+    assert ready["ok"] is False and ready["reco"] == rps.LIBRARY_RECO
+    assert "urllib3 2.7.0 (corrigée en 2.8.0, que ccxt 4.5.90 accepte)" in ready["detail"]
+
+    def offline(name):
+        raise OSError("PyPI injoignable")
+    _, unknown = rps.library_checks(root, _pinned(offline))
+    assert unknown["ok"] is None and "mais ccxt 4.5.84 exige urllib3==2.7.0" in unknown["detail"]
+
+
+def test_github_flaw_check_fails_only_when_a_fix_can_be_installed(monkeypatch, capsys):
+    seen = []
+
+    def check(root, deps, requirements=None):
+        seen.append(requirements)
+        return rps.chk("Failles connues des bibliothèques", verdict, "détail")
+    monkeypatch.setattr(rp, "audit_check", check)
+    for verdict, code in ((None, 0), (True, 0), (False, 1)):
+        assert rp.main(["failles"]) == code
+    assert seen == [rps.PINS_FILE] * 3 and "requirements-docker.txt" in capsys.readouterr().out
+    workflow = open(os.path.join(v29.APP_DIR, ".github", "workflows", "checks.yml"), encoding="utf-8").read()
+    assert "python trendguard_bot.py rapport failles" in workflow
 
 
 def test_audit_that_cannot_run_is_information_only(root):

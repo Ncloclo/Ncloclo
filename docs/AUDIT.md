@@ -71,6 +71,28 @@ encore corrigeables, peu exploitables contre ce bot. Heures en UTC.
 | F8 | Le compteur du superviseur affiche « 1 relance » : c'est l'exercice de 17 h 03, pas une panne | Information | Revient à zéro à la prochaine relance du superviseur |
 | F9 | **Trois failles publiées cet après-midi dans `urllib3` 2.7.0**, la bibliothèque de connexion utilisée pour parler à Binance ; corrigées en 2.8.0. Les contrôles GitHub passent au rouge à 17 h 10 (étape pip-audit). Impossible à corriger aujourd'hui : ccxt 4.5.84, la dernière version, exige exactement `urllib3` 2.7.0 | Faible en pratique : deux failles touchent les proxys HTTPS (le bot n'en utilise pas), une la lecture de très grosses réponses (le bot ne parle qu'à Binance, en HTTPS). Mais tant que les contrôles sont rouges, une mise à jour validée ne s'installe pas seule | Mettre ccxt et `urllib3` à jour dès que ccxt accepte la 2.8.0 (plan, ligne 18) ; d'ici là, à votre choix : attendre, ou accepter ces trois failles pour quelques jours, par écrit, pour que les contrôles repassent au vert |
 
+### Suite donnée le 30 septembre à 17 h 40
+
+- **F9** : ccxt n'a toujours pas de version qui accepte `urllib3` 2.8.0 (la
+  sienne, 4.5.84, exige la 2.7.0 ; ses dépendances sont épinglées exprès).
+  Plutôt que d'accepter ces failles à la main, le contrôle les classe seul :
+  une faille qu'une bibliothèque épinglée empêche de corriger est affichée
+  sans bloquer ; dès que la nouvelle version de ccxt accepte la correction, le
+  contrôle de GitHub échoue et le rapport quotidien la marque à corriger. Les
+  contrôles GitHub repassent au vert.
+- **Bibliothèques du PC** : `urllib3` 2.8.0 et `pyjwt` 2.15.1 installés (une
+  nouvelle faille publiée aujourd'hui touchait aussi `pyjwt` 2.14.0) ; les
+  logiciels qui s'en servent (freqtrade, requests, ccxt du PC) fonctionnent.
+  Reste `curl-cffi`, retenue par yfinance.
+- **F2, disque** : 1,3 Go de plus rendus (caches de npm et de VS Code) : 18,7 Go
+  libres (8 %). Pour dépasser 10 %, il faut libérer environ 5 Go dans vos
+  téléchargements (26 Go, dont un dossier « Compressed » de 11 Go et
+  « pcsx2 » de 7,5 Go), ou désactiver la veille prolongée (fichier de 6,4 Go),
+  ce qui demande les droits d'administrateur.
+- **F4, horloge** : le service « Temps Windows » ne peut être démarré qu'avec
+  les droits d'administrateur (essai refusé) : Services ▸ Temps Windows ▸
+  Démarrage automatique ▸ Démarrer.
+
 ## Diagnostic approfondi du 30 septembre, 13 h
 
 **Verdict : la mise à jour des bibliothèques n'a rien cassé, et la stratégie
@@ -432,9 +454,9 @@ Points faibles :
 | 13 | Avant le réel : faire tourner le bot sur une machine allumée en permanence, à adresse fixe (petit serveur) | Vous | le moment venu ; règle la disponibilité et la clé Binance |
 | 14 | Fermer la proposition n° 3 sur GitHub (devenue inutile, en conflit) ; fermer la démonstration du port 8799 quand elle ne sert plus | Vous | quand vous voulez |
 | 15 | Alimentation du portable signalée (tableau de bord, centre de sécurité, rapport) ; réglage caché du capot lu | Code | fait (30/09) |
-| 16 | Libérer de la mémoire (onglets de Chrome) et de la place sur le disque | Vous | **en partie fait** (30/09, 17 h) : 2,8 Go de fichiers temporaires des vérifications retirés, 17,9 Go libres sur 240 ; il en faut 24 pour repasser au-dessus de 10 % |
+| 16 | Libérer de la mémoire (onglets de Chrome) et de la place sur le disque | Vous | **en partie fait** (30/09, 17 h 40) : 4,1 Go de fichiers temporaires et de caches retirés, 18,7 Go libres sur 240 ; il en faut 24 pour repasser au-dessus de 10 % |
 | 17 | Six améliorations du code : superviseur allégé ; rapport qui prévient quand la mémoire ou le disque se remplissent ; `verify` qui continue sans clé ; repli si le dossier `.venv` est incomplet ; « plus haut » en direct dans le panneau ; e-mail mis en pause après trois refus du mot de passe | Code, avec votre accord | **fait** (30/09) : les six sont en service ; code restructuré (rapport en quatre fichiers, centre de sécurité du panneau à part) et harmonisé, détail dans [`DIAGNOSTIC_CODE.md`](DIAGNOSTIC_CODE.md) |
-| 18 | `urllib3` 2.8.0 (trois failles corrigées) avec la version de ccxt qui l'accepte ; d'ici là, décider d'attendre ou d'accepter ces failles quelques jours | Code, avec votre accord | constat du 30/09, 17 h 10 : aucune version de ccxt ne l'accepte encore |
+| 18 | `urllib3` 2.8.0 (trois failles corrigées) avec la version de ccxt qui l'accepte | Code | **en attente de ccxt, suivie seule** (30/09, 17 h 40) : le contrôle signale la faille sans bloquer, et échouera le jour où la correction pourra s'installer |
 
 Fait depuis l'audit du matin : chemins de secours des ordres réels testés (et
 un défaut corrigé), blocage des mots de passe ratés, écriture sûre du choix des

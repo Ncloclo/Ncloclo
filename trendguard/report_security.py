@@ -31,6 +31,9 @@ from .systeme import installed_versions as _installed_versions
 from .systeme import power_ac as _power_ac
 from .systeme import power_source as _power_source
 from .systeme import ps_lines as _ps_lines
+from .systeme import pypi_json as _pypi_json
+from .systeme import requirements_of as _requirements_of
+from .systeme import run as _run
 
 KEEP_BACKUPS = 14
 SECRET_SUFFIXES = ("_KEY", "_SECRET", "_TOKEN", "_PASSWORD", "_APIKEY")
@@ -374,7 +377,7 @@ def library_checks(root: str, deps: Deps) -> List[Check]:
     if have is None:
         return []
     own = deps.extra["own_env"] if "own_env" in deps.extra else environnement.inside(root)
-    return [_versions_check(pins, have, own), _audit_check(root, deps)]
+    return [_versions_check(pins, have, own), audit_check(root, deps)]
 
 
 def _versions_check(pins: Dict[str, str], have: Dict[str, Optional[str]], own: bool) -> Check:
@@ -394,13 +397,69 @@ def _version_key(version: str) -> Tuple[int, ...]:
     return tuple(int(p) if p.isdigit() else 0 for p in re.split(r"[.+-]", version))
 
 
-def _audit_check(root: str, deps: Deps) -> Check:
-    """Failles connues (pip-audit) des bibliothèques installées là où tourne
-    le bot."""
-    label = "Failles connues des bibliothèques"
+def needed_fix(installed: str, flaws: List[Dict[str, Any]]) -> Optional[str]:
+    """Version qui corrige les failles connues d'une bibliothèque : pour
+    chacune, la plus petite correction au-dessus de la version installée, et
+    la plus haute de celles-là. None si aucune correction n'est publiée."""
+    needed: Optional[str] = None
+    for flaw in flaws:
+        later = [v for v in flaw.get("fix_versions") or [] if _version_key(v) > _version_key(installed)]
+        if later:
+            first = min(later, key=_version_key)
+            if needed is None or _version_key(first) > _version_key(needed):
+                needed = first
+    return needed
+
+
+def blockers(name: str, fix: str, requirements: Dict[str, Tuple[str, List[str]]]
+             ) -> List[Tuple[str, str, str]]:
+    """Bibliothèques dont une exigence exclut la version corrigée :
+    [(nom, version, exigence)]. ccxt, par exemple, épingle chacune des
+    siennes à une version exacte."""
     try:
-        r = deps.run([sys.executable, "-m", "pip_audit", "--progress-spinner", "off",
-                      "--desc", "off", "-f", "json"], cwd=root, timeout=AUDIT_TIMEOUT)
+        from packaging.requirements import InvalidRequirement, Requirement
+        from packaging.utils import canonicalize_name
+        from packaging.version import InvalidVersion, Version
+    except ImportError:
+        return []
+    target, out = canonicalize_name(name), []
+    for dist, (version, requires) in requirements.items():
+        for raw in requires:
+            try:
+                req = Requirement(raw)
+                if canonicalize_name(req.name) != target or (
+                        req.marker is not None and not req.marker.evaluate({"extra": ""})):
+                    continue
+                if req.specifier and not req.specifier.contains(Version(fix), prereleases=True):
+                    out.append((dist, version, f"{req.name}{req.specifier}"))
+            except (InvalidRequirement, InvalidVersion):
+                continue
+    return out
+
+
+def _upstream(dist: str, name: str, fix: str, deps: Deps) -> Tuple[Optional[str], bool]:
+    """(dernière version publiée de `dist`, accepte-t-elle la correction ?)."""
+    fetch = deps.extra.get("pypi") or (_pypi_json if deps.run is _run else None)
+    try:
+        info = fetch(dist)["info"] if fetch else None
+    except Exception:              # PyPI injoignable : rien n'est affirmé
+        info = None
+    if not info:
+        return None, False
+    latest = info.get("version")
+    return latest, not blockers(name, fix, {dist: (latest, info.get("requires_dist") or [])})
+
+
+def audit_check(root: str, deps: Deps, requirements: Optional[str] = None) -> Check:
+    """Failles connues (pip-audit) des bibliothèques installées là où tourne
+    le bot, ou d'une liste de versions (`requirements`, comme sur GitHub).
+    À corriger quand la correction peut s'installer ; simple information
+    quand une bibliothèque épinglée l'empêche encore, jusqu'à ce que sa
+    nouvelle version publiée l'accepte."""
+    label = "Failles connues des bibliothèques"
+    cmd = [sys.executable, "-m", "pip_audit", "--progress-spinner", "off", "--desc", "off", "-f", "json"]
+    try:
+        r = deps.run(cmd + (["-r", requirements] if requirements else []), cwd=root, timeout=AUDIT_TIMEOUT)
     except (OSError, subprocess.SubprocessError):
         return chk(label, None, "vérification impossible")
     if "No module named" in (r.stderr or ""):
@@ -410,14 +469,34 @@ def _audit_check(root: str, deps: Deps) -> Check:
         found = json.loads(text[text.index("{"):])["dependencies"]
     except (ValueError, KeyError, TypeError):
         return chk(label, None, "vérification impossible (réseau ?)")
-    bad = []
+    installed = _requirements_of(deps)
+    now: List[str] = []
+    later: List[str] = []
     for lib in found:
-        fixes = sorted({v for flaw in lib.get("vulns") or [] for v in flaw.get("fix_versions") or []},
-                       key=_version_key)
-        if lib.get("vulns"):
-            bad.append(f"{lib.get('name')} {lib.get('version')}"
-                       + (f" (corrigée en {fixes[-1]})" if fixes else ""))
-    if bad:
-        return chk(label, False, f"{len(bad)} sur {len(found)} : " + ", ".join(bad[:6])
-                   + (" …" if len(bad) > 6 else ""), LIBRARY_RECO)
+        if not lib.get("vulns"):
+            continue
+        name, version = lib.get("name", "?"), lib.get("version", "?")
+        fix = needed_fix(version, lib["vulns"])
+        if fix is None:
+            later.append(f"{name} {version} (aucune correction publiée)")
+            continue
+        blocking = blockers(name, fix, installed) if installed else []
+        if not blocking:
+            now.append(f"{name} {version} (corrigée en {fix})")
+            continue
+        dist, dist_version, need = blocking[0]
+        latest, accepts = _upstream(dist, name, fix, deps)
+        if accepts and latest and latest != dist_version:
+            now.append(f"{name} {version} (corrigée en {fix}, que {dist} {latest} accepte)")
+        else:
+            later.append(f"{name} {version} (corrigée en {fix}, mais {dist} {dist_version}"
+                         + (", sa dernière version," if latest == dist_version else "")
+                         + f" exige {need})")
+    if now:
+        listed = now + later
+        return chk(label, False, f"{len(listed)} sur {len(found)} : " + ", ".join(listed[:6])
+                   + (" …" if len(listed) > 6 else ""), LIBRARY_RECO)
+    if later:
+        return chk(label, None, f"{len(later)} sur {len(found)}, pas encore corrigeable : "
+                   + ", ".join(later) + " ; le rapport dira quand la correction pourra s'installer")
     return chk(label, True, f"aucune dans les {len(found)} bibliothèques installées")

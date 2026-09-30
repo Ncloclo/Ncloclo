@@ -30,9 +30,13 @@ jobs:
           ruff check --output-format=github .
       - run: python -m pytest tests -q -p no:cacheprovider
       - name: Failles connues dans les dépendances (pip-audit)
+        # En échec dès qu'une correction peut s'installer. Une faille qu'une
+        # bibliothèque épinglée empêche encore de corriger (ccxt épingle toutes
+        # les siennes) est affichée sans bloquer, jusqu'à ce que sa nouvelle
+        # version publiée accepte la correction.
         run: |
           pip install pip-audit
-          pip-audit -r requirements-docker.txt --progress-spinner off
+          python trendguard_bot.py rapport failles
 
   web:
     name: Pages web (ESLint, Playwright)

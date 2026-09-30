@@ -45,7 +45,10 @@ jour des uns ne casse plus les autres.
   numpy réserve environ 30 Mo de mémoire par fil dès son chargement : avec huit
   fils, 341 Mo par processus ; avec un seul, 104 Mo, pour les mêmes résultats.
 - Le rapport quotidien compare les bibliothèques installées aux versions testées
-  et cherche leurs failles connues (`pip-audit`). Les installer reste une
+  et cherche leurs failles connues (`pip-audit`) ; une faille que ccxt, qui
+  épingle ses bibliothèques, empêche encore de corriger n'est qu'une
+  information, jusqu'à ce que sa version publiée accepte la correction. Les
+  installer reste une
   recommandation : README, « Bibliothèques du bot ».
 
 ## Dossiers
@@ -235,7 +238,7 @@ trendguard_bot.py ─► trendguard
 ```bash
 python -m pytest tests -q            # tests Python
 python -m ruff check .               # style, imports, erreurs courantes
-python -m pip_audit -r requirements-docker.txt   # failles connues des dépendances
+python trendguard_bot.py rapport failles         # failles connues des versions testées
 ```
 
 Sur un PC qui a le dossier `.venv`, ces trois commandes se lancent avec son

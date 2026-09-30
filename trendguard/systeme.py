@@ -166,6 +166,30 @@ def installed_versions(deps: Deps, names: List[str]) -> Optional[Dict[str, Optio
     return out
 
 
+def requirements_of(deps: Deps) -> Optional[Dict[str, Tuple[str, List[str]]]]:
+    """Bibliothèques installées dans le Python du bot : nom → (version,
+    exigences déclarées). None avec des commandes simulées (tests)."""
+    if "requirements" in deps.extra:
+        return deps.extra["requirements"]
+    if deps.run is not run:
+        return None
+    from importlib import metadata
+    out: Dict[str, Tuple[str, List[str]]] = {}
+    for d in metadata.distributions():
+        name = (d.metadata["Name"] or "").lower()
+        if name:
+            out[name] = (d.version, list(d.requires or []))
+    return out
+
+
+def pypi_json(name: str) -> Any:
+    """Dernière version publiée d'une bibliothèque sur PyPI (lecture seule)."""
+    req = urllib.request.Request(f"https://pypi.org/pypi/{name}/json",
+                                 headers={"User-Agent": "TrendGuard"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return json.loads(r.read().decode("utf-8"))
+
+
 def github_json(url: str) -> Any:
     """API publique de GitHub (lecture seule, sans jeton)."""
     req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json",

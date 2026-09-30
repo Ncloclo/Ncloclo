@@ -425,7 +425,11 @@ python -m venv .venv                                                           #
 
 Chaque nuit, le rapport quotidien vérifie que ces bibliothèques sont aux
 versions testées et sans faille connue, et dit quoi faire sinon. Il ne les
-installe jamais lui-même.
+installe jamais lui-même. Une faille qu'une bibliothèque empêche encore de
+corriger (ccxt exige des versions exactes de ses propres bibliothèques) est
+signalée sans alarme, jusqu'au jour où sa nouvelle version accepte la
+correction : le rapport le dit alors. `python trendguard_bot.py rapport failles`
+fait le même contrôle sur les versions testées ; c'est celui de GitHub.
 
 ### Utilisation
 

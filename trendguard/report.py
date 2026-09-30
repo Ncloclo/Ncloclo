@@ -47,6 +47,8 @@ from .report_health import (
 )
 from .report_render import render_html, render_short, render_text
 from .report_security import (
+    PINS_FILE,
+    audit_check,
     backup_database,
     binance_key_check,
     check_database,
@@ -237,16 +239,22 @@ def launch(gcfg: Any, action: str = "quotidien") -> bool:
 def main(argv: Optional[List[str]] = None) -> int:
     """Ligne de commande du rapport : afficher le dernier (défaut), le générer
     maintenant ou comme la routine de 00:30 (quotidien), installer une mise
-    à jour validée, remettre les réglages de veille d'origine (restaurer)
-    ou reprendre les corrections automatiques (corriger)."""
+    à jour validée, remettre les réglages de veille d'origine (restaurer),
+    reprendre les corrections automatiques (corriger), ou chercher les
+    failles connues des versions testées (failles : contrôle de GitHub, en
+    échec seulement si une correction peut s'installer)."""
     from .config import load_guard_config_from_env
     ap = argparse.ArgumentParser(description="Rapport quotidien : sécurité et diagnostic expert")
     ap.add_argument("action", nargs="?", default="dernier",
                     choices=["dernier", "maintenant", "quotidien", "installer", "restaurer",
-                             "corriger"])
+                             "corriger", "failles"])
     ap.add_argument("--sans-envoi", action="store_true", help="garder le rapport sans l'envoyer")
     args = ap.parse_args(argv)
     v29.ensure_utf8_stdio()
+    if args.action == "failles":
+        c = audit_check(v29.APP_DIR, Deps(), requirements=PINS_FILE)
+        print(f"{c['label']} ({PINS_FILE}) : {c['detail']}" + (f"\n→ {c['reco']}" if c["reco"] else ""))
+        return 1 if c["ok"] is False else 0
     gcfg = load_guard_config_from_env()
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     last = load_latest(gcfg)
