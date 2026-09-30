@@ -210,6 +210,9 @@ bloque tout achat jusqu'à la commande `resume` :
 | essai : 5 % / 20 % / 20 | 2023 → | bloqué | 18 810 | −40,7 % | 2024-10-25 | – | 703 |
 | essai : 5 % / 20 % / 20 | 2023 → | reprise après 60 j | 43 689 | −40,7 % | 2024-10-25 | 2024-12-24 | 60 |
 
+Le vrai bot, rejoué jour par jour depuis le 01/01/2023 avec ces réglages et la
+reprise prudente, finit exactement au même capital : 43 689 USDT.
+
 ### Décision
 
 1. **Palier de risque** (`TG_RISK_MAX_PCT=0.02` par défaut ; `0.01` le

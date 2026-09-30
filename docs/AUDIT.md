@@ -57,9 +57,10 @@ une commande manuelle, bot arrêté (703 jours sans achat dans l'essai « 5 % /
 20 % / 20 » depuis 2023). Il se lève maintenant seul après 60 jours, si le
 marché est redevenu haussier et que l'auto-diagnostic ne conclut pas à la perte
 de l'avantage de la stratégie, une fois par an au plus, avec un risque divisé
-par deux pendant 90 jours. Dans cet essai : 43 689 USDT au lieu de 18 810 depuis
-
-2023. Aux réglages du bot, il ne s'est jamais déclenché depuis 2018.
+par deux pendant 90 jours. Dans cet essai, en partant du 1er janvier 2023 :
+43 689 USDT au lieu de 18 810, chiffre confirmé par le vrai bot rejoué jour par
+jour. Aux réglages du bot, l'arrêt d'urgence ne s'est jamais déclenché depuis
+2018.
 
 ## Diagnostic approfondi du 30 septembre, 17 h
 
