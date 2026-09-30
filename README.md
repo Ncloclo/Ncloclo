@@ -289,20 +289,20 @@ plafonds, l'arrêt d'urgence et le passage en réel restent hors de sa portée.
 `python trendguard_bot.py evolution` affiche le niveau et l'historique ;
 `TG_EVOLUTION=false` garde des réglages fixes.
 
-**Rapport quotidien** (`report.py`, [`docs/RAPPORT.md`](docs/RAPPORT.md)).
-Chaque
-jour à 00:30 UTC, le bot fait une analyse profonde de lui-même : sécurité
-(secrets, droits, clé Binance, sauvegarde, pare-feu, antivirus), santé,
-stratégie
-(diagnostic expert complet), compétences acquises, code et journal. Il applique
-seul les protections sûres et réversibles (sauvegarde vérifiée de sa base,
-droits
-du fichier des secrets, secrets masqués dans les journaux) et garde le reste en
-recommandations. Le rapport s'affiche dans Réglages ▸ Rapport quotidien et part
-par e-mail (complet) et WhatsApp (résumé) ; `python trendguard_bot.py rapport
-maintenant` en fait un tout de suite. Une routine Claude Code propose aussi,
-chaque nuit, au plus une amélioration testée du code en Pull Request, que vous
-validez vous-même.
+**Rapport quotidien et recommandations appliquées** (`report.py`,
+`maintenance.py`, [`docs/RAPPORT.md`](docs/RAPPORT.md)). Chaque jour à 00:30
+UTC, le bot applique d'abord seul les recommandations sûres et réversibles :
+veille du PC sur secteur « Jamais » (réglages d'origine gardés, `rapport
+restaurer`), sauvegarde vérifiée de sa base, droits du fichier des secrets,
+secrets masqués dans les journaux. Il installe aussi les améliorations que vous
+avez validées sur GitHub (Pull Request fusionnée par vous, contrôles au vert),
+avec contrôle de démarrage, redémarrage et retour automatique en arrière en cas
+de problème ; jamais un changement que vous n'avez pas validé. Puis il fait une
+analyse profonde de lui-même (sécurité, santé, stratégie, compétences, code et
+journal) : le rapport s'affiche dans Réglages ▸ Rapport quotidien et part par
+e-mail (complet) et WhatsApp (résumé). Une routine Claude Code propose chaque
+nuit au plus une amélioration testée du code en Pull Request, à valider d'un
+clic.
 
 **Rusé à l'achat, discipliné à la vente.** Avant chaque achat, le bot lit le
 carnet d'ordres de Binance. Écart achat/vente supérieur à 0,5 %

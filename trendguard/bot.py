@@ -8,8 +8,6 @@ import faulthandler
 import logging
 import math
 import os
-import subprocess
-import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -72,6 +70,7 @@ class TrendGuardBot:
         self._last_veto_refresh = 0.0
         self._last_equity_log = 0.0
         self._stop_flag = False
+        self._restart_flag = False          # redémarrage prévu (nouvelle version)
         self._started_at = time.time()
         self._last_alive = 0.0
         self._last_selection_try = 0.0
@@ -277,16 +276,23 @@ class TrendGuardBot:
         périmée : ignorée."""
         if self._stop_flag:
             return True
-        path = self.g.stop_file
-        if path and os.path.exists(path):
+        for path, restart in ((self.g.stop_file, False),
+                              (autonomy.sidecar(self.g.lock_file, ".restart"), True)):
+            if not path or not os.path.exists(path):
+                continue
             stale = os.path.getmtime(path) < self._started_at - 60
             try:
                 os.remove(path)
             except OSError:
                 pass
-            if not stale:
-                self._stop_flag = True
-                self.logger.info("[ARRÊT] demandé depuis le panneau de contrôle : arrêt propre")
+            if stale:
+                continue
+            self._stop_flag = True
+            self._restart_flag = restart
+            self.logger.info("[MISE À JOUR] nouvelle version installée : redémarrage du bot"
+                             if restart else
+                             "[ARRÊT] demandé depuis le panneau de contrôle : arrêt propre")
+            break
         return self._stop_flag
 
     ALIVE_EVERY_SEC = 30
@@ -429,21 +435,12 @@ class TrendGuardBot:
         peak, eq = self.state.get("peak_equity"), self.state.get("last_equity")
         storm = bool(self.state.get("halted")) or bool(
             peak and eq and float(eq) < float(peak) * (1 - evolution.STORM_DD))
-        kw: Dict[str, Any] = {"cwd": autonomy.ROOT, "stdin": subprocess.DEVNULL,
-                              "stderr": subprocess.STDOUT,
-                              "env": dict(os.environ, RUN_MODE=self.g.run_mode,
-                                          PYTHONIOENCODING="utf-8")}
-        if os.name == "nt":
-            kw["creationflags"] = autonomy.CREATE_NO_WINDOW
-        log = autonomy.sidecar(self.g.lock_file, ".evolution.log") or os.devnull
-        try:
-            with open(log, "a", encoding="utf-8") as out:
-                subprocess.Popen([sys.executable, autonomy.BOT_SCRIPT, "evolution", "quotidien"]
-                                 + (["--tempete"] if storm else []), stdout=out, **kw)
+        if autonomy.launch_tool(self.g, ["evolution", "quotidien"] + (["--tempete"] if storm else []),
+                                ".evolution.log"):
             self.logger.info("[ÉVOLUTION] épreuves du jour lancées"
                              + (" (tempête : aucun changement permis)" if storm else ""))
-        except OSError as e:
-            self.logger.warning(f"[ÉVOLUTION] épreuves du jour impossibles : {e}")
+        else:
+            self.logger.warning("[ÉVOLUTION] épreuves du jour impossibles à lancer")
 
     def _launch_report(self, now: datetime) -> None:
         """Rapport quotidien (report.py) à partir de 00:30 UTC, une fois par

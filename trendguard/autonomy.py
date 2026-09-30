@@ -109,13 +109,13 @@ def _read_json(path: str) -> Dict[str, Any]:
         return {}
 
 
-def _write_json(path: str, data: Dict[str, Any], attempts: int = 10) -> None:
-    """Écriture atomique. Sous Windows, remplacer un fichier qu'un autre
-    process lit à cet instant échoue (accès refusé) : nouvel essai 10 fois,
-    toutes les 50 ms."""
+def write_json(path: str, data: Dict[str, Any], attempts: int = 10) -> None:
+    """Écriture atomique (état du superviseur, de l'évolution, du rapport).
+    Sous Windows, remplacer un fichier qu'un autre process lit à cet instant
+    échoue (accès refusé) : nouvel essai 10 fois, toutes les 50 ms."""
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as fh:
-        json.dump(data, fh, ensure_ascii=False)
+        json.dump(data, fh, ensure_ascii=False, indent=1)
     for k in range(attempts):
         try:
             os.replace(tmp, path)
@@ -124,6 +124,63 @@ def _write_json(path: str, data: Dict[str, Any], attempts: int = 10) -> None:
             if k == attempts - 1:
                 raise
             time.sleep(0.05)
+
+
+_write_json = write_json
+
+
+def launch_tool(gcfg: Any, args: List[str], log_ext: str) -> bool:
+    """Outil du bot dans un processus séparé et sans fenêtre (évolution,
+    rapport quotidien) : le bot continue de surveiller ses stops pendant
+    qu'il calcule. Sortie dans <journal>.<outil>.log."""
+    kw: Dict[str, Any] = {"cwd": ROOT, "stdin": subprocess.DEVNULL, "stderr": subprocess.STDOUT,
+                          "env": dict(os.environ, RUN_MODE=gcfg.run_mode, PYTHONIOENCODING="utf-8")}
+    if os.name == "nt":
+        kw["creationflags"] = CREATE_NO_WINDOW
+    log = sidecar(gcfg.lock_file, log_ext) or os.devnull
+    try:
+        with open(log, "a", encoding="utf-8") as out:
+            subprocess.Popen([sys.executable, BOT_SCRIPT, *args], stdout=out, **kw)
+    except OSError:
+        return False
+    return True
+
+
+# Code de sortie du bot pour un redémarrage prévu (nouvelle version installée) :
+# le superviseur le relance aussitôt, sans le compter comme un plantage.
+RESTART_CODE = 75
+
+
+def request_restart(gcfg: Any) -> bool:
+    """Redémarrage prévu du bot : il finit son cycle, sort avec RESTART_CODE,
+    et le superviseur le relance avec la nouvelle version."""
+    path = sidecar(gcfg.lock_file, ".restart")
+    if not path:
+        return False
+    _touch(path)
+    return True
+
+
+def restart_panel(run: Callable[..., Any] = subprocess.run,
+                  popen: Callable[..., Any] = subprocess.Popen,
+                  platform: str = sys.platform) -> bool:
+    """Relance le panneau (nouvelle version) comme au démarrage de la session.
+    Windows seulement ; ailleurs, il reprend la nouvelle version à son
+    prochain démarrage."""
+    if not platform.startswith("win"):
+        return False
+    ps = ("Get-CimInstance Win32_Process -Filter \"Name like 'python%'\" | Where-Object { "
+          "$_.CommandLine -like '*trendguard_bot.py*panel*' -and $_.CommandLine -notlike '*--demo*' "
+          "} | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }")
+    try:
+        run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
+            capture_output=True, timeout=60, creationflags=CREATE_NO_WINDOW)
+        popen([gui_python(sys.executable), BOT_SCRIPT, "panel", "--login"], cwd=ROOT,
+              stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+              creationflags=CREATE_NO_WINDOW)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return True
 
 
 def automation_off(gcfg: Any) -> bool:
@@ -186,6 +243,7 @@ def _fdur(sec: float) -> str:
 
 class Supervisor:
     BACKOFF_SEC = (10, 30, 60, 120, 300, 600)
+    PLANNED_WAIT_SEC = 2         # redémarrage prévu (nouvelle version)
     STALL_SEC = 30 * 60          # sans signe de vie du bot : bloqué
     HEALTHY_SEC = 60 * 60        # 1 h sans incident : l'attente repart de 10 s
     POLL_SEC = 2.0
@@ -329,6 +387,12 @@ class Supervisor:
                 self._status("running", bot_pid=pid)
                 code = self._watch(started)
                 self.child = None
+                if code == RESTART_CODE and not self.stop_wanted():
+                    self.log.info("[SUPERVISEUR] redémarrage prévu (nouvelle version installée) "
+                                  "→ relance immédiate")
+                    self._status("restarting")
+                    self._wait(self.PLANNED_WAIT_SEC)
+                    continue
                 self.last_exit = {"code": code, "at": v29._utcnow_iso(), "stalled": code is None}
                 if code == 0 or self.stop_wanted():
                     self.log.info("[SUPERVISEUR] bot arrêté proprement → fin de la supervision")

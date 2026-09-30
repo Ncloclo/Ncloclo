@@ -48,6 +48,7 @@ import v29
 from . import autonomy
 from . import diagnostics as dg
 from . import trend_strategy as ts
+from .texte import fr
 
 # Ce que le bot peut régler lui-même, et les seules valeurs permises.
 SPACE: Dict[str, List[float]] = {
@@ -124,10 +125,6 @@ WISDOM = [
 Trial = Tuple[str, bool, str]
 
 
-def fr(x: float, spec: str = ".2f") -> str:
-    return format(x, spec).replace(".", ",").replace("-", "−")
-
-
 def fmt_value(k: str, v: float) -> str:
     return str(int(v)) if k in INT_PARAMS else fr(float(v), "g")
 
@@ -160,10 +157,7 @@ def load_state(path: str) -> Dict[str, Any]:
 
 
 def save_state(path: str, st: Dict[str, Any]) -> None:
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as fh:
-        json.dump(st, fh, ensure_ascii=False, indent=1)
-    os.replace(tmp, path)
+    autonomy.write_json(path, st)
 
 
 def approved(raw: Any) -> Dict[str, float]:

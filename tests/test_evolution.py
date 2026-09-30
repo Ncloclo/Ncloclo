@@ -18,7 +18,7 @@ import v29
 from panel import assistant as pa
 from panel import server as ps
 from test_trendguard import SIM_FROM, synthetic_market
-from trendguard import bot as bot_module
+from trendguard import autonomy
 from trendguard import evolution as ev
 from trendguard import trend_strategy as ts
 
@@ -170,7 +170,7 @@ def test_bot_applies_evolved_settings_only_when_enabled(tmp_path, logger, monkey
     off._apply_evolution()
     assert off.p.trail_atr == g.params.trail_atr
     launched = []
-    monkeypatch.setattr(bot_module.subprocess, "Popen", lambda cmd, **kw: launched.append(cmd))
+    monkeypatch.setattr(autonomy.subprocess, "Popen", lambda cmd, **kw: launched.append(cmd))
     bot._launch_evolution("2026-10-01")
     assert launched == []                                       # cycle isolé : jamais lancé
     bot.track_uptime = True

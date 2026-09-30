@@ -16,6 +16,12 @@
 *.evolution.json.tmp
 *.rapport.json
 *.rapport.json.tmp
+# Maintenance autonome (maintenance.py) : réglages d'origine, arrêt des
+# corrections, redémarrage prévu
+*.restauration.json
+*.restauration.json.tmp
+*.autocorrection.off
+*.restart
 # Rapports quotidiens et sauvegardes de la base (report.py)
 rapports/
 sauvegardes/

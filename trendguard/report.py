@@ -38,13 +38,17 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import v29
 
-from . import autonomy, evolution, learning
+from . import autonomy, evolution, learning, maintenance
+from .systeme import Check, Deps, chk, ci_status, github_json, read_state, repo_slug
+from .systeme import git as _git
+from .systeme import power_ac as _power_ac
+from .systeme import ps_lines as _ps_lines
+from .texte import fr
 
 REPORT_MINUTE = 30              # 00:30 UTC
 KEEP_BACKUPS = 14
@@ -57,36 +61,6 @@ BROAD_SIDS = {"S-1-1-0": "Tout le monde", "S-1-5-32-545": "Utilisateurs",
 SHORT_MAX = 900                 # résumé WhatsApp
 LOG_GLOBS = ("*.log", "*.log.*", "*.console.txt", "*.blocage.txt")
 _STAMP = re.compile(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})")
-
-Check = Dict[str, Any]
-
-
-def chk(label: str, ok: Optional[bool], detail: str, reco: str = "", action: str = "") -> Check:
-    """Un constat : ok = True (conforme), False (à corriger), None (information)."""
-    return {"label": label, "ok": ok, "detail": detail, "reco": reco, "action": action}
-
-
-def _run(cmd: List[str], cwd: Optional[str] = None, env: Optional[Dict[str, str]] = None,
-         timeout: int = 60) -> subprocess.CompletedProcess:
-    kw: Dict[str, Any] = {"cwd": cwd, "env": env, "capture_output": True, "text": True,
-                          "timeout": timeout, "encoding": "utf-8", "errors": "replace"}
-    if os.name == "nt":
-        kw["creationflags"] = autonomy.CREATE_NO_WINDOW
-    return subprocess.run(cmd, **kw)
-
-
-@dataclass
-class Deps:
-    """Accès au monde extérieur, remplaçables dans les tests."""
-    run: Callable[..., Any] = _run
-    http_json: Optional[Callable[[str, Dict[str, str]], Any]] = None
-    panel: Optional[Callable[[int, str], Dict[str, Any]]] = None
-    binance: Optional[Callable[[Dict[str, str], bool], Check]] = None
-    diagnose: Optional[Callable[[Any], Tuple[List[Any], str]]] = None
-    platform: str = sys.platform
-    now: Optional[datetime] = None
-    extra: Dict[str, Any] = field(default_factory=dict)
-
 
 # ══════════════════════════════════════════════════════════════════════
 # Fichiers
@@ -121,41 +95,12 @@ def is_running(gcfg: Any) -> bool:
 
 
 def _save_json(path: str, data: Dict[str, Any]) -> None:
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as fh:
-        json.dump(data, fh, ensure_ascii=False, indent=1)
-    os.replace(tmp, path)
-
-
-def read_state(db_file: str) -> Dict[str, Any]:
-    """État du bot, en lecture seule (le bot garde la main sur sa base)."""
-    if not db_file or db_file == ":memory:" or not os.path.exists(db_file):
-        return {}
-    uri = pathlib.Path(os.path.abspath(db_file)).as_uri() + "?mode=ro"
-    try:
-        con = sqlite3.connect(uri, uri=True, timeout=5)
-    except sqlite3.Error:
-        return {}
-    try:
-        row = con.execute("SELECT value FROM kv WHERE key=?", ("trendguard",)).fetchone()
-        return json.loads(row[0]) if row else {}
-    except (sqlite3.Error, ValueError):
-        return {}
-    finally:
-        con.close()
+    autonomy.write_json(path, data)
 
 
 # ══════════════════════════════════════════════════════════════════════
 # Sécurité : constats et protections appliquées seules
 # ══════════════════════════════════════════════════════════════════════
-
-def _git(deps: Deps, root: str, *args: str) -> Optional[str]:
-    try:
-        r = deps.run(["git", *args], cwd=root)
-    except (OSError, subprocess.SubprocessError):
-        return None
-    return r.stdout if r.returncode == 0 else None
-
 
 def check_env_published(root: str, deps: Deps) -> Check:
     """Le fichier des secrets n'est ni suivi ni publié sur GitHub."""
@@ -382,14 +327,6 @@ def binance_key_check(env: Dict[str, str], testnet: bool = False) -> Check:
     return chk(label, True, detail, "" if ip else "Ajoutez une restriction IP à la clé sur Binance.")
 
 
-def _ps_lines(deps: Deps, script: str) -> Optional[List[str]]:
-    try:
-        r = deps.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script])
-    except (OSError, subprocess.SubprocessError):
-        return None
-    return r.stdout.splitlines() if r.returncode == 0 else None
-
-
 def check_windows(deps: Deps) -> List[Check]:
     """Pare-feu, antivirus, mise en veille et capot (lecture seule : les
     changer demande votre accord)."""
@@ -419,15 +356,6 @@ def check_windows(deps: Deps) -> List[Check]:
                                        "Microsoft Defender."))
     out.append(_power_check(deps))
     return out
-
-
-def _power_ac(deps: Deps, sub: str, setting: str) -> Optional[int]:
-    try:
-        r = deps.run(["powercfg", "/query", "SCHEME_CURRENT", sub, setting])
-    except (OSError, subprocess.SubprocessError):
-        return None
-    vals = re.findall(r"0x([0-9a-fA-F]{8})", r.stdout or "")
-    return int(vals[-2], 16) if r.returncode == 0 and len(vals) >= 2 else None
 
 
 def _power_check(deps: Deps) -> Check:
@@ -502,7 +430,10 @@ def check_log(log_file: str, now: datetime) -> Check:
     lines = _log_tail_24h(log_file, now)
     if not lines:
         return chk("Journal des 24 dernières heures", None, "vide ou illisible")
-    errors = [x for x in lines if "[ERROR]" in x or "[CRITICAL]" in x]
+    # Alerte critique que Telegram, non configuré, n'a pas envoyée : ce n'est
+    # pas une panne du bot (l'e-mail et WhatsApp ont leur propre contrôle).
+    unsent = [x for x in lines if "[NOTIFIER-OFF]" in x]
+    errors = [x for x in lines if ("[ERROR]" in x or "[CRITICAL]" in x) and x not in unsent]
     warns = [x for x in lines if "[WARNING]" in x]
     tags: Dict[str, int] = {}
     for x in warns:
@@ -511,7 +442,9 @@ def check_log(log_file: str, now: datetime) -> Check:
     top = ", ".join(f"{t} × {n}" for t, n in sorted(tags.items(), key=lambda kv: -kv[1])[:3])
     return chk("Journal des 24 dernières heures", not errors,
                f"{len(lines)} lignes, {len(errors)} erreur(s), {len(warns)} avertissement(s)"
-               + (f" ({top})" if top else ""),
+               + (f" ({top})" if top else "")
+               + (f" ; {len(unsent)} alerte(s) critique(s) non envoyée(s) par Telegram (non "
+                  "configuré)" if unsent else ""),
                "" if not errors else "Erreurs à examiner : " + errors[-1][20:160])
 
 
@@ -589,21 +522,19 @@ def code_checks(root: str, deps: Deps, gh: Optional[Callable[[str], Any]]) -> Tu
                        "modifié localement : " + ", ".join(files[:5]),
                        "" if not files else "Si ce n'est pas une mise à jour en cours, demandez "
                                             "une vérification : fichiers du bot modifiés."))
-    remote = (_git(deps, root, "remote", "get-url", "origin") or "").strip()
-    slug = re.sub(r"(\.git)?$", "", remote.split("github.com/")[-1]) if "github.com/" in remote else ""
+    slug = repo_slug(deps, root)
     out.append(chk("Origine du code", bool(slug), f"github.com/{slug}" if slug else "inconnue",
                    "" if slug else "Le dépôt n'est plus relié à GitHub : demandez une vérification."))
     head = (_git(deps, root, "rev-parse", "HEAD") or "").strip()
     proposals: List[str] = []
     if gh and slug and head:
         try:
-            runs = gh(f"https://api.github.com/repos/{slug}/actions/runs?head_sha={head}&per_page=20")
-            wf = [r for r in (runs or {}).get("workflow_runs", []) if r.get("status") == "completed"]
-            bad = [r["name"] for r in wf if r.get("conclusion") not in ("success", "skipped")]
-            out.append(chk("Contrôles GitHub de cette version", None if not wf else not bad,
-                           "en cours ou absents" if not wf else ("tests, qualité et sécurité au vert"
-                                                               if not bad else "en échec : " + ", ".join(bad)),
-                           "" if not bad else "Demandez une correction : les contrôles automatiques échouent."))
+            ok, bad = ci_status(gh, slug, head)
+            out.append(chk("Contrôles GitHub de cette version", ok,
+                           "en cours ou absents" if ok is None else ("tests, qualité et sécurité au vert"
+                                                                     if ok else "en échec : " + ", ".join(bad)),
+                           "" if ok is not False else "Demandez une correction : les contrôles "
+                                                      "automatiques échouent."))
             pulls = gh(f"https://api.github.com/repos/{slug}/pulls?state=open&per_page=20") or []
             proposals = [f"{p.get('title')} — {p.get('html_url')}" for p in pulls if isinstance(p, dict)]
         except Exception as e:
@@ -621,13 +552,6 @@ def code_checks(root: str, deps: Deps, gh: Optional[Callable[[str], Any]]) -> Tu
     except (OSError, subprocess.SubprocessError):
         out.append(chk("Qualité du code (ruff)", None, "vérification impossible"))
     return out, proposals
-
-
-def _github_json(url: str) -> Any:
-    req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json",
-                                               "User-Agent": "TrendGuard-rapport"})
-    with urllib.request.urlopen(req, timeout=20) as r:
-        return json.loads(r.read().decode("utf-8"))
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -664,12 +588,17 @@ def skills_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
     """Compétences acquises : apprentissage libre et évolution encadrée."""
     lr = learning.summary(st.get("learning"))
     out = [chk("Apprentissage libre", None, lr["text"])]
-    if lr["brier_raw"] is not None and lr["forecasts"] >= 20:
+    if lr["brier_raw"] is not None:
+        # Une information, jamais un point à corriger : l'apprentissage se
+        # juge sur la durée (au moins 100 prévisions comparées à la clôture).
+        enough = lr["forecasts"] >= 100
         better = lr["brier_cal"] <= lr["brier_raw"]
-        out.append(chk("Précision des prévisions", better,
-                       f"erreur {lr['brier_raw']:.3f} brute, {lr['brier_cal']:.3f} corrigée".replace(".", ","),
-                       "" if better else "La correction apprise n'aide pas encore : elle reste "
-                                         "tempérée par le modèle."))
+        out.append(chk("Précision des prévisions", True if enough and better else None,
+                       f"erreur {fr(lr['brier_raw'], '.3f')} brute, {fr(lr['brier_cal'], '.3f')} "
+                       f"corrigée, sur {fr(lr['forecasts'], '.0f')} prévisions"
+                       + ("" if enough else " (jugée à partir de 100)")
+                       + ("" if not enough or better else " : la correction apprise n'aide pas "
+                                                          "encore, elle reste tempérée par le modèle")))
     ev = evolution.summary(gcfg)
     if ev.get("enabled"):
         changes = ", ".join(f"{c['param']} {c['from']} → {c['to']}" for c in ev["changes"]) or "réglages d'origine"
@@ -679,7 +608,9 @@ def skills_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
 
 
 def build(gcfg: Any, env: Dict[str, str], deps: Optional[Deps] = None,
-          backups: bool = True) -> Dict[str, Any]:
+          backups: bool = True, applied: Optional[List[Check]] = None) -> Dict[str, Any]:
+    """Le rapport complet ; `applied` : recommandations déjà appliquées seules
+    (maintenance.py), montrées en tête."""
     deps = deps or Deps()
     now = deps.now or datetime.now(timezone.utc)
     day = now.date().isoformat()
@@ -688,7 +619,7 @@ def build(gcfg: Any, env: Dict[str, str], deps: Optional[Deps] = None,
     pnl = (deps.panel or panel_fetch)(int(env.get("PANEL_PORT", "8765") or 8765),
                                       env.get("PANEL_PASSWORD", ""))
     status, security = pnl.get("status"), pnl.get("security")
-    gh = deps.http_json or _github_json
+    gh = deps.http_json or github_json
 
     sec = [check_env_published(root, deps), check_env_permissions(root, deps)]
     sec += check_secret_leaks(root, env, deps)
@@ -712,6 +643,7 @@ def build(gcfg: Any, env: Dict[str, str], deps: Optional[Deps] = None,
     code, proposals = code_checks(root, deps, gh)
     form = [check_log(gcfg.log_file, now)] + code
     sections = [
+        {"title": "Recommandations appliquées seules", "checks": list(applied or [])},
         {"title": "Sécurité", "checks": sec},
         {"title": "Centre de sécurité du panneau", "checks": panel_sec},
         {"title": "Santé du bot (le fond)", "checks": health},
@@ -805,8 +737,12 @@ def deliver(report: Dict[str, Any], hub: Any) -> Dict[str, Dict[str, Any]]:
 
 
 def generate(gcfg: Any, env: Dict[str, str], send: bool = True, deps: Optional[Deps] = None,
-             hub: Any = None) -> Dict[str, Any]:
-    """Analyse, protections, rapport gardé puis envoyé. Un seul à la fois."""
+             hub: Any = None, maintain: bool = True) -> Dict[str, Any]:
+    """Recommandations sûres appliquées seules (maintenance.py), analyse,
+    protections, rapport gardé puis envoyé. Un seul à la fois."""
+    # Chargés avant une éventuelle mise à jour : ce processus garde une
+    # version cohérente du code jusqu'à la fin du rapport.
+    from . import alerts, cli  # noqa: F401
     p = paths(gcfg)
     if p["lock"]:
         if is_running(gcfg):
@@ -814,12 +750,15 @@ def generate(gcfg: Any, env: Dict[str, str], send: bool = True, deps: Optional[D
         with open(p["lock"], "w", encoding="utf-8") as fh:
             fh.write(str(os.getpid()))
     try:
-        report = build(gcfg, env, deps)
+        deps = deps or Deps()
+        root = deps.extra.get("root") or v29.APP_DIR
+        port = int(env.get("PANEL_PORT", "8765") or 8765)
+        applied = maintenance.run_all(gcfg, deps, root, port) if maintain else []
+        report = build(gcfg, env, deps, applied=applied)
         save(gcfg, report)
         if send:
             own = hub is None
             if own:
-                from . import alerts
                 hub = alerts.build_notifier(env=env)
             try:
                 report["delivery"] = deliver(report, hub)
@@ -840,26 +779,15 @@ def launch(gcfg: Any, action: str = "quotidien") -> bool:
     """Rapport dans un processus séparé (bot à 00:30, bouton du panneau)."""
     if is_running(gcfg):
         return False
-    p = paths(gcfg)
-    kw: Dict[str, Any] = {"cwd": autonomy.ROOT, "stdin": subprocess.DEVNULL,
-                          "stderr": subprocess.STDOUT,
-                          "env": dict(os.environ, RUN_MODE=gcfg.run_mode, PYTHONIOENCODING="utf-8")}
-    if os.name == "nt":
-        kw["creationflags"] = autonomy.CREATE_NO_WINDOW
-    try:
-        with open(p["log"], "a", encoding="utf-8") as out:
-            subprocess.Popen([sys.executable, autonomy.BOT_SCRIPT, "rapport", action],
-                             stdout=out, **kw)
-    except OSError:
-        return False
-    return True
+    return autonomy.launch_tool(gcfg, ["rapport", action], ".rapport.log")
 
 
 def main(argv: Optional[List[str]] = None) -> int:
     from .config import load_guard_config_from_env
     ap = argparse.ArgumentParser(description="Rapport quotidien : sécurité et diagnostic expert")
     ap.add_argument("action", nargs="?", default="dernier",
-                    choices=["dernier", "maintenant", "quotidien"])
+                    choices=["dernier", "maintenant", "quotidien", "installer", "restaurer",
+                             "corriger"])
     ap.add_argument("--sans-envoi", action="store_true", help="garder le rapport sans l'envoyer")
     args = ap.parse_args(argv)
     v29.ensure_utf8_stdio()
@@ -870,6 +798,17 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(last["text"] if last else "Aucun rapport pour l'instant : python trendguard_bot.py "
                                         "rapport maintenant")
         return 0
+    if args.action == "restaurer":
+        print(maintenance.restore_power(gcfg, Deps()))
+        return 0
+    if args.action == "corriger":
+        print(maintenance.resume_fixes(gcfg))
+        return 0
+    if args.action == "installer":
+        c = maintenance.update(gcfg, Deps(), v29.APP_DIR, int(os.environ.get("PANEL_PORT", "8765")),
+                               allow_live=True)
+        print(f"{stamp} {c['label']} : {c['detail']}" + (f"\n→ {c['reco']}" if c["reco"] else ""))
+        return 0 if c["ok"] is not False else 1
     if args.action == "quotidien" and last and last.get("day") == datetime.now(timezone.utc).date().isoformat():
         print(f"{stamp} Rapport du jour déjà fait.")
         return 0

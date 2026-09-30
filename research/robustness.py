@@ -35,12 +35,9 @@ import pandas as pd
 import v29
 from research import adaptation as ra
 from trendguard import trend_strategy as ts
+from trendguard.texte import fr
 
 GRID = {"breakout_n": [20, 30, 40], "init_stop_atr": [2.5, 3.0, 3.5], "trail_atr": [4.0, 5.0, 6.0]}
-
-
-def fr(x: float, spec: str) -> str:
-    return format(x, spec).replace(".", ",").replace("-", "−")
 
 
 def cell(m: Dict[str, float]) -> str:

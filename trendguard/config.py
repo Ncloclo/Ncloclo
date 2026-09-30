@@ -44,6 +44,8 @@ TG_ENV_DOC: Dict[str, str] = {
     "TG_ANTICIPATION": "true : alerte quand une vente ou un achat sont probables à la prochaine clôture",
     "TG_EVOLUTION": "true : évolution encadrée, le bot règle lui-même cassure et stops s'il réussit les épreuves",
     "TG_RAPPORT": "true : rapport quotidien à 00:30 UTC (sécurité, diagnostic), gardé et envoyé par e-mail et WhatsApp",
+    "TG_AUTOCORRECTION": "true : le rapport applique seul les corrections sûres (veille du PC sur secteur : jamais)",
+    "TG_MISE_A_JOUR": "true : installe seules les Pull Requests fusionnées par le propriétaire (contrôles au vert)",
     "TG_CLASSEMENT": "true : classement quotidien des cryptos par bénéfice (page Cryptos du panneau)",
     "TG_KEEP_AWAKE": "true : l'ordinateur ne se met pas en veille tout seul pendant que le bot tourne",
     "TG_MAX_SPREAD": "Ruse : achat différé si l'écart achat/vente dépasse ce seuil (0.005 = 0,5 %)",
@@ -111,6 +113,11 @@ class GuardConfig:
     # Rapport quotidien (report.py) : sécurité et diagnostic à 00:30 UTC ;
     # activé par l'environnement.
     daily_report: bool = False
+    # Maintenance autonome (maintenance.py), au début du rapport : corrections
+    # sûres et mises à jour validées par le propriétaire ; activées par
+    # l'environnement.
+    auto_fix: bool = False
+    auto_update: bool = False
     watch_db: str = ""
     max_capital: float = 0.0            # 0 = tout le compte
     keep_awake: bool = False            # anti-veille (activé par l'environnement)
@@ -203,6 +210,8 @@ def load_guard_config_from_env() -> GuardConfig:
         anticipation_alerts=v29._env_b("TG_ANTICIPATION", True),
         evolution=v29._env_b("TG_EVOLUTION", True),
         daily_report=v29._env_b("TG_RAPPORT", True),
+        auto_fix=v29._env_b("TG_AUTOCORRECTION", True),
+        auto_update=v29._env_b("TG_MISE_A_JOUR", True),
         watch_db=v29._env_s("TG_VEILLE_DB", os.path.join(v29.APP_DIR, "trendguard_veille.db")),
         max_capital=v29._env_f("TG_MAX_CAPITAL", 0.0),
         keep_awake=v29._env_b("TG_KEEP_AWAKE", True),

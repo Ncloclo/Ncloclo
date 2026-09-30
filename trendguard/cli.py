@@ -808,7 +808,8 @@ def _run(gcfg: GuardConfig, once: bool) -> int:
             delay = min(delay * 2, 600)
         if _bot._running and not bot.stop_requested():
             bot.run_forever()
-        return 0
+        # Nouvelle version installée : le superviseur relance aussitôt le bot.
+        return autonomy.RESTART_CODE if bot._restart_flag else 0
     finally:
         if awake is not None:
             awake.stop()

@@ -27,6 +27,8 @@ from __future__ import annotations
 import statistics
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
+from .texte import fr
+
 BOOK_ALPHA = 0.05        # poids d'un nouveau relevé (≈ les 20 derniers comptent)
 BOOK_MIN_N = 24          # relevés avant de se fier à la normale (≈ un jour)
 SPREAD_MULT = 3.0        # écart anormal : plus de 3 × la normale de la crypto…
@@ -198,9 +200,11 @@ def evaluate(L: Dict[str, Any], day: str, sold: Iterable[str], signals: Iterable
         lessons += [("buy", p, a in signals) for a, p in (snap.get("buy") or {}).items()]
         if snap.get("bear") is not None:
             lessons.append(("bear", snap["bear"], bear))
-    for kind, p, happened in lessons:
+    # Mesure honnête : chaque prévision du soir est jugée avec la correction
+    # connue AVANT ce soir, pas avec celle qu'apprennent ses voisines.
+    corrected = [calibrate(L, kind, p) for kind, p, _h in lessons]
+    for (kind, p, happened), pc in zip(lessons, corrected):
         o = 1.0 if happened else 0.0
-        pc = calibrate(L, kind, p)            # correction d'avant la leçon : mesure honnête
         br = L["brier"][kind]
         br["n"] += 1
         br["raw"] += (p - o) ** 2
@@ -230,10 +234,6 @@ def note_deferral(L: Dict[str, Any], outcome: str, gain: Optional[float] = None)
 # Résumé (panneau, Rachelle)
 # ══════════════════════════════════════════════════════════════════════
 
-def _fr(x: float, spec: str) -> str:
-    return format(x, spec).replace(",", " ").replace(".", ",")
-
-
 def summary(L: Any) -> Dict[str, Any]:
     L = ensure(dict(L) if isinstance(L, dict) else {})
     books = L["books"]
@@ -248,13 +248,13 @@ def summary(L: Any) -> Dict[str, Any]:
     parts = [f"carnets : normale apprise pour {len(learned)} crypto(s) sur {len(books)} "
              f"({samples} relevés)" if books else "carnets : premiers relevés dans l'heure"]
     if n_fc:
-        parts.append(f"prévisions : {_fr(n_fc, '.0f')} comparées à la clôture, erreur (Brier) "
-                     f"{_fr(raw, '.3f')} brute, {_fr(cal, '.3f')} corrigée")
+        parts.append(f"prévisions : {fr(n_fc, '.0f')} comparées à la clôture, erreur (Brier) "
+                     f"{fr(raw, '.3f')} brute, {fr(cal, '.3f')} corrigée")
     else:
         parts.append("prévisions : premières leçons après la prochaine clôture")
     if r.get("deferred"):
         parts.append(f"ruse : {r['deferred']} achat(s) différé(s), {r['bought']} acheté(s) plus tard"
-                     + (f" ({_fr(gain, '+.2f')} % en moyenne)" if gain is not None else "")
+                     + (f" ({fr(gain, '+.2f')} % en moyenne)" if gain is not None else "")
                      + f", {r['abandoned']} abandonné(s)")
     tight = sorted(((a, b["spread"]) for a, b in learned.items()), key=lambda x: -x[1])[:3]
     return {"books": len(learned), "books_seen": len(books), "samples": samples,
@@ -271,5 +271,5 @@ def lessons_text(L: Any) -> List[str]:
     out = [s["text"]]
     if s["widest"]:
         out.append("Écarts normaux les plus larges : " + ", ".join(
-            f"{w['asset'].upper()} {_fr(w['spread_pct'], '.3f')} %" for w in s["widest"]) + ".")
+            f"{w['asset'].upper()} {fr(w['spread_pct'], '.3f')} %" for w in s["widest"]) + ".")
     return out
