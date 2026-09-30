@@ -71,16 +71,17 @@ réel (`python trendguard_bot.py rapport installer` le fait à votre demande).
 
 **Jamais, avec sagesse** : le bot ne touche pas aux règles ni au risque
 (l'évolution encadrée s'en charge, sous épreuves), ni aux clés, ni au mode réel,
-ni au pare-feu ou à l'antivirus. Ce qu'il ne peut pas appliquer lui-même (une
-clé Binance à corriger, un mot de passe d'application Gmail à créer) reste en
-tête des recommandations, classées par importance.
+ni au pare-feu ou à l'antivirus, ni à ses bibliothèques (il les contrôle, sans
+les installer). Ce qu'il ne peut pas appliquer lui-même (une clé Binance à
+corriger, un mot de passe d'application Gmail à créer, des bibliothèques à
+mettre à jour) reste en tête des recommandations, classées par importance.
 
 ## Ce qu'il analyse
 
 | Partie | Contrôles |
 | --- | --- |
 | Recommandations appliquées seules | correction de la veille du PC, mise à jour validée installée (ou pourquoi pas) |
-| Sécurité | secrets hors de GitHub (fichier `.env` jamais publié), droits du fichier des secrets, aucune clé ni aucun mot de passe dans les fichiers publiés ni dans les journaux, droits de la clé Binance (retrait interdit, restriction IP), sauvegarde et intégrité de la base, pare-feu et antivirus de Windows, veille du PC, alimentation d'un portable (sur batterie, il s'endort capot fermé puis s'éteint : à brancher) |
+| Sécurité | secrets hors de GitHub (fichier `.env` jamais publié), droits du fichier des secrets, aucune clé ni aucun mot de passe dans les fichiers publiés ni dans les journaux, droits de la clé Binance (retrait interdit, restriction IP), sauvegarde et intégrité de la base, pare-feu et antivirus de Windows, veille du PC, alimentation d'un portable (sur batterie, il s'endort capot fermé puis s'éteint : à brancher), bibliothèques du bot aux versions testées (`requirements-docker.txt`) et sans faille connue (`pip-audit`, sur celles réellement installées là où il tourne) |
 | Centre de sécurité du panneau | accès, mots de passe ratés, alertes (dernier envoi), garde-fou de Rachelle |
 | Santé du bot (le fond) | panneau en marche, bot en marche, dernier cycle, décision du jour à l'heure, disponibilité sur 7 jours, relance automatique, démarrage avec l'ordinateur, arrêt d'urgence, risque configuré dans les limites sages, mode, espace disque |
 | Stratégie (le fond) | le diagnostic expert complet (données, marché, signaux, portefeuille, santé de la stratégie, réel contre attendu, stratégies concurrentes, veille) |

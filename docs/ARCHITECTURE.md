@@ -22,6 +22,28 @@ animation). `python trendguard_bot.py --help` donne la liste complète.
 Les commandes du bot (`run`, `panel`, `supervise`, `stop`, `set-keys`…), la
 clé « Démarrer avec l'ordinateur » et les tâches VS Code ne changent pas.
 
+## Bibliothèques : l'environnement propre du bot
+
+Les bibliothèques du bot sont dans le dossier `.venv`, à côté du code, aux
+versions de `requirements-docker.txt` : celles de l'image Docker et des
+contrôles GitHub. Les autres logiciels du PC gardent les leurs, et une mise à
+jour des uns ne casse plus les autres.
+
+- `trendguard_bot.py` relance toute commande dans ce dossier avant de lire le
+  reste du code (`trendguard/environnement.py`, bibliothèque standard
+  seulement). Sous Linux et macOS, le processus est remplacé ; sous Windows, qui
+  ne sait pas le faire, le premier processus attend la fin de la commande et
+  transmet son code de sortie.
+- Un processus lancé par le bot (superviseur, bot, rapport, panneau relancé)
+  reste dans l'environnement de son parent : la variable `TRENDGUARD_ENV`, posée
+  par le premier, passe aux suivants.
+- Sans dossier `.venv`, ou s'il ne peut pas être lancé, le bot tourne avec les
+  bibliothèques du PC. La clé « Démarrer avec l'ordinateur » garde donc le
+  Python de l'installation : le démarrage ne dépend pas de ce dossier.
+- Le rapport quotidien compare les bibliothèques installées aux versions testées
+  et cherche leurs failles connues (`pip-audit`). Les installer reste une
+  recommandation : README, « Bibliothèques du bot ».
+
 ## Dossiers
 
 | Dossier | Rôle |
@@ -59,7 +81,8 @@ sont jamais envoyés sur GitHub. VS Code les masque dans l'explorateur
 | `evolution.py` | évolution encadrée : réglages ajustés par le bot sous épreuves, niveaux, essais de 30 jours |
 | `report.py` | rapport quotidien : sécurité, diagnostic du fond et de la forme, protections sûres, envoi |
 | `maintenance.py` | recommandations appliquées seules : veille du PC, mises à jour validées par le propriétaire |
-| `systeme.py` | accès au système partagé : commandes, git, GitHub, réglages de Windows, état en lecture seule |
+| `systeme.py` | accès au système partagé : commandes, git, GitHub, réglages de Windows, bibliothèques installées, état en lecture seule |
+| `environnement.py` | environnement propre du bot (dossier `.venv`) : commande relancée dedans, Python du démarrage avec l'ordinateur |
 | `texte.py` | nombres écrits à la française (`fr`, `fr_plain`) pour le bot, le panneau, les rapports et les études |
 | `journal.py` | journaux muets des simulations et des vérifications (`silent_logger`) |
 | `alerts.py` | alertes Telegram, e-mail et WhatsApp |
@@ -198,3 +221,7 @@ python -m pytest tests -q            # tests Python
 python -m ruff check .               # style, imports, erreurs courantes
 python -m pip_audit -r requirements-docker.txt   # failles connues des dépendances
 ```
+
+Sur un PC qui a le dossier `.venv`, ces trois commandes se lancent avec son
+Python (`.venv\Scripts\python` sous Windows, `.venv/bin/python` ailleurs) : les
+tests tournent alors avec les bibliothèques du bot.

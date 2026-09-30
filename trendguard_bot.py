@@ -39,11 +39,25 @@ Outils (mêmes options qu'avant, après le nom de l'outil) :
 Ce fichier est le seul point d'entrée : le code est rangé dans le paquet
 trendguard/ (voir docs/ARCHITECTURE.md) et tous ses noms restent
 accessibles ici (import trendguard_bot).
+
+Bibliothèques : si le dossier .venv existe à côté de ce fichier, toute
+commande y est relancée (versions testées, séparées des autres logiciels du
+PC) ; sinon elle tourne avec les bibliothèques du PC.
 """
 
 from __future__ import annotations
 
+import os
 import sys
+
+if __name__ == "__main__":
+    # Avant tout autre import : les bibliothèques lues ensuite sont celles de
+    # l'environnement propre du bot (trendguard/environnement.py).
+    from trendguard.environnement import relaunch
+
+    _code = relaunch(os.path.dirname(os.path.abspath(__file__)), sys.orig_argv[1:])
+    if _code is not None:
+        sys.exit(_code)
 
 from trendguard.bot import DecisionDeferred, Slot, TrendGuardBot, _sleep, _stop, last_closed_day
 from trendguard.cli import (

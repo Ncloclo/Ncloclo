@@ -3,8 +3,10 @@
   "python.testing.pytestArgs": ["tests"],
   "python.envFile": "${workspaceFolder}/.env",
   // Explorateur : le code seulement. Les fichiers de fonctionnement du bot
-  // (base, journaux, verrous, choix du panneau) restent sur le disque, masqués ici.
+  // (base, journaux, verrous, choix du panneau, bibliothèques du dossier .venv)
+  // restent sur le disque, masqués ici.
   "files.exclude": {
+    ".venv": true,
     "**/__pycache__": true,
     "**/.pytest_cache": true,
     "**/.ruff_cache": true,

@@ -1,4 +1,7 @@
-# Versions figées pour l'image Docker (toutes validées par la suite de tests).
+# Versions testées (toutes validées par la suite de tests) : image Docker,
+# contrôles GitHub et environnement propre du bot sur un PC (dossier .venv,
+# README ▸ Bibliothèques du bot). Le rapport quotidien les compare à celles
+# qui sont installées.
 ccxt==4.5.84
 numpy==2.5.3
 pandas==3.0.6

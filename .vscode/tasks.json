@@ -3,9 +3,13 @@
   "version": "2.0.0",
   "tasks": [
     {
+      // Bibliothèques du bot, dans son dossier .venv (README ▸ Bibliothèques du bot).
       "label": "Installer les dépendances",
       "type": "shell",
-      "command": "python -m pip install -r requirements.txt",
+      "command": "python -m venv .venv && .venv/bin/python -m pip install -r requirements-docker.txt ruff pip-audit",
+      "windows": {
+        "command": "python -m venv .venv; if ($?) { .venv\\Scripts\\python -m pip install -r requirements-docker.txt ruff pip-audit }"
+      },
       "problemMatcher": []
     },
     {

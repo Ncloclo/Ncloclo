@@ -11,8 +11,8 @@ Autonome et automatique, avec sagesse :
   secrets limités à son propriétaire, secret masqué dans un journal où il
   apparaîtrait ;
 - tout le reste est un constat ou une recommandation : il ne touche jamais
-  aux règles, au risque, aux clés, au mode réel, au code ni aux réglages de
-  Windows.
+  aux règles, au risque, aux clés, au mode réel, au code, aux bibliothèques
+  ni aux réglages de Windows.
 
 Le rapport est gardé (panneau ▸ Réglages ▸ Rapport quotidien), puis envoyé
 par e-mail (complet) et par WhatsApp (résumé). Aucun secret n'y figure :
@@ -44,9 +44,10 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import v29
 
-from . import autonomy, evolution, learning, maintenance
+from . import autonomy, environnement, evolution, learning, maintenance
 from .systeme import Check, Deps, chk, ci_status, github_json, read_state, repo_slug
 from .systeme import git as _git
+from .systeme import installed_versions as _installed_versions
 from .systeme import power_ac as _power_ac
 from .systeme import power_source as _power_source
 from .systeme import ps_lines as _ps_lines
@@ -62,6 +63,10 @@ BROAD_SIDS = {"S-1-1-0": "Tout le monde", "S-1-5-32-545": "Utilisateurs",
               "S-1-5-11": "Utilisateurs authentifiés"}
 SHORT_MAX = 900                 # résumé WhatsApp
 LOG_GLOBS = ("*.log", "*.log.*", "*.console.txt", "*.blocage.txt")
+PINS_FILE = "requirements-docker.txt"       # versions testées des bibliothèques
+AUDIT_TIMEOUT = 300
+LIBRARY_RECO = ("Mettez les bibliothèques du bot à jour (README ▸ « Bibliothèques du bot »), "
+                "ou demandez cette mise à jour.")
 _STAMP = re.compile(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})")
 
 # ══════════════════════════════════════════════════════════════════════
@@ -407,6 +412,78 @@ def _source_check(deps: Deps) -> Optional[Check]:
                "fermé, puis s'éteint quand elle est vide, et le bot s'arrête.")
 
 
+def read_pins(root: str) -> Dict[str, str]:
+    """Versions testées des bibliothèques (nom → version) ; vide si la liste
+    est illisible."""
+    pins: Dict[str, str] = {}
+    try:
+        with open(os.path.join(root, PINS_FILE), encoding="utf-8") as fh:
+            for line in fh:
+                name, sep, version = line.split("#")[0].strip().partition("==")
+                if sep and name.strip() and version.strip():
+                    pins[name.strip()] = version.strip()
+    except OSError:
+        pass
+    return pins
+
+
+def library_checks(root: str, deps: Deps) -> List[Check]:
+    """Bibliothèques du bot : aux versions testées, sans faille connue
+    (lecture seule : les installer reste une recommandation)."""
+    pins = read_pins(root)
+    have = _installed_versions(deps, list(pins))
+    if have is None:
+        return []
+    own = deps.extra["own_env"] if "own_env" in deps.extra else environnement.inside(root)
+    return [_versions_check(pins, have, own), _audit_check(root, deps)]
+
+
+def _versions_check(pins: Dict[str, str], have: Dict[str, Optional[str]], own: bool) -> Check:
+    label = "Bibliothèques du bot"
+    if not pins:
+        return chk(label, None, f"versions testées introuvables ({PINS_FILE})")
+    wrong = [f"{n} {have[n] or 'absente'} au lieu de {v}" for n, v in pins.items() if have[n] != v]
+    if wrong:
+        return chk(label, False, ", ".join(wrong) + (
+            ", dans l'environnement propre du bot" if own else
+            " : le bot utilise les bibliothèques du PC, pas son environnement propre"), LIBRARY_RECO)
+    return chk(label, True, "aux versions testées" + (", dans l'environnement propre du bot" if own else "")
+               + " : " + ", ".join(f"{n} {v}" for n, v in pins.items()))
+
+
+def _version_key(version: str) -> Tuple[int, ...]:
+    return tuple(int(p) if p.isdigit() else 0 for p in re.split(r"[.+-]", version))
+
+
+def _audit_check(root: str, deps: Deps) -> Check:
+    """Failles connues (pip-audit) des bibliothèques installées là où tourne
+    le bot."""
+    label = "Failles connues des bibliothèques"
+    try:
+        r = deps.run([sys.executable, "-m", "pip_audit", "--progress-spinner", "off",
+                      "--desc", "off", "-f", "json"], cwd=root, timeout=AUDIT_TIMEOUT)
+    except (OSError, subprocess.SubprocessError):
+        return chk(label, None, "vérification impossible")
+    if "No module named" in (r.stderr or ""):
+        return chk(label, None, "pip-audit non installé")
+    text = r.stdout or ""
+    try:
+        found = json.loads(text[text.index("{"):])["dependencies"]
+    except (ValueError, KeyError, TypeError):
+        return chk(label, None, "vérification impossible (réseau ?)")
+    bad = []
+    for lib in found:
+        fixes = sorted({v for flaw in lib.get("vulns") or [] for v in flaw.get("fix_versions") or []},
+                       key=_version_key)
+        if lib.get("vulns"):
+            bad.append(f"{lib.get('name')} {lib.get('version')}"
+                       + (f" (corrigée en {fixes[-1]})" if fixes else ""))
+    if bad:
+        return chk(label, False, f"{len(bad)} sur {len(found)} : " + ", ".join(bad[:6])
+                   + (" …" if len(bad) > 6 else ""), LIBRARY_RECO)
+    return chk(label, True, f"aucune dans les {len(found)} bibliothèques installées")
+
+
 # ══════════════════════════════════════════════════════════════════════
 # Panneau, bot, code : santé du fond et de la forme
 # ══════════════════════════════════════════════════════════════════════
@@ -671,6 +748,7 @@ def build(gcfg: Any, env: Dict[str, str], deps: Optional[Deps] = None,
                            "Vérifiez l'espace disque."))
     sec.append(check_database(gcfg.db_file))
     sec += check_windows(deps)
+    sec += library_checks(root, deps)
     panel_sec = [chk(c["label"], c["ok"], c["detail"],
                      f"{c['label']} : {c['detail']}" if c.get("ok") is False else "")
                  for c in (security or {}).get("checks", [])

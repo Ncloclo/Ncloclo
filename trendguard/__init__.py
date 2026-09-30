@@ -11,6 +11,7 @@ Stratégie et décision
   anticipation.py      ventes, achats et risques probables à la prochaine clôture
 
 Fonctionnement autonome
+  environnement.py     bibliothèques du bot : son environnement propre (.venv)
   autonomy.py          superviseur, démarrage avec l'ordinateur, anti-veille
   alerts.py            alertes Telegram, e-mail et WhatsApp
   market_watch.py      veille : annonces officielles de Binance, avis des IA

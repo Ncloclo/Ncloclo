@@ -409,10 +409,30 @@ Son environnement n'a pas accès à Binance : GitHub Actions
 sur la branche `donnees` (veille, diagnostic, laboratoire, historique
 Binance). Réglages de l'agent : <https://claude.ai/code/routines>.
 
+### Bibliothèques du bot
+
+Le bot a son propre jeu de bibliothèques Python, dans le dossier `.venv` à côté
+du code : les versions de `requirements-docker.txt`, celles que GitHub teste à
+chaque envoi. Elles sont séparées de celles des autres logiciels du PC, qui
+gardent les leurs. Toute commande `python trendguard_bot.py …` passe d'elle-même
+par ce dossier ; s'il n'existe pas, le bot tourne avec les bibliothèques du PC.
+
+Première installation, ou mise à jour quand les versions testées changent (bot
+et panneau arrêtés, dans le dossier du bot) :
+
+```bash
+python -m venv .venv                                                           # une seule fois
+.venv\Scripts\python -m pip install -r requirements-docker.txt ruff pip-audit  # Windows
+.venv/bin/python -m pip install -r requirements-docker.txt ruff pip-audit      # Linux, macOS
+```
+
+Chaque nuit, le rapport quotidien vérifie que ces bibliothèques sont aux
+versions testées et sans faille connue, et dit quoi faire sinon. Il ne les
+installe jamais lui-même.
+
 ### Utilisation
 
 ```bash
-pip install -r requirements.txt
 python trendguard_bot.py strategy download --data data          # historique Coin Metrics
 python trendguard_bot.py strategy research --data data          # régénère le rapport
 python trendguard_bot.py docs                                   # variables d'environnement

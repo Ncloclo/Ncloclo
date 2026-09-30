@@ -112,6 +112,24 @@ def power_source(deps: Optional[Deps] = None) -> Optional[Dict[str, Any]]:
     return {"ac": s.ac == 1, "battery_pct": int(s.pct) if battery else None}
 
 
+def installed_versions(deps: Deps, names: List[str]) -> Optional[Dict[str, Optional[str]]]:
+    """Version installée de chaque bibliothèque (None : absente) dans le
+    Python qui fait tourner le bot. None avec des commandes simulées (tests) :
+    rien de réel n'est lu."""
+    if "installed" in deps.extra:
+        return {n: deps.extra["installed"].get(n) for n in names}
+    if deps.run is not run:
+        return None
+    from importlib import metadata
+    out: Dict[str, Optional[str]] = {}
+    for n in names:
+        try:
+            out[n] = metadata.version(n)
+        except metadata.PackageNotFoundError:
+            out[n] = None
+    return out
+
+
 def github_json(url: str) -> Any:
     """API publique de GitHub (lecture seule, sans jeton)."""
     req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json",

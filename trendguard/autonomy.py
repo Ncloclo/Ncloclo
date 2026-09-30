@@ -45,6 +45,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import v29
 
+from . import environnement
+
 ROOT = v29.APP_DIR
 BOT_SCRIPT = os.path.join(ROOT, "trendguard_bot.py")
 CREATE_NO_WINDOW = 0x08000000        # Windows : process sans fenêtre de console
@@ -548,11 +550,13 @@ class WindowsRunKey:
 
 
 class Autostart:
-    def __init__(self, platform: str = sys.platform, python: str = sys.executable,
+    def __init__(self, platform: str = sys.platform, python: Optional[str] = None,
                  script: str = BOT_SCRIPT, home: Optional[str] = None,
                  run: Callable[..., Any] = subprocess.run, registry: Any = None):
         self.platform = platform
-        self.python = python
+        # Le Python de l'installation, même depuis l'environnement propre du
+        # bot : le démarrage ne dépend pas du dossier .venv.
+        self.python = python or environnement.launcher_python(ROOT)
         self.script = script
         self.home = home or os.path.expanduser("~")
         self.run = run

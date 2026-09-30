@@ -18,8 +18,9 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# Points d'entrée qui ré-exportent tous les noms de leur paquet.
-"trendguard_bot.py" = ["F401"]
+# Points d'entrée qui ré-exportent tous les noms de leur paquet ; celui du bot
+# choisit d'abord son environnement (.venv), puis importe (E402).
+"trendguard_bot.py" = ["F401", "E402"]
 "v29/__init__.py" = ["F401"]
 
 [tool.ruff.lint.isort]
