@@ -16,13 +16,11 @@ from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from . import evolution, learning
-from .systeme import Check, Deps, chk, ci_status, pc_resources, repo_slug
+from .systeme import DISK_MIN_GB, DISK_MIN_PCT, Check, Deps, chk, ci_status, pc_resources, repo_slug
 from .systeme import git as _git
 from .texte import fr
 
 _STAMP = re.compile(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})")
-DISK_MIN_GB = 2                 # en dessous, le bot ne peut plus écrire longtemps
-DISK_MIN_PCT = 10               # en dessous, Windows manque de place pour ses mises à jour
 MEMORY_MAX_PCT = 90             # au-dessus, Windows refuse bientôt de la mémoire aux programmes
 
 

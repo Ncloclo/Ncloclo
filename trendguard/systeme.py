@@ -24,6 +24,8 @@ from . import autonomy
 
 Check = Dict[str, Any]
 GB = 2 ** 30
+DISK_MIN_GB = 2                 # en dessous, le bot ne peut plus écrire longtemps
+DISK_MIN_PCT = 10               # en dessous, Windows manque de place pour ses mises à jour
 
 
 def chk(label: str, ok: Optional[bool], detail: str, reco: str = "", action: str = "") -> Check:
