@@ -27,6 +27,30 @@ n'est pas prêt pour de l'argent réel : il lui faut des alertes
 qui arrivent, une machine allumée en permanence avec une adresse fixe, et
 plusieurs semaines de paper avec des trades vendus.
 
+## Le paper trade déjà (1er octobre, 13 h)
+
+Votre demande : que le paper commence à trader. Il trade déjà : six achats le
+26 septembre (AAVE, ADA, ICP, LINK, LTC, XLM), suivis tous les quarts d'heure,
+décision chaque nuit à 00:02 UTC. Depuis, rien ne bouge, sans panne :
+
+- **budget plein** : chaque position risque 1 % du capital, six positions font
+  les 6 % permis ; un achat de plus attend une vente ;
+- **aucune vente** : aucun cours n'a clôturé sous son stop. Le plus proche,
+  LTC, est à 0,7 % de son stop (38 % de chances d'être vendu à la clôture de
+  ce soir, d'après le bot) ;
+- **aucune cassure** : même avec de la place, rien ne s'achèterait ce soir ;
+  la plus proche, ETH, doit encore monter de 2,8 % pour dépasser son plus
+  haut de 30 jours.
+
+Rien n'est changé : les trois façons de le faire acheter plus (budget libéré
+quand les stops montent, 8 % cumulé, 0,75 % par achat) font 10 % de trades en
+plus mais gagnent moins depuis 2023, et deux dépassent la limite du hasard
+([`ADAPTATION.md`](ADAPTATION.md), section 6). Rythme normal du bot : 3
+trades par mois, gardés 15 jours (médiane) ; entre deux mouvements, 3 jours
+d'habitude et 10 jours ou plus une fois sur dix. Pour voir chaque achat et
+chaque vente au moment où ils se font : les alertes par e-mail (mot de passe
+d'application Gmail) ou par WhatsApp.
+
 ## Clés exposées retirées (1er octobre, 7 h)
 
 Votre demande : supprimer les clés exposées signalées par le rapport. Le
@@ -703,6 +727,7 @@ Points faibles :
 | 22 | Sécurité renforcée (clé Binance au moindre privilège, historique des commandes, dossier hors du nuage, chiffrement, mises à jour de Windows), rapport après chaque compétence acquise, rapport de sécurité dans le panneau et renvoyé à la demande | Code, à votre demande | **fait** (01/10) |
 | 23 | Prévenir par e-mail et WhatsApp quand le PC passe sur batterie ; en paper, une clé refusée devient une information ; commande `rapport` et contrôles de santé découpés | Code, avec votre accord | **fait** (01/10, 6 h) : G6, G7, G8 |
 | 24 | Fermer les propositions n° 3 et n° 4 sur GitHub (en conflit, déjà faites) | Vous | quand vous voulez |
+| 25 | Faire acheter plus le bot (budget libéré quand les stops montent, 8 % cumulé, 0,75 % par achat) | Étude, à votre demande | **écarté** (01/10, 13 h) : plus de trades, mais moins bon ([`ADAPTATION.md`](ADAPTATION.md), section 6) |
 
 Fait depuis l'audit du matin : chemins de secours des ordres réels testés (et
 un défaut corrigé), blocage des mots de passe ratés, écriture sûre du choix des

@@ -17,9 +17,10 @@ baisse) et son arrêt d'urgence à −40 % :
      garde-fous du bot (evolution.py) ;
   4. arrêt d'urgence : bloqué jusqu'à la commande resume, ou reprise
      automatique après 60 jours de marché redevenu haussier (bot.py) ;
-  5. budget de risque : risque de départ de chaque position (le bot), ou
-     risque restant jusqu'au stop actuel (plus d'achats quand les stops
-     montent).
+  5. faire acheter plus ? Budget compté avec le risque restant jusqu'au
+     stop actuel (il se libère quand les stops montent), 8 % cumulé, ou
+     0,75 % par achat ; et le rythme du bot (trades par mois, attente
+     entre deux mouvements).
 
   python -m research.palier --cache data_binance
 """
@@ -275,29 +276,52 @@ def kill_switch(close: pd.DataFrame, volume: pd.DataFrame, base: ts.TrendParams,
                       f"{', '.join(k.halts) or '–'} | {', '.join(k.resumes) or '–'} | {k.halted_days} |")
 
 
-def open_risk_at_stop(close: pd.DataFrame, volume: pd.DataFrame, pre, base: ts.TrendParams,
-                      eras: List[Era]) -> None:
-    """5. Budget de risque compté avec le risque de départ de chaque position
-    (le bot), ou avec le risque restant jusqu'à son stop actuel : le budget
-    se libère quand les stops montent, le bot achète plus."""
-    print("\n## 5. Budget de risque : risque de départ, ou risque restant jusqu'au stop\n")
-    print("| Budget compté avec | 2018-22 rendement | baisse | Calmar | depuis 2023 rendement | "
-          "baisse | Calmar | trades |")
-    print("|---|---|---|---|---|---|---|---|")
+def _rhythm(res: ts.PortfolioResult) -> str:
+    """Rythme d'un rejeu : trades par mois, durée de garde, attente entre
+    deux mouvements (achat ou vente)."""
+    months = (res.equity.index[-1] - res.equity.index[0]).days / 30.44
+    held = float(np.median([t["days"] for t in res.trades]))
+    moves = sorted({pd.Timestamp(t[k]) for t in res.trades for k in ("entry_date", "exit_date")
+                    if t.get(k) is not None})
+    gaps = np.diff([m.value for m in moves]) / 86_400e9
+    return (f"{fr(len(res.trades) / months, '.1f')} trades par mois, gardés {fr(held, '.0f')} jours "
+            f"(médiane) ; entre deux mouvements : {fr(np.median(gaps), '.0f')} jours d'habitude, "
+            f"{fr(np.percentile(gaps, 90), '.0f')} jours 1 fois sur 10, {fr(gaps.max(), '.0f')} jours au plus")
+
+
+def risk_budget(close: pd.DataFrame, volume: pd.DataFrame, pre, base: ts.TrendParams,
+                eras: List[Era]) -> None:
+    """5. Faire acheter plus le bot ? Budget compté avec le risque restant
+    jusqu'au stop actuel (il se libère quand les stops montent), 8 % cumulé
+    (deux places de plus), ou 0,75 % par achat (huit places dans les mêmes
+    6 %) ; puis le rythme du bot tel qu'il est."""
+    print("\n## 5. Budget de risque : faire acheter plus ?\n")
+    print("| Variante | 2018-22 rendement | baisse | Calmar | depuis 2023 rendement | "
+          "baisse | Calmar | hasard 1 fois sur 20 | trades par mois |")
+    print("|---|---|---|---|---|---|---|---|---|")
     real = ts.plan_entries
 
     def at_stop(holdings, snap, bull, equity, cash, p, risk_mult=1.0):
         left = {a: dataclasses.replace(h, risk_quote=min(h.risk_quote, max(0.0, h.qty * (h.entry - h.stop))))
                 for a, h in holdings.items()}
         return real(left, snap, bull, equity, cash, p, risk_mult)
-    for name, fn in (("le risque de départ (bot)", real), ("le risque restant jusqu'au stop", at_stop)):
+    bot = None
+    for name, p, fn in (("bot : 1 % par achat, 6 % cumulé (risque de départ)", base, real),
+                        ("budget libéré quand les stops montent", base, at_stop),
+                        ("8 % cumulé (deux places de plus)", dataclasses.replace(base, max_total_risk=0.08), real),
+                        ("0,75 % par achat (huit places dans 6 %)", dataclasses.replace(base, risk_pct=0.0075),
+                         real)):
         ts.plan_entries = fn            # la boucle du bot appelle plan_entries du module
         try:
-            res = [ts.backtest(close, volume, base, a, b, pre=pre) for a, b in eras]
+            res = [ts.backtest(close, volume, p, a, b, pre=pre) for a, b in eras]
+            full = ts.backtest(close, volume, p, eras[0][0], eras[-1][1], pre=pre)
         finally:
             ts.plan_entries = real
+        bot = bot or full
+        months = (full.equity.index[-1] - full.equity.index[0]).days / 30.44
         print(f"| {name} | {' | '.join(_row(r.metrics) for r in res)} | "
-              f"{' + '.join(str(r.metrics['trades']) for r in res)} |")
+              f"−{fr(evolution.block_luck(full.equity)[1], '.0f')} % | {fr(len(full.trades) / months, '.1f')} |")
+    print(f"\nRythme du bot depuis {eras[0][0][:4]} : {_rhythm(bot)}.")
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -314,7 +338,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     market_rules(close, volume, pre, base, eras)
     walk_forward(close, volume, pre, base, "2020-01-01", end)
     kill_switch(close, volume, base, end)
-    open_risk_at_stop(close, volume, pre, base, eras)
+    risk_budget(close, volume, pre, base, eras)
     return 0
 
 

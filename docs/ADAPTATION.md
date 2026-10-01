@@ -137,16 +137,27 @@ aucun cours n'a clôturé sous son stop (placés 7 à 11 % sous les prix d'achat
 Le raisonnement du jour le dit désormais en clair : « Budget de risque plein :
 6,0 % engagés sur 6 % permis… » et « Vente la plus proche : LTC, stop à… ».
 
-Libérer le budget quand les stops montent (compter le risque restant jusqu'au
-stop actuel au lieu du risque de départ) fait acheter plus, mais moins bien :
+Faire acheter plus le bot ? Trois façons, étudiées le 30 septembre et le
+1er octobre (votre demande : « que le paper commence à trader ») :
 
-| Budget compté avec | 2018-22 rendement | baisse | Calmar | depuis 2023 rendement | baisse | Calmar | trades |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| le risque de départ (bot) | +31,8 % | −20,6 % | 1,54 | +32,1 % | −24,2 % | 1,33 | 142 + 172 |
-| le risque restant jusqu'au stop | +28,3 % | −21,9 % | 1,29 | +25,2 % | −24,0 % | 1,05 | 161 + 185 |
+| Variante | 2018-22 rendement | baisse | Calmar | depuis 2023 rendement | baisse | Calmar | hasard 1 fois sur 20 | trades par mois |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| bot : 1 % par achat, 6 % cumulé (risque de départ) | +31,8 % | −20,6 % | 1,54 | +32,1 % | −24,2 % | 1,33 | −34 % | 3,0 |
+| budget libéré quand les stops montent | +28,3 % | −21,9 % | 1,29 | +25,2 % | −24,0 % | 1,05 | −36 % | 3,3 |
+| 8 % cumulé (deux places de plus) | +33,3 % | −22,3 % | 1,50 | +27,9 % | −24,4 % | 1,14 | −36 % | 3,3 |
+| 0,75 % par achat (huit places dans 6 %) | +26,5 % | −18,9 % | 1,40 | +22,6 % | −19,7 % | 1,15 | −31 % | 3,3 |
 
-Écarté : en crypto, les positions baissent ensemble ; en tenir plus, c'est
+Écartées toutes les trois : 10 % de trades en plus, mais 4 à 10 points de
+rendement en moins chaque année depuis 2023, et, pour les deux premières, une
+pire baisse du hasard au-delà de la limite de −35 % (arrêt d'urgence à
+−40 %). En crypto, les positions baissent ensemble ; en tenir plus, c'est
 rendre plus de gains au retournement.
+
+Le rythme du bot tel qu'il est, depuis 2018 : 3 trades par mois, gardés 15
+jours (médiane) ; entre deux mouvements (achat ou vente), 3 jours d'habitude,
+10 jours ou plus une fois sur dix, jusqu'à 7 mois en marché baissier (avril à
+novembre 2022). Une semaine sans achat ni vente, budget plein, n'a rien
+d'anormal.
 
 ### Plus de risque : plus de gains, mais le hasard frôle l'arrêt d'urgence
 
