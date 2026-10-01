@@ -28,7 +28,6 @@ from __future__ import annotations
 import math
 import os
 import platform
-import shutil
 import sys
 import time
 from dataclasses import dataclass
@@ -42,6 +41,7 @@ import v29
 
 from . import strategy_lab as sl
 from . import trend_strategy as ts
+from .systeme import DISK_MIN_GB, DISK_MIN_PCT, pc_resources
 from .texte import fr
 
 DAY_MS = 86_400_000
@@ -207,12 +207,15 @@ def check_system(exchange: Any, state: Dict[str, Any], expected_day: str,
                            "Analyser la baisse, puis `python trendguard_bot.py resume` "
                            "(bot arrêté)."))
     if db_file and db_file != ":memory:" and os.path.exists(db_file):
-        free = shutil.disk_usage(os.path.dirname(os.path.abspath(db_file))).free
         size = os.path.getsize(db_file)
-        lvl = "OK" if free > 1e9 else "ATTENTION"
-        out.append(Finding(S, lvl, f"Base {fr(size / 1e6, '.1f')} Mo, disque libre "
-                           f"{fr(free / 1e9, '.1f')} Go",
-                           "" if lvl == "OK" else "Libérer de l'espace disque."))
+        res = pc_resources(root=os.path.dirname(os.path.abspath(db_file)))
+        if res:
+            free, total = res["disk_free"], res["disk_total"]
+            pct = free / total * 100 if total else 100.0
+            lvl = "ATTENTION" if free < DISK_MIN_GB or pct < DISK_MIN_PCT else "OK"
+            out.append(Finding(S, lvl, f"Base {fr(size / 1e6, '.1f')} Mo, disque libre "
+                               f"{fr(free, '.1f')} Go sur {fr(total, '.0f')} ({fr(pct, '.0f')} %)",
+                               "" if lvl == "OK" else "Libérer de l'espace disque."))
     return out
 
 

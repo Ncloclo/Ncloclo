@@ -4,7 +4,7 @@ import dataclasses
 import io
 import logging
 from contextlib import redirect_stdout
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import ccxt
 import pytest
@@ -13,7 +13,9 @@ import trendguard_bot as tg
 import v29
 from test_trendguard import DAY, N_DAYS, SIM_FROM, feed, make_bot, synthetic_market
 from trendguard import diagnostics as dg
+from trendguard import report_health as rph
 from trendguard import trend_strategy as ts
+from trendguard.texte import fr
 
 
 @pytest.fixture
@@ -220,3 +222,22 @@ def test_cmd_diagnose_end_to_end(tmp_path, logger):
     assert (tmp_path / "rapport.txt").read_text(encoding="utf-8").startswith("═")
     with pytest.raises(RuntimeError):
         fb.create_order("ETH/USDT", "market", "buy", 1)      # aucun ordre possible
+
+
+def test_check_system_disk_matches_report_measure_and_threshold(tmp_path, monkeypatch):
+    """Le disque du diagnostic et celui du rapport quotidien utilisent la même
+    mesure (systeme.pc_resources, Go binaires) et le même seuil
+    (systeme.DISK_MIN_GB/DISK_MIN_PCT), au lieu de deux calculs qui pouvaient
+    se contredire (docs/AUDIT.md, constat E3)."""
+    db = tmp_path / "tg.db"
+    db.write_bytes(b"x" * 2_000_000)
+    for free, total in ((1.5, 8.0), (17.1, 240.3), (120.0, 240.0)):
+        resources = {"disk_free": free, "disk_total": total, "memory_used": None, "memory_limit": None}
+        monkeypatch.setattr(dg, "pc_resources", lambda root="", r=resources: r)
+        findings = dg.check_system(object(), {}, "2026-01-01", str(db), None, datetime(2026, 1, 1))
+        disk = next(f for f in findings if f.message.startswith("Base "))
+
+        report_check = rph.resource_checks(rph.Deps(extra={"resources": resources}))[0]
+        assert (disk.level == "OK") == bool(report_check["ok"])
+        pct = free / total * 100
+        assert f"{fr(free, '.1f')} Go sur {fr(total, '.0f')} ({fr(pct, '.0f')} %)" in disk.message
