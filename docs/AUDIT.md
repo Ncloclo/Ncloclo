@@ -1,4 +1,4 @@
-# Audit et diagnostic expert de TrendGuard — 28 au 30 septembre 2026
+# Audit et diagnostic expert de TrendGuard — 28 septembre au 1er octobre 2026
 
 Cinq diagnostics successifs : l'audit du 28, le diagnostic approfondi du 29
 (disponibilité, robustesse, alertes), celui du 30 à 10 h (alimentation,
@@ -7,8 +7,9 @@ bibliothèques (PC, contrôles croisés), et celui de 17 h, après la
 restructuration du code (épreuves de résistance). Puis, à 21 h, le palier de
 risque et la reprise prudente de l'arrêt d'urgence, à 22 h un sixième
 diagnostic, clé Binance enfin acceptée, le 1er octobre à 2 h la sécurité
-renforcée et le rapport après chaque compétence acquise, et à 5 h un septième
-diagnostic. Méthode : diagnostic de la stratégie sur les données publiques de
+renforcée et le rapport après chaque compétence acquise, à 5 h un septième
+diagnostic et à 14 h un huitième (disque, mémoire, PC déplacé). Méthode :
+diagnostic de la stratégie sur les données publiques de
 Binance (`python trendguard_bot.py diagnose`), état du bot dans le panneau,
 journal du bot, du superviseur et de Windows, vérification Binance (`verify`,
 aucun ordre), tests, analyse statique, failles connues des dépendances
@@ -17,15 +18,72 @@ aucun ordre), tests, analyse statique, failles connues des dépendances
 ## Verdict
 
 **Le bot, sa stratégie et son code sont sains ; ce qui l'entoure ne l'est pas
-encore.** Au 30 septembre, la stratégie est conforme (27 contrôles sur 27), le
-journal ne contient aucune erreur du bot, les tests et les contrôles de GitHub
-sont au vert. Deux faiblesses restent autour du bot : le PC portable (veille,
-arrêts : 70 % de disponibilité sur 7 jours, 91 % sur 24 heures) et les alertes
-qui n'arrivent pas. La clé Binance est acceptée depuis le 30 septembre au soir,
-et les bibliothèques Python du bot sont à jour, aux versions testées. Le bot
-n'est pas prêt pour de l'argent réel : il lui faut des alertes
-qui arrivent, une machine allumée en permanence avec une adresse fixe, et
-plusieurs semaines de paper avec des trades vendus.
+encore.** Au 1er octobre à 14 h, la stratégie est conforme, le journal ne
+contient aucune erreur du bot, les tests et les contrôles de GitHub sont au
+vert, les bibliothèques du bot sans faille connue. Les faiblesses sont autour
+du bot : le PC portable (déplacé deux fois par jour, 71 % de disponibilité sur
+7 jours, disque et mémoire presque pleins) et les alertes qui n'arrivent pas.
+La clé Binance est refusée dès que le PC change de réseau. Le bot n'est pas
+prêt pour de l'argent réel : il lui faut des alertes qui arrivent, une machine
+fixe allumée en permanence avec une adresse fixe, de l'argent sur le compte,
+et plusieurs semaines de paper avec des trades vendus.
+
+## Diagnostic approfondi du 1er octobre, 14 h
+
+**Verdict : le bot, sa stratégie et son code vont bien ; c'est le PC qui
+fatigue.** Rapport du bot : 37 contrôles conformes sur 47 (sécurité : 20 sur
+23), 4 points à corriger, tous autour du PC : alertes, disponibilité, disque,
+mémoire. Diagnostic de la stratégie conforme, sauf la place sur le disque.
+
+### État du bot (01/10, 14 h)
+
+- En marche depuis la mise à jour de 13 h 17 (ccxt 4.5.85), sans une erreur ;
+  relance automatique active (0 relance) ; PC sur secteur, batterie à 100 %.
+- Capital 10 016 USDT (+0,2 % depuis le départ, −0,6 % sous le plus haut) ;
+  6 positions, budget de risque plein (6,0 % sur 6 %) ; si tous les stops
+  étaient touchés : −5,6 % du capital.
+- Cette nuit : LTC à 0,75 % au-dessus de son stop, 35 % de chances d'être
+  vendu (ce serait le premier trade clos, environ −1 % du capital) ; ETH, BTC
+  et TRX, les achats les plus proches, à plus de 3 % d'une cassure.
+- Stratégie (Binance, 2019 → 30/09) : +33,6 % par an, pire baisse −24,7 %,
+  Sharpe 1,19 ; 24 derniers mois : +1,19 R par trade (intervalle 90 % : +0,37
+  à +2,11) ; 12 mois glissants : +34 %, percentile 65. Tournoi de 7 stratégies
+  sur 2 ans : TrendGuard 3e, juste derrière les deux premières (Sharpe 1,64
+  contre 1,72), rien ne justifie d'en changer.
+- Bibliothèques : ccxt 4.5.85 et `urllib3` 2.8.0 depuis 13 h (F9 réglé),
+  aucune faille connue dans les 47 bibliothèques ; 531 tests et contrôles
+  GitHub au vert.
+- Heure juste à 0,2 s près : Windows la synchronise de lui-même par moments
+  (service démarré à la demande, 3 fois en 3 jours) ; la ligne 5 du plan
+  n'est plus nécessaire.
+- Restent de votre côté : propositions n° 3 et n° 4 à fermer sur GitHub, clés
+  exposées à supprimer sur Binance, compte réel sans USDT.
+
+### Constats de 14 h
+
+| N° | Constat | Gravité | Suite |
+| --- | --- | --- | --- |
+| H1 | **Disque libre à 6 %** (14,7 Go sur 240), 6 Go perdus depuis la veille au soir. En cause : la mémoire presque pleine (H2) fait grossir le fichier d'échange de Windows (11,1 Go) ; s'y ajoutent le fichier d'hibernation (6,4 Go) et le dossier Téléchargements (25 Go). Sous 10 %, les mises à jour de Windows peuvent échouer ; à zéro, le bot ne peut plus écrire sa base | **Élevée** | Vous : trier le dossier Téléchargements (sans toucher au dossier `claude`, qui contient le bot), fermer des onglets (H2), puis redémarrer le PC, qui rend la place du fichier d'échange. Code : dire dans le rapport où part la place (H7) |
+| H2 | **Mémoire réservée à 94 %** (23,1 Go sur 24,5 possibles) : Chrome (47 processus, 7,2 Go), les fenêtres intégrées d'Edge (WebView2, 3,3 Go), VS Code (2,6 Go) ; le bot, moins de 1 Go. Pleine, Windows ferme des programmes, parfois le bot (la relance automatique le reprend) | **Élevée** | Vous : fermer des onglets de Chrome. Code : nommer dans le rapport les programmes qui prennent le plus de mémoire (H7) |
+| H3 | **Le PC voyage** : débranché et capot fermé deux fois par jour (1 h 32 de veille ce matin, 1 h 37 hier soir) : 71 % de disponibilité sur 7 jours. Et il change de réseau : troisième adresse publique en 24 heures, la clé Binance est de nouveau refusée (`verify` à 14 h) | Faible en paper, **bloquant pour le réel** | En paper : rien à faire (décisions rattrapées, clé refusée = information). Pour le réel : une machine fixe, allumée en permanence, à adresse fixe (ligne 13) ; en réel, les stops de secours posés sur Binance protègent même PC éteint |
+| H4 | Réseau instable : prix indisponibles à 12 h 21, 13 h 48 et de 14 h 03 à 14 h 06, contrôle de la clé du rapport hors délai ; latence de 400 à 450 ms vers Binance. Tout est rattrapé au cycle suivant | Faible | Rien à faire ; compté dans le rapport |
+| H5 | **Toujours aucune alerte ne vous arrive** : e-mail en pause après 3 refus du mot de passe (un essai par jour), WhatsApp pas configuré ; la fenêtre « alerts configurer » attend depuis la veille à 18 h 39 | **Élevée** | Vous : mot de passe d'application Gmail dans cette fenêtre, puis CallMeBot pour WhatsApp |
+| H6 | Vie privée : le dépôt est public et contient vos adresses publiques passées (quatre lignes de cet audit, un test) | Faible (adresses changeantes) | Code : les remplacer par des adresses d'exemple, et un test qui refuse toute adresse réelle dans les fichiers publiés (H8) |
+
+Code : 70 modules, 25 554 lignes ; les fonctions les plus chargées du bot
+sont la veille du marché (30 embranchements), le contrôle du système du
+diagnostic (28), la maintenance (28) et l'évolution quotidienne (25). À
+découper sans urgence, à l'occasion d'une autre modification.
+
+### Améliorations proposées (votre accord d'abord)
+
+- **H7** : quand le disque ou la mémoire se remplissent, le rapport et le
+  centre de sécurité disent où part la place (Téléchargements, fichier
+  d'échange, hibernation, fichiers temporaires, corbeille : des tailles,
+  jamais des noms de fichiers), combien de place a été perdue depuis le
+  rapport précédent, et quels programmes prennent le plus de mémoire.
+- **H8** : vos adresses publiques retirées des fichiers publiés (remplacées
+  par des adresses d'exemple), et un test qui empêche d'en publier une autre.
 
 ## Le paper trade déjà (1er octobre, 13 h)
 
@@ -712,7 +770,7 @@ Points faibles :
 | 2 | Clé Binance : de nouvelles clés sont enregistrées (supprimer sur Binance les anciennes, montrées dans la conversation, si ce n'est pas fait) ; la nouvelle était refusée parce que l'adresse du PC sur Internet change | Vous | **fait** (30/09, 22 h) : adresse du PC autorisée, clé acceptée ; à refaire quand l'adresse change ; pour le réel, une machine à adresse fixe (ligne 13) et une clé neuve (constat E5) |
 | 3 | Laisser tourner en paper jusqu'à 10 à 20 trades vendus, puis comparer à l'attendu (section « Réel vs attendu » du diagnostic) | Vous et le bot | plusieurs semaines |
 | 4 | **Disponibilité** : PC branché et allumé en continu, veille désactivée sur secteur, capot fermé = « Ne rien faire » sur secteur ; ou un petit serveur | Vous et le bot | **en partie fait** : veille sur secteur « Jamais » (29/09), capot fermé « ne rien faire » (30/09, appliqués par le bot). 65 % sur 7 jours au 30/09. Reste à vous : PC branché, et fermer le capot plutôt qu'appuyer sur le bouton d'alimentation |
-| 5 | Synchroniser l'horloge de Windows | Vous | droits d'administrateur nécessaires : le service « Temps Windows » est arrêté (30/09, 17 h) ; le démarrer, le mettre en démarrage automatique, puis Paramètres ▸ Heure et langue ▸ Synchroniser maintenant |
+| 5 | Synchroniser l'horloge de Windows | Vous | **plus nécessaire** (01/10, 14 h) : le service « Temps Windows » démarre de lui-même quand il le faut (3 synchronisations en 3 jours), heure juste à 0,2 s près ; le bot se cale de toute façon sur l'heure de Binance |
 | 6 | Découper les fonctions les plus complexes et `app.js` | Code | **fait** : les six plus lourdes découpées, `app.js` en quatre modules ; un test d'horodatage fragile rendu fiable |
 | 7 | Décider du sort de l'ancien bot V29 (le supprimer allégerait le dépôt) | Code | **décidé : gardé à part.** Son moteur d'exécution est aussi celui de TrendGuard ; le supprimer obligerait à retoucher le code des ordres réels pour peu de gain |
 | 8 | Avant le réel : `verify` complet, quelques jours de testnet, au moins 100 USDT | Vous | le moment venu |
@@ -733,6 +791,8 @@ Points faibles :
 | 23 | Prévenir par e-mail et WhatsApp quand le PC passe sur batterie ; en paper, une clé refusée devient une information ; commande `rapport` et contrôles de santé découpés | Code, avec votre accord | **fait** (01/10, 6 h) : G6, G7, G8 |
 | 24 | Fermer les propositions n° 3 et n° 4 sur GitHub (en conflit, déjà faites) | Vous | quand vous voulez |
 | 25 | Faire acheter plus le bot (budget libéré quand les stops montent, 8 % cumulé, 0,75 % par achat) | Étude, à votre demande | **écarté** (01/10, 13 h) : plus de trades, mais moins bon ([`ADAPTATION.md`](ADAPTATION.md), section 6) |
+| 26 | Libérer le disque (6 % libre) et la mémoire (94 %) : trier Téléchargements (25 Go, sans toucher au dossier `claude`, qui contient le bot), fermer des onglets de Chrome (7,2 Go), puis redémarrer le PC | Vous | **dès que possible** (01/10, 14 h) : H1, H2 |
+| 27 | Rapport qui dit où part la place du disque et quels programmes prennent la mémoire ; adresses publiques retirées des fichiers publiés | Code, avec votre accord | proposé (01/10, 14 h) : H7, H8 |
 
 Fait depuis l'audit du matin : chemins de secours des ordres réels testés (et
 un défaut corrigé), blocage des mots de passe ratés, écriture sûre du choix des
