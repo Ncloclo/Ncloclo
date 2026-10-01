@@ -303,9 +303,18 @@
             </div>
           </div>
           <div class="col">
-            <div class="card">
-              <div class="card-head"><h2>Sécurité</h2><strong class="sel-count" id="s-sec-score">—</strong></div>
+            <div class="card" id="s-security">
+              <div class="card-head"><h2>Rapport de sécurité</h2><strong class="sel-count" id="s-sec-score">—</strong></div>
+              <p class="sub sec-sub">En direct : accès, clés, autonomie, alertes.</p>
               <ul class="sec-list" id="s-sec"></ul>
+              <div class="sec-night" id="s-sec-night-box" hidden>
+                <h3 class="sec-title">Analyse de la nuit <span class="sub" id="s-sec-night-when"></span></h3>
+                <ul class="sec-list" id="s-sec-night" aria-label="Sécurité, analyse de la nuit"></ul>
+                <ul class="plain sec-changes" id="s-sec-changes" aria-label="Depuis le dernier rapport"></ul>
+              </div>
+              <div class="row-end rep-actions">
+                <button class="btn small ghost" type="button" id="s-sec-send">Envoyer par e-mail et WhatsApp</button>
+              </div>
             </div>
             <div class="card"><div class="card-head"><h2>Bot</h2></div><dl id="s-bot" class="dl"></dl></div>
             <div class="card">

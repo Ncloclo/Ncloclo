@@ -365,6 +365,17 @@ class PanelApp(SecurityCenter):
         return {"ok": True, "message": "Analyse lancée : le rapport sera prêt dans 2 à 3 minutes, "
                                        "puis envoyé par e-mail et WhatsApp."}
 
+    def _send_report(self) -> Dict[str, Any]:
+        """Renvoie le dernier rapport par e-mail (complet) et WhatsApp (résumé)."""
+        if self.demo:
+            return {"ok": False, "message": "Indisponible en démonstration."}
+        if not report.load_latest(self.g):
+            return {"ok": False, "message": "Aucun rapport encore : « Générer maintenant » d'abord."}
+        if not report.launch(self.g, "envoyer"):
+            return {"ok": False, "message": "Un rapport est en cours : il sera envoyé à la fin."}
+        return {"ok": True, "message": "Envoi lancé par e-mail et WhatsApp : le résultat s'affiche "
+                                       "ici dans une minute."}
+
     def chat(self, body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
         now = time.time()
         with self._lock:
@@ -515,6 +526,7 @@ class PanelApp(SecurityCenter):
             "/api/autostart": lambda: reply(self.control.set_autostart(body.get("enabled") is True)),
             "/api/alerts/test": lambda: self._test_alerts(body),
             "/api/report/run": self._run_report,
+            "/api/report/send": self._send_report,
         }
         try:
             if method == "POST" and path == "/api/assistant":

@@ -5,11 +5,16 @@ l'apprentissage libre et les épreuves de l'évolution encadrée, le bot appliqu
 d'abord lui-même les recommandations sûres, puis fait une analyse profonde de
 lui-même : le fond (santé, stratégie, compétences acquises), la forme (code,
 journal, panneau) et sa sécurité. Il garde le rapport et vous l'envoie. Si le PC
-était éteint à 00:30, tout est fait dès son retour. Code :
-`trendguard/maintenance.py` (recommandations appliquées) et
-`trendguard/report.py` (rapport), avec ses contrôles (`report_security.py`,
-`report_health.py`) et sa mise en page (`report_render.py`) ; `TG_RAPPORT=false`
-dans `.env` pour l'arrêter.
+était éteint à 00:30, tout est fait dès son retour. Il refait aussi l'analyse et
+vous envoie un rapport **aussitôt après une compétence acquise** (réglage
+adopté, confirmé ou annulé par l'évolution encadrée, palier de risque changé)
+quand le rapport de la nuit n'a pas pu en rendre compte. Chaque rapport dit
+pourquoi il a été fait, donne le score de la sécurité à part et ce qui a changé
+depuis le précédent : points corrigés, nouveaux points à corriger, compétences
+et expérience acquises. Code : `trendguard/maintenance.py` (recommandations
+appliquées) et `trendguard/report.py` (rapport), avec ses contrôles
+(`report_security.py`, `report_health.py`) et sa mise en page
+(`report_render.py`) ; `TG_RAPPORT=false` dans `.env` pour l'arrêter.
 
 ## Où le lire
 
@@ -18,8 +23,12 @@ dans `.env` pour l'arrêter.
   configuré, avec la marche à suivre si le rapport ne vous parvient pas), les
   trois premières choses à faire, la tendance des derniers jours et les
   améliorations du code qui attendent votre validation ; boutons « Rapport
-  complet » et « Générer maintenant ». Le centre de sécurité, juste à côté,
-  affiche aussi la date et le verdict du dernier rapport.
+  complet » et « Générer maintenant ».
+- **Panneau ▸ Réglages ▸ Rapport de sécurité**, juste à côté : les contrôles en
+  direct (accès, clés, autonomie, alertes), puis la sécurité de la dernière
+  analyse (secrets, clé Binance, sauvegarde, chiffrement, mises à jour de
+  Windows…), avec ce qui a changé depuis la précédente, et le bouton « Envoyer
+  par e-mail et WhatsApp » qui vous renvoie le dernier rapport.
 - **E-mail** : le rapport complet, mis en page (couleurs, sections, lisible sur
   téléphone), avec une version texte pour les messageries qui n'affichent pas
   les pages. **WhatsApp** (et Telegram) : un résumé, avec les trois premières
@@ -28,7 +37,9 @@ dans `.env` pour l'arrêter.
   une connexion refusée sur votre compte) ; il reprend dès qu'un bon mot de
   passe est enregistré (`python trendguard_bot.py alerts configurer`).
 - `python trendguard_bot.py rapport` : le dernier rapport ; `python
-  trendguard_bot.py rapport maintenant` : une analyse tout de suite.
+  trendguard_bot.py rapport maintenant` : une analyse tout de suite ; `python
+  trendguard_bot.py rapport envoyer` : le dernier rapport renvoyé par e-mail et
+  WhatsApp.
 - Archives : dossier `rapports/` (30 jours) ; aucun secret n'y figure, seulement
   leur présence et leur état.
 
@@ -49,8 +60,9 @@ défaut) :
 - droits du fichier des secrets réservés à votre compte s'ils étaient trop
   larges (Windows : accès retiré à « Tout le monde », « Utilisateurs » et
   « Utilisateurs authentifiés » ; Linux et macOS : 600) ;
-- un secret retrouvé dans un journal y est masqué par des étoiles, sans changer
-  la taille du fichier.
+- un secret retrouvé dans un journal ou dans l'historique des commandes
+  (PowerShell, terminal, Python) y est masqué par des étoiles, sans changer la
+  taille du fichier.
 
 **Mises à jour validées par vous** (`TG_MISE_A_JOUR`, activées par défaut) : une
 amélioration proposée en Pull Request et **fusionnée par vous sur GitHub** est
@@ -85,7 +97,7 @@ mettre à jour) reste en tête des recommandations, classées par importance.
 | Partie | Contrôles |
 | --- | --- |
 | Recommandations appliquées seules | correction de la veille du PC, mise à jour validée installée (ou pourquoi pas) |
-| Sécurité | secrets hors de GitHub (fichier `.env` jamais publié), droits du fichier des secrets, aucune clé ni aucun mot de passe dans les fichiers publiés ni dans les journaux, droits de la clé Binance (retrait interdit, restriction IP), sauvegarde et intégrité de la base, pare-feu et antivirus de Windows, veille du PC, alimentation d'un portable (sur batterie, il s'endort capot fermé puis s'éteint : à brancher), bibliothèques du bot aux versions testées (`requirements-docker.txt`) et sans faille connue (`pip-audit`, sur celles réellement installées là où il tourne ; une faille qu'une bibliothèque épinglée, comme ccxt, empêche encore de corriger reste une information, jusqu'à ce que sa nouvelle version publiée accepte la correction) |
+| Sécurité | secrets hors de GitHub (fichier `.env` jamais publié), droits du fichier des secrets, aucune clé ni aucun mot de passe dans les fichiers publiés, les journaux ni l'historique des commandes, dossier du bot hors du nuage (OneDrive, Dropbox…), droits de la clé Binance (retrait interdit, restriction IP, aucun droit superflu comme la marge, les contrats à terme ou les transferts, âge de la clé ; refusée : l'adresse actuelle du PC à autoriser), sauvegarde et intégrité de la base, pare-feu et antivirus de Windows, chiffrement du disque, mises à jour de sécurité de Windows (45 jours au plus, redémarrage en attente), veille du PC, alimentation d'un portable (sur batterie, il s'endort capot fermé puis s'éteint : à brancher), bibliothèques du bot aux versions testées (`requirements-docker.txt`) et sans faille connue (`pip-audit`, sur celles réellement installées là où il tourne ; une faille qu'une bibliothèque épinglée, comme ccxt, empêche encore de corriger reste une information, jusqu'à ce que sa nouvelle version publiée accepte la correction) |
 | Centre de sécurité du panneau | accès, mots de passe ratés, alertes (dernier envoi), garde-fou de Rachelle |
 | Santé du bot (le fond) | panneau en marche, bot en marche, dernier cycle, décision du jour à l'heure, disponibilité sur 7 jours, relance automatique, démarrage avec l'ordinateur, arrêt d'urgence (et, s'il est déclenché, quand il pourra se lever seul), risque configuré dans les limites sages, mode, place sur le disque (à corriger sous 10 % ou 2 Go libres) et mémoire du PC (à corriger quand 90 % est réservé aux programmes) |
 | Stratégie (le fond) | le diagnostic expert complet (données, marché, signaux, portefeuille, santé de la stratégie, réel contre attendu, stratégies concurrentes, veille) |

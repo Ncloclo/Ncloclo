@@ -1,11 +1,14 @@
 """Rapport quotidien, contrôles de sécurité (docs/RAPPORT.md) : secrets
-hors de GitHub et des journaux, droits du fichier des secrets, sauvegarde et
-intégrité de la base, clé Binance, pare-feu, antivirus, veille et
-alimentation du PC, bibliothèques du bot.
+hors de GitHub, des journaux et de l'historique des commandes, droits du
+fichier des secrets, dossier hors du nuage, sauvegarde et intégrité de la
+base, clé Binance (droits, âge, adresse autorisée), pare-feu, antivirus,
+chiffrement du disque, mises à jour de Windows, veille et alimentation du PC,
+bibliothèques du bot.
 
 Seules protections appliquées ici, sûres et réversibles : la sauvegarde de
 la base, les droits du fichier des secrets resserrés, un secret masqué dans
-un journal. Tout le reste est un constat ou une recommandation.
+un journal ou dans l'historique des commandes. Tout le reste est un constat
+ou une recommandation.
 """
 
 from __future__ import annotations
@@ -20,12 +23,14 @@ import sqlite3
 import stat
 import subprocess
 import sys
-from typing import Any, Dict, List, Optional, Tuple
+import time
+from datetime import datetime
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import v29
 
 from . import environnement
-from .systeme import Check, Deps, chk
+from .systeme import Check, Deps, chk, public_ip
 from .systeme import git as _git
 from .systeme import installed_versions as _installed_versions
 from .systeme import power_ac as _power_ac
@@ -41,6 +46,24 @@ SECRET_MIN_LEN = 8
 BROAD_SIDS = {"S-1-1-0": "Tout le monde", "S-1-5-32-545": "Utilisateurs",
               "S-1-5-11": "Utilisateurs authentifiés"}
 LOG_GLOBS = ("*.log", "*.log.*", "*.console.txt", "*.blocage.txt")
+# Historiques des commandes tapées (PowerShell, terminal, Python) : une clé
+# collée dans une commande y resterait en clair.
+HISTORY_GLOBS = (("APPDATA", "Microsoft/Windows/PowerShell/PSReadLine/*_history.txt"),
+                 ("HOME", ".local/share/powershell/PSReadLine/*_history.txt"),
+                 ("HOME", ".bash_history"), ("HOME", ".zsh_history"), ("HOME", ".python_history"))
+SYNC_MARKERS = ("onedrive", "dropbox", "google drive", "googledrive", "icloud")
+# Droits d'une clé Binance inutiles au bot (il lit le compte et trade le Spot).
+SUPERFLUOUS_RIGHTS = (("enableMargin", "marge (emprunts)"), ("enableFutures", "contrats à terme"),
+                      ("enableVanillaOptions", "options"),
+                      ("enablePortfolioMarginTrading", "marge de portefeuille"),
+                      ("enableInternalTransfer", "transferts internes"),
+                      ("permitsUniversalTransfer", "transferts universels"))
+KEY_RENEW_DAYS = 180            # au-delà, renouveler la clé Binance
+UPDATES_MAX_DAYS = 45           # sans mise à jour de sécurité de Windows : à corriger
+# Chiffrement du disque (propriété Windows System.Volume.BitLockerProtection).
+ENCRYPTION = {1: (True, "actif (BitLocker ou chiffrement de l'appareil)"),
+              3: (True, "en cours d'activation"), 6: (True, "actif"),
+              2: (None, "INACTIF")}
 PINS_FILE = "requirements-docker.txt"       # versions testées des bibliothèques
 AUDIT_TIMEOUT = 300
 LIBRARY_RECO = ("Mettez les bibliothèques du bot à jour (README ▸ « Bibliothèques du bot »), "
@@ -135,10 +158,52 @@ def secret_values(env: Dict[str, str]) -> List[Tuple[str, str]]:
             if k.upper().endswith(SECRET_SUFFIXES) and len((v or "").strip()) >= SECRET_MIN_LEN]
 
 
+def history_files(deps: Deps, environ: Optional[Dict[str, str]] = None) -> List[str]:
+    """Historiques des commandes de ce PC (aucun avec des commandes
+    simulées, sauf liste donnée dans deps.extra["histories"])."""
+    if "histories" in deps.extra:
+        return list(deps.extra["histories"])
+    if deps.run is not _run:
+        return []
+    environ = os.environ if environ is None else environ
+    home = environ.get("USERPROFILE") or environ.get("HOME") or os.path.expanduser("~")
+    out: List[str] = []
+    for var, pattern in HISTORY_GLOBS:
+        base = home if var == "HOME" else environ.get(var, "")
+        if base:
+            out += glob.glob(os.path.join(base, *pattern.split("/")))
+    return out
+
+
+def mask_secrets(paths: List[str], secrets: List[Tuple[str, str]]) -> List[str]:
+    """Remplace chaque secret par des étoiles de même longueur (le fichier
+    garde sa forme et peut continuer d'être écrit). Fichiers modifiés."""
+    cleaned = []
+    for p in paths:
+        try:
+            with open(p, "rb") as fh:
+                data = fh.read()
+        except OSError:
+            continue
+        new = data
+        for _name, val in secrets:
+            b = val.encode()
+            new = new.replace(b, b"*" * len(b))
+        if new != data:
+            try:
+                with open(p, "r+b") as fh:
+                    fh.write(new)
+                cleaned.append(os.path.basename(p))
+            except OSError:
+                continue
+    return cleaned
+
+
 def check_secret_leaks(root: str, env: Dict[str, str], deps: Deps) -> List[Check]:
-    """Aucune clé ni aucun mot de passe dans les fichiers publiés sur GitHub
-    ni dans les journaux. Un secret trouvé dans un journal est masqué seul
-    (même longueur : le bot peut continuer d'y écrire)."""
+    """Aucune clé ni aucun mot de passe dans les fichiers publiés sur GitHub,
+    dans les journaux ni dans l'historique des commandes. Un secret trouvé
+    dans un journal ou un historique est masqué seul (même longueur : le
+    fichier peut continuer d'être écrit)."""
     secrets = secret_values(env)
     if not secrets:
         return [chk("Secrets dans les fichiers", None, "aucun secret enregistré à rechercher")]
@@ -156,25 +221,9 @@ def check_secret_leaks(root: str, env: Dict[str, str], deps: Deps) -> List[Check
         for name, val in secrets:
             if val.encode() in data:
                 leaks.add((name, rel))
-    cleaned = []
-    for pattern in LOG_GLOBS:
-        for p in glob.glob(os.path.join(root, pattern)):
-            try:
-                with open(p, "rb") as fh:
-                    data = fh.read()
-            except OSError:
-                continue
-            new = data
-            for _name, val in secrets:
-                b = val.encode()
-                new = new.replace(b, b"*" * len(b))
-            if new != data:
-                try:
-                    with open(p, "r+b") as fh:
-                        fh.write(new)
-                    cleaned.append(os.path.basename(p))
-                except OSError:
-                    continue
+    cleaned = mask_secrets([p for pattern in LOG_GLOBS for p in glob.glob(os.path.join(root, pattern))],
+                           secrets)
+    typed = mask_secrets(history_files(deps), secrets)
     repo = (chk("Secrets dans le dépôt GitHub", None, "vérification impossible (git absent)")
             if listed is None else
             chk("Secrets dans le dépôt GitHub", not leaks,
@@ -185,7 +234,40 @@ def check_secret_leaks(root: str, env: Dict[str, str], deps: Deps) -> List[Check
     logs = chk("Secrets dans les journaux", True,
                "aucun secret dans les journaux" if not cleaned else "masqués (voir les actions)",
                action="secret masqué dans : " + ", ".join(cleaned) if cleaned else "")
-    return [repo, logs]
+    history = chk("Secrets dans l'historique des commandes", True,
+                  "aucun secret dans les commandes tapées (PowerShell, terminal, Python)" if not typed
+                  else "masqués (voir les actions)",
+                  "" if not typed else "Ne tapez jamais une clé dans une commande : utilisez "
+                                       "python trendguard_bot.py set-keys (saisie masquée).",
+                  action="secret masqué dans l'historique : " + ", ".join(typed) if typed else "")
+    return [repo, logs, history]
+
+
+def check_sync_folder(root: str, environ: Optional[Dict[str, str]] = None) -> Check:
+    """Le dossier du bot (et son fichier des secrets) n'est pas synchronisé
+    dans le nuage (OneDrive, Dropbox, Google Drive, iCloud)."""
+    environ = os.environ if environ is None else environ
+    path = os.path.abspath(root)
+    clouds = [environ[k] for k in ("OneDrive", "OneDriveConsumer", "OneDriveCommercial") if environ.get(k)]
+    synced = any(os.path.normcase(path).startswith(os.path.normcase(os.path.abspath(c))) for c in clouds) \
+        or any(m in path.lower() for m in SYNC_MARKERS)
+    if synced:
+        return chk("Dossier du bot hors du nuage", False,
+                   "synchronisé dans le nuage : le fichier des secrets y est copié",
+                   "Déplacez le dossier du bot hors de OneDrive (ou Dropbox, Google Drive…), "
+                   "par exemple dans C:\\TrendGuard, puis relancez-le.")
+    return chk("Dossier du bot hors du nuage", True, "non synchronisé (OneDrive, Dropbox, Google Drive…)")
+
+
+def key_rights(r: Dict[str, Any], now: Optional[float] = None) -> Tuple[List[str], Optional[int]]:
+    """Droits superflus d'une clé Binance (au-delà de lire le compte et de
+    trader le Spot) et son âge en jours (None s'il est inconnu)."""
+    extra = [name for key, name in SUPERFLUOUS_RIGHTS if r.get(key)]
+    created = r.get("createTime")
+    age = None
+    if isinstance(created, (int, float)) and not isinstance(created, bool) and created > 0:
+        age = max(0, int(((now or time.time()) - created / 1000) // 86400))
+    return extra, age
 
 
 def backup_database(db_file: str, dest: str, day: str, keep: int = KEEP_BACKUPS) -> Check:
@@ -246,8 +328,12 @@ def check_database(db_file: str) -> Check:
                                       "(dossier sauvegardes).")
 
 
-def binance_key_check(env: Dict[str, str], testnet: bool = False) -> Check:
-    """Droits de la clé Binance, lus sans aucun ordre."""
+def binance_key_check(env: Dict[str, str], testnet: bool = False,
+                      ip_lookup: Callable[[], Optional[str]] = public_ip) -> Check:
+    """Droits de la clé Binance, lus sans aucun ordre : retrait interdit,
+    restriction d'adresse, aucun droit superflu, âge. Refusée : l'adresse
+    actuelle du PC, à autoriser sur Binance (elle change sur une connexion
+    à la maison)."""
     import ccxt
     label = "Clé API Binance"
     key, sec = env.get("BINANCE_API_KEY", "").strip(), env.get("BINANCE_API_SECRET", "").strip()
@@ -256,20 +342,32 @@ def binance_key_check(env: Dict[str, str], testnet: bool = False) -> Check:
     try:
         r = v29.make_binance(key, sec, testnet).sapi_get_account_apirestrictions()
     except ccxt.AuthenticationError:
-        return chk(label, False, "refusée par Binance (adresse IP non autorisée, clé supprimée "
-                                 "ou mal copiée)",
-                   "Binance ▸ Gestion des API : vérifiez la restriction IP, puis "
-                   "python trendguard_bot.py set-keys.")
+        ip = ip_lookup()
+        where = f"l'adresse actuelle de ce PC ({ip})" if ip else "l'adresse actuelle de ce PC"
+        return chk(label, False, f"refusée par Binance : {where} n'est sans doute pas autorisée "
+                                 "(sinon : clé supprimée ou mal copiée)",
+                   f"Binance ▸ Gestion des API ▸ Modifier les restrictions : autorisez {where} ; "
+                   "elle change de temps en temps sur une connexion à la maison. En paper, sans "
+                   "effet sur les achats et les ventes.")
     except Exception as e:
         return chk(label, None, f"vérification impossible ({type(e).__name__})")
     withdraw, ip = bool(r.get("enableWithdrawals")), bool(r.get("ipRestrict"))
     trading = bool(r.get("enableSpotAndMarginTrading"))
+    extra, age = key_rights(r)
     detail = (f"retrait {'AUTORISÉ' if withdraw else 'interdit'} ; trading Spot "
-              f"{'autorisé' if trading else 'non autorisé'} ; restriction IP {'oui' if ip else 'non'}")
+              f"{'autorisé' if trading else 'non autorisé'} ; restriction IP {'oui' if ip else 'non'} ; "
+              f"droits superflus : {', '.join(extra) if extra else 'aucun'}"
+              + (f" ; créée il y a {age} jour(s)" if age is not None else ""))
     if withdraw:
         return chk(label, False, detail, "Désactivez tout de suite le droit de retrait de la clé "
                                          "sur Binance.")
-    return chk(label, True, detail, "" if ip else "Ajoutez une restriction IP à la clé sur Binance.")
+    if extra:
+        return chk(label, False, detail, "Binance ▸ Gestion des API ▸ Modifier les restrictions : "
+                                         f"décochez {', '.join(extra)} (inutiles au bot).")
+    reco = ("Ajoutez une restriction IP à la clé sur Binance." if not ip else
+            f"Renouvelez la clé Binance (créée il y a {age} jours) : créez-en une neuve, puis "
+            "set-keys, et supprimez l'ancienne." if age is not None and age > KEY_RENEW_DAYS else "")
+    return chk(label, True, detail, reco)
 
 
 def check_windows(deps: Deps) -> List[Check]:
@@ -303,7 +401,56 @@ def check_windows(deps: Deps) -> List[Check]:
     source = _source_check(deps)
     if source:
         out.append(source)
+    out.append(check_encryption(deps))
+    out.append(check_windows_updates(deps))
     return out
+
+
+def check_encryption(deps: Deps) -> Check:
+    """Chiffrement du disque du bot (BitLocker ou chiffrement de l'appareil),
+    lu sans droits d'administrateur : un PC volé ne livre alors ni le fichier
+    des secrets ni la base."""
+    label = "Chiffrement du disque"
+    drive = os.path.splitdrive(os.path.abspath(deps.extra.get("root") or v29.APP_DIR))[0] or "C:"
+    lines = _ps_lines(deps, "(New-Object -ComObject Shell.Application).NameSpace('" + drive
+                      + "').Self.ExtendedProperty('System.Volume.BitLockerProtection')")
+    value = int(lines[0]) if lines and lines[0].strip().isdigit() else None
+    ok, text = ENCRYPTION.get(value, (None, "état inconnu"))
+    return chk(label, ok, f"{drive} {text}",
+               "" if value != 2 else "Activez le chiffrement : Paramètres ▸ Confidentialité et "
+                                     "sécurité ▸ Chiffrement de l'appareil (ou BitLocker).")
+
+
+def check_windows_updates(deps: Deps, now: Optional[datetime] = None) -> Check:
+    """Dernière mise à jour de sécurité de Windows installée (hors
+    signatures de l'antivirus) et redémarrage en attente, sans droits
+    d'administrateur."""
+    label = "Mises à jour de Windows"
+    lines = _ps_lines(deps, "$h=(New-Object -ComObject Microsoft.Update.Session).CreateUpdateSearcher();"
+                            "$n=$h.GetTotalHistoryCount();"
+                            "$u=$h.QueryHistory(0,[Math]::Min($n,300)) | Where-Object { $_.ResultCode -eq 2 "
+                            "-and $_.Title -match 'KB[0-9]+' -and $_.Title -notmatch "
+                            "'Defender|Intelligence|antimalware' } | Select-Object -First 1;"
+                            "if($u){ Write-Output ('LAST|' + $u.Date.ToString('yyyy-MM-dd')) };"
+                            "Write-Output ('REBOOT|' + (Test-Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\"
+                            "CurrentVersion\\WindowsUpdate\\Auto Update\\RebootRequired'))")
+    if lines is None:
+        return chk(label, None, "état inconnu")
+    found = dict(line.split("|", 1) for line in lines if "|" in line)
+    reboot = found.get("REBOOT", "").strip().lower() == "true"
+    try:
+        last = datetime.strptime(found.get("LAST", "").strip(), "%Y-%m-%d")
+    except ValueError:
+        return chk(label, None, "aucune mise à jour de sécurité trouvée dans l'historique",
+                   "Ouvrez Paramètres ▸ Windows Update et installez les mises à jour.")
+    days = ((now or datetime.now()).replace(tzinfo=None) - last).days
+    late = days > UPDATES_MAX_DAYS
+    detail = (f"dernière mise à jour de sécurité le {last:%d/%m/%Y} (il y a {days} jour(s))"
+              + (" ; REDÉMARRAGE EN ATTENTE pour l'achever" if reboot else ""))
+    reco = ("Ouvrez Paramètres ▸ Windows Update et installez les mises à jour." if late else
+            "Redémarrez le PC pour achever les mises à jour de Windows (le bot repart seul)."
+            if reboot else "")
+    return chk(label, not late, detail, reco)
 
 
 BUTTON_ACTIONS = {0: "ne rien faire", 1: "veille", 2: "veille prolongée", 3: "arrêt",

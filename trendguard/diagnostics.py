@@ -42,6 +42,7 @@ import v29
 
 from . import strategy_lab as sl
 from . import trend_strategy as ts
+from .systeme import GB
 from .texte import fr
 
 DAY_MS = 86_400_000
@@ -207,12 +208,13 @@ def check_system(exchange: Any, state: Dict[str, Any], expected_day: str,
                            "Analyser la baisse, puis `python trendguard_bot.py resume` "
                            "(bot arrêté)."))
     if db_file and db_file != ":memory:" and os.path.exists(db_file):
-        free = shutil.disk_usage(os.path.dirname(os.path.abspath(db_file))).free
-        size = os.path.getsize(db_file)
-        lvl = "OK" if free > 1e9 else "ATTENTION"
-        out.append(Finding(S, lvl, f"Base {fr(size / 1e6, '.1f')} Mo, disque libre "
-                           f"{fr(free / 1e9, '.1f')} Go",
-                           "" if lvl == "OK" else "Libérer de l'espace disque."))
+        from .report_health import disk_state  # même règle que le rapport (import circulaire évité)
+        disk = shutil.disk_usage(os.path.dirname(os.path.abspath(db_file)))
+        low, text = disk_state(disk.free / GB, disk.total / GB)
+        out.append(Finding(S, "ATTENTION" if low else "OK",
+                           f"Base {fr(os.path.getsize(db_file) / 2 ** 20, '.1f')} Mo ; disque : {text}",
+                           "" if not low else "Libérer de la place sur le disque : moins de 10 % "
+                           "ou de 2 Go libres (comme le rapport quotidien)."))
     return out
 
 

@@ -119,6 +119,11 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
             self.logger.critical("[BOOT] BTC/USDT indisponible (régime) → arrêt")
             return False
         self.state = self.store.get_kv(self.STATE_KEY) or {}
+        # Dernier envoi connu de chaque canal d'alerte : la cause à corriger
+        # (mot de passe refusé…) reste affichée après un redémarrage.
+        last = getattr(self.notifier, "last", None)
+        if isinstance(last, dict) and not last and isinstance(self.state.get("alerts_last"), dict):
+            last.update({k: dict(v) for k, v in self.state["alerts_last"].items() if isinstance(v, dict)})
         self._apply_evolution()
         self._sync_clock(force=True)       # heure de Binance avant toute décision
         self.state.setdefault("last_decision_day", None)

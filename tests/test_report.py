@@ -108,18 +108,28 @@ def test_posix_permissions_are_tightened(root):
     assert oct(os.stat(root / ".env").st_mode & 0o777) == "0o600"
 
 
-def test_secret_leaks_are_found_and_masked_in_logs(root):
+def test_secret_leaks_are_found_and_masked_in_logs_and_command_histories(root, tmp_path):
     (root / "code.py").write_text(f"CLE = '{SECRET}'\n", encoding="utf-8")
     (root / "bot.log").write_text(f"2026-09-30 00:02:00,000 [INFO] mot de passe {SECRET} !\n",
                                   encoding="utf-8")
+    typed = tmp_path / "ConsoleHost_history.txt"
+    typed.write_text(f"cd bot\n$env:SMTP_PASSWORD='{SECRET}'\npython trendguard_bot.py run\n",
+                     encoding="utf-8")
     env = {"SMTP_PASSWORD": SECRET, "TG_RISK_PCT": "0.01", "PANEL_PASSWORD": "court"}
-    repo, logs = rps.check_secret_leaks(str(root), env, rp.Deps(run=FakeRun(files=["code.py"])))
+    deps = rp.Deps(run=FakeRun(files=["code.py"]), extra={"histories": [str(typed)]})
+    repo, logs, history = rps.check_secret_leaks(str(root), env, deps)
     assert repo["ok"] is False and "SMTP_PASSWORD dans code.py" in repo["detail"]
     assert SECRET not in repo["detail"] + repo["reco"]
     text = (root / "bot.log").read_text(encoding="utf-8")
     assert SECRET not in text and "*" * len(SECRET) in text and logs["action"].endswith("bot.log")
-    clean = rps.check_secret_leaks(str(root), env, rp.Deps(run=FakeRun(files=[])))
-    assert clean[0]["ok"] is True and not clean[1]["action"]
+    lines = typed.read_text(encoding="utf-8").splitlines()     # même forme, secret masqué
+    assert SECRET not in typed.read_text(encoding="utf-8") and len(lines) == 3
+    assert history["ok"] is True and history["action"].endswith("ConsoleHost_history.txt")
+    assert "set-keys" in history["reco"]
+    clean = rps.check_secret_leaks(str(root), env, rp.Deps(run=FakeRun(files=[]),
+                                                           extra={"histories": [str(typed)]}))
+    assert clean[0]["ok"] is True and not clean[1]["action"] and not clean[2]["action"]
+    assert rps.history_files(rp.Deps(run=FakeRun())) == []      # commandes simulées : rien de réel
 
 
 def _db(path):
@@ -452,3 +462,121 @@ def test_disk_and_memory_are_part_of_the_bot_s_health(root):
     assert labels[-2:] == ["Espace disque", "Mémoire du PC"]
     assert any("Libérez de la place" in x for x in r["recommendations"])
     assert any("Fermez des programmes" in x for x in r["recommendations"])
+
+
+class WindowsRun(FakeRun):
+    """Commandes de Windows en plus : chiffrement du disque, mises à jour."""
+
+    def __init__(self, protection="1", last="2026-09-10", reboot="False", **kw):
+        super().__init__(**kw)
+        self.protection, self.last, self.reboot = protection, last, reboot
+
+    def __call__(self, cmd, cwd=None, env=None, **kw):
+        if cmd[0] == "powershell" and "BitLockerProtection" in cmd[-1]:
+            return proc(self.protection)
+        if cmd[0] == "powershell" and "Microsoft.Update.Session" in cmd[-1]:
+            return proc((f"LAST|{self.last}\n" if self.last else "") + f"REBOOT|{self.reboot}")
+        return super().__call__(cmd, cwd=cwd, env=env, **kw)
+
+
+def test_disk_encryption_and_windows_updates_are_read_without_admin_rights():
+    now = datetime(2026, 10, 1, 1, 0)
+    deps = rp.Deps(run=WindowsRun(), platform="win32")
+    enc = rps.check_encryption(deps)
+    assert enc["ok"] is True and "actif" in enc["detail"]
+    off = rps.check_encryption(rp.Deps(run=WindowsRun(protection="2"), platform="win32"))
+    assert off["ok"] is None and "Chiffrement de l'appareil" in off["reco"]
+    up = rps.check_windows_updates(deps, now)
+    assert up["ok"] is True and "10/09/2026 (il y a 21 jour(s))" in up["detail"] and not up["reco"]
+    late = rps.check_windows_updates(rp.Deps(run=WindowsRun(last="2026-07-01", reboot="True")), now)
+    assert late["ok"] is False and "REDÉMARRAGE EN ATTENTE" in late["detail"] and "Windows Update" in late["reco"]
+    pending = rps.check_windows_updates(rp.Deps(run=WindowsRun(reboot="True")), now)
+    assert pending["ok"] is True and "Redémarrez le PC" in pending["reco"]
+    unknown = rps.check_windows_updates(rp.Deps(run=FakeRun()), now)
+    assert unknown["ok"] is None and unknown["detail"] == "état inconnu"
+    labels = [c["label"] for c in rps.check_windows(deps)]
+    assert labels[-2:] == ["Chiffrement du disque", "Mises à jour de Windows"]
+
+
+def test_bot_folder_outside_cloud_sync():
+    assert rps.check_sync_folder(r"C:\TrendGuard", {})["ok"] is True
+    synced = rps.check_sync_folder(r"C:\Users\moi\OneDrive\TrendGuard", {"OneDrive": r"C:\Users\moi\OneDrive"})
+    assert synced["ok"] is False and "OneDrive" in synced["reco"]
+    assert rps.check_sync_folder("/home/moi/Dropbox/bot", {})["ok"] is False
+
+
+class FakeBinance:
+    def __init__(self, rights=None, refuse=False):
+        self.rights, self.refuse = rights or {}, refuse
+
+    def sapi_get_account_apirestrictions(self):
+        if self.refuse:
+            import ccxt
+            raise ccxt.AuthenticationError('binance {"code":-2015,"msg":"Invalid API-key, IP"}')
+        return self.rights
+
+
+def test_binance_key_rights_least_privilege_age_and_current_address(monkeypatch):
+    env = {"BINANCE_API_KEY": "k" * 20, "BINANCE_API_SECRET": "s" * 20}
+    created = (datetime(2026, 9, 29, tzinfo=timezone.utc).timestamp()) * 1000
+    good = {"enableWithdrawals": False, "enableSpotAndMarginTrading": True, "ipRestrict": True,
+            "enableReading": True, "createTime": created}
+    monkeypatch.setattr(rps.v29, "make_binance", lambda *a: FakeBinance(good))
+    c = rps.binance_key_check(env)
+    assert c["ok"] is True and "droits superflus : aucun" in c["detail"] and "créée il y a" in c["detail"]
+    extra, age = rps.key_rights(dict(good, enableFutures=True, permitsUniversalTransfer=True),
+                                now=datetime(2026, 10, 1, tzinfo=timezone.utc).timestamp())
+    assert extra == ["contrats à terme", "transferts universels"] and age == 2
+    monkeypatch.setattr(rps.v29, "make_binance", lambda *a: FakeBinance(dict(good, enableMargin=True)))
+    c = rps.binance_key_check(env)
+    assert c["ok"] is False and "décochez marge (emprunts)" in c["reco"]
+    old = dict(good, createTime=created - 200 * 86400 * 1000)
+    monkeypatch.setattr(rps.v29, "make_binance", lambda *a: FakeBinance(old))
+    assert "Renouvelez la clé Binance" in rps.binance_key_check(env)["reco"]
+    monkeypatch.setattr(rps.v29, "make_binance", lambda *a: FakeBinance(refuse=True))
+    c = rps.binance_key_check(env, ip_lookup=lambda: "160.155.219.186")
+    assert c["ok"] is False and "160.155.219.186" in c["detail"] and "160.155.219.186" in c["reco"]
+    assert "connexion à la maison" in c["reco"]
+    assert rps.binance_key_check({})["detail"] == "absente (normal en paper)"
+
+
+def test_report_says_why_scores_security_and_lists_changes(tmp_path):
+    prev = {"sections": [
+        {"title": "Sécurité", "checks": [rp.chk("Clé API Binance", False, "refusée"),
+                                         rp.chk("Pare-feu Windows", True, "actif")]},
+        {"title": "Compétences acquises", "checks": [rp.chk("Palier de risque", None, "1 %")]}]}
+    now = [{"title": "Sécurité", "checks": [rp.chk("Clé API Binance", True, "acceptée"),
+                                            rp.chk("Pare-feu Windows", False, "désactivé"),
+                                            rp.chk("Chiffrement du disque", True, "actif")]},
+           {"title": "Compétences acquises", "checks": [rp.chk("Palier de risque", None, "1,25 %")]}]
+    assert rp.changes_since(prev, now) == ["corrigé : Clé API Binance",
+                                           "nouveau point à corriger : Pare-feu Windows",
+                                           "compétence : Palier de risque, 1,25 %"]
+    assert rp.changes_since(None, now) == [] and rp.score_of(now[0]["checks"]) == {
+        "ok": 2, "warn": 1, "info": 0, "total": 3}
+    r = {"day": "2026-10-01", "generated_at": "2026-10-01T09:00:00+00:00", "mode": "paper",
+         "score": {"ok": 30, "warn": 2, "info": 3, "total": 35}, "verdict": "2 point(s) à corriger",
+         "motif": "après une compétence acquise (palier de risque : 1,25 %)",
+         "security": {"ok": 12, "warn": 1, "info": 1, "total": 14},
+         "changes": rp.changes_since(prev, now), "actions": [], "recommendations": ["Faire ceci."],
+         "proposals": [], "sections": now}
+    short = rpr.render_short(r)
+    assert "sécurité 12/14 ✓" in short and "Pourquoi : après une compétence acquise" in short
+    assert "Depuis le dernier rapport : corrigé : Clé API Binance" in short
+    text = rpr.render_text(r)
+    assert "Pourquoi ce rapport : après une compétence acquise" in text and "DEPUIS LE DERNIER RAPPORT" in text
+    assert "Sécurité : 12 contrôle(s) conforme(s) sur 14, 1 à corriger." in text
+    html = rpr.render_html(r)
+    assert "Depuis le dernier rapport" in html and "Sécurité : 12 contrôle(s)" in html
+
+
+def test_last_report_is_sent_again_by_email_and_whatsapp(tmp_path):
+    g = tg.GuardConfig(lock_file=str(tmp_path / "tg.lock"), db_file=":memory:", log_file=os.devnull)
+    report = {"day": "2026-10-01", "verdict": "Tout est en ordre", "text": "texte", "short": "court",
+              "generated_at": "2026-10-01T00:31:00+00:00", "mode": "paper",
+              "score": {"ok": 1, "warn": 0, "info": 0, "total": 1}, "actions": [],
+              "recommendations": [], "proposals": [], "sections": []}
+    rec = Recorder()
+    hub = alerts.AlertHub(FakeTelegram(enabled=False), [rec], async_mode=False)
+    sent = rp.send_again(g, report, {}, hub)
+    assert sent["rec"]["ok"] and rec.got and rp.load_latest(g)["delivery"]["rec"]["ok"]

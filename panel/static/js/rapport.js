@@ -1,5 +1,6 @@
-// Onglet Réglages : centre de sécurité et rapport quotidien (sécurité et
-// diagnostic, 00:30 UTC), avec sa fenêtre détaillée et son envoi.
+// Onglet Réglages : rapport de sécurité (en direct, et analyse de la nuit)
+// et rapport quotidien (sécurité et diagnostic, 00:30 UTC et après chaque
+// compétence acquise), avec sa fenêtre détaillée et son envoi.
 import { $, api, el, toast } from "./core.js";
 
 let REPORT = null;
@@ -59,6 +60,7 @@ export async function renderReport(alerts) {
     $("#s-rep-trend").textContent = "";
     return;
   }
+  renderNightSecurity(r);
   $("#s-rep-score").textContent = `${r.score.ok} / ${r.score.total}`;
   verdict.className = "rep-verdict " + (r.score.warn ? "bad" : "good");
   verdict.textContent = r.score.warn ? `${r.score.warn} point(s) à corriger` : "✓ Tout est en ordre";
@@ -95,8 +97,19 @@ export async function renderReport(alerts) {
     trend.append(" (installée seule la nuit suivante).");
   }
 }
-// Fenêtre du rapport complet : actions faites seul, recommandations, contrôles
-// par section, propositions et règles de sagesse.
+// Rapport de sécurité : la section « Sécurité » de la dernière analyse (secrets,
+// clé Binance, sauvegarde, Windows…) et ce qui a changé depuis la précédente.
+function renderNightSecurity(r) {
+  const sec = (r.sections || []).find((s) => s.title === "Sécurité");
+  $("#s-sec-night-box").hidden = !sec;
+  if (!sec) return;
+  const score = r.security ? ` · ${r.security.ok}/${r.security.total} conformes` : "";
+  $("#s-sec-night-when").textContent = `· ${repWhen(r)} UTC${score}`;
+  $("#s-sec-night").replaceChildren(...sec.checks.map(checkRow));
+  $("#s-sec-changes").replaceChildren(...(r.changes || []).slice(0, 6).map((t) => el("li", "", t)));
+}
+// Fenêtre du rapport complet : pourquoi, changements, actions faites seul,
+// recommandations, contrôles par section, propositions et règles de sagesse.
 function openReport() {
   const r = REPORT;
   if (!r) return;
@@ -104,8 +117,10 @@ function openReport() {
   const body = [];
   const verdict = el("p", "report-verdict " + (r.score.warn ? "bad" : "good"), `${r.verdict} : ${r.score.ok} contrôles conformes, ${r.score.warn} à corriger, ${r.score.info} informations, sur ${r.score.total}.`);
   body.push(verdict);
+  if (r.motif) body.push(el("p", "sub", `Pourquoi ce rapport : ${r.motif}.`));
   const block = (title, node) => { const d = el("div"); d.append(el("h3", "", title), node); body.push(d); };
   const list = (items, ordered) => { const l = el(ordered ? "ol" : "ul", ordered ? "" : "plain"); items.forEach((t) => l.append(el("li", "", t))); return l; };
+  if ((r.changes || []).length) block("Depuis le dernier rapport", list(r.changes, false));
   block("Ce que le bot a fait seul", list(r.actions.length ? r.actions : ["rien à corriger automatiquement"], false));
   block("À faire, par ordre d'importance", list(r.recommendations.length ? r.recommendations : ["rien : tout est en ordre"], true));
   r.sections.forEach((s) => { const ul = el("ul", "sec-list"); ul.append(...s.checks.map(checkRow)); block(s.title, ul); });
@@ -116,6 +131,18 @@ function openReport() {
 }
 $("#s-rep-open").addEventListener("click", openReport);
 $("#report-close").addEventListener("click", () => $("#report").close());
+// Envoi du dernier rapport par e-mail (complet) et WhatsApp (résumé).
+$("#s-sec-send").addEventListener("click", async (ev) => {
+  const b = ev.currentTarget;
+  b.disabled = true;
+  try {
+    const r = await api("/api/report/send", { body: {} });
+    toast(r.message, r.ok ? "ok" : "err");
+  } catch (e) {
+    toast(e.message, "err");
+  }
+  setTimeout(() => { b.disabled = false; renderReport().catch(() => { /* réessai au prochain rafraîchissement */ }); }, 4000);
+});
 $("#s-rep-run").addEventListener("click", async (ev) => {
   const b = ev.currentTarget;
   b.disabled = true;

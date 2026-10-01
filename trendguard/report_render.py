@@ -1,6 +1,7 @@
 """Rapport quotidien, mise en page (docs/RAPPORT.md) : texte complet
 (panneau, e-mail sans page, archive), résumé court (WhatsApp, Telegram) et
-page mise en forme de l'e-mail. Aucun secret n'y figure.
+page mise en forme de l'e-mail. En tête : pourquoi ce rapport, score de la
+sécurité et ce qui a changé depuis le précédent. Aucun secret n'y figure.
 """
 
 from __future__ import annotations
@@ -17,13 +18,30 @@ def _icon(ok: Optional[bool]) -> str:
     return "✓" if ok is True else "✗" if ok is False else "i"
 
 
+def head_lines(r: Dict[str, Any]) -> List[str]:
+    """Pourquoi ce rapport, et le score de la sécurité (rapports plus anciens :
+    rien)."""
+    out = []
+    if r.get("motif"):
+        out.append(f"Pourquoi ce rapport : {r['motif']}.")
+    sec = r.get("security")
+    if sec and sec.get("total"):
+        out.append(f"Sécurité : {sec['ok']} contrôle(s) conforme(s) sur {sec['total']}"
+                   + (f", {sec['warn']} à corriger." if sec["warn"] else "."))
+    return out
+
+
 def render_text(r: Dict[str, Any]) -> str:
+    """Le rapport en texte : verdict, pourquoi, sécurité, changements, ce que
+    le bot a fait seul, à faire, chaque section, propositions, règles."""
     s = r["score"]
     when = r["generated_at"][:16].replace("T", " à ")
     lines = [f"RAPPORT QUOTIDIEN TRENDGUARD — {r['day']} ({when} UTC, mode {r['mode']})",
              "",
              f"Verdict : {r['verdict']}. {s['ok']} contrôle(s) conforme(s), {s['warn']} à corriger, "
-             f"{s['info']} information(s), sur {s['total']}.", ""]
+             f"{s['info']} information(s), sur {s['total']}."] + head_lines(r) + [""]
+    if r.get("changes"):
+        lines += ["DEPUIS LE DERNIER RAPPORT"] + [f"- {c}" for c in r["changes"]] + [""]
     lines += ["CE QUE LE BOT A FAIT SEUL"] + ([f"- {a}" for a in r["actions"]] or
                                                ["- rien à corriger automatiquement"]) + [""]
     lines += ["À FAIRE (par ordre d'importance)"] + ([f"{k}. {x}" for k, x in enumerate(r["recommendations"], 1)]
@@ -44,12 +62,19 @@ def render_text(r: Dict[str, Any]) -> str:
 
 
 def render_short(r: Dict[str, Any]) -> str:
+    """Résumé WhatsApp et Telegram : verdict, sécurité, changements, trois
+    premières choses à faire."""
     s = r["score"]
+    sec = r.get("security") or {}
     head = (f"🛡️ TrendGuard, rapport du {r['day']} : {r['verdict'].lower()} "
-            f"({s['ok']}/{s['total']} ✓).")
+            f"({s['ok']}/{s['total']} ✓"
+            + (f" ; sécurité {sec['ok']}/{sec['total']} ✓" if sec.get("total") else "") + ").")
+    why = [f"Pourquoi : {r['motif']}."] if r.get("motif") and "00:30" not in r["motif"] else []
+    changes = (["Depuis le dernier rapport : " + " ; ".join(r["changes"][:3]) + "."]
+               if r.get("changes") else [])
     todo = [f"{k}. {x}" for k, x in enumerate(r["recommendations"][:3], 1)]
     tail = "Rapport complet : panneau ▸ Réglages ▸ Rapport quotidien (et par e-mail)."
-    text = "\n".join([head] + todo + [tail])
+    text = "\n".join([head] + why + changes + todo + [tail])
     return text if len(text) <= SHORT_MAX else text[:SHORT_MAX - 1] + "…"
 
 
@@ -90,6 +115,9 @@ def render_html(r: Dict[str, Any]) -> str:
         f"<div style='font-size:13px;margin-top:4px'>{s['ok']} contrôles conformes sur {s['total']} · "
         f"{esc(when)} UTC · mode {esc(r['mode'])}</div></div>",
         "<div style='padding:6px 22px 20px;color:#0f172a'>",
+        "".join(f"<p style='margin:12px 0 0;font-size:14px'>{esc(line)}</p>" for line in head_lines(r)),
+        ("<h3 style='margin:18px 0 0;font-size:15px'>Depuis le dernier rapport</h3>"
+         + items(r["changes"], False)) if r.get("changes") else "",
         "<h3 style='margin:18px 0 0;font-size:15px'>À faire, par ordre d'importance</h3>",
         items(r["recommendations"] or ["Rien : tout est en ordre."], True),
         "<h3 style='margin:18px 0 0;font-size:15px'>Ce que le bot a fait seul</h3>",

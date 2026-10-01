@@ -4,6 +4,7 @@ sans jamais bloquer ni faire échouer le bot."""
 import io
 import os
 import smtplib
+import socket
 
 from trendguard import alerts
 
@@ -262,3 +263,60 @@ def test_pause_file_is_the_bot_s_only_with_the_real_environment(tmp_path):
     hub = alerts.build_notifier(env={}, pause_file=str(tmp_path / "p.json"))
     assert hub.pause.path.endswith("p.json") and hub.pause.env_file.endswith(".env")
     assert alerts.PAUSE_FILE.endswith("trendguard.alertes.json")
+
+
+class Flaky:
+    """Canal en panne de réseau puis rétabli, ou qui refuse l'envoi."""
+    name, label, enabled, secrets = "flaky", "Canal", True, []
+
+    def __init__(self, errors):
+        self.errors, self.got = list(errors), []
+
+    def send(self, subject, text):
+        err = self.errors.pop(0) if self.errors else None
+        if err is not None:
+            raise err
+        self.got.append(text)
+
+
+def test_critical_alert_lost_to_the_network_is_sent_late():
+    clock = {"now": 1_790_756_960.0}                       # 30/09 à 08:29 UTC
+    ch = Flaky([socket.gaierror(11001, "getaddrinfo failed"), TimeoutError("lent")])
+    hub = alerts.AlertHub(FakeTelegram(enabled=False), [ch], async_mode=False, dedup_sec=0,
+                          clock=lambda: clock["now"])
+    hub("⚠️ TrendGuard a été arrêté 1 h 27", critical=True)
+    assert ch.got == [] and hub.retry_due() == 0             # pas encore l'heure
+    clock["now"] += alerts.RETRY_EVERY_SEC
+    assert hub.retry_due() == 0 and ch.got == []             # réseau encore coupé : on réessaiera
+    clock["now"] += alerts.RETRY_EVERY_SEC
+    assert hub.retry_due() == 1 and "arrêté 1 h 27" in ch.got[0]
+    assert "envoyée en retard : prévue le 30/09 à 08:29 UTC" in ch.got[0]
+    assert hub.retry_due() == 0 and len(ch.got) == 1         # une seule fois
+    hub("notification ordinaire", critical=False)             # niveau critical : rien à renvoyer
+    refused = Flaky([smtplib.SMTPAuthenticationError(535, b"refuse")])
+    hub2 = alerts.AlertHub(FakeTelegram(enabled=False), [refused], async_mode=False, dedup_sec=0,
+                           clock=lambda: clock["now"])
+    hub2("alerte", critical=True)
+    clock["now"] += 2 * alerts.RETRY_EVERY_SEC
+    assert hub2.retry_due() == 0 and refused.got == []      # un mot de passe refusé ne se renvoie pas
+    late = Flaky([socket.gaierror(11001, "x")] * 200)
+    hub3 = alerts.AlertHub(FakeTelegram(enabled=False), [late], async_mode=False, dedup_sec=0,
+                           clock=lambda: clock["now"])
+    hub3("alerte", critical=True)
+    clock["now"] += alerts.RETRY_FOR_SEC + 1
+    assert hub3.retry_due() == 0 and hub3._retry == []       # abandonnée après 6 h
+
+
+def test_the_real_cause_stays_visible_after_a_network_failure():
+    ch = Flaky([smtplib.SMTPAuthenticationError(535, b"refuse"), socket.gaierror(11001, "x"), None])
+    hub = alerts.AlertHub(FakeTelegram(enabled=False), [ch], async_mode=False, dedup_sec=0)
+    hub("un", critical=True)
+    assert "mot de passe d'application" in hub.last["flaky"]["cause"]
+    hub("deux", critical=True)                                # coupure du réseau ensuite
+    last = hub.last["flaky"]
+    assert "introuvable" in last["error"] and "mot de passe d'application" in last["cause"]
+    hub("trois", critical=True)                               # un envoi réussi efface la cause
+    assert hub.last["flaky"]["ok"] and "cause" not in hub.last["flaky"]
+    assert alerts.network_failure(socket.gaierror(1, "x")) and alerts.network_failure(TimeoutError())
+    assert not alerts.network_failure(smtplib.SMTPAuthenticationError(535, b"x"))
+    assert not alerts.network_failure(RuntimeError("CallMeBot a refusé l'envoi (HTTP 403)"))

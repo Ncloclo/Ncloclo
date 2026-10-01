@@ -343,3 +343,42 @@ def test_bot_applies_the_risk_step_and_cuts_it_at_the_first_alert(tmp_path, logg
     bot.state = {"auto_resumed_at": "2026-09-01"}                     # reprise en douceur
     assert bot._gentle(day) == 0.5 and bot._risk_step(day, 10_000.0, 10_000.0, True) == 1.0
     assert bot._gentle("2026-12-01") == 1.0
+
+
+def test_a_skill_acquired_after_the_nightly_report_gets_its_own_report(tmp_path, logger, monkeypatch):
+    """Compétence acquise (ici un palier relevé) après le rapport de la nuit :
+    analyse profonde et rapport envoyé aussitôt, une seule fois ; avant le
+    rapport de la nuit, c'est lui qui en rend compte."""
+    monkeypatch.setattr(ev, "block_luck", lambda eq, **kw: (50.0, 30.0))
+    g = tg.GuardConfig(run_mode="paper", universe=("BTC",), db_file=":memory:", log_file=os.devnull,
+                       lock_file=str(tmp_path / "tg.lock"), auto_diagnose_days=0, evolution=True,
+                       daily_report=True)
+    st = {}
+    base = ts.TrendParams()
+    ev.run_risk(st, base, date(2026, 10, 1), lambda: RiskJudge(), ev.risk_steps(base), 0.40, 0.0, True)
+    with open(ev.state_path(g), "w", encoding="utf-8") as fh:
+        json.dump(st, fh)
+    change = ev.last_change(g)
+    assert change["text"].startswith("palier de risque : Palier relevé à 1,25 %")
+    assert ev.last_change(dataclasses.replace(g, evolution=False)) is None
+    from trendguard import report as rp
+    launched, latest = [], {"generated_at": "2000-01-01T00:30:00+00:00"}
+    monkeypatch.setattr(rp, "launch", lambda gcfg, action="quotidien", motif="": launched.append(
+        (action, motif)) or True)
+    monkeypatch.setattr(rp, "load_latest", lambda gcfg: latest)
+    bot = tg.TrendGuardBot(g, logger, None, v29.Store(":memory:", logger), lambda *a, **k: True)
+    bot.track_uptime = True
+    today = change["at"][:10]
+    bot._report_after_skill(today)
+    assert launched == []                       # le rapport de la nuit n'est pas encore fait
+    bot.state["report_day"] = today
+    bot._report_after_skill(today)
+    bot._report_after_skill(today)
+    assert len(launched) == 1 and launched[0][0] == "maintenant"
+    assert "après une compétence acquise (palier de risque : Palier relevé" in launched[0][1]
+    st["last_change"]["at"] = "2099-01-01T00:00:00+00:00"          # nouvelle compétence…
+    with open(ev.state_path(g), "w", encoding="utf-8") as fh:
+        json.dump(st, fh)
+    latest["generated_at"] = "2099-01-01T00:05:00+00:00"            # … dont un rapport a déjà rendu compte
+    bot._report_after_skill(today)
+    assert len(launched) == 1 and bot.state["report_change_at"] == "2099-01-01T00:00:00+00:00"

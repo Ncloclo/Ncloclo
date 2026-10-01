@@ -118,8 +118,13 @@ class SecurityCenter:
                 parts.append(f"{c['label']} : dernier envoi réussi le {self._when(r.get('at'))}")
             else:
                 failed = True
-                parts.append(f"{c['label']} : dernier envoi RATÉ le {self._when(r.get('at'))} "
-                             f"({r.get('error') or 'cause inconnue'})")
+                text = (f"{c['label']} : dernier envoi RATÉ le {self._when(r.get('at'))} "
+                        f"({r.get('error') or 'cause inconnue'})")
+                if r.get("cause") and r["cause"] != r.get("error"):
+                    # Une coupure du réseau ne masque pas la vraie cause.
+                    text += (f" ; cause à corriger, constatée le {self._when(r.get('cause_at'))} : "
+                             f"{r['cause']}")
+                parts.append(text)
         return self._check("Alertes", False if failed else True if sent else None, " ; ".join(parts))
 
     def _uptime_check(self, st: Dict[str, Any]) -> Dict[str, Any]:

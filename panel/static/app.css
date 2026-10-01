@@ -219,6 +219,12 @@ svg { width: 20px; height: 20px; fill: currentColor; flex: none; }
 .sec-list li.ok .sec-ico { background: var(--up); }
 .sec-list li.warn .sec-ico { background: var(--down); }
 .sec-list li.info .sec-ico { background: var(--accent); }
+.sec-sub { margin: -4px 0 10px; }
+.sec-title { margin: 16px 0 8px; font-size: 14px; font-weight: 700; }
+.sec-title .sub { font-weight: 500; }
+.sec-changes { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.sec-changes:empty { display: none; }
+.sec-changes li::before { content: "↻ "; color: var(--accent-2); }
 
 /* Raisonnement du bot */
 .mind { position: relative; overflow: hidden; }

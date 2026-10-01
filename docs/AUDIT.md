@@ -5,9 +5,10 @@ Cinq diagnostics successifs : l'audit du 28, le diagnostic approfondi du 29
 bibliothèques du PC, état en direct), celui de 13 h, après la mise à jour des
 bibliothèques (PC, contrôles croisés), et celui de 17 h, après la
 restructuration du code (épreuves de résistance). Puis, à 21 h, le palier de
-risque et la reprise prudente de l'arrêt d'urgence, et à 22 h un sixième
-diagnostic, clé Binance enfin acceptée. Méthode : diagnostic de la
-stratégie sur les données publiques de Binance (`python trendguard_bot.py
+risque et la reprise prudente de l'arrêt d'urgence, à 22 h un sixième
+diagnostic, clé Binance enfin acceptée, et le 1er octobre à 2 h la sécurité
+renforcée et le rapport après chaque compétence acquise. Méthode : diagnostic de
+la stratégie sur les données publiques de Binance (`python trendguard_bot.py
 diagnose`), état du bot dans le panneau, journal du bot, du superviseur et de
 Windows, vérification Binance (`verify`, aucun ordre), tests, analyse statique,
 failles connues des dépendances (pip-audit), recherche de secrets dans git.
@@ -24,6 +25,41 @@ et les bibliothèques Python du bot sont à jour, aux versions testées. Le bot
 n'est pas prêt pour de l'argent réel : il lui faut des alertes
 qui arrivent, une machine allumée en permanence avec une adresse fixe, et
 plusieurs semaines de paper avec des trades vendus.
+
+## Suite donnée le 1er octobre, 2 h : sécurité renforcée, rapport après chaque compétence
+
+Votre demande : une analyse profonde du fond et de la forme après chaque
+compétence acquise et chaque nuit à 00:30, toutes les sécurités possibles avec
+sagesse, de façon autonome, un rapport détaillé dans les réglages du panneau et
+par e-mail et WhatsApp, les recommandations appliquées, le code harmonisé.
+
+**La nuit du 30 septembre.** Le PC est passé sur batterie (86 % à 00:30, 61 % à
+1 h 35) et s'est endormi de 22 h 18 à 23 h 56 : bot arrêté 1 h 37. La clé
+Binance, acceptée à 22 h, est de nouveau refusée : l'adresse de la connexion a
+changé en trois heures (160.120.68.43, puis 160.155.219.186). La décision de
+minuit est prise : LTC a fini au-dessus de son stop, rien n'est vendu ; le
+palier reste à 1 %.
+
+**Ce qui a été fait (constats E1 à E3 et sécurité) :**
+
+| Amélioration | Effet |
+| --- | --- |
+| Vraie cause d'un échec d'alerte | une coupure du réseau au réveil ne masque plus le mot de passe Gmail refusé : le panneau et le rapport montrent les deux (constat E1), même après un redémarrage du bot |
+| Alertes critiques renvoyées | ratée faute de réseau, une alerte critique est renvoyée toutes les 5 minutes pendant 6 heures, marquée « envoyée en retard » (constat E2) ; un mot de passe refusé ne se renvoie pas |
+| Disque : une seule règle | diagnostic, rapport et panneau disent la même chose, dans la même unité et avec le même seuil (constat E3) |
+| Clé Binance : moindre privilège | droits superflus signalés (marge, contrats à terme, options, transferts), âge de la clé (à renouveler après 180 jours) ; refusée : l'adresse actuelle du PC à autoriser est écrite dans le rapport ; `verify` les montre aussi |
+| Secrets dans l'historique des commandes | une clé tapée dans PowerShell, le terminal ou Python est masquée seule chaque nuit, comme dans les journaux |
+| Dossier hors du nuage | alerte si le dossier du bot est synchronisé par OneDrive, Dropbox ou Google Drive |
+| Chiffrement du disque | lu sans droits d'administrateur : actif sur ce PC |
+| Mises à jour de Windows | dernière mise à jour de sécurité (le 10/09 sur ce PC), à corriger au-delà de 45 jours, redémarrage en attente signalé |
+| Rapport après une compétence acquise | réglage adopté, confirmé ou annulé, palier de risque changé : analyse et rapport envoyés aussitôt, si le rapport de la nuit n'en a pas rendu compte |
+| Rapport plus clair | pourquoi ce rapport, score de la sécurité à part, ce qui a changé depuis le précédent (points corrigés, nouveaux points, compétences) ; dans le texte, l'e-mail et WhatsApp |
+| Panneau ▸ Réglages ▸ Rapport de sécurité | contrôles en direct, puis la sécurité de la dernière analyse et ses changements, bouton « Envoyer par e-mail et WhatsApp » (`rapport envoyer`) |
+| Harmonisation | palier de risque découpé en quatre étapes courtes, rapport en fonctions plus petites (sécurité, score, changements), masquage des secrets en une seule fonction, README sans clé dans une commande |
+
+Le bot n'installe ni ne change aucun réglage de sécurité de Windows : il les lit
+et recommande. Il n'agit seul que sur ce qui est sûr et réversible (sauvegarde,
+droits du fichier des secrets, secrets masqués, veille sur secteur).
 
 ## Diagnostic approfondi du 30 septembre, 22 h
 
@@ -583,8 +619,9 @@ Points faibles :
 | 17 | Six améliorations du code : superviseur allégé ; rapport qui prévient quand la mémoire ou le disque se remplissent ; `verify` qui continue sans clé ; repli si le dossier `.venv` est incomplet ; « plus haut » en direct dans le panneau ; e-mail mis en pause après trois refus du mot de passe | Code, avec votre accord | **fait** (30/09) : les six sont en service ; code restructuré (rapport en quatre fichiers, centre de sécurité du panneau à part) et harmonisé, détail dans [`DIAGNOSTIC_CODE.md`](DIAGNOSTIC_CODE.md) |
 | 18 | `urllib3` 2.8.0 (trois failles corrigées) avec la version de ccxt qui l'accepte | Code | **en attente de ccxt, suivie seule** (30/09, 17 h 40) : le contrôle signale la faille sans bloquer, et échouera le jour où la correction pourra s'installer |
 | 19 | Palier de risque de 1 % à 2 % choisi par l'analyse du bot, arrêt d'urgence levé seul avec prudence, raisonnement qui dit pourquoi rien ne bouge | Code, à votre demande | **fait** (30/09, 21 h) : en service ; premier examen, le bot garde 1 % ([`ADAPTATION.md`](ADAPTATION.md), section 6) |
-| 20 | Alertes : afficher la vraie cause d'un échec (mot de passe refusé) plutôt que la dernière coupure du réseau ; renvoyer les alertes critiques perdues pendant une coupure | Code, avec votre accord | proposé (30/09, 22 h) : constats E1 et E2 |
-| 21 | Disque : une seule mesure et un seul seuil dans le diagnostic, le rapport et le panneau | Code, avec votre accord | proposé (30/09, 22 h) : constat E3 |
+| 20 | Alertes : afficher la vraie cause d'un échec (mot de passe refusé) plutôt que la dernière coupure du réseau ; renvoyer les alertes critiques perdues pendant une coupure | Code, avec votre accord | **fait** (01/10) |
+| 21 | Disque : une seule mesure et un seul seuil dans le diagnostic, le rapport et le panneau | Code, avec votre accord | **fait** (01/10) |
+| 22 | Sécurité renforcée (clé Binance au moindre privilège, historique des commandes, dossier hors du nuage, chiffrement, mises à jour de Windows), rapport après chaque compétence acquise, rapport de sécurité dans le panneau et renvoyé à la demande | Code, à votre demande | **fait** (01/10) |
 
 Fait depuis l'audit du matin : chemins de secours des ordres réels testés (et
 un défaut corrigé), blocage des mots de passe ratés, écriture sûre du choix des

@@ -9,7 +9,10 @@ avant, et aussi par e-mail et WhatsApp selon ALERT_LEVEL :
   all               : aussi le résumé quotidien et les autres messages.
 L'envoi se fait dans un fil dédié : un serveur de messagerie lent ne
 retarde jamais une action de trading, et une panne d'un canal n'empêche
-pas les autres.
+pas les autres. Une alerte critique ratée faute de réseau (PC qui se
+réveille, Internet coupé) est renvoyée dès que le réseau revient, marquée
+« en retard » ; un mot de passe refusé reste affiché comme la cause à
+corriger, même si une coupure du réseau suit.
 
   python trendguard_bot.py alerts configurer     # saisie guidée (mots de passe masqués)
   python trendguard_bot.py alerts tester         # message de test sur chaque canal
@@ -49,10 +52,21 @@ ERROR_MAX = 300              # caractères gardés d'une cause d'échec
 PAUSE_AFTER = 3              # refus du mot de passe à la suite avant la pause
 PAUSE_RETRY_SEC = 24 * 3600  # en pause : un essai par jour
 PAUSE_FILE = os.path.join(v29.APP_DIR, "trendguard.alertes.json")
+RETRY_EVERY_SEC = 300        # alerte critique ratée faute de réseau : nouvel essai toutes les 5 min…
+RETRY_FOR_SEC = 6 * 3600     # … pendant 6 h au plus
 
 
 def _env(env: Dict[str, str], name: str, default: str = "") -> str:
     return (env.get(name) or default).strip()
+
+
+def network_failure(e: Optional[BaseException]) -> bool:
+    """Panne passagère du réseau (serveur introuvable, délai dépassé,
+    connexion impossible) : l'envoi vaut d'être retenté. Jamais un mot de
+    passe ou un envoi refusés."""
+    if isinstance(e, urllib.error.URLError) and not isinstance(e, urllib.error.HTTPError):
+        return True
+    return isinstance(e, (socket.gaierror, TimeoutError, ConnectionError, smtplib.SMTPConnectError))
 
 
 def refused(e: Exception, already: int = 0) -> bool:
@@ -260,17 +274,22 @@ class AlertHub:
 
     def __init__(self, telegram: Any, channels: List[Any], level: str = "critical",
                  logger: Any = None, async_mode: bool = True, dedup_sec: int = 600,
-                 pause: Optional[Pause] = None):
+                 pause: Optional[Pause] = None, clock: Callable[[], float] = time.time):
         self.telegram = telegram
         self.channels = [c for c in channels if c is not None and c.enabled]
         self.level = level if level in ("critical", "all") else "critical"
         self.logger = logger
         self.dedup_sec = dedup_sec
         self.pause = pause
+        self.clock = clock
         self._sent: Dict[str, float] = {}
-        # Dernier envoi de chaque canal : {"at", "ok", "error"} (centre de
-        # sécurité du panneau : un canal configuré mais en échec est signalé).
+        # Dernier envoi de chaque canal : {"at", "ok", "error"}, et la dernière
+        # cause à corriger ("cause", "cause_at" : mot de passe refusé…), gardée
+        # tant qu'aucun envoi ne réussit (centre de sécurité du panneau).
         self.last: Dict[str, Dict[str, Any]] = {}
+        self._failure: Dict[str, Optional[BaseException]] = {}
+        # Alertes critiques ratées faute de réseau, à renvoyer.
+        self._retry: List[Dict[str, Any]] = []
         self._lock = threading.Lock()
         self._q: "queue.Queue" = queue.Queue(maxsize=200)
         self._thread: Optional[threading.Thread] = None
@@ -304,10 +323,56 @@ class AlertHub:
 
     def _worker(self) -> None:
         while True:
-            item = self._q.get()
+            try:
+                item = self._q.get(timeout=RETRY_EVERY_SEC if self._retry else None)
+            except queue.Empty:
+                self.retry_due()
+                continue
             if item is None:
                 return
             self._deliver(*item)
+            self.retry_due()
+
+    def retry_due(self) -> int:
+        """Renvoie les alertes critiques ratées faute de réseau dont l'heure
+        est venue, marquées « en retard » ; abandonne après 6 h ou si le
+        canal refuse l'envoi pour une autre raison. Nombre d'alertes
+        parties."""
+        now, sent = self.clock(), 0
+        with self._lock:
+            due = [e for e in self._retry if e["next"] <= now]
+        for e in due:
+            ch = next((c for c in self.channels if c.name == e["ch"]), None)
+            if ch is None or now - e["first"] > RETRY_FOR_SEC:
+                self._log("warning", f"[ALERTES] alerte abandonnée après {RETRY_FOR_SEC // 3600} h sans "
+                                     f"réseau : {e['msg'][:80]}")
+                self._drop(e)
+                continue
+            when = time.strftime("%d/%m à %H:%M UTC", time.gmtime(e["first"]))
+            err = self._send(ch, e["subject"], f"{e['msg']}\n\n(Alerte envoyée en retard : prévue le {when}, "
+                                               "le réseau ne répondait pas.)", tag="ALERTES")
+            if err is None:
+                sent += 1
+                self._log("info", f"[ALERTES] {ch.label} : alerte du {when} envoyée en retard")
+                self._drop(e)
+            elif network_failure(self._failure.get(ch.name)):
+                e["next"] = now + RETRY_EVERY_SEC
+            else:
+                self._drop(e)
+        return sent
+
+    def _hold(self, ch: Any, subject: str, msg: str) -> None:
+        """Alerte critique ratée faute de réseau : gardée pour un nouvel essai."""
+        now = self.clock()
+        with self._lock:
+            if not any(e["ch"] == ch.name and e["msg"] == msg for e in self._retry):
+                self._retry.append({"ch": ch.name, "subject": subject, "msg": msg, "first": now,
+                                    "next": now + RETRY_EVERY_SEC})
+
+    def _drop(self, entry: Dict[str, Any]) -> None:
+        with self._lock:
+            if entry in self._retry:
+                self._retry.remove(entry)
 
     def _send(self, ch: Any, subject: str, text: str, html: Optional[str] = None,
               tag: str = "", force: bool = False) -> Optional[str]:
@@ -316,8 +381,8 @@ class AlertHub:
         étiquette de l'avertissement écrit au journal ; `force` : envoyer
         même si le canal est en pause (test demandé)."""
         err = None if force or self.pause is None else self.pause.held(ch.name)
+        failure: Optional[Exception] = None
         if err is None:
-            failure: Optional[Exception] = None
             try:
                 if html and getattr(ch, "supports_html", False):
                     ch.send(subject, text, html=html)
@@ -329,15 +394,21 @@ class AlertHub:
                                         ch.secrets)[:ERROR_MAX]
             if self.pause is not None:
                 self.pause.note(ch.name, failure)
+        self._failure[ch.name] = failure
         if err and tag:
             self._log("warning", f"[{tag}] {ch.label} : envoi impossible ({err})")
-        self._note(ch.name, err)
+        self._note(ch.name, err, failure)
         return err
 
     def _deliver(self, msg: str, critical: bool) -> Dict[str, Optional[str]]:
         subject = ("🛑 TrendGuard : alerte critique" if critical
                    else "TrendGuard : notification")
-        return {ch.name: self._send(ch, subject, msg, tag="ALERTES") for ch in self.channels}
+        out: Dict[str, Optional[str]] = {}
+        for ch in self.channels:
+            out[ch.name] = self._send(ch, subject, msg, tag="ALERTES")
+            if out[ch.name] and critical and network_failure(self._failure.get(ch.name)):
+                self._hold(ch, subject, msg)
+        return out
 
     def send_report(self, subject: str, full: str, short: str,
                     html: Optional[str] = None) -> Dict[str, Optional[str]]:
@@ -354,9 +425,17 @@ class AlertHub:
                                           html if whole else None, tag="RAPPORT")
         return results
 
-    def _note(self, name: str, err: Optional[str]) -> None:
+    def _note(self, name: str, err: Optional[str], failure: Optional[BaseException] = None) -> None:
+        """Dernier envoi du canal ; une panne passagère du réseau n'efface pas
+        la dernière cause à corriger (mot de passe refusé…)."""
         with self._lock:
-            self.last[name] = {"at": time.time(), "ok": err is None, "error": err}
+            prev = self.last.get(name) or {}
+            rec: Dict[str, Any] = {"at": self.clock(), "ok": err is None, "error": err}
+            if err is not None and not network_failure(failure):
+                rec["cause"], rec["cause_at"] = err, rec["at"]
+            elif err is not None and prev.get("cause"):
+                rec["cause"], rec["cause_at"] = prev["cause"], prev.get("cause_at")
+            self.last[name] = rec
 
     def _log(self, level: str, text: str) -> None:
         if self.logger is not None:

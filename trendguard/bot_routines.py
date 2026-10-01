@@ -112,10 +112,12 @@ class RoutinesMixin:
     def _launch_report(self, now: datetime) -> None:
         """Rapport quotidien (report.py) à partir de 00:30 UTC, une fois par
         jour, dans un processus séparé ; rattrapé au retour du PC s'il était
-        éteint à cette heure-là."""
+        éteint à cette heure-là. Et un rapport aussitôt après une compétence
+        acquise dont le rapport du jour n'a pas pu rendre compte."""
         if not (self.g.daily_report and self.track_uptime):
             return
         today = now.date().isoformat()
+        self._report_after_skill(today)
         if self.state.get("report_day") == today or now.hour * 60 + now.minute < report.REPORT_MINUTE:
             return
         self.state["report_day"] = today
@@ -124,6 +126,27 @@ class RoutinesMixin:
                 self.logger.info("[RAPPORT] analyse profonde, sécurité et rapport du jour lancés")
         except Exception as e:
             self.logger.warning(f"[RAPPORT] rapport du jour impossible : {e}")
+
+    def _report_after_skill(self, today: str) -> None:
+        """Compétence ou expérience acquise (réglage adopté, confirmé ou
+        annulé, palier de risque changé) après le rapport du jour : analyse
+        profonde et rapport envoyé aussitôt, une fois par changement. Avant
+        le rapport de la nuit, c'est lui qui en rendra compte."""
+        change = evolution.last_change(self.g)
+        if not change or change["at"] <= (self.state.get("report_change_at") or ""):
+            return
+        if self.state.get("report_day") != today:
+            return
+        latest = report.load_latest(self.g) or {}
+        if str(latest.get("generated_at") or "") >= change["at"]:
+            self.state["report_change_at"] = change["at"]
+            return
+        try:
+            if report.launch(self.g, "maintenant", motif=f"après une compétence acquise ({change['text']})"):
+                self.state["report_change_at"] = change["at"]
+                self.logger.info("[RAPPORT] compétence acquise : analyse profonde et rapport lancés")
+        except Exception as e:
+            self.logger.warning(f"[RAPPORT] rapport de la compétence acquise impossible : {e}")
 
     def _note_stop(self) -> None:
         """Arrêt propre (bouton ARRÊTER, Ctrl+C) : noté, pour que la reprise

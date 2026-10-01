@@ -302,15 +302,20 @@ palier et l'historique ; `TG_EVOLUTION=false` garde des réglages fixes.
 UTC, le bot applique d'abord seul les recommandations sûres et réversibles :
 veille du PC sur secteur « Jamais » (réglages d'origine gardés, `rapport
 restaurer`), sauvegarde vérifiée de sa base, droits du fichier des secrets,
-secrets masqués dans les journaux. Il installe aussi les améliorations que vous
-avez validées sur GitHub (Pull Request fusionnée par vous, contrôles au vert),
-avec contrôle de démarrage, redémarrage et retour automatique en arrière en cas
-de problème ; jamais un changement que vous n'avez pas validé. Puis il fait une
-analyse profonde de lui-même (sécurité, santé, stratégie, compétences, code et
-journal) : le rapport s'affiche dans Réglages ▸ Rapport quotidien et part par
-e-mail (complet) et WhatsApp (résumé). Une routine Claude Code propose chaque
-nuit au plus une amélioration testée du code en Pull Request, à valider d'un
-clic.
+secrets masqués dans les journaux et l'historique des commandes. Il installe
+aussi les améliorations que vous avez validées sur GitHub (Pull Request
+fusionnée par vous, contrôles au vert), avec contrôle de démarrage, redémarrage
+et retour automatique en arrière en cas de problème ; jamais un changement que
+vous n'avez pas validé. Puis il fait une analyse profonde de lui-même (sécurité,
+santé, stratégie, compétences, code et journal) : le rapport s'affiche dans
+Réglages ▸ Rapport quotidien et Rapport de sécurité, et part par e-mail
+(complet) et WhatsApp (résumé). Il refait l'analyse et le rapport aussitôt après
+une compétence acquise (réglage ou palier de risque changé par l'évolution
+encadrée). Sécurité contrôlée chaque nuit : secrets, clé Binance (droits
+superflus, âge, adresse à autoriser), dossier hors du nuage, chiffrement du
+disque, mises à jour de Windows, pare-feu, antivirus. Une routine Claude Code
+propose chaque nuit au plus une amélioration testée du code en Pull Request, à
+valider d'un clic.
 
 **Rusé à l'achat, discipliné à la vente.** Avant chaque achat, le bot lit le
 carnet d'ordres de Binance. Écart achat/vente supérieur à 0,5 %
@@ -488,10 +493,13 @@ python trendguard_bot.py alerts configurer                      # alertes e-mail
 Live, testnet d'abord :
 
 ```bash
+python trendguard_bot.py set-keys     # répondre 1 (testnet) : clés en saisie masquée
 BINANCE_TESTNET=true RUN_MODE=live ENABLE_LIVE_TRADING=true \
-LIVE_TRADING_CONFIRMATION=I_UNDERSTAND_RISK \
-BINANCE_API_KEY=… BINANCE_API_SECRET=… python trendguard_bot.py run
+LIVE_TRADING_CONFIRMATION=I_UNDERSTAND_RISK python trendguard_bot.py run
 ```
+
+Ne tapez jamais une clé dans une commande : elle resterait dans l'historique du
+terminal (le rapport quotidien l'y masque s'il la trouve).
 
 Compte réel :
 

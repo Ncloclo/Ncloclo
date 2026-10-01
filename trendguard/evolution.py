@@ -512,101 +512,142 @@ def risk_trials(j: Judge, cur: ts.TrendParams, lo: float, hi: float,
     return out
 
 
-def run_risk(st: Dict[str, Any], cur: ts.TrendParams, today: date,
-             judge: Callable[[], Judge], steps: List[float], kill: float,
-             dd: Optional[float], bull: Optional[bool], storm: bool = False,
-             busy: bool = False, notify: Callable[[str], None] = lambda _t: None) -> None:
-    """Routine quotidienne du palier de risque (après celle des réglages).
-    Descente aussitôt au premier palier à la première alerte (tempête,
-    baisse de 10 %, marché baissier) ; essai de 30 jours jugé à son terme ;
-    descente d'un cran si l'analyse ne justifie plus le palier ; montée
-    d'un cran si le marché est haussier, le capital à moins de 5 % de son
-    plus haut, aucun autre changement à l'essai et toutes les épreuves
-    réussies. `dd` et `bull` : situation du bot (None si inconnue). Met à
-    jour st["risk"]."""
-    r = risk_state(st, steps)
+Note = Tuple[str, str, bool]        # (texte, action, alerte)
+
+
+def _risk_alarm(r: Dict[str, Any], cur: ts.TrendParams, today: date, dd: Optional[float],
+                bull: Optional[bool], storm: bool) -> Optional[Note]:
+    """Première alerte au-dessus du premier palier : retour immédiat à 1
+    (60 jours de repos après une tempête ou une baisse de 10 %)."""
+    alarm = storm or (dd is not None and dd >= RISK_DOWN_DD)
+    if r["step"] <= 1.0 or not (alarm or bull is False):
+        return None
+    r.update(step=1.0, probation=None)
+    if alarm:
+        r["rest_until"] = (today + timedelta(days=RISK_REST_DOWN)).isoformat()
+    why = ("tempête (arrêt d'urgence ou forte baisse)" if storm else
+           f"baisse de {fr(dd * 100, '.1f')} % depuis le plus haut" if alarm else "marché baissier")
+    return (f"Retour immédiat à {_pct(cur, 1.0)} par achat : {why}."
+            + (f" Repos jusqu'au {r['rest_until']}." if alarm else ""), "descend", True)
+
+
+def _risk_probation(r: Dict[str, Any], cur: ts.TrendParams, today: date,
+                    judge: Callable[[], Judge]) -> Optional[Note]:
+    """Essai de 30 jours du palier : jugé à son terme sur ce qui s'est vraiment
+    passé, comparé au palier d'avant (retour en arrière s'il a fait moins bien)."""
+    pr = r.get("probation")
+    if not pr:
+        return None
     day = today.isoformat()
+    elapsed = (today - date.fromisoformat(pr["since"])).days
+    if elapsed < PROBATION_DAYS:
+        return (f"Essai du palier {_pct(cur, r['step'])} par achat, jour {elapsed} sur "
+                f"{PROBATION_DAYS}.", "essai", False)
+    j = judge()
+    rn = j.window_return(at_step(cur, pr["new"]), pr["since"], day)
+    ro = j.window_return(at_step(cur, pr["old"]), pr["since"], day)
+    r["probation"] = None
+    versus = (f"{fr(rn, '+.1f')} % en {elapsed} jours, contre {fr(ro, '+.1f')} % à "
+              f"{_pct(cur, pr['old'])}")
+    if rn >= ro - PROBATION_TOL:
+        r["rest_until"] = (today + timedelta(days=REST_AFTER_CONFIRM)).isoformat()
+        return (f"Essai réussi : palier {_pct(cur, r['step'])} par achat confirmé ({versus}).",
+                "confirme", True)
+    r.update(step=float(pr["old"]), rest_until=(today + timedelta(days=RISK_REST_DOWN)).isoformat())
+    return (f"Essai raté : retour à {_pct(cur, pr['old'])} par achat ({versus}). Repos jusqu'au "
+            f"{r['rest_until']}.", "annule", True)
+
+
+def _risk_review(r: Dict[str, Any], cur: ts.TrendParams, today: date, judge: Callable[[], Judge],
+                 steps: List[float], kill: float) -> Optional[Note]:
+    """Au-dessus du premier palier : l'analyse de la nuit le justifie-t-elle
+    encore face au palier du dessous ? Sinon, un cran plus bas."""
+    k = steps.index(r["step"])
+    if k == 0:
+        return None
+    step = r["step"]
+    t = risk_trials(judge(), cur, steps[k - 1], step, kill)
+    r["last_trials"] = [list(x) for x in t]
+    if all(x[1] for x in t):
+        return None
+    r.update(step=steps[k - 1], rest_until=(today + timedelta(days=RISK_REST_ANALYSIS)).isoformat())
+    return (f"L'analyse ne justifie plus {_pct(cur, step)} (épreuve « {t[-1][0]} » : {t[-1][2]}) : "
+            f"retour à {_pct(cur, steps[k - 1])} par achat.", "descend", True)
+
+
+def _risk_climb(r: Dict[str, Any], cur: ts.TrendParams, today: date, judge: Callable[[], Judge],
+                steps: List[float], kill: float, dd: Optional[float], bull: Optional[bool],
+                busy: bool) -> Note:
+    """Un cran de plus, seulement si tout est réuni (marché haussier, capital
+    près de son plus haut, aucun autre essai) et les épreuves réussies."""
     step = r["step"]
     k = steps.index(step)
-    base = _pct(cur, 1.0)
-
-    def note(text: str, action: str, alert: bool = False) -> None:
-        r["history"] = r["history"][-(HISTORY_MAX - 1):] + [
-            {"day": day, "action": action, "step": r["step"], "text": text}]
-        r["last_text"] = text
-        if alert:
-            notify(text)
-
-    alarm = storm or (dd is not None and dd >= RISK_DOWN_DD)
-    if step > 1.0 and (alarm or bull is False):
-        r.update(step=1.0, probation=None)
-        if alarm:
-            r["rest_until"] = (today + timedelta(days=RISK_REST_DOWN)).isoformat()
-        why = ("tempête (arrêt d'urgence ou forte baisse)" if storm else
-               f"baisse de {fr(dd * 100, '.1f')} % depuis le plus haut" if alarm else "marché baissier")
-        note(f"Retour immédiat à {base} par achat : {why}."
-             + (f" Repos jusqu'au {r['rest_until']}." if alarm else ""), "descend", alert=True)
-        return
-    pr = r.get("probation")
-    if pr:
-        elapsed = (today - date.fromisoformat(pr["since"])).days
-        if elapsed < PROBATION_DAYS:
-            note(f"Essai du palier {_pct(cur, step)} par achat, jour {elapsed} sur "
-                 f"{PROBATION_DAYS}.", "essai")
-            return
-        j = judge()
-        rn = j.window_return(at_step(cur, pr["new"]), pr["since"], day)
-        ro = j.window_return(at_step(cur, pr["old"]), pr["since"], day)
-        r["probation"] = None
-        versus = (f"{fr(rn, '+.1f')} % en {elapsed} jours, contre {fr(ro, '+.1f')} % à "
-                  f"{_pct(cur, pr['old'])}")
-        if rn >= ro - PROBATION_TOL:
-            r["rest_until"] = (today + timedelta(days=REST_AFTER_CONFIRM)).isoformat()
-            note(f"Essai réussi : palier {_pct(cur, step)} par achat confirmé ({versus}).",
-                 "confirme", alert=True)
-        else:
-            r.update(step=float(pr["old"]),
-                     rest_until=(today + timedelta(days=RISK_REST_DOWN)).isoformat())
-            note(f"Essai raté : retour à {_pct(cur, pr['old'])} par achat ({versus}). Repos "
-                 f"jusqu'au {r['rest_until']}.", "annule", alert=True)
-        return
-    if r.get("rest_until") and day < r["rest_until"]:
-        note(f"Repos jusqu'au {r['rest_until']} : le palier reste à {_pct(cur, step)} par achat.",
-             "repos")
-        return
-    if k > 0:
-        t = risk_trials(judge(), cur, steps[k - 1], step, kill)
-        r["last_trials"] = [list(x) for x in t]
-        if not all(x[1] for x in t):
-            r.update(step=steps[k - 1],
-                     rest_until=(today + timedelta(days=RISK_REST_ANALYSIS)).isoformat())
-            note(f"L'analyse ne justifie plus {_pct(cur, step)} (épreuve « {t[-1][0]} » : "
-                 f"{t[-1][2]}) : retour à {_pct(cur, steps[k - 1])} par achat.", "descend", alert=True)
-            return
     if k + 1 >= len(steps):
-        note(f"Palier le plus haut permis : {_pct(cur, step)} par achat.", "garde")
-        return
+        return f"Palier le plus haut permis : {_pct(cur, step)} par achat.", "garde", False
     if busy:
-        note(f"Un réglage est à l'essai : un seul changement à la fois, le palier reste à "
-             f"{_pct(cur, step)} par achat.", "attend")
-        return
+        return (f"Un réglage est à l'essai : un seul changement à la fois, le palier reste à "
+                f"{_pct(cur, step)} par achat.", "attend", False)
     if bull is not True or dd is None or dd > RISK_UP_DD:
         why = ("marché baissier" if bull is False else "situation du bot inconnue" if dd is None
                or bull is None else f"capital à {fr(dd * 100, '.1f')} % sous son plus haut "
                                     f"(au plus {fr(RISK_UP_DD * 100, '.0f')} % pour monter)")
-        note(f"Le bot garde {_pct(cur, step)} par achat : {why}.", "garde")
-        return
+        return f"Le bot garde {_pct(cur, step)} par achat : {why}.", "garde", False
     nxt = steps[k + 1]
     t = risk_trials(judge(), cur, step, nxt, kill)
     r["last_trials"] = [list(x) for x in t]
-    if all(x[1] for x in t):
-        r.update(step=nxt, probation={"since": day, "old": step, "new": nxt})
-        note(f"Palier relevé à {_pct(cur, nxt)} par achat à la prochaine décision : épreuves "
-             f"réussies ({', '.join(x[0] for x in t)}). Essai de {PROBATION_DAYS} jours ; retour "
-             f"immédiat à {base} à la première alerte.", "monte", alert=True)
-    else:
-        note(f"Le bot garde {_pct(cur, step)} par achat : {_pct(cur, nxt)} refusé, épreuve "
-             f"« {t[-1][0]} » ratée ({t[-1][2]}).", "garde")
+    if not all(x[1] for x in t):
+        return (f"Le bot garde {_pct(cur, step)} par achat : {_pct(cur, nxt)} refusé, épreuve "
+                f"« {t[-1][0]} » ratée ({t[-1][2]}).", "garde", False)
+    r.update(step=nxt, probation={"since": today.isoformat(), "old": step, "new": nxt})
+    return (f"Palier relevé à {_pct(cur, nxt)} par achat à la prochaine décision : épreuves "
+            f"réussies ({', '.join(x[0] for x in t)}). Essai de {PROBATION_DAYS} jours ; retour "
+            f"immédiat à {_pct(cur, 1.0)} à la première alerte.", "monte", True)
+
+
+def run_risk(st: Dict[str, Any], cur: ts.TrendParams, today: date,
+             judge: Callable[[], Judge], steps: List[float], kill: float,
+             dd: Optional[float], bull: Optional[bool], storm: bool = False,
+             busy: bool = False, notify: Callable[[str], None] = lambda _t: None) -> None:
+    """Routine quotidienne du palier de risque (après celle des réglages), en
+    quatre temps : la première alerte fait redescendre aussitôt au premier
+    palier ; un essai de 30 jours est jugé à son terme ; un palier que
+    l'analyse ne justifie plus perd un cran ; sinon, après le repos, un cran
+    de plus si tout est réuni et les épreuves réussies. `dd` et `bull` :
+    situation du bot (None si inconnue). Met à jour st["risk"] ; un
+    changement est daté dans st["last_change"] (rapport aussitôt)."""
+    r = risk_state(st, steps)
+    day = today.isoformat()
+    found = (_risk_alarm(r, cur, today, dd, bull, storm)
+             or _risk_probation(r, cur, today, judge))
+    if found is None and r.get("rest_until") and day < r["rest_until"]:
+        found = (f"Repos jusqu'au {r['rest_until']} : le palier reste à {_pct(cur, r['step'])} "
+                 "par achat.", "repos", False)
+    found = (found or _risk_review(r, cur, today, judge, steps, kill)
+             or _risk_climb(r, cur, today, judge, steps, kill, dd, bull, busy))
+    text, action, alert = found
+    r["history"] = r["history"][-(HISTORY_MAX - 1):] + [
+        {"day": day, "action": action, "step": r["step"], "text": text}]
+    r["last_text"] = text
+    if alert:
+        mark_change(st, f"palier de risque : {text}")
+        notify(text)
+
+
+def mark_change(st: Dict[str, Any], text: str) -> None:
+    """Compétence ou expérience acquise (réglage adopté, confirmé ou annulé,
+    palier de risque changé) : datée pour que le bot en fasse aussitôt un
+    rapport."""
+    st["last_change"] = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                         "text": text}
+
+
+def last_change(gcfg: Any) -> Optional[Dict[str, Any]]:
+    """Dernière compétence acquise ({"at", "text"}), ou None (évolution
+    désactivée ou rien encore)."""
+    if not getattr(gcfg, "evolution", False) or not state_path(gcfg):
+        return None
+    ch = load_state(state_path(gcfg)).get("last_change")
+    return ch if isinstance(ch, dict) and isinstance(ch.get("at"), str) else None
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -645,6 +686,7 @@ def run_daily(base: ts.TrendParams, path: str, today: date,
             {"day": day, "action": action, "level": st["level"], "text": text}]
         st["last_text"] = text
         if alert:
+            mark_change(st, text)
             notify(text)
 
     pr = st.get("probation")

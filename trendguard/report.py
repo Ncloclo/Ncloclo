@@ -55,6 +55,7 @@ from .report_security import (
     check_env_permissions,
     check_env_published,
     check_secret_leaks,
+    check_sync_folder,
     check_windows,
     library_checks,
 )
@@ -87,16 +88,69 @@ def is_running(gcfg: Any) -> bool:
         return False
 
 
+# Sections de la sécurité (rapport de sécurité du panneau, score à part).
+SECURITY_TITLES = ("Sécurité", "Centre de sécurité du panneau")
 # Lignes du centre de sécurité déjà vérifiées par le rapport lui-même.
 PANEL_DUPLICATES = {"Disponibilité du bot (7 j)", "Relance automatique", "Arrêt d'urgence", "Mode",
                     "Clés API Binance", "Fichier des secrets (.env)", "Rapport quotidien",
                     "Évolution encadrée", "Alimentation du PC", "Espace disque", "Mémoire du PC"}
 
 
+def security_checks(gcfg: Any, env: Dict[str, str], deps: Deps, root: str, day: str,
+                    backups: bool = True) -> List[Check]:
+    """Section « Sécurité » : secrets (GitHub, journaux, historique des
+    commandes), dossier hors du nuage, clé Binance, sauvegarde et intégrité
+    de la base, Windows (pare-feu, antivirus, chiffrement, mises à jour,
+    veille, alimentation), bibliothèques du bot."""
+    sec = [check_env_published(root, deps), check_env_permissions(root, deps)]
+    sec += check_secret_leaks(root, env, deps)
+    sec.append(check_sync_folder(root, deps.extra.get("environ")))
+    sec.append((deps.binance or binance_key_check)(env, bool(gcfg.binance_testnet)))
+    if backups:
+        try:
+            sec.append(backup_database(gcfg.db_file, paths(gcfg)["backups"], day))
+        except (OSError, sqlite3.Error) as e:
+            sec.append(chk("Sauvegarde de la base", False, f"impossible ({type(e).__name__})",
+                           "Vérifiez l'espace disque."))
+    sec.append(check_database(gcfg.db_file))
+    return sec + check_windows(deps) + library_checks(root, deps)
+
+
+def score_of(checks: List[Check]) -> Dict[str, int]:
+    """Conformes, à corriger, informations, total."""
+    return {"ok": sum(1 for c in checks if c["ok"] is True),
+            "warn": sum(1 for c in checks if c["ok"] is False),
+            "info": sum(1 for c in checks if c["ok"] is None), "total": len(checks)}
+
+
+def changes_since(prev: Optional[Dict[str, Any]], sections: List[Dict[str, Any]]) -> List[str]:
+    """Ce qui a changé depuis le rapport précédent : points corrigés, points
+    nouveaux à corriger, compétences et expérience acquises."""
+    if not prev or not isinstance(prev.get("sections"), list):
+        return []
+    before = {c.get("label"): c for s in prev["sections"] for c in s.get("checks", [])}
+    out: List[str] = []
+    for s in sections:
+        for c in s["checks"]:
+            b = before.get(c["label"])
+            if b is None:
+                continue
+            if b.get("ok") is False and c["ok"] is not False:
+                out.append(f"corrigé : {c['label']}")
+            elif b.get("ok") is not False and c["ok"] is False:
+                out.append(f"nouveau point à corriger : {c['label']}")
+            elif s["title"] == "Compétences acquises" and c["detail"] != b.get("detail"):
+                out.append(f"compétence : {c['label']}, {c['detail'][:140]}")
+    return out
+
+
 def build(gcfg: Any, env: Dict[str, str], deps: Optional[Deps] = None,
-          backups: bool = True, applied: Optional[List[Check]] = None) -> Dict[str, Any]:
+          backups: bool = True, applied: Optional[List[Check]] = None,
+          motif: str = "") -> Dict[str, Any]:
     """Le rapport complet ; `applied` : recommandations déjà appliquées seules
-    (maintenance.py), montrées en tête."""
+    (maintenance.py), montrées en tête ; `motif` : pourquoi ce rapport (nuit,
+    compétence acquise, demande). Score à part pour la sécurité, et ce qui a
+    changé depuis le rapport précédent."""
     deps = deps or Deps()
     now = deps.now or datetime.now(timezone.utc)
     day = now.date().isoformat()
@@ -106,19 +160,7 @@ def build(gcfg: Any, env: Dict[str, str], deps: Optional[Deps] = None,
                                       env.get("PANEL_PASSWORD", ""))
     status, security = pnl.get("status"), pnl.get("security")
     gh = deps.http_json or github_json
-
-    sec = [check_env_published(root, deps), check_env_permissions(root, deps)]
-    sec += check_secret_leaks(root, env, deps)
-    sec.append((deps.binance or binance_key_check)(env, bool(gcfg.binance_testnet)))
-    if backups:
-        try:
-            sec.append(backup_database(gcfg.db_file, paths(gcfg)["backups"], day))
-        except (OSError, sqlite3.Error) as e:
-            sec.append(chk("Sauvegarde de la base", False, f"impossible ({type(e).__name__})",
-                           "Vérifiez l'espace disque."))
-    sec.append(check_database(gcfg.db_file))
-    sec += check_windows(deps)
-    sec += library_checks(root, deps)
+    sec = security_checks(gcfg, env, deps, root, day, backups)
     panel_sec = [chk(c["label"], c["ok"], c["detail"],
                      f"{c['label']} : {c['detail']}" if c.get("ok") is False else "")
                  for c in (security or {}).get("checks", [])
@@ -140,9 +182,7 @@ def build(gcfg: Any, env: Dict[str, str], deps: Optional[Deps] = None,
     ]
     sections = [s for s in sections if s["checks"]]
     allc = [c for s in sections for c in s["checks"]]
-    score = {"ok": sum(1 for c in allc if c["ok"] is True),
-             "warn": sum(1 for c in allc if c["ok"] is False),
-             "info": sum(1 for c in allc if c["ok"] is None), "total": len(allc)}
+    score = score_of(allc)
     recos: List[str] = []
     for level in (False, None, True):
         for c in allc:
@@ -152,6 +192,10 @@ def build(gcfg: Any, env: Dict[str, str], deps: Optional[Deps] = None,
               "mode": gcfg.run_mode, "score": score,
               "verdict": ("Tout est en ordre" if score["warn"] == 0
                           else f"{score['warn']} point(s) à corriger"),
+              "motif": motif or "rapport de la nuit (00:30 UTC)",
+              "security": score_of([c for s in sections if s["title"] in SECURITY_TITLES
+                                    for c in s["checks"]]),
+              "changes": changes_since(load_latest(gcfg), sections),
               "actions": [c["action"] for c in allc if c.get("action")],
               "recommendations": recos, "proposals": proposals, "sections": sections,
               "delivery": {}}
@@ -191,9 +235,10 @@ def deliver(report: Dict[str, Any], hub: Any) -> Dict[str, Dict[str, Any]]:
 
 
 def generate(gcfg: Any, env: Dict[str, str], send: bool = True, deps: Optional[Deps] = None,
-             hub: Any = None, maintain: bool = True) -> Dict[str, Any]:
+             hub: Any = None, maintain: bool = True, motif: str = "") -> Dict[str, Any]:
     """Recommandations sûres appliquées seules (maintenance.py), analyse,
-    protections, rapport gardé puis envoyé. Un seul à la fois."""
+    protections, rapport gardé puis envoyé par e-mail et WhatsApp. Un seul
+    à la fois."""
     # Chargés avant une éventuelle mise à jour : ce processus garde une
     # version cohérente du code jusqu'à la fin du rapport.
     from . import alerts, cli  # noqa: F401
@@ -208,18 +253,10 @@ def generate(gcfg: Any, env: Dict[str, str], send: bool = True, deps: Optional[D
         root = deps.extra.get("root") or v29.APP_DIR
         port = int(env.get("PANEL_PORT", "8765") or 8765)
         applied = maintenance.run_all(gcfg, deps, root, port) if maintain else []
-        report = build(gcfg, env, deps, applied=applied)
+        report = build(gcfg, env, deps, applied=applied, motif=motif)
         save(gcfg, report)
         if send:
-            own = hub is None
-            if own:
-                hub = alerts.build_notifier(env=env, pause_file=alerts.PAUSE_FILE)
-            try:
-                report["delivery"] = deliver(report, hub)
-            finally:
-                if own:
-                    hub.close()
-            save(gcfg, report)
+            send_again(gcfg, report, env, hub)
         return report
     finally:
         if p["lock"]:
@@ -229,11 +266,30 @@ def generate(gcfg: Any, env: Dict[str, str], send: bool = True, deps: Optional[D
                 pass
 
 
-def launch(gcfg: Any, action: str = "quotidien") -> bool:
-    """Rapport dans un processus séparé (bot à 00:30, bouton du panneau)."""
+def send_again(gcfg: Any, report: Dict[str, Any], env: Dict[str, str], hub: Any = None
+               ) -> Dict[str, Dict[str, Any]]:
+    """Envoie le rapport par e-mail (complet) et WhatsApp (résumé), puis
+    garde le résultat de chaque envoi (panneau)."""
+    from . import alerts
+    own = hub is None
+    if own:
+        hub = alerts.build_notifier(env=env, pause_file=alerts.PAUSE_FILE)
+    try:
+        report["delivery"] = deliver(report, hub)
+    finally:
+        if own:
+            hub.close()
+    save(gcfg, report)
+    return report["delivery"]
+
+
+def launch(gcfg: Any, action: str = "quotidien", motif: str = "") -> bool:
+    """Rapport dans un processus séparé : bot à 00:30 ou après une compétence
+    acquise, boutons du panneau (générer, envoyer)."""
     if is_running(gcfg):
         return False
-    return autonomy.launch_tool(gcfg, ["rapport", action], ".rapport.log")
+    return autonomy.launch_tool(gcfg, ["rapport", action] + (["--motif", motif] if motif else []),
+                                ".rapport.log")
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -246,9 +302,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     from .config import load_guard_config_from_env
     ap = argparse.ArgumentParser(description="Rapport quotidien : sécurité et diagnostic expert")
     ap.add_argument("action", nargs="?", default="dernier",
-                    choices=["dernier", "maintenant", "quotidien", "installer", "restaurer",
-                             "corriger", "failles"])
+                    choices=["dernier", "maintenant", "quotidien", "envoyer", "installer",
+                             "restaurer", "corriger", "failles"])
     ap.add_argument("--sans-envoi", action="store_true", help="garder le rapport sans l'envoyer")
+    ap.add_argument("--motif", default="", help="pourquoi ce rapport (affiché en tête)")
     args = ap.parse_args(argv)
     v29.ensure_utf8_stdio()
     if args.action == "failles":
@@ -262,6 +319,15 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(last["text"] if last else "Aucun rapport pour l'instant : python trendguard_bot.py "
                                         "rapport maintenant")
         return 0
+    if args.action == "envoyer":
+        if not last:
+            print(f"{stamp} Aucun rapport à envoyer : python trendguard_bot.py rapport maintenant")
+            return 1
+        sent = send_again(gcfg, last, dict(os.environ))
+        print(f"{stamp} rapport du {last['day']} envoyé : " + (", ".join(
+            f"{n} {'✓' if d['ok'] else '✗ ' + str(d.get('error') or '')}" for n, d in sent.items())
+            or "aucun canal configuré (python trendguard_bot.py alerts configurer)"))
+        return 0 if sent and all(d["ok"] for d in sent.values()) else 1
     if args.action == "restaurer":
         print(maintenance.restore_power(gcfg, Deps()))
         return 0
@@ -277,7 +343,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"{stamp} Rapport du jour déjà fait.")
         return 0
     try:
-        r = generate(gcfg, dict(os.environ), send=not args.sans_envoi)
+        r = generate(gcfg, dict(os.environ), send=not args.sans_envoi,
+                     motif=args.motif or ("rapport de la nuit (00:30 UTC)" if args.action == "quotidien"
+                                          else "demandé"))
     except RuntimeError as e:
         print(f"{stamp} {e}")
         return 1

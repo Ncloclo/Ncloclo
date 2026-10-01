@@ -629,3 +629,24 @@ def test_watch_page_data(monkeypatch):
     ai = ai_summary()
     assert ai["configured"] == ["Mistral"] and len(ai["possible"]) == len(ps.mw.PROVIDERS)
     assert "cle-secrete-de-test" not in json.dumps(ai)                       # le nom, jamais la clé
+
+
+def test_security_report_send_and_alert_cause(tmp_path):
+    """Rapport de sécurité : envoi du dernier rapport (indisponible en
+    démonstration), et la vraie cause d'un échec d'alerte reste affichée
+    après une coupure du réseau."""
+    demo = ps.build_app(_cfg(tmp_path), demo=True)
+    assert demo._send_report()["ok"] is False
+    r = demo.report_view()
+    assert r["security"]["total"] == 9 and r["motif"].startswith("rapport de la nuit")
+    app = ps.build_app(_cfg(tmp_path))
+    assert app._send_report()["message"].startswith("Aucun rapport encore")
+    st = {"alerts_last": {"email": {"at": 1_790_756_960.0, "ok": False,
+                                    "error": "serveur « smtp.gmail.com » introuvable",
+                                    "cause": "identifiant ou mot de passe refusés par le serveur",
+                                    "cause_at": 1_790_722_950.0}}}
+    app._alert_channels = lambda _st: [{"name": "email", "label": "E-mail", "enabled": True,
+                                        "last": st["alerts_last"]["email"]}]
+    row = app._alerts_check(st)
+    assert row["ok"] is False and "introuvable" in row["detail"]
+    assert "cause à corriger, constatée le" in row["detail"] and "mot de passe refusés" in row["detail"]

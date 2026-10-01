@@ -35,6 +35,7 @@ from .config import (
 )
 from .journal import silent_logger
 from .replay import replay
+from .report_security import KEY_RENEW_DAYS, key_rights
 from .texte import fr, fr_plain
 
 
@@ -290,10 +291,15 @@ def _verify_rights(exchange: Any, say: Callable[..., None]
         return None, True
     withdraw = bool(r.get("enableWithdrawals"))
     trading = bool(r.get("enableSpotAndMarginTrading"))
+    extra, age = key_rights(r)
     say(f"  Retrait autorisé      : {'OUI ❌ à désactiver sur Binance' if withdraw else 'non ✓'}")
     say(f"  Trading Spot autorisé : {'oui ✓' if trading else 'NON ❌ à activer sur Binance'}")
     say(f"  Restriction IP        : {'oui ✓' if r.get('ipRestrict') else 'non (conseillé)'}")
-    return r, not withdraw and trading
+    say(f"  Droits superflus      : {', '.join(extra) + ' ❌ à décocher sur Binance' if extra else 'aucun ✓'}")
+    if age is not None:
+        say(f"  Âge de la clé         : {age} jour(s)"
+            + (" (à renouveler)" if age > KEY_RENEW_DAYS else ""))
+    return r, not withdraw and trading and not extra
 
 
 def _verify_balances(exchange: Any, say: Callable[..., None]) -> None:

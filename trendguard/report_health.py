@@ -169,17 +169,23 @@ def bot_checks(gcfg: Any, st: Dict[str, Any], status: Optional[Dict[str, Any]],
     return out
 
 
+def disk_state(free_gb: float, total_gb: float) -> Tuple[bool, str]:
+    """(trop peu de place, texte) : la même règle et les mêmes mots pour le
+    rapport, le panneau et le diagnostic. Trop peu : moins de 2 Go ou de
+    10 % libres, en Go comme Windows les affiche."""
+    pct = free_gb / total_gb * 100 if total_gb else 100.0
+    return (free_gb < DISK_MIN_GB or pct < DISK_MIN_PCT,
+            f"{fr(free_gb, '.1f')} Go libres sur {fr(total_gb, '.0f')} ({fr(pct, '.0f')} %)")
+
+
 def resource_checks(deps: Optional[Deps] = None, root: str = "") -> List[Check]:
     """Place sur le disque et mémoire du PC, pour le rapport et le centre de
     sécurité du panneau : à corriger avant que Windows n'en manque."""
     r = pc_resources(deps, root)
     if not r:
         return []
-    free, total = r["disk_free"], r["disk_total"]
-    pct = free / total * 100 if total else 100.0
-    low = free < DISK_MIN_GB or pct < DISK_MIN_PCT
-    out = [chk("Espace disque", not low,
-               f"{fr(free, '.1f')} Go libres sur {fr(total, '.0f')} ({fr(pct, '.0f')} %)",
+    low, text = disk_state(r["disk_free"], r["disk_total"])
+    out = [chk("Espace disque", not low, text,
                "" if not low else f"Libérez de la place sur le disque : moins de {DISK_MIN_PCT} % "
                                   "sont libres (Windows en a besoin pour ses mises à jour, le bot "
                                   "pour sa base et ses journaux).")]

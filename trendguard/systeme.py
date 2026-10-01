@@ -66,6 +66,17 @@ def git(deps: Deps, root: str, *args: str) -> Optional[str]:
     return r.stdout if r.returncode == 0 else None
 
 
+def public_ip(timeout: float = 10.0) -> Optional[str]:
+    """Adresse publique de ce PC sur Internet (celle que voit Binance), ou
+    None : à autoriser sur Binance quand la clé est restreinte par adresse."""
+    try:
+        with urllib.request.urlopen("https://api.ipify.org", timeout=timeout) as r:
+            ip = r.read(64).decode("ascii", "replace").strip()
+    except (OSError, ValueError):
+        return None
+    return ip if re.fullmatch(r"[0-9A-Fa-f.:]{3,45}", ip) else None
+
+
 def ps_lines(deps: Deps, script: str) -> Optional[List[str]]:
     """Lignes écrites par un script PowerShell, ou None s'il échoue."""
     try:
