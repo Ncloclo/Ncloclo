@@ -23,6 +23,8 @@ from .texte import fr
 _STAMP = re.compile(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})")
 DISK_MIN_GB = 2                 # en dessous, le bot ne peut plus écrire longtemps
 DISK_MIN_PCT = 10               # en dessous, Windows manque de place pour ses mises à jour
+DISK_RECO = (f"Libérez de la place sur le disque : moins de {DISK_MIN_PCT} % ou de {DISK_MIN_GB} Go sont "
+             "libres (Windows en a besoin pour ses mises à jour, le bot pour sa base et ses journaux).")
 MEMORY_MAX_PCT = 90             # au-dessus, Windows refuse bientôt de la mémoire aux programmes
 
 
@@ -185,10 +187,7 @@ def resource_checks(deps: Optional[Deps] = None, root: str = "") -> List[Check]:
     if not r:
         return []
     low, text = disk_state(r["disk_free"], r["disk_total"])
-    out = [chk("Espace disque", not low, text,
-               "" if not low else f"Libérez de la place sur le disque : moins de {DISK_MIN_PCT} % "
-                                  "sont libres (Windows en a besoin pour ses mises à jour, le bot "
-                                  "pour sa base et ses journaux).")]
+    out = [chk("Espace disque", not low, text, DISK_RECO if low else "")]
     used, limit = r.get("memory_used"), r.get("memory_limit")
     if used is not None and limit:
         share = used / limit * 100

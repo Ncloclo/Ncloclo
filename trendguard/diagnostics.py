@@ -208,13 +208,13 @@ def check_system(exchange: Any, state: Dict[str, Any], expected_day: str,
                            "Analyser la baisse, puis `python trendguard_bot.py resume` "
                            "(bot arrêté)."))
     if db_file and db_file != ":memory:" and os.path.exists(db_file):
-        from .report_health import disk_state  # même règle que le rapport (import circulaire évité)
+        # Même règle et mêmes mots que le rapport (import ici : évite un cycle).
+        from .report_health import DISK_RECO, disk_state
         disk = shutil.disk_usage(os.path.dirname(os.path.abspath(db_file)))
         low, text = disk_state(disk.free / GB, disk.total / GB)
         out.append(Finding(S, "ATTENTION" if low else "OK",
                            f"Base {fr(os.path.getsize(db_file) / 2 ** 20, '.1f')} Mo ; disque : {text}",
-                           "" if not low else "Libérer de la place sur le disque : moins de 10 % "
-                           "ou de 2 Go libres (comme le rapport quotidien)."))
+                           DISK_RECO if low else ""))
     return out
 
 
