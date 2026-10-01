@@ -323,6 +323,10 @@ def test_generate_saves_sends_and_refuses_a_second_run(root):
     assert r["delivery"]["email"]["ok"] and rp.load_latest(g)["delivery"]["whatsapp"]["ok"]
     assert os.path.exists(root / "rapports" / "rapport-2026-09-30.txt")
     assert not rp.is_running(g)
+    # Rapport gardé sans envoi : le dernier résultat de chaque canal reste connu.
+    quiet = rp.generate(g, {}, send=False, deps=_deps(root), hub=hub, motif="demandé")
+    assert quiet["delivery"] == {} and quiet["last_delivery"]["email"]["ok"]
+    assert quiet["motif"] == "demandé" and quiet["security"]["total"] > 0
     open(rp.paths(g)["lock"], "w").close()
     with pytest.raises(RuntimeError):
         rp.generate(g, {}, deps=_deps(root), hub=hub)

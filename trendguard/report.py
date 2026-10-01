@@ -231,7 +231,10 @@ def deliver(report: Dict[str, Any], hub: Any) -> Dict[str, Dict[str, Any]]:
     subject = f"TrendGuard — rapport du {report['day']} : {report['verdict']}"
     res = hub.send_report(subject, report["text"], report["short"], render_html(report))
     at = time.time()
-    return {name: {"at": at, "ok": err is None, "error": err} for name, err in res.items()}
+    # La cause à corriger (mot de passe refusé…) suit le résultat de l'envoi.
+    last = getattr(hub, "last", None) or {}
+    return {name: dict(last.get(name) or {}, at=at, ok=err is None, error=err)
+            for name, err in res.items()}
 
 
 def generate(gcfg: Any, env: Dict[str, str], send: bool = True, deps: Optional[Deps] = None,
@@ -254,6 +257,10 @@ def generate(gcfg: Any, env: Dict[str, str], send: bool = True, deps: Optional[D
         port = int(env.get("PANEL_PORT", "8765") or 8765)
         applied = maintenance.run_all(gcfg, deps, root, port) if maintain else []
         report = build(gcfg, env, deps, applied=applied, motif=motif)
+        # Rapport gardé sans envoi : le dernier résultat connu de chaque canal
+        # reste visible (centre de sécurité du panneau).
+        prev = load_latest(gcfg) or {}
+        report["last_delivery"] = prev.get("delivery") or prev.get("last_delivery") or {}
         save(gcfg, report)
         if send:
             send_again(gcfg, report, env, hub)

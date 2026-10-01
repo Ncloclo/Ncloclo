@@ -15,10 +15,13 @@ function checkRow(c) {
   li.append(t);
   return li;
 }
+let LIVE = new Set();                  // libellés déjà montrés en direct
 export async function renderSecurity() {
   const s = await api("/api/security");
   $("#s-sec-score").textContent = `${s.ok} / ${s.total}`;
   $("#s-sec").replaceChildren(...s.checks.map(checkRow));
+  LIVE = new Set(s.checks.map((c) => c.label));
+  if (REPORT) renderNightSecurity(REPORT);
 }
 
 const repWhen = (r) => new Date(r.generated_at).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
@@ -29,9 +32,10 @@ function deliveryText(r) {
   return d.map(([k, v]) => `${names[k] || k} ${v.ok ? "✓" : "✗"}`).join(" · ");
 }
 // Envoi du rapport, canal par canal : ✓ reçu, ✗ refusé, ou pas encore configuré.
+// Un rapport gardé sans envoi montre le dernier envoi connu.
 function deliveryChips(r) {
   const configured = new Set(ALERTS.filter((c) => c.enabled).map((c) => c.name));
-  const d = r.delivery || {};
+  const d = Object.keys(r.delivery || {}).length ? r.delivery : (r.last_delivery || {});
   return [["email", "E-mail"], ["whatsapp", "WhatsApp"], ["telegram", "Telegram"]]
     .filter(([k]) => k !== "telegram" || configured.has(k) || d[k])
     .map(([k, label]) => {
@@ -105,7 +109,7 @@ function renderNightSecurity(r) {
   if (!sec) return;
   const score = r.security ? ` · ${r.security.ok}/${r.security.total} conformes` : "";
   $("#s-sec-night-when").textContent = `· ${repWhen(r)} UTC${score}`;
-  $("#s-sec-night").replaceChildren(...sec.checks.map(checkRow));
+  $("#s-sec-night").replaceChildren(...sec.checks.filter((c) => !LIVE.has(c.label)).map(checkRow));
   $("#s-sec-changes").replaceChildren(...(r.changes || []).slice(0, 6).map((t) => el("li", "", t)));
 }
 // Fenêtre du rapport complet : pourquoi, changements, actions faites seul,

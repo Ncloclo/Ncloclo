@@ -93,7 +93,8 @@ class SecurityCenter:
         if self.hub is None:
             return []
         seen: Dict[str, Dict[str, Any]] = {}
-        sent = (report.load_latest(self.g) or {}).get("delivery")
+        latest = report.load_latest(self.g) or {}
+        sent = latest.get("delivery") or latest.get("last_delivery")
         for src in (st.get("alerts_last"), sent, getattr(self.hub, "last", None)):
             for name, r in (dict(src) if isinstance(src, dict) else {}).items():
                 if isinstance(r, dict) and float(r.get("at") or 0) >= float((seen.get(name) or {}).get("at") or 0):
