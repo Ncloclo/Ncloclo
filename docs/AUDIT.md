@@ -8,7 +8,8 @@ restructuration du code (épreuves de résistance). Puis, à 21 h, le palier de
 risque et la reprise prudente de l'arrêt d'urgence, à 22 h un sixième
 diagnostic, clé Binance enfin acceptée, le 1er octobre à 2 h la sécurité
 renforcée et le rapport après chaque compétence acquise, à 5 h un septième
-diagnostic et à 14 h un huitième (disque, mémoire, PC déplacé). Méthode :
+diagnostic, à 14 h un huitième (disque, mémoire, PC déplacé) et à 16 h un
+neuvième (Wi-Fi). Méthode :
 diagnostic de la stratégie sur les données publiques de
 Binance (`python trendguard_bot.py diagnose`), état du bot dans le panneau,
 journal du bot, du superviseur et de Windows, vérification Binance (`verify`,
@@ -18,7 +19,7 @@ aucun ordre), tests, analyse statique, failles connues des dépendances
 ## Verdict
 
 **Le bot, sa stratégie et son code sont sains ; ce qui l'entoure ne l'est pas
-encore.** Au 1er octobre à 14 h, la stratégie est conforme, le journal ne
+encore.** Au 1er octobre à 16 h, la stratégie est conforme, le journal ne
 contient aucune erreur du bot, les tests et les contrôles de GitHub sont au
 vert, les bibliothèques du bot sans faille connue. Les faiblesses sont autour
 du bot : le PC portable (déplacé deux fois par jour, 71 % de disponibilité sur
@@ -27,6 +28,51 @@ La clé Binance est refusée dès que le PC change de réseau. Le bot n'est pas
 prêt pour de l'argent réel : il lui faut des alertes qui arrivent, une machine
 fixe allumée en permanence avec une adresse fixe, de l'argent sur le compte,
 et plusieurs semaines de paper avec des trades vendus.
+
+## Diagnostic approfondi du 1er octobre, 16 h
+
+**Verdict : rien n'a bougé dans le bot depuis 14 h, et la cause des coupures
+est trouvée : c'est le Wi-Fi du bureau.** Rapport du bot : 38 contrôles
+conformes sur 47 (sécurité : 21 sur 23), 4 points à corriger, les mêmes qu'à
+14 h, tous autour du PC : alertes, disponibilité, disque, mémoire.
+
+### État du bot (01/10, 16 h)
+
+- En marche depuis 13 h 17, 0 relance, PC sur secteur ; capital 9 976 USDT
+  (−0,2 % depuis le départ, −1,0 % sous le plus haut), 6 positions, budget de
+  risque plein.
+- Mémoire du bot stable (211 Mo pour le bot, 122 Mo pour le panneau, mêmes
+  valeurs à six minutes d'écart) ; aucune erreur du bot dans le journal.
+- Sauvegarde de la nuit vérifiée, en lecture seule : intègre, mêmes positions,
+  mêmes quantités, mêmes stops et même argent disponible que la base en
+  service. Une restauration rendrait le bot exactement là où il en est.
+- Correction du panneau de 15 h (H9) en service : le panneau sert la nouvelle
+  version, 17 tests du navigateur au vert sur GitHub.
+- Clé Binance de nouveau acceptée (retrait interdit, trading Spot seulement,
+  restriction d'adresse active) : le PC est revenu sur le réseau dont
+  l'adresse est autorisée (voir I1).
+
+### Constats de 16 h
+
+| N° | Constat | Gravité | Suite |
+| --- | --- | --- | --- |
+| I1 | **Les coupures viennent du Wi-Fi du bureau.** Journal de Windows : sur l'un des deux réseaux du bureau (réseau A), le pilote Wi-Fi a coupé la connexion 7 fois entre 12 h 21 et 14 h 49 (de 4 secondes à 1 minute), et entre ces coupures la connexion restait dégradée : depuis 11 h, le bot n'a pas pu lire les prix pendant 27 minutes différentes, toutes sur ce réseau. L'adresse de ce réseau n'est pas autorisée sur Binance. Depuis 15 h 32, le PC est sur l'autre réseau (réseau B) : signal à 100 %, plus un seul échec (20 minutes d'observation, à confirmer), et son adresse est celle autorisée sur Binance | Moyenne | Vous : au bureau, rester sur le réseau B ; dans Paramètres ▸ Réseau et Internet ▸ Wi-Fi, décocher « Se connecter automatiquement » pour le réseau A |
+| I2 | **La nuit, le bot passe par le partage de connexion de votre téléphone** (hier de 23 h 56 à 8 h 17) : la décision de 00:02 dépend du téléphone (allumé, à portée, avec des données), l'adresse change, et la clé Binance y est refusée | Faible en paper, **bloquant pour le réel** | En paper : rien à faire. Pour le réel : une machine fixe, sur une connexion fixe (ligne 13) |
+| I3 | 27 réseaux Wi-Fi mémorisés, dont des hôtels et des téléphones : Windows peut s'y connecter seul. Les réseaux sont classés « public » (pare-feu strict) et le panneau n'écoute que ce PC : risque faible | Faible | Vous : oublier les réseaux qui ne servent plus |
+| I4 | Disque libre à 6 % et mémoire réservée à 95 % : inchangés depuis 14 h | **Élevée** | H1 et H2 : de votre côté |
+| I5 | Toujours aucune alerte ne vous arrive | **Élevée** | H5 : mot de passe d'application Gmail |
+
+### Amélioration proposée (votre accord d'abord)
+
+- **I6** : le rapport lit aussi le journal du Wi-Fi : coupures par réseau sur
+  24 heures, réseau stable à préférer, et connexion par un téléphone signalée
+  à l'heure de la décision. Les noms des réseaux restent dans le rapport (sur
+  ce PC, et dans l'e-mail qui vous est envoyé), jamais dans les fichiers
+  publiés.
+
+Toujours en attente de votre accord : H7 (où part la place du disque et quels
+programmes prennent la mémoire) et H8 (adresses publiques retirées des fichiers
+publiés).
 
 ## Diagnostic approfondi du 1er octobre, 14 h
 
@@ -76,7 +122,7 @@ sont la veille du marché (30 embranchements), le contrôle du système du
 diagnostic (28), la maintenance (28) et l'évolution quotidienne (25). À
 découper sans urgence, à l'occasion d'une autre modification.
 
-### Améliorations proposées (votre accord d'abord)
+### Améliorations proposées à 14 h (votre accord d'abord)
 
 - **H7** : quand le disque ou la mémoire se remplissent, le rapport et le
   centre de sécurité disent où part la place (Téléchargements, fichier
@@ -174,7 +220,7 @@ côté ; diagnostic de la stratégie conforme, sauf la place sur le disque.
 | G4 | Deux propositions de la routine de nuit, n° 3 et n° 4, sont en conflit et inutiles : la n° 4 (disque mesuré pareil partout) a été faite directement à 2 h | Aucune | Vous : les fermer sur GitHub |
 | G5 | Code : les fonctions les plus chargées du bot sont maintenant la commande `rapport` (29 embranchements) et les contrôles de santé (31) ; le palier de risque et le rapport, découpés, ont quitté la liste | Faible | Code : les découper à leur tour (G8) |
 
-### Améliorations proposées (votre accord d'abord)
+### Améliorations proposées à 5 h (votre accord d'abord)
 
 - **G6** : alerte « PC sur batterie, branchez le chargeur » envoyée dès le
   passage sur batterie (lecture de l'alimentation sans PowerShell, une fois par
@@ -253,7 +299,7 @@ sur 27.
   une limite de −35 %). Arrêt d'urgence prêt, reprise prudente armée.
 - Mémoire : 72 % réservés (contre 83 à 85 % avant le redémarrage de 18 h 20).
 
-### Ce qui a été vérifié et tient
+### Ce qui a été vérifié et tient (30/09, 22 h)
 
 | Contrôle | Résultat |
 | --- | --- |
@@ -405,7 +451,7 @@ toujours arrêté après le redémarrage (F4) : il ne démarre pas seul sur ce P
 
 Simulé sur l'historique réel de Binance, sans rien changer au bot, puis
 confirmé par le vrai bot rejoué jour par jour depuis le 01/01/2023 (page locale
-http://127.0.0.1:8899, dossier `rapports/essai-5-20-20/`) :
+<http://127.0.0.1:8899>, dossier `rapports/essai-5-20-20/`) :
 
 | Depuis le 01/01/2018, 10 000 USDT au départ | Gain par an | Pire baisse | Capital final |
 | --- | --- | --- | --- |
@@ -446,7 +492,7 @@ réglages publics du dépôt GitHub. Heures en UTC.
 | Code | 65 modules, 23 747 lignes, 1 051 fonctions ; 508 tests (495 réussis, 13 sans objet sur ce PC), ruff sans remarque, contrôles GitHub au vert |
 | Rapport de 12 h 50 | 32 contrôles conformes sur 40, 3 à corriger (clé Binance, alertes, disponibilité) |
 
-### Ce qui a été vérifié et tient
+### Ce qui a été vérifié et tient (30/09, 13 h)
 
 | Contrôle | Résultat |
 | --- | --- |
@@ -795,6 +841,8 @@ Points faibles :
 | 26 | Libérer le disque (6 % libre) et la mémoire (94 %) : trier Téléchargements (25 Go, sans toucher au dossier `claude`, qui contient le bot), fermer des onglets de Chrome (7,2 Go), puis redémarrer le PC | Vous | **dès que possible** (01/10, 14 h) : H1, H2 |
 | 27 | Rapport qui dit où part la place du disque et quels programmes prennent la mémoire ; adresses publiques retirées des fichiers publiés | Code, avec votre accord | proposé (01/10, 14 h) : H7, H8 |
 | 28 | Panneau ▸ Cryptos : une case cochée ne doit jamais être effacée par une actualisation | Code | **fait** (01/10, 15 h) : H9 |
+| 29 | Au bureau, rester sur le réseau Wi-Fi stable (B) et décocher « Se connecter automatiquement » pour l'autre ; oublier les réseaux Wi-Fi qui ne servent plus | Vous | dès que possible (01/10, 16 h) : I1, I3 |
+| 30 | Rapport qui lit le journal du Wi-Fi (coupures par réseau, réseau à préférer, partage de connexion d'un téléphone) | Code, avec votre accord | proposé (01/10, 16 h) : I6 |
 
 Fait depuis l'audit du matin : chemins de secours des ordres réels testés (et
 un défaut corrigé), blocage des mots de passe ratés, écriture sûre du choix des
