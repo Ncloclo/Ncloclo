@@ -113,10 +113,17 @@ def decision_time(log_file: str, now: datetime) -> Optional[str]:
 def bot_checks(gcfg: Any, st: Dict[str, Any], status: Optional[Dict[str, Any]],
                now: datetime) -> List[Check]:
     """Santé du bot pour le rapport : marche, dernier cycle, disponibilité sur
-    7 jours, relance automatique, démarrage avec l'ordinateur, décision du
-    jour, arrêt d'urgence, risque et mode."""
-    p = gcfg.params
-    out = []
+    7 jours, relance automatique, démarrage avec l'ordinateur (panneau en
+    marche), décision du jour, arrêt d'urgence, risque et mode."""
+    return (running_checks(status) + [decision_check(gcfg, now), halt_check(gcfg, st),
+                                      risk_check(gcfg), mode_check(gcfg)])
+
+
+def running_checks(status: Optional[Dict[str, Any]]) -> List[Check]:
+    """Ce que dit le panneau en marche : bot en marche, dernier cycle,
+    disponibilité sur 7 jours, relance automatique, démarrage avec
+    l'ordinateur (rien si le panneau ne répond pas)."""
+    out: List[Check] = []
     if status:
         running = status.get("state") in ("running", "restarting")
         out.append(chk("Bot en marche", running, {"running": "en marche", "restarting":
@@ -140,35 +147,52 @@ def bot_checks(gcfg: Any, st: Dict[str, Any], status: Optional[Dict[str, Any]],
         out.append(chk("Démarrage avec l'ordinateur", bool(au.get("autostart")),
                        "activé" if au.get("autostart") else "désactivé",
                        "" if au.get("autostart") else "Réglages ▸ Démarrer avec l'ordinateur."))
+    return out
+
+
+def decision_check(gcfg: Any, now: datetime) -> Check:
+    """Décision du jour prise à l'heure (avant 00:10 UTC), d'après le journal."""
     dt_ = decision_time(gcfg.log_file, now)
     late = dt_ is not None and dt_ > "00:10:00"
-    out.append(chk("Décision du jour", None if dt_ is None else not late,
-                   "pas encore dans le journal" if dt_ is None else f"prise à {dt_} UTC"
-                   + (" (en retard : PC éteint ou en veille à minuit)" if late else ""),
-                   "" if not late else "Laissez le PC allumé la nuit, sur secteur."))
+    return chk("Décision du jour", None if dt_ is None else not late,
+               "pas encore dans le journal" if dt_ is None else f"prise à {dt_} UTC"
+               + (" (en retard : PC éteint ou en veille à minuit)" if late else ""),
+               "" if not late else "Laissez le PC allumé la nuit, sur secteur.")
+
+
+def halt_check(gcfg: Any, st: Dict[str, Any]) -> Check:
+    """Arrêt d'urgence prêt, ou déclenché avec la date de sa reprise."""
     halted = bool(st.get("halted"))
     resume_days = getattr(gcfg, "kill_resume_days", 0)
-    out.append(chk("Arrêt d'urgence", not halted,
-                   f"déclenché : {st.get('halt_reason')}"
-                   + (f" ; {st['resume_note']}" if st.get("resume_note") else "") if halted
-                   else f"prêt (−{gcfg.kill_drawdown * 100:.0f} % depuis le plus haut ; "
-                        + (f"reprise automatique après {resume_days} jours si le marché redevient "
-                           "haussier)" if resume_days > 0 else "levé par la commande resume)"),
-                   "" if not halted else "Lisez la cause ; pour relancer les achats sans attendre : "
-                                         "arrêtez le bot puis python trendguard_bot.py resume."))
+    return chk("Arrêt d'urgence", not halted,
+               f"déclenché : {st.get('halt_reason')}"
+               + (f" ; {st['resume_note']}" if st.get("resume_note") else "") if halted
+               else f"prêt (−{gcfg.kill_drawdown * 100:.0f} % depuis le plus haut ; "
+                    + (f"reprise automatique après {resume_days} jours si le marché redevient "
+                       "haussier)" if resume_days > 0 else "levé par la commande resume)"),
+               "" if not halted else "Lisez la cause ; pour relancer les achats sans attendre : "
+                                     "arrêtez le bot puis python trendguard_bot.py resume.")
+
+
+def risk_check(gcfg: Any) -> Check:
+    """Risque du fichier .env dans les limites sages (1 % par achat, 2 % au
+    plus par palier, 6 % cumulé, 8 positions, arrêt à −40 %)."""
+    p = gcfg.params
     top = getattr(gcfg, "risk_max_pct", p.risk_pct)
     wise = p.risk_pct <= 0.01 and top <= 0.02 and p.max_total_risk <= 0.06 \
         and p.max_positions <= 8 and gcfg.kill_drawdown <= 0.40
-    out.append(chk("Risque configuré", wise,
-                   f"{fr(p.risk_pct * 100, 'g')} % par achat ({fr(min(top, 2 * p.risk_pct) * 100, 'g')} % "
-                   f"au plus si l'analyse du bot le justifie), {fr(p.max_total_risk * 100, 'g')} % "
-                   f"cumulé, {p.max_positions} positions, arrêt d'urgence à "
-                   f"−{fr(gcfg.kill_drawdown * 100, 'g')} %",
-                   "" if wise else "Revenez aux limites sages : 1 % par achat (2 % au plus par "
-                                   "palier), 6 % cumulé, 8 positions, arrêt à −40 % (fichier .env)."))
-    out.append(chk("Mode", None if gcfg.run_mode == "live" else True,
-                   "RÉEL" if gcfg.run_mode == "live" else "paper : aucun argent réel en jeu"))
-    return out
+    return chk("Risque configuré", wise,
+               f"{fr(p.risk_pct * 100, 'g')} % par achat ({fr(min(top, 2 * p.risk_pct) * 100, 'g')} % "
+               f"au plus si l'analyse du bot le justifie), {fr(p.max_total_risk * 100, 'g')} % "
+               f"cumulé, {p.max_positions} positions, arrêt d'urgence à "
+               f"−{fr(gcfg.kill_drawdown * 100, 'g')} %",
+               "" if wise else "Revenez aux limites sages : 1 % par achat (2 % au plus par "
+                               "palier), 6 % cumulé, 8 positions, arrêt à −40 % (fichier .env).")
+
+
+def mode_check(gcfg: Any) -> Check:
+    return chk("Mode", None if gcfg.run_mode == "live" else True,
+               "RÉEL" if gcfg.run_mode == "live" else "paper : aucun argent réel en jeu")
 
 
 def disk_state(free_gb: float, total_gb: float) -> Tuple[bool, str]:

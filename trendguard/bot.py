@@ -66,6 +66,7 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         self._last_close: Optional[pd.DataFrame] = None   # apprentissage de la veille
         # Palier de risque choisi par l'évolution encadrée (1 à 2 × TG_RISK_PCT).
         self.risk_step = 1.0
+        self._last_power = 0.0              # alimentation du portable relue
 
     @property
     def live(self) -> bool:
@@ -352,6 +353,7 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         try:
             if self.track_uptime:
                 self._note_downtime()
+                self._watch_power()
             self._keep_alert_status()
         except Exception as e:           # un simple relevé : jamais bloquant
             self.logger.warning(f"[REPRISE] disponibilité non relevée : {e}")

@@ -329,11 +329,12 @@ def check_database(db_file: str) -> Check:
 
 
 def binance_key_check(env: Dict[str, str], testnet: bool = False,
-                      ip_lookup: Callable[[], Optional[str]] = public_ip) -> Check:
+                      ip_lookup: Callable[[], Optional[str]] = public_ip, live: bool = True) -> Check:
     """Droits de la clé Binance, lus sans aucun ordre : retrait interdit,
     restriction d'adresse, aucun droit superflu, âge. Refusée : l'adresse
     actuelle du PC, à autoriser sur Binance (elle change sur une connexion
-    à la maison)."""
+    à la maison) ; à corriger en réel, simple information en paper (la clé
+    n'y sert à rien)."""
     import ccxt
     label = "Clé API Binance"
     key, sec = env.get("BINANCE_API_KEY", "").strip(), env.get("BINANCE_API_SECRET", "").strip()
@@ -344,8 +345,9 @@ def binance_key_check(env: Dict[str, str], testnet: bool = False,
     except ccxt.AuthenticationError:
         ip = ip_lookup()
         where = f"l'adresse actuelle de ce PC ({ip})" if ip else "l'adresse actuelle de ce PC"
-        return chk(label, False, f"refusée par Binance : {where} n'est sans doute pas autorisée "
-                                 "(sinon : clé supprimée ou mal copiée)",
+        return chk(label, False if live else None,
+                   f"refusée par Binance : {where} n'est sans doute pas autorisée "
+                   "(sinon : clé supprimée ou mal copiée)",
                    f"Binance ▸ Gestion des API ▸ Modifier les restrictions : autorisez {where} ; "
                    "elle change de temps en temps sur une connexion à la maison. En paper, sans "
                    "effet sur les achats et les ventes.")

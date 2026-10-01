@@ -876,3 +876,32 @@ def test_tools_share_the_single_entry_point(capsys, monkeypatch):
     assert "trendguard_bot.py watch" in out and "set-key" in out
     assert sys.argv[0] == "trendguard_bot.py"                 # rétabli après l'aide
     assert set(tg.TOOLS) == {"alerts", "watch", "strategy", "lab", "animation", "evolution", "rapport"}
+
+
+def test_bot_warns_when_the_laptop_runs_on_battery(logger, monkeypatch):
+    """Portable débranché : une alerte après une minute sur batterie (Windows
+    l'endort ensuite), une seule par débranchement, puis « chargeur
+    rebranché » ; rien sur un PC fixe."""
+    from trendguard import systeme
+    close, _ = synthetic_market()
+    bot, _fb = make_bot("paper", close, logger)
+    sent = []
+    bot.notifier = lambda text, **kw: sent.append((text, kw.get("critical")))
+    power = {"ac": False, "battery_pct": 86}
+    monkeypatch.setattr(systeme, "power_source", lambda deps=None: power)
+    bot._watch_power(now=1_000.0)
+    assert sent == []                                   # premier relevé sur batterie
+    bot._watch_power(now=1_030.0)                       # relu une fois par minute seulement
+    bot._watch_power(now=1_060.0)
+    assert len(sent) == 1 and "sur batterie (86 %)" in sent[0][0] and sent[0][1] is True
+    bot._watch_power(now=1_200.0)
+    assert len(sent) == 1 and bot.state["power_watch"]["alerted"]
+    power["ac"] = True
+    bot._watch_power(now=1_300.0)
+    assert "chargeur rebranché" in sent[-1][0] and bot.state["power_watch"] == {}
+    bot._watch_power(now=1_400.0)
+    assert len(sent) == 2
+    monkeypatch.setattr(systeme, "power_source", lambda deps=None: {"ac": False, "battery_pct": None})
+    bot._watch_power(now=2_000.0)
+    bot._watch_power(now=2_100.0)
+    assert len(sent) == 2                               # PC fixe (sans batterie) : rien

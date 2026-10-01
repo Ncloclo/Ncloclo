@@ -1,8 +1,8 @@
 """Les routines du bot TrendGuard, autour de la décision quotidienne :
-disponibilité (uptime.py), évolution encadrée (evolution.py), rapport
-quotidien (report.py), veille officielle (market_watch.py), horloge,
-auto-diagnostic, anticipation de la clôture, apprentissage libre
-(learning.py) et point de situation du journal.
+disponibilité (uptime.py) et alimentation du portable, évolution encadrée
+(evolution.py), rapport quotidien (report.py), veille officielle
+(market_watch.py), horloge, auto-diagnostic, anticipation de la clôture,
+apprentissage libre (learning.py) et point de situation du journal.
 
 Partie de la classe TrendGuardBot (bot.py), qui en hérite.
 """
@@ -16,7 +16,7 @@ import pandas as pd
 
 import v29
 
-from . import anticipation, autonomy, evolution, learning, report, uptime
+from . import anticipation, autonomy, evolution, learning, report, systeme, uptime
 from . import diagnostics as dg
 from . import market_watch as mw
 from . import trend_strategy as ts
@@ -147,6 +147,41 @@ class RoutinesMixin:
                 self.logger.info("[RAPPORT] compétence acquise : analyse profonde et rapport lancés")
         except Exception as e:
             self.logger.warning(f"[RAPPORT] rapport de la compétence acquise impossible : {e}")
+
+    # ---------- Alimentation du portable ----------
+
+    POWER_EVERY_SEC = 60        # alimentation relue une fois par minute (sans PowerShell)
+    BATTERY_ALERT_SEC = 60      # sur batterie depuis une minute : alerte
+
+    def _watch_power(self, now: Optional[float] = None) -> None:
+        """Portable débranché : alerte (e-mail, WhatsApp) après une minute sur
+        batterie, car Windows l'endort capot fermé ou après 10 minutes sans
+        activité, et le bot s'arrête ; puis « chargeur rebranché ». Rien sur
+        un PC fixe. Une alerte par débranchement, même après un redémarrage
+        du bot (état gardé)."""
+        now = time.time() if now is None else now
+        if now - self._last_power < self.POWER_EVERY_SEC:
+            return
+        self._last_power = now
+        p = systeme.power_source()
+        if not p or p.get("battery_pct") is None:
+            return
+        watch = self.state.setdefault("power_watch", {})
+        if p["ac"]:
+            if watch.get("alerted"):
+                self.logger.info("[ALIMENTATION] chargeur rebranché : le bot tourne sur secteur")
+                self.notifier("✅ TrendGuard : chargeur rebranché, le bot tourne de nouveau sur secteur.",
+                              dedup_key=f"tg-secteur-{int(watch.get('since') or now)}", critical=True)
+            watch.clear()
+            return
+        since = float(watch.setdefault("since", now))
+        if not watch.get("alerted") and now - since >= self.BATTERY_ALERT_SEC:
+            watch["alerted"] = True
+            pct = p["battery_pct"]
+            self.logger.warning(f"[ALIMENTATION] PC sur batterie ({pct} %) : branchez le chargeur")
+            self.notifier(f"🔌 TrendGuard : le PC est sur batterie ({pct} %). Branchez le chargeur : sur "
+                          "batterie, Windows l'endort capot fermé ou après 10 minutes sans activité, "
+                          "et le bot s'arrête.", dedup_key=f"tg-batterie-{int(since)}", critical=True)
 
     def _note_stop(self) -> None:
         """Arrêt propre (bouton ARRÊTER, Ctrl+C) : noté, pour que la reprise

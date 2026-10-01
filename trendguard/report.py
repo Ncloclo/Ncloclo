@@ -25,13 +25,14 @@ seulement leur présence et leur état.
 from __future__ import annotations
 
 import argparse
+import functools
 import glob
 import os
 import sqlite3
 import sys
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import v29
 
@@ -105,7 +106,8 @@ def security_checks(gcfg: Any, env: Dict[str, str], deps: Deps, root: str, day: 
     sec = [check_env_published(root, deps), check_env_permissions(root, deps)]
     sec += check_secret_leaks(root, env, deps)
     sec.append(check_sync_folder(root, deps.extra.get("environ")))
-    sec.append((deps.binance or binance_key_check)(env, bool(gcfg.binance_testnet)))
+    key_check = deps.binance or functools.partial(binance_key_check, live=gcfg.run_mode == "live")
+    sec.append(key_check(env, bool(gcfg.binance_testnet)))
     if backups:
         try:
             sec.append(backup_database(gcfg.db_file, paths(gcfg)["backups"], day))
@@ -308,9 +310,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     échec seulement si une correction peut s'installer)."""
     from .config import load_guard_config_from_env
     ap = argparse.ArgumentParser(description="Rapport quotidien : sécurité et diagnostic expert")
-    ap.add_argument("action", nargs="?", default="dernier",
-                    choices=["dernier", "maintenant", "quotidien", "envoyer", "installer",
-                             "restaurer", "corriger", "failles"])
+    ap.add_argument("action", nargs="?", default="dernier", choices=sorted(ACTIONS) + ["failles"])
     ap.add_argument("--sans-envoi", action="store_true", help="garder le rapport sans l'envoyer")
     ap.add_argument("--motif", default="", help="pourquoi ce rapport (affiché en tête)")
     args = ap.parse_args(argv)
@@ -319,33 +319,40 @@ def main(argv: Optional[List[str]] = None) -> int:
         c = audit_check(v29.APP_DIR, Deps(), requirements=PINS_FILE)
         print(f"{c['label']} ({PINS_FILE}) : {c['detail']}" + (f"\n→ {c['reco']}" if c["reco"] else ""))
         return 1 if c["ok"] is False else 0
-    gcfg = load_guard_config_from_env()
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    return ACTIONS[args.action](load_guard_config_from_env(), args, stamp)
+
+
+def _show_last(gcfg: Any, args: argparse.Namespace, stamp: str) -> int:
     last = load_latest(gcfg)
-    if args.action == "dernier":
-        print(last["text"] if last else "Aucun rapport pour l'instant : python trendguard_bot.py "
-                                        "rapport maintenant")
-        return 0
-    if args.action == "envoyer":
-        if not last:
-            print(f"{stamp} Aucun rapport à envoyer : python trendguard_bot.py rapport maintenant")
-            return 1
-        sent = send_again(gcfg, last, dict(os.environ))
-        print(f"{stamp} rapport du {last['day']} envoyé : " + (", ".join(
-            f"{n} {'✓' if d['ok'] else '✗ ' + str(d.get('error') or '')}" for n, d in sent.items())
-            or "aucun canal configuré (python trendguard_bot.py alerts configurer)"))
-        return 0 if sent and all(d["ok"] for d in sent.values()) else 1
-    if args.action == "restaurer":
-        print(maintenance.restore_power(gcfg, Deps()))
-        return 0
-    if args.action == "corriger":
-        print(maintenance.resume_fixes(gcfg))
-        return 0
-    if args.action == "installer":
-        c = maintenance.update(gcfg, Deps(), v29.APP_DIR, int(os.environ.get("PANEL_PORT", "8765")),
-                               allow_live=True)
-        print(f"{stamp} {c['label']} : {c['detail']}" + (f"\n→ {c['reco']}" if c["reco"] else ""))
-        return 0 if c["ok"] is not False else 1
+    print(last["text"] if last else "Aucun rapport pour l'instant : python trendguard_bot.py "
+                                    "rapport maintenant")
+    return 0
+
+
+def _send_last(gcfg: Any, args: argparse.Namespace, stamp: str) -> int:
+    last = load_latest(gcfg)
+    if not last:
+        print(f"{stamp} Aucun rapport à envoyer : python trendguard_bot.py rapport maintenant")
+        return 1
+    sent = send_again(gcfg, last, dict(os.environ))
+    print(f"{stamp} rapport du {last['day']} envoyé : " + (", ".join(
+        f"{n} {'✓' if d['ok'] else '✗ ' + str(d.get('error') or '')}" for n, d in sent.items())
+        or "aucun canal configuré (python trendguard_bot.py alerts configurer)"))
+    return 0 if sent and all(d["ok"] for d in sent.values()) else 1
+
+
+def _install(gcfg: Any, args: argparse.Namespace, stamp: str) -> int:
+    c = maintenance.update(gcfg, Deps(), v29.APP_DIR, int(os.environ.get("PANEL_PORT", "8765")),
+                           allow_live=True)
+    print(f"{stamp} {c['label']} : {c['detail']}" + (f"\n→ {c['reco']}" if c["reco"] else ""))
+    return 0 if c["ok"] is not False else 1
+
+
+def _generate(gcfg: Any, args: argparse.Namespace, stamp: str) -> int:
+    """maintenant (et quotidien, une fois par jour) : analyse, rapport gardé,
+    envoyé sauf --sans-envoi."""
+    last = load_latest(gcfg)
     if args.action == "quotidien" and last and last.get("day") == datetime.now(timezone.utc).date().isoformat():
         print(f"{stamp} Rapport du jour déjà fait.")
         return 0
@@ -359,6 +366,20 @@ def main(argv: Optional[List[str]] = None) -> int:
     sent = ", ".join(f"{n} {'✓' if d['ok'] else '✗'}" for n, d in r["delivery"].items()) or "non envoyé"
     print(f"{stamp} {r['verdict']} ({r['score']['ok']}/{r['score']['total']}) ; envoi : {sent}")
     return 0
+
+
+def _say(text: str) -> int:
+    print(text)
+    return 0
+
+
+# Actions de la commande `rapport` (failles, sans configuration, à part).
+ACTIONS: Dict[str, Callable[[Any, argparse.Namespace, str], int]] = {
+    "dernier": _show_last, "envoyer": _send_last, "installer": _install,
+    "maintenant": _generate, "quotidien": _generate,
+    "restaurer": lambda gcfg, args, stamp: _say(maintenance.restore_power(gcfg, Deps())),
+    "corriger": lambda gcfg, args, stamp: _say(maintenance.resume_fixes(gcfg)),
+}
 
 
 if __name__ == "__main__":

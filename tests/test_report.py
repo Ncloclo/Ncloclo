@@ -541,6 +541,8 @@ def test_binance_key_rights_least_privilege_age_and_current_address(monkeypatch)
     c = rps.binance_key_check(env, ip_lookup=lambda: "160.155.219.186")
     assert c["ok"] is False and "160.155.219.186" in c["detail"] and "160.155.219.186" in c["reco"]
     assert "connexion à la maison" in c["reco"]
+    paper = rps.binance_key_check(env, ip_lookup=lambda: "160.155.219.186", live=False)
+    assert paper["ok"] is None and paper["reco"] == c["reco"]        # en paper : une information
     assert rps.binance_key_check({})["detail"] == "absente (normal en paper)"
 
 

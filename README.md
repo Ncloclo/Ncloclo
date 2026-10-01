@@ -231,12 +231,14 @@ puis `python trendguard_bot.py alerts tester`. Les alertes partent sur Telegram,
 par e-mail (SMTP, par exemple Gmail avec un mot de passe d'application) et sur
 WhatsApp (CallMeBot, gratuit pour un usage personnel, ou Twilio). Par défaut,
 seules les alertes critiques (arrêt d'urgence, retrait officiel d'une crypto
-détenue, alerte forte de la veille) partent par e-mail et WhatsApp ;
-`ALERT_LEVEL=all` y ajoute le résumé quotidien. Un canal en panne ne ralentit
-jamais le trading. Un canal dont le mot de passe est refusé trois fois de suite
-n'essaie plus qu'une fois par jour, pour ne pas faire bloquer votre compte de
-messagerie ; il reprend dès qu'un bon mot de passe est enregistré, et le bouton
-« Tester » envoie toujours.
+détenue, alerte forte de la veille, PC portable sur batterie depuis une minute,
+puis chargeur rebranché) partent par e-mail et WhatsApp ; `ALERT_LEVEL=all` y
+ajoute le résumé quotidien. Un canal en panne ne ralentit jamais le trading ;
+une alerte critique ratée faute de réseau est renvoyée dès qu'il revient. Un
+canal dont le mot de passe est refusé trois fois de suite n'essaie plus qu'une
+fois par jour, pour ne pas faire bloquer votre compte de messagerie ; il reprend
+dès qu'un bon mot de passe est enregistré, et le bouton « Tester » envoie
+toujours.
 
 **Alertes d'anticipation** (`TG_ANTICIPATION=true` par défaut) : dans les 3
 heures avant la clôture de 00:00 UTC, le bot prévient une seule fois par crypto
@@ -286,16 +288,17 @@ cinq épreuves : deux époques, frais doublés, énigmes des crises passées, pl
 et hasard. Le plus simple qui les réussit toutes est adopté, puis mis à l'essai
 30 jours. Réussi, le bot monte de niveau (Apprenti, Compagnon, Expert, Maître :
 plus de liberté, épreuves plus dures) ; raté, retour aux anciens réglages et un
-niveau de moins. Il peut aussi porter son risque par achat de 1 % à 2 %, un
-cran de 0,25 % à la fois, seulement si son analyse le justifie (meilleur sur
-les deux époques, pire baisse et hasard loin de l'arrêt d'urgence), le capital
-près de son plus haut et le marché haussier ; il redescend aussitôt à 1 % à la
-première alerte (`TG_RISK_MAX_PCT=0.01` : jamais plus de 1 %). Premier examen,
-le 30 septembre 2026 : il garde 1 %, car un tirage malchanceux sur 20 à 1,25 %
-frôlerait l'arrêt d'urgence ([`docs/ADAPTATION.md`](docs/ADAPTATION.md),
-section 6). Nombre de positions, arrêt d'urgence et passage en réel restent
-hors de sa portée. `python trendguard_bot.py evolution` affiche le niveau, le
-palier et l'historique ; `TG_EVOLUTION=false` garde des réglages fixes.
+niveau de moins. Il peut aussi porter son risque par achat de 1 % à 2 %, un cran
+de 0,25 % à la fois, seulement si son analyse le justifie (meilleur sur les deux
+époques, pire baisse et hasard loin de l'arrêt d'urgence), le capital près de
+son plus haut et le marché haussier ; il redescend aussitôt à 1 % à la première
+alerte (`TG_RISK_MAX_PCT=0.01` : jamais plus de 1 %). Premier examen, le 30
+septembre 2026 : il garde 1 %, car un tirage malchanceux sur 20 à 1,25 %
+frôlerait l'arrêt d'urgence (section 6 de
+[`docs/ADAPTATION.md`](docs/ADAPTATION.md)). Nombre de positions, arrêt
+d'urgence et passage en réel restent hors de sa portée. `python
+trendguard_bot.py evolution` affiche le niveau, le palier et
+l'historique ; `TG_EVOLUTION=false` garde des réglages fixes.
 
 **Rapport quotidien et recommandations appliquées** (`report.py`,
 `maintenance.py`, [`docs/RAPPORT.md`](docs/RAPPORT.md)). Chaque jour à 00:30

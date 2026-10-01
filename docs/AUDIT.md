@@ -70,6 +70,15 @@ côté ; diagnostic de la stratégie conforme, sauf la place sur le disque.
 - **G8** : commande `rapport` et contrôles de santé découpés en fonctions
   courtes, comme le palier et le rapport.
 
+**Suite donnée le 1er octobre, 6 h : G6, G7 et G8 appliquées.** Le bot relit
+l'alimentation une fois par minute (sans PowerShell) et prévient par e-mail et
+WhatsApp après une minute sur batterie, une seule fois par débranchement, puis
+quand le chargeur est rebranché ; une alerte ratée faute de réseau, au réveil,
+part dès qu'il revient. En paper, une clé Binance refusée reste visible, avec
+l'adresse à autoriser, sans compter comme un point à corriger. La commande
+`rapport` passe par une table d'actions courtes, et les contrôles de santé
+sont cinq fonctions (marche, décision du jour, arrêt d'urgence, risque, mode).
+
 ## Suite donnée le 1er octobre, 2 h : sécurité renforcée, rapport après chaque compétence
 
 Votre demande : une analyse profonde du fond et de la forme après chaque
@@ -666,7 +675,7 @@ Points faibles :
 | 20 | Alertes : afficher la vraie cause d'un échec (mot de passe refusé) plutôt que la dernière coupure du réseau ; renvoyer les alertes critiques perdues pendant une coupure | Code, avec votre accord | **fait** (01/10) |
 | 21 | Disque : une seule mesure et un seul seuil dans le diagnostic, le rapport et le panneau | Code, avec votre accord | **fait** (01/10) |
 | 22 | Sécurité renforcée (clé Binance au moindre privilège, historique des commandes, dossier hors du nuage, chiffrement, mises à jour de Windows), rapport après chaque compétence acquise, rapport de sécurité dans le panneau et renvoyé à la demande | Code, à votre demande | **fait** (01/10) |
-| 23 | Prévenir par e-mail et WhatsApp quand le PC passe sur batterie ; en paper, une clé refusée devient une information ; commande `rapport` et contrôles de santé découpés | Code, avec votre accord | proposé (01/10, 5 h) : G6, G7, G8 |
+| 23 | Prévenir par e-mail et WhatsApp quand le PC passe sur batterie ; en paper, une clé refusée devient une information ; commande `rapport` et contrôles de santé découpés | Code, avec votre accord | **fait** (01/10, 6 h) : G6, G7, G8 |
 | 24 | Fermer les propositions n° 3 et n° 4 sur GitHub (en conflit, déjà faites) | Vous | quand vous voulez |
 
 Fait depuis l'audit du matin : chemins de secours des ordres réels testés (et
