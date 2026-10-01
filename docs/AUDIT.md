@@ -6,12 +6,13 @@ bibliothèques du PC, état en direct), celui de 13 h, après la mise à jour de
 bibliothèques (PC, contrôles croisés), et celui de 17 h, après la
 restructuration du code (épreuves de résistance). Puis, à 21 h, le palier de
 risque et la reprise prudente de l'arrêt d'urgence, à 22 h un sixième
-diagnostic, clé Binance enfin acceptée, et le 1er octobre à 2 h la sécurité
-renforcée et le rapport après chaque compétence acquise. Méthode : diagnostic de
-la stratégie sur les données publiques de Binance (`python trendguard_bot.py
-diagnose`), état du bot dans le panneau, journal du bot, du superviseur et de
-Windows, vérification Binance (`verify`, aucun ordre), tests, analyse statique,
-failles connues des dépendances (pip-audit), recherche de secrets dans git.
+diagnostic, clé Binance enfin acceptée, le 1er octobre à 2 h la sécurité
+renforcée et le rapport après chaque compétence acquise, et à 5 h un septième
+diagnostic. Méthode : diagnostic de la stratégie sur les données publiques de
+Binance (`python trendguard_bot.py diagnose`), état du bot dans le panneau,
+journal du bot, du superviseur et de Windows, vérification Binance (`verify`,
+aucun ordre), tests, analyse statique, failles connues des dépendances
+(pip-audit), recherche de secrets dans git.
 
 ## Verdict
 
@@ -25,6 +26,49 @@ et les bibliothèques Python du bot sont à jour, aux versions testées. Le bot
 n'est pas prêt pour de l'argent réel : il lui faut des alertes
 qui arrivent, une machine allumée en permanence avec une adresse fixe, et
 plusieurs semaines de paper avec des trades vendus.
+
+## Diagnostic approfondi du 1er octobre, 5 h
+
+**Verdict : le bot et sa stratégie vont bien, la sécurité est au vert ; ce qui
+l'arrête, c'est le PC qui s'endort sur batterie.** Rapport du bot : 37 contrôles
+conformes sur 47 (sécurité : 19 sur 23), 3 points à corriger, tous de votre
+côté ; diagnostic de la stratégie conforme, sauf la place sur le disque.
+
+### État du bot (01/10, 5 h)
+
+- En marche depuis la mise à jour de 2 h 12, sans une erreur ni un
+  avertissement depuis ; relance automatique active (0 relance) ; PC sur
+  secteur, batterie à 100 %.
+- Capital 10 155 USDT, nouveau plus haut (+1,6 % depuis le départ) ; 6
+  positions, budget de risque plein (5,9 % sur 6 %).
+- Cette nuit : LTC à 1 % au-dessus de son stop, 29 % de chances d'être vendu ;
+  TRX, ICP et XLM à moins de 3 % d'une cassure (TRX ne pourrait être acheté
+  qu'après une vente).
+- Stratégie : +33,6 % par an depuis 2019, pire baisse −24,7 % ; 24 derniers
+  mois : +1,19 R par trade (intervalle 90 % : +0,37 à +2,11) ; 12 mois
+  glissants : +34 %, percentile 65.
+- Clé Binance acceptée (adresse autorisée), aucun droit superflu ; disque
+  chiffré, Windows à jour, aucun secret trouvé.
+
+### Constats de 5 h
+
+| N° | Constat | Gravité | Suite |
+| --- | --- | --- | --- |
+| G1 | **Le PC s'endort sur batterie** (journal de Windows) : chargeur débranché à 22 h 19 et capot fermé, veille 5 secondes après (jusqu'à 23 h 56, bot arrêté 1 h 37) ; puis trois mises en veille pour inactivité sur batterie (0 h 16, 0 h 29, 1 h 06), au bout de 10 minutes sans toucher le PC, malgré l'anti-veille du bot ; même scénario le 30/09 à 7 h 02 | **Élevée** | Vous : laisser le chargeur branché, surtout la nuit. Code : prévenir par e-mail et WhatsApp dès que le PC passe sur batterie (G6) |
+| G2 | Aucune alerte n'est encore arrivée : Gmail refuse toujours le mot de passe (dernier refus le 01/10 à 0 h 38) ; la fenêtre « alerts configurer » attend depuis la veille | **Élevée** | Vous : mot de passe d'application Gmail, puis CallMeBot pour WhatsApp |
+| G3 | L'adresse de la connexion a changé deux fois en douze heures (160.120.68.43, puis 160.155.219.186) : la clé Binance sera refusée à chaque changement, et le rapport le comptera comme « à corriger » alors qu'en paper elle ne sert à rien | Faible en paper | Code : en paper, une clé refusée devient une information (toujours critique en réel) (G7) |
+| G4 | Deux propositions de la routine de nuit, n° 3 et n° 4, sont en conflit et inutiles : la n° 4 (disque mesuré pareil partout) a été faite directement à 2 h | Aucune | Vous : les fermer sur GitHub |
+| G5 | Code : les fonctions les plus chargées du bot sont maintenant la commande `rapport` (29 embranchements) et les contrôles de santé (31) ; le palier de risque et le rapport, découpés, ont quitté la liste | Faible | Code : les découper à leur tour (G8) |
+
+### Améliorations proposées (votre accord d'abord)
+
+- **G6** : alerte « PC sur batterie, branchez le chargeur » envoyée dès le
+  passage sur batterie (lecture de l'alimentation sans PowerShell, une fois par
+  minute), et « chargeur rebranché » ensuite.
+- **G7** : en paper, une clé Binance refusée reste visible mais ne compte plus
+  comme un point à corriger ; en réel, elle reste critique.
+- **G8** : commande `rapport` et contrôles de santé découpés en fonctions
+  courtes, comme le palier et le rapport.
 
 ## Suite donnée le 1er octobre, 2 h : sécurité renforcée, rapport après chaque compétence
 
@@ -622,6 +666,8 @@ Points faibles :
 | 20 | Alertes : afficher la vraie cause d'un échec (mot de passe refusé) plutôt que la dernière coupure du réseau ; renvoyer les alertes critiques perdues pendant une coupure | Code, avec votre accord | **fait** (01/10) |
 | 21 | Disque : une seule mesure et un seul seuil dans le diagnostic, le rapport et le panneau | Code, avec votre accord | **fait** (01/10) |
 | 22 | Sécurité renforcée (clé Binance au moindre privilège, historique des commandes, dossier hors du nuage, chiffrement, mises à jour de Windows), rapport après chaque compétence acquise, rapport de sécurité dans le panneau et renvoyé à la demande | Code, à votre demande | **fait** (01/10) |
+| 23 | Prévenir par e-mail et WhatsApp quand le PC passe sur batterie ; en paper, une clé refusée devient une information ; commande `rapport` et contrôles de santé découpés | Code, avec votre accord | proposé (01/10, 5 h) : G6, G7, G8 |
+| 24 | Fermer les propositions n° 3 et n° 4 sur GitHub (en conflit, déjà faites) | Vous | quand vous voulez |
 
 Fait depuis l'audit du matin : chemins de secours des ordres réels testés (et
 un défaut corrigé), blocage des mots de passe ratés, écriture sûre du choix des
