@@ -51,6 +51,11 @@ d'habitude et 10 jours ou plus une fois sur dix. Pour voir chaque achat et
 chaque vente au moment où ils se font : les alertes par e-mail (mot de passe
 d'application Gmail) ou par WhatsApp.
 
+Au passage, le contrôle des failles de GitHub a échoué comme prévu (F9) :
+ccxt 4.5.85, publiée ce matin, accepte enfin `urllib3` 2.8.0. Les
+bibliothèques du bot sont mises à jour (ccxt 4.5.85, `urllib3` 2.8.0, rien
+d'autre ne change), les tests passent, le bot est relancé avec elles.
+
 ## Clés exposées retirées (1er octobre, 7 h)
 
 Votre demande : supprimer les clés exposées signalées par le rapport. Le
@@ -720,7 +725,7 @@ Points faibles :
 | 15 | Alimentation du portable signalée (tableau de bord, centre de sécurité, rapport) ; réglage caché du capot lu | Code | fait (30/09) |
 | 16 | Libérer de la mémoire (onglets de Chrome) et de la place sur le disque | Vous | **en partie fait** (30/09, 17 h 40) : 4,1 Go de fichiers temporaires et de caches retirés, 18,7 Go libres sur 240 ; il en faut 24 pour repasser au-dessus de 10 % |
 | 17 | Six améliorations du code : superviseur allégé ; rapport qui prévient quand la mémoire ou le disque se remplissent ; `verify` qui continue sans clé ; repli si le dossier `.venv` est incomplet ; « plus haut » en direct dans le panneau ; e-mail mis en pause après trois refus du mot de passe | Code, avec votre accord | **fait** (30/09) : les six sont en service ; code restructuré (rapport en quatre fichiers, centre de sécurité du panneau à part) et harmonisé, détail dans [`DIAGNOSTIC_CODE.md`](DIAGNOSTIC_CODE.md) |
-| 18 | `urllib3` 2.8.0 (trois failles corrigées) avec la version de ccxt qui l'accepte | Code | **en attente de ccxt, suivie seule** (30/09, 17 h 40) : le contrôle signale la faille sans bloquer, et échouera le jour où la correction pourra s'installer |
+| 18 | `urllib3` 2.8.0 (trois failles corrigées) avec la version de ccxt qui l'accepte | Code | **fait** (01/10, 13 h) : ccxt 4.5.85, publiée le matin, l'accepte ; le contrôle a échoué comme prévu, les bibliothèques du bot sont à jour |
 | 19 | Palier de risque de 1 % à 2 % choisi par l'analyse du bot, arrêt d'urgence levé seul avec prudence, raisonnement qui dit pourquoi rien ne bouge | Code, à votre demande | **fait** (30/09, 21 h) : en service ; premier examen, le bot garde 1 % ([`ADAPTATION.md`](ADAPTATION.md), section 6) |
 | 20 | Alertes : afficher la vraie cause d'un échec (mot de passe refusé) plutôt que la dernière coupure du réseau ; renvoyer les alertes critiques perdues pendant une coupure | Code, avec votre accord | **fait** (01/10) |
 | 21 | Disque : une seule mesure et un seul seuil dans le diagnostic, le rapport et le panneau | Code, avec votre accord | **fait** (01/10) |

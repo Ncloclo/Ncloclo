@@ -2,7 +2,7 @@
 # contrôles GitHub et environnement propre du bot sur un PC (dossier .venv,
 # README ▸ Bibliothèques du bot). Le rapport quotidien les compare à celles
 # qui sont installées.
-ccxt==4.5.84
+ccxt==4.5.85
 numpy==2.5.3
 pandas==3.0.6
 python-dotenv==1.2.3
