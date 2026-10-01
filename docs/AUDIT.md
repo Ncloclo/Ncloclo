@@ -216,7 +216,7 @@ côté ; diagnostic de la stratégie conforme, sauf la place sur le disque.
 | --- | --- | --- | --- |
 | G1 | **Le PC s'endort sur batterie** (journal de Windows) : chargeur débranché à 22 h 19 et capot fermé, veille 5 secondes après (jusqu'à 23 h 56, bot arrêté 1 h 37) ; puis trois mises en veille pour inactivité sur batterie (0 h 16, 0 h 29, 1 h 06), au bout de 10 minutes sans toucher le PC, malgré l'anti-veille du bot ; même scénario le 30/09 à 7 h 02 | **Élevée** | Vous : laisser le chargeur branché, surtout la nuit. Code : prévenir par e-mail et WhatsApp dès que le PC passe sur batterie (G6) |
 | G2 | Aucune alerte n'est encore arrivée : Gmail refuse toujours le mot de passe (dernier refus le 01/10 à 0 h 38) ; la fenêtre « alerts configurer » attend depuis la veille | **Élevée** | Vous : mot de passe d'application Gmail, puis CallMeBot pour WhatsApp |
-| G3 | L'adresse de la connexion a changé deux fois en douze heures (160.120.68.43, puis 160.155.219.186) : la clé Binance sera refusée à chaque changement, et le rapport le comptera comme « à corriger » alors qu'en paper elle ne sert à rien | Faible en paper | Code : en paper, une clé refusée devient une information (toujours critique en réel) (G7) |
+| G3 | L'adresse de la connexion a changé deux fois en douze heures (adresse A, puis adresse B) : la clé Binance sera refusée à chaque changement, et le rapport le comptera comme « à corriger » alors qu'en paper elle ne sert à rien | Faible en paper | Code : en paper, une clé refusée devient une information (toujours critique en réel) (G7) |
 | G4 | Deux propositions de la routine de nuit, n° 3 et n° 4, sont en conflit et inutiles : la n° 4 (disque mesuré pareil partout) a été faite directement à 2 h | Aucune | Vous : les fermer sur GitHub |
 | G5 | Code : les fonctions les plus chargées du bot sont maintenant la commande `rapport` (29 embranchements) et les contrôles de santé (31) ; le palier de risque et le rapport, découpés, ont quitté la liste | Faible | Code : les découper à leur tour (G8) |
 
@@ -249,7 +249,7 @@ par e-mail et WhatsApp, les recommandations appliquées, le code harmonisé.
 **La nuit du 30 septembre.** Le PC est passé sur batterie (86 % à 00:30, 61 % à
 1 h 35) et s'est endormi de 22 h 18 à 23 h 56 : bot arrêté 1 h 37. La clé
 Binance, acceptée à 22 h, est de nouveau refusée : l'adresse de la connexion a
-changé en trois heures (160.120.68.43, puis 160.155.219.186). La décision de
+changé en trois heures (adresse A, puis adresse B). La décision de
 minuit est prise : LTC a fini au-dessus de son stop, rien n'est vendu ; le
 palier reste à 1 %.
 
@@ -519,7 +519,7 @@ réglages publics du dépôt GitHub. Heures en UTC.
 | E8 | `verify` s'arrête dès que la clé est refusée, sans répéter les ordres ; la répétition ci-dessus a dû être lancée sans clé | Faible | **Fait le 30/09** : la clé refusée est signalée, puis le marché est vérifié sans elle |
 | E9 | Le dossier `.venv` est utilisé dès qu'il existe, même incomplet (installation interrompue) : le bot ne démarrerait pas | Faible : dossier complet et contrôlé chaque nuit | **Fait le 30/09** : un dossier incomplet n'est pas utilisé, le bot garde les bibliothèques du PC |
 | E10 | Branche principale du dépôt non protégée sur GitHub. Le bot n'installe que ce que vous avez fusionné vous-même, et le refuse sinon | Information | Avant le réel : exiger les contrôles GitHub avant toute fusion |
-| E11 | Réseau : Wi-Fi partagé (signal 100 %), adresse publique changeante (160.120.68.43 à 13 h), latence de 330 à 400 ms vers Binance | Information | Confirme D4 : clé à adresse fixe impossible sur cette connexion |
+| E11 | Réseau : Wi-Fi partagé (signal 100 %), adresse publique changeante (adresse A à 13 h), latence de 330 à 400 ms vers Binance | Information | Confirme D4 : clé à adresse fixe impossible sur cette connexion |
 
 ## Diagnostic approfondi du 30 septembre, 10 h
 
@@ -556,7 +556,7 @@ marché sur la période, mais sans aucun trade vendu, cela ne prouve rien.
 | D1 | **Le portable tournait sur batterie** : de 90 % à 43 % en 1 h 45 pendant l'analyse. Batterie vide, le PC s'éteint et le bot s'arrête | **Critique** | **Chargeur rebranché pendant l'analyse** (batterie à 43 %). À garder branché : le tableau de bord, le centre de sécurité et le rapport signalent désormais un PC sur batterie |
 | D2 | **Disponibilité : 65 % sur 7 jours** (84 % sur 24 h). Causes relevées dans le journal de Windows : PC éteint la nuit du 26 au 27 (16,7 h), mises en veille par le capot ou le bouton d'alimentation (29/09 à 21 h 33, 30/09 à 07 h 02), arrêt le 29 au matin | Élevée | **Corrigé en partie le 30/09** : Windows cachait le réglage du capot, le bot ne le voyait pas ; capot fermé sur secteur = « ne rien faire ». Reste à vous : PC branché ; ne pas appuyer sur le bouton d'alimentation (il met en veille) |
 | D3 | **Aucune alerte ne vous parvient** : Gmail refuse le mot de passe (il faut un mot de passe d'application), WhatsApp et Telegram ne sont pas configurés. Deux alertes critiques sont restées dans le journal (arrêts du 29 et du 30). La fenêtre « Alertes — configurer » est ouverte depuis 01 h 45, sans saisie | Élevée | `python trendguard_bot.py alerts configurer`, puis « Tester » dans Réglages |
-| D4 | **Clé Binance refusée** (erreur −2015). L'adresse du PC sur Internet change (102.209.218.110 à la première vérification, 160.120.68.43 le 30) : une clé limitée à une adresse ne peut pas tenir sur cette connexion | Aucune en paper ; bloquante pour le réel | Pour le réel : une machine à adresse fixe (petit serveur), qui règle aussi D2 |
+| D4 | **Clé Binance refusée** (erreur −2015). L'adresse du PC sur Internet change (adresse C à la première vérification, adresse A le 30) : une clé limitée à une adresse ne peut pas tenir sur cette connexion | Aucune en paper ; bloquante pour le réel | Pour le réel : une machine à adresse fixe (petit serveur), qui règle aussi D2 |
 | D5 | **Bibliothèques Python du PC en retard** sur celles que GitHub teste : pandas 2.3.3 (testée : 3.0.6), ccxt 4.5.44 (4.5.84), numpy 2.4.3 (2.5.3). Et 15 paquets installés sur 226 ont des failles connues, dont 6 utilisés par le bot : aiohttp, cryptography, requests, urllib3, anyio, setuptools | Moyenne : le bot n'écoute que sur ce PC, mais il parle à Binance avec ces bibliothèques | **Corrigé le 30/09** : le bot a ses propres bibliothèques, aux versions testées (voir « Suite donnée ») |
 | D6 | **Angle mort du rapport quotidien** : « tests, qualité et sécurité au vert » décrit les contrôles de GitHub, faits avec des bibliothèques à jour ; celles du PC ne sont pas contrôlées | Moyenne | **Corrigé le 30/09** : deux contrôles ajoutés au rapport (voir « Suite donnée ») |
 | D7 | Apprentissage : erreur de prévision 0,002 sur 51 prévisions. Le chiffre ne dit encore rien : aucune vente ni aucun achat n'a eu lieu depuis qu'il mesure | Information | Jugé à partir de 100 prévisions, comme prévu |
@@ -839,10 +839,10 @@ Points faibles :
 | 24 | Fermer les propositions n° 3 et n° 4 sur GitHub (en conflit, déjà faites) | Vous | quand vous voulez |
 | 25 | Faire acheter plus le bot (budget libéré quand les stops montent, 8 % cumulé, 0,75 % par achat) | Étude, à votre demande | **écarté** (01/10, 13 h) : plus de trades, mais moins bon ([`ADAPTATION.md`](ADAPTATION.md), section 6) |
 | 26 | Libérer le disque (6 % libre) et la mémoire (94 %) : trier Téléchargements (25 Go, sans toucher au dossier `claude`, qui contient le bot), fermer des onglets de Chrome (7,2 Go), puis redémarrer le PC | Vous | **dès que possible** (01/10, 14 h) : H1, H2 |
-| 27 | Rapport qui dit où part la place du disque et quels programmes prennent la mémoire ; adresses publiques retirées des fichiers publiés | Code, avec votre accord | proposé (01/10, 14 h) : H7, H8 |
+| 27 | Rapport qui dit où part la place du disque et quels programmes prennent la mémoire ; adresses publiques retirées des fichiers publiés | Code, avec votre accord | **fait** (01/10, 21 h) : H7, H8 ; un test refuse désormais toute adresse réelle dans les fichiers publiés |
 | 28 | Panneau ▸ Cryptos : une case cochée ne doit jamais être effacée par une actualisation | Code | **fait** (01/10, 15 h) : H9 |
 | 29 | Au bureau, rester sur le réseau Wi-Fi stable (B) et décocher « Se connecter automatiquement » pour l'autre ; oublier les réseaux Wi-Fi qui ne servent plus | Vous | dès que possible (01/10, 16 h) : I1, I3 |
-| 30 | Rapport qui lit le journal du Wi-Fi (coupures par réseau, réseau à préférer, partage de connexion d'un téléphone) | Code, avec votre accord | proposé (01/10, 16 h) : I6 |
+| 30 | Rapport qui lit le journal du Wi-Fi (coupures par réseau, réseau à préférer, partage de connexion d'un téléphone) | Code, avec votre accord | **fait** (01/10, 21 h) : I6 |
 | 31 | Noyau de savoir : presse, moteurs de recherche, forums, réseau social, tendances et avis des IA lus toutes les heures, chaque source jugée sur les cours réels ; l'avis des sources prouvées peut seulement reporter un achat | Code, à votre demande | **fait** (01/10, 20 h) : [`SAVOIR.md`](SAVOIR.md) |
 
 Fait depuis l'audit du matin : chemins de secours des ordres réels testés (et

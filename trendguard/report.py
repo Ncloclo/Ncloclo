@@ -45,6 +45,7 @@ from .report_health import (
     resource_checks,
     skills_checks,
     strategy_checks,
+    wifi_check,
 )
 from .report_render import render_html, render_short, render_text
 from .report_security import (
@@ -60,7 +61,7 @@ from .report_security import (
     check_windows,
     library_checks,
 )
-from .systeme import Check, Deps, chk, github_json, read_state
+from .systeme import Check, Deps, chk, github_json, pc_resources, read_state
 
 REPORT_MINUTE = 30              # 00:30 UTC
 KEEP_REPORTS = 30
@@ -167,7 +168,10 @@ def build(gcfg: Any, env: Dict[str, str], deps: Optional[Deps] = None,
                      f"{c['label']} : {c['detail']}" if c.get("ok") is False else "")
                  for c in (security or {}).get("checks", [])
                  if c.get("label") not in PANEL_DUPLICATES]
-    health = bot_checks(gcfg, st, status, now) + resource_checks(deps, root)
+    prev = load_latest(gcfg) or {}
+    res = pc_resources(deps, root)
+    health = bot_checks(gcfg, st, status, now) + resource_checks(
+        deps, root, detail=True, prev_free=(prev.get("resources") or {}).get("disk_free"), r=res) + wifi_check(deps, now)
     health.insert(0, chk("Panneau de contrôle", "ms" in pnl,
                          f"en marche, répond en {pnl['ms']} ms" if "ms" in pnl else "injoignable",
                          "" if "ms" in pnl else "Relancez le panneau (il démarre avec l'ordinateur)."))
@@ -197,7 +201,8 @@ def build(gcfg: Any, env: Dict[str, str], deps: Optional[Deps] = None,
               "motif": motif or "rapport de la nuit (00:30 UTC)",
               "security": score_of([c for s in sections if s["title"] in SECURITY_TITLES
                                     for c in s["checks"]]),
-              "changes": changes_since(load_latest(gcfg), sections),
+              "changes": changes_since(prev or None, sections),
+              "resources": {"disk_free": round(res["disk_free"], 2)} if res else {},
               "actions": [c["action"] for c in allc if c.get("action")],
               "recommendations": recos, "proposals": proposals, "sections": sections,
               "delivery": {}}

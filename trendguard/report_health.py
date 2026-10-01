@@ -1,6 +1,7 @@
 """Rapport quotidien, santé du fond et de la forme (docs/RAPPORT.md) :
-panneau, bot, disque et mémoire du PC, journal des 24 dernières heures,
-stratégie, compétences acquises, code et contrôles GitHub. Lecture seule.
+panneau, bot, disque et mémoire du PC, Wi-Fi, journal des 24 dernières
+heures, stratégie, compétences acquises, code et contrôles GitHub. Lecture
+seule.
 """
 
 from __future__ import annotations
@@ -17,7 +18,16 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from . import evolution, learning, savoir
-from .systeme import Check, Deps, chk, ci_status, pc_resources, repo_slug
+from .systeme import (
+    Check,
+    Deps,
+    chk,
+    ci_status,
+    disk_breakdown,
+    pc_resources,
+    repo_slug,
+    top_programs,
+)
 from .systeme import git as _git
 from .texte import fr
 
@@ -205,24 +215,141 @@ def disk_state(free_gb: float, total_gb: float) -> Tuple[bool, str]:
             f"{fr(free_gb, '.1f')} Go libres sur {fr(total_gb, '.0f')} ({fr(pct, '.0f')} %)")
 
 
-def resource_checks(deps: Optional[Deps] = None, root: str = "") -> List[Check]:
+def _disk_detail(deps: Optional[Deps], root: str, free: float,
+                 prev_free: Optional[float]) -> Tuple[str, str]:
+    """Disque presque plein, dans le rapport : où part la place (tailles,
+    jamais de noms de fichiers), ce qui a été perdu depuis le rapport
+    précédent, et le conseil qui va avec."""
+    parts = disk_breakdown(deps, root) or {}
+    big = sorted(((k, v) for k, v in parts.items() if v >= 0.1), key=lambda kv: -kv[1])
+    text = ""
+    if prev_free is not None and prev_free - free >= 0.5:
+        text += f" ; {fr(prev_free - free, '.1f')} Go de moins qu'au rapport précédent"
+    if big:
+        text += " ; où part la place : " + ", ".join(f"{k} {fr(v, '.1f')} Go" for k, v in big)
+    advice = []
+    if parts.get("Téléchargements", 0) >= 2:
+        advice.append(f"triez le dossier Téléchargements ({fr(parts['Téléchargements'], '.0f')} Go, "
+                      "sans toucher au dossier du bot)")
+    if parts.get("Fichiers temporaires", 0) >= 1 or parts.get("Corbeille", 0) >= 1:
+        advice.append("videz la corbeille et les fichiers temporaires (Paramètres ▸ Système ▸ Stockage)")
+    if parts.get("Fichier d'échange de Windows", 0) >= 6:
+        advice.append("fermez des programmes puis redémarrez le PC : le fichier d'échange rétrécit au "
+                      "redémarrage")
+    return text, (DISK_RECO + " Ici : " + " ; ".join(advice) + ".") if advice else DISK_RECO
+
+
+# Wi-Fi des 26 dernières heures (journal de Windows) : heure UTC, connexion
+# (8001) ou déconnexion (8003), réseau, raison (2 et 3 : demandées par
+# l'utilisateur ; les autres sont des coupures).
+WIFI_SCRIPT = (
+    "Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-WLAN-AutoConfig/Operational';"
+    "Id=8001,8003; StartTime=(Get-Date).AddHours(-26)} -ErrorAction SilentlyContinue | "
+    "ForEach-Object { $d = ([xml]$_.ToXml()).Event.EventData.Data; '{0}|{1}|{2}|{3}' -f "
+    "$_.TimeCreated.ToUniversalTime().ToString('o'), $_.Id, ($d | Where-Object Name -eq 'SSID').'#text', "
+    "($d | Where-Object Name -eq 'ReasonCode').'#text' }")
+WIFI_USER_REASONS = ("2", "3")
+WIFI_DROPS_MAX = 3              # coupures en 24 h au-delà desquelles un réseau est à éviter
+# Marques de téléphones : un réseau à leur nom est sans doute un partage de connexion.
+PHONE_HINTS = re.compile(r"\b(oppo|redmi|xiaomi|poco|tecno|infinix|itel|galaxy|samsung|iphone|honor|"
+                         r"huawei|pixel|nokia|vivo|realme|oneplus|moto|androidap)\b", re.I)
+
+
+def wifi_events(deps: Deps) -> List[Tuple[datetime, str, str, str]]:
+    """(heure UTC, 8001 ou 8003, réseau, raison) du journal Wi-Fi de Windows,
+    dans l'ordre ; vide ailleurs ou s'il est illisible."""
+    if not deps.platform.startswith("win"):
+        return []
+    try:
+        r = deps.run(["powershell", "-NoProfile", "-Command", WIFI_SCRIPT], timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    out = []
+    for line in (r.stdout or "").splitlines() if r.returncode == 0 else []:
+        parts = line.strip().split("|")
+        if len(parts) != 4 or parts[1] not in ("8001", "8003") or not parts[2]:
+            continue
+        try:
+            t = datetime.fromisoformat(parts[0].replace("Z", "+00:00")).astimezone(timezone.utc)
+        except ValueError:
+            continue
+        out.append((t, parts[1], parts[2], parts[3]))
+    return sorted(out)
+
+
+def wifi_check(deps: Deps, now: datetime) -> List[Check]:
+    """Wi-Fi des dernières 24 heures : coupures par réseau, réseau à
+    préférer, et réseau en service à la décision de 00:02 (partage de
+    connexion d'un téléphone ?). Les noms des réseaux restent dans le
+    rapport (ce PC, l'e-mail du propriétaire), jamais dans les fichiers
+    publiés."""
+    events = wifi_events(deps)
+    if not events:
+        return []
+    since = now - timedelta(hours=24)
+    decision = now.replace(hour=0, minute=2, second=0, microsecond=0)
+    drops: Dict[str, int] = {}
+    current = at_decision = None
+    for t, kind, ssid, reason in events:
+        if t <= decision:
+            at_decision = ssid if kind == "8001" else (None if at_decision == ssid else at_decision)
+        if kind == "8001":
+            current = ssid
+            drops.setdefault(ssid, 0)
+            continue
+        if t >= since and reason not in WIFI_USER_REASONS:
+            drops[ssid] = drops.get(ssid, 0) + 1
+        if current == ssid:
+            current = None
+    worst = max(drops, key=lambda k: drops[k])
+    # Réseau à préférer : le plus stable, hors partage de connexion d'un
+    # téléphone quand il y a mieux ; nettement plus stable (4 fois moins de
+    # coupures) pour valoir un conseil.
+    fixed = [k for k in drops if not PHONE_HINTS.search(k)] or list(drops)
+    best = min(fixed, key=lambda k: drops[k])
+    bad = drops[worst] >= WIFI_DROPS_MAX and worst != best and drops[best] * 4 <= drops[worst]
+    parts = [f"réseau actuel : {current}" if current else "aucun réseau Wi-Fi en ce moment",
+             "coupures en 24 h : " + ", ".join(f"{k} {n}" for k, n in sorted(drops.items(), key=lambda kv: -kv[1]))]
+    if at_decision:
+        phone = " (sans doute le partage de connexion d'un téléphone)" if PHONE_HINTS.search(at_decision) else ""
+        parts.append(f"à la décision de 00:02 : {at_decision}{phone}")
+    reco = (f"Préférez le réseau « {best} » : dans Paramètres ▸ Réseau et Internet ▸ Wi-Fi, décochez "
+            f"« Se connecter automatiquement » pour « {worst} » ({drops[worst]} coupures en 24 h)."
+            if bad else "")
+    return [chk("Wi-Fi (24 h)", False if bad else None, " ; ".join(parts), reco)]
+
+
+def resource_checks(deps: Optional[Deps] = None, root: str = "", detail: bool = False,
+                    prev_free: Optional[float] = None,
+                    r: Optional[Dict[str, Any]] = None) -> List[Check]:
     """Place sur le disque et mémoire du PC, pour le rapport et le centre de
-    sécurité du panneau : à corriger avant que Windows n'en manque."""
-    r = pc_resources(deps, root)
+    sécurité du panneau : à corriger avant que Windows n'en manque. Avec
+    `detail` (rapport quotidien) : où part la place, ce qui a été perdu
+    depuis le rapport précédent (`prev_free`, en Go), et les programmes qui
+    prennent le plus de mémoire."""
+    r = r if r is not None else pc_resources(deps, root)
     if not r:
         return []
     low, text = disk_state(r["disk_free"], r["disk_total"])
-    out = [chk("Espace disque", not low, text, DISK_RECO if low else "")]
+    reco = DISK_RECO if low else ""
+    if low and detail:
+        more, reco = _disk_detail(deps, root, r["disk_free"], prev_free)
+        text += more
+    out = [chk("Espace disque", not low, text, reco)]
     used, limit = r.get("memory_used"), r.get("memory_limit")
     if used is not None and limit:
         share = used / limit * 100
         full = share >= MEMORY_MAX_PCT
-        out.append(chk("Mémoire du PC", not full,
-                       f"{fr(share, '.0f')} % réservés aux programmes ({fr(used, '.1f')} Go sur "
-                       f"{fr(limit, '.1f')} possibles)",
-                       "" if not full else "Fermez des programmes ou des onglets du navigateur : "
-                                           "quand la mémoire du PC est pleine, Windows peut "
-                                           "arrêter le bot."))
+        text = (f"{fr(share, '.0f')} % réservés aux programmes ({fr(used, '.1f')} Go sur "
+                f"{fr(limit, '.1f')} possibles)")
+        reco = "" if not full else ("Fermez des programmes ou des onglets du navigateur : quand la "
+                                    "mémoire du PC est pleine, Windows peut arrêter le bot.")
+        progs = top_programs(deps) if full and detail else None
+        if progs:
+            text += " ; plus gros programmes : " + ", ".join(
+                f"{name} {fr(gb, '.1f')} Go ({n} processus)" for name, n, gb in progs)
+            reco += f" Le plus gourmand : {progs[0][0]} ({fr(progs[0][2], '.1f')} Go)."
+        out.append(chk("Mémoire du PC", not full, text, reco))
     return out
 
 

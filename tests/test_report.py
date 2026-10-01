@@ -468,6 +468,64 @@ def test_disk_and_memory_are_part_of_the_bot_s_health(root):
     assert any("Fermez des programmes" in x for x in r["recommendations"])
 
 
+def test_report_says_where_the_disk_space_and_the_memory_go(root):
+    """Dans le rapport : où part la place (tailles, jamais de noms de
+    fichiers), la place perdue depuis le rapport précédent, le conseil qui va
+    avec, et les programmes qui prennent le plus de mémoire."""
+    full = {"disk_free": 14.6, "disk_total": 240.3, "memory_used": 23.3, "memory_limit": 24.5}
+    parts = {"Téléchargements": 24.5, "Fichiers temporaires": 2.1, "Corbeille": 0.02,
+             "Fichier d'échange de Windows": 8.2, "Hibernation de Windows": 6.4}
+    progs = [("Chrome", 47, 6.2), ("VS Code", 19, 2.6), ("fenêtres intégrées d'Edge (WebView2)", 32, 1.2)]
+    deps = rp.Deps(run=FakeRun(), extra={"resources": full, "breakdown": parts, "programs": progs})
+    c = {x["label"]: x for x in rph.resource_checks(deps, detail=True, prev_free=20.9)}
+    disk, mem = c["Espace disque"], c["Mémoire du PC"]
+    assert "6,3 Go de moins qu'au rapport précédent" in disk["detail"]
+    assert "où part la place : Téléchargements 24,5 Go, Fichier d'échange de Windows 8,2 Go" in disk["detail"]
+    assert "Corbeille" not in disk["detail"]                         # moins de 0,1 Go : rien à dire
+    assert "triez le dossier Téléchargements (24 Go, sans toucher au dossier du bot)" in disk["reco"]
+    assert "redémarrez le PC" in disk["reco"] and disk["reco"].startswith("Libérez de la place")
+    assert "plus gros programmes : Chrome 6,2 Go (47 processus)" in mem["detail"]
+    assert "Le plus gourmand : Chrome (6,2 Go)" in mem["reco"]
+    # Le centre de sécurité du panneau (sans détail) reste rapide : ni dossiers parcourus, ni programmes listés.
+    quick = {x["label"]: x for x in rph.resource_checks(deps)}
+    assert "où part la place" not in quick["Espace disque"]["detail"] and "programmes :" not in quick["Mémoire du PC"]["detail"]
+    # Le rapport garde la place libre mesurée, pour la comparer au suivant.
+    g = tg.GuardConfig(db_file=":memory:", log_file=os.devnull, lock_file=str(root / "tg.lock"))
+    r = rp.build(g, {}, _deps(root, extra={"root": str(root), "resources": full}), backups=False)
+    assert r["resources"] == {"disk_free": 14.6}
+
+
+def test_report_reads_the_wifi_log():
+    """Journal Wi-Fi de Windows : coupures par réseau sur 24 h, réseau à
+    préférer, réseau en service à la décision de 00:02 (partage de connexion
+    d'un téléphone ?)."""
+    lines = ["2026-09-30T23:56:21.0000000Z|8001|OPPO A2 Pro 5G|",
+             "2026-10-01T08:17:26.0000000Z|8003|OPPO A2 Pro 5G|0",
+             "2026-10-01T08:17:31.0000000Z|8001|Bureau-A|",
+             "2026-10-01T12:21:23.0000000Z|8003|Bureau-A|0",
+             "2026-10-01T12:21:53.0000000Z|8001|Bureau-A|",
+             "2026-10-01T13:48:06.0000000Z|8003|Bureau-A|0",
+             "2026-10-01T13:48:26.0000000Z|8001|Bureau-A|",
+             "2026-10-01T14:03:41.0000000Z|8003|Bureau-A|13",
+             "2026-10-01T14:03:45.0000000Z|8001|Bureau-A|",
+             "2026-10-01T15:32:51.0000000Z|8003|Bureau-A|3",
+             "2026-10-01T15:32:52.0000000Z|8001|Bureau-B|"]
+
+    def run(cmd, **kw):
+        assert cmd[0] == "powershell" and "WLAN-AutoConfig" in cmd[-1]
+        return proc("\n".join(lines))
+    now = datetime(2026, 10, 1, 16, 0, tzinfo=timezone.utc)
+    c = rph.wifi_check(rp.Deps(run=run, platform="win32"), now)[0]
+    assert c["label"] == "Wi-Fi (24 h)" and c["ok"] is False
+    assert "réseau actuel : Bureau-B" in c["detail"] and "Bureau-A 3" in c["detail"]   # le changement voulu ne compte pas
+    assert "à la décision de 00:02 : OPPO A2 Pro 5G (sans doute le partage de connexion d'un téléphone)" in c["detail"]
+    assert "Préférez le réseau « Bureau-B »" in c["reco"] and "« Bureau-A » (3 coupures en 24 h)" in c["reco"]
+    calm = rph.wifi_check(rp.Deps(run=lambda cmd, **kw: proc("\n".join(lines[:3])), platform="win32"), now)[0]
+    assert calm["ok"] is None and calm["reco"] == ""                 # une seule coupure : information
+    assert rph.wifi_check(rp.Deps(run=run, platform="linux"), now) == []
+    assert rph.wifi_check(rp.Deps(run=lambda cmd, **kw: proc("", 1), platform="win32"), now) == []
+
+
 class WindowsRun(FakeRun):
     """Commandes de Windows en plus : chiffrement du disque, mises à jour."""
 
@@ -538,10 +596,10 @@ def test_binance_key_rights_least_privilege_age_and_current_address(monkeypatch)
     monkeypatch.setattr(rps.v29, "make_binance", lambda *a: FakeBinance(old))
     assert "Renouvelez la clé Binance" in rps.binance_key_check(env)["reco"]
     monkeypatch.setattr(rps.v29, "make_binance", lambda *a: FakeBinance(refuse=True))
-    c = rps.binance_key_check(env, ip_lookup=lambda: "160.155.219.186")
-    assert c["ok"] is False and "160.155.219.186" in c["detail"] and "160.155.219.186" in c["reco"]
+    c = rps.binance_key_check(env, ip_lookup=lambda: "203.0.113.7")
+    assert c["ok"] is False and "203.0.113.7" in c["detail"] and "203.0.113.7" in c["reco"]
     assert "connexion à la maison" in c["reco"]
-    paper = rps.binance_key_check(env, ip_lookup=lambda: "160.155.219.186", live=False)
+    paper = rps.binance_key_check(env, ip_lookup=lambda: "203.0.113.7", live=False)
     assert paper["ok"] is None and paper["reco"] == c["reco"]        # en paper : une information
     assert rps.binance_key_check({})["detail"] == "absente (normal en paper)"
 

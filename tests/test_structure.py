@@ -138,3 +138,31 @@ def test_code_diagnostic_of_this_repository():
     assert ("trendguard", "research") not in m["dependencies"]
     unused = [f"{name} ({rel})" for name, rel in m["unused"] if not rel.startswith("v29/")]
     assert not unused, f"jamais utilisés (à retirer, ou à ajouter à HOOKS) : {unused}"
+
+
+def test_no_real_internet_address_is_published():
+    """Le dépôt est public : aucune adresse Internet réelle (celle du PC du
+    propriétaire, par exemple) dans les fichiers publiés. Seules les adresses
+    privées, locales et d'exemple (192.0.2.x, 198.51.100.x, 203.0.113.x)
+    sont permises."""
+    import ipaddress
+    import re
+    import shutil
+    import subprocess
+    if not shutil.which("git") or not (ROOT / ".git").exists():
+        return
+    files = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True).stdout.split()
+    found = []
+    for name in files:
+        path = ROOT / name
+        if path.suffix.lower() in {".png", ".ico", ".db", ".pdf", ".woff2"} or not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        for m in re.finditer(r"(?<![\d.])(\d{1,3}(?:\.\d{1,3}){3})(?![\d.])", text):
+            try:
+                ip = ipaddress.ip_address(m.group(1))
+            except ValueError:
+                continue
+            if ip.is_global:
+                found.append(f"{name} : {m.group(1)}")
+    assert not found, "adresses réelles publiées : " + ", ".join(found)

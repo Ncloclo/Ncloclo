@@ -159,6 +159,89 @@ def pc_resources(deps: Optional[Deps] = None, root: str = "") -> Optional[Dict[s
     return out
 
 
+def folder_size(path: str) -> int:
+    """Taille d'un dossier en octets (sous-dossiers compris, sans suivre les
+    raccourcis) ; 0 s'il manque ou se lit mal."""
+    total, todo = 0, [path]
+    while todo:
+        try:
+            with os.scandir(todo.pop()) as it:
+                for e in it:
+                    try:
+                        if e.is_dir(follow_symlinks=False):
+                            todo.append(e.path)
+                        elif e.is_file(follow_symlinks=False):
+                            total += e.stat(follow_symlinks=False).st_size
+                    except OSError:
+                        continue
+        except OSError:
+            continue
+    return total
+
+
+def disk_breakdown(deps: Optional[Deps] = None, root: str = "") -> Optional[Dict[str, float]]:
+    """Où part la place du disque, en Go : dossier Téléchargements (hors
+    dossier du bot), fichier d'échange et hibernation de Windows, fichiers
+    temporaires, corbeille. Des tailles, jamais des noms de fichiers. None
+    ailleurs que sous Windows ou avec des commandes simulées (tests)."""
+    if deps is not None:
+        if "breakdown" in deps.extra:
+            return deps.extra["breakdown"]
+        if deps.run is not run:
+            return None
+    if not sys.platform.startswith("win"):
+        return None
+    root = os.path.abspath(root or autonomy.ROOT)
+    downloads = os.path.join(os.path.expanduser("~"), "Downloads")
+    bot = folder_size(root) if root.lower().startswith(downloads.lower() + os.sep) else 0
+    out = {"Téléchargements": max(0, folder_size(downloads) - bot) / GB,
+           "Fichiers temporaires": folder_size(os.environ.get("TEMP", "")) / GB if os.environ.get("TEMP") else 0.0,
+           "Corbeille": folder_size(os.path.join(os.environ.get("SystemDrive", "C:") + os.sep, "$Recycle.Bin")) / GB}
+    for label, name in (("Fichier d'échange de Windows", "pagefile.sys"), ("Hibernation de Windows", "hiberfil.sys")):
+        try:
+            out[label] = os.stat(os.path.join(os.environ.get("SystemDrive", "C:") + os.sep, name)).st_size / GB
+        except OSError:
+            continue
+    return out
+
+
+# Noms lisibles des programmes les plus gourmands.
+PROGRAM_NAMES = {"chrome": "Chrome", "msedge": "Edge", "msedgewebview2": "fenêtres intégrées d'Edge (WebView2)",
+                 "code": "VS Code", "firefox": "Firefox", "python": "Python", "pythonw": "Python (dont le bot)",
+                 "msmpeng": "antivirus de Windows", "explorer": "Explorateur Windows", "teams": "Teams",
+                 "ms-teams": "Teams", "outlook": "Outlook", "excel": "Excel", "winword": "Word"}
+
+
+def top_programs(deps: Optional[Deps] = None, n: int = 3) -> Optional[List[Tuple[str, int, float]]]:
+    """Les `n` programmes qui occupent le plus de mémoire : (nom, nombre de
+    processus, Go), d'après la liste des tâches de Windows. None ailleurs que
+    sous Windows ou avec des commandes simulées (tests)."""
+    if deps is not None:
+        if "programs" in deps.extra:
+            return deps.extra["programs"]
+        if deps.run is not run:
+            return None
+    if not sys.platform.startswith("win"):
+        return None
+    try:
+        out = subprocess.run(["tasklist", "/FO", "CSV", "/NH"], capture_output=True, encoding="oem",
+                             errors="replace", timeout=30,
+                             creationflags=getattr(autonomy, "CREATE_NO_WINDOW", 0)).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    acc: Dict[str, List[float]] = {}
+    for line in out.splitlines():
+        cols = [c.strip('"') for c in line.split('","')]
+        if len(cols) < 5:
+            continue
+        name = re.sub(r"\.exe$", "", cols[0].strip('"'), flags=re.I)
+        kb = re.sub(r"\D", "", cols[-1])
+        if kb:
+            acc.setdefault(name, []).append(int(kb) / 2 ** 20)
+    ranked = sorted(acc.items(), key=lambda kv: -sum(kv[1]))[:n]
+    return [(PROGRAM_NAMES.get(k.lower(), k), len(v), sum(v)) for k, v in ranked]
+
+
 def installed_versions(deps: Deps, names: List[str]) -> Optional[Dict[str, Optional[str]]]:
     """Version installée de chaque bibliothèque (None : absente) dans le
     Python qui fait tourner le bot. None avec des commandes simulées (tests) :

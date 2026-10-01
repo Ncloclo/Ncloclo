@@ -483,7 +483,7 @@ class _Account:
             return {"total": {}}
         raise ccxt.AuthenticationError(
             'binance {"code":-2015,"msg":"Invalid API-key, IP, or permissions for '
-            'action, request ip: 41.202.1.2"}')
+            'action, request ip: 198.51.100.23"}')
 
 
 def _set_keys(tmp_path, answers, env="testnet", down=False):
@@ -515,7 +515,7 @@ def test_set_keys_fixes_swapped_keys_and_wrong_account(tmp_path):
 def test_set_keys_refused_writes_nothing_and_shows_ip(tmp_path):
     rc, env, text = _set_keys(tmp_path, ["2", "A" * 64, "B" * 64])
     assert rc == 1 and env == "RUN_MODE=paper\n"
-    assert "41.202.1.2" in text and "Rien n'a été modifié" in text
+    assert "198.51.100.23" in text and "Rien n'a été modifié" in text
     assert "l'adresse IP ci-dessus" in text
     rc, env, text = _set_keys(tmp_path, ["1", KEY, "C" * 64])
     assert rc == 1 and "Secret Key incorrecte" in text
