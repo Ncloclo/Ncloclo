@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 
 import v29
 from trendguard import evolution, report, report_health, report_security, uptime
+from trendguard.config import exposed_fingerprints, is_exposed
 from trendguard.texte import fr
 
 
@@ -74,10 +75,24 @@ class SecurityCenter:
             self._check("Clés API Binance", has_keys or not live, keys),
             self._check("Droit de retrait de la clé", None,
                         "doit rester désactivé : python trendguard_bot.py verify le contrôle auprès de Binance"),
-            self._check("Clé partagée par erreur", None,
-                        "une clé montrée dans une conversation ou une capture doit être supprimée sur Binance"),
+            self._exposed_check(),
             self._check("Fichier des secrets (.env)", True if env_ok else None, "privé, exclu de GitHub"),
         ]
+
+    def _exposed_check(self) -> Dict[str, Any]:
+        """Clé partagée par erreur : la clé en service est-elle l'une des clés
+        exposées connues (empreintes, jamais les clés) ?"""
+        label = "Clé partagée par erreur"
+        if not exposed_fingerprints():
+            return self._check(label, None, "une clé montrée dans une conversation ou une capture doit "
+                                            "être supprimée sur Binance")
+        if any(is_exposed(os.environ.get(n, "")) for n in ("BINANCE_API_KEY", "BINANCE_API_SECRET")):
+            return self._check(label, False, "LA CLÉ EN SERVICE A ÉTÉ MONTRÉE dans une conversation : créez-"
+                                             "en une neuve sur Binance, enregistrez-la avec set-keys, puis "
+                                             "supprimez celle-ci")
+        return self._check(label, True, "la clé en service n'a jamais été montrée ; les clés exposées sont "
+                                        "retirées de ce PC (à supprimer aussi sur Binance si ce n'est pas "
+                                        "fait) et refusées par set-keys")
 
     @staticmethod
     def _when(ts: Any) -> str:

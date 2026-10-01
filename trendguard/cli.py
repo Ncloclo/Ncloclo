@@ -30,6 +30,7 @@ from .config import (
     TG_ENV_DOC,
     GuardConfig,
     build_guard_logger,
+    is_exposed,
     load_guard_config_from_env,
     set_env_var,
 )
@@ -79,6 +80,10 @@ def cmd_set_secret(env_path: str = ENV_FILE) -> int:
         return 1
     except (EOFError, KeyboardInterrupt):
         print("\nAnnulé. Rien n'a été modifié.")
+        return 1
+    if is_exposed(secret):
+        print("❌ Ce secret a été montré dans une conversation : il n'est plus sûr. Créez une clé "
+              "neuve sur Binance, puis python trendguard_bot.py set-keys. Rien n'a été modifié.")
         return 1
     set_env_var(env_path, "BINANCE_API_SECRET", secret)
     print(f"✅ Secret enregistré dans {env_path} (fichier privé, jamais commité).")
@@ -211,6 +216,11 @@ def cmd_set_keys(env_path: str = ENV_FILE, ask: Optional[Callable[[str], str]] =
     if key == secret:
         say("❌ API Key et Secret Key identiques : ce sont deux valeurs "
             "différentes sur Binance. Rien n'a été modifié.")
+        return 1
+    if is_exposed(key) or is_exposed(secret):
+        say("❌ Cette clé a été montrée dans une conversation : elle n'est plus sûre. Créez-en "
+            "une neuve sur Binance (Gestion des API), supprimez celle-ci, puis recommencez. "
+            "Rien n'a été modifié.")
         return 1
     where = lambda t: "testnet" if t else "compte réel"   # noqa: E731
     say(f"Vérification auprès de Binance ({where(testnet)}), sans aucun ordre…")

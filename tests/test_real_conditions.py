@@ -621,3 +621,22 @@ def test_paper_mode_ignores_testnet_flag(monkeypatch, tmp_path):
             for h in list(bot.logger.handlers):
                 h.close()
                 bot.logger.removeHandler(h)
+
+
+def test_set_keys_refuses_an_exposed_key(tmp_path, monkeypatch):
+    """Une clé montrée dans une conversation (empreinte connue) n'est jamais
+    enregistrée ; la comparaison se fait par empreinte, jamais en clair."""
+    import hashlib
+    import json
+
+    from trendguard import config as tgc
+    exposed = tmp_path / "exposees.json"
+    exposed.write_text(json.dumps({"sha256": [hashlib.sha256(KEY.encode()).hexdigest()]}),
+                       encoding="utf-8")
+    monkeypatch.setattr(tgc, "EXPOSED_FILE", str(exposed))
+    rc, env, text = _set_keys(tmp_path, ["1", KEY, SECRET])
+    assert rc == 1 and "montrée dans une conversation" in text and env == "RUN_MODE=paper\n"
+    assert KEY not in text and KEY not in exposed.read_text(encoding="utf-8")
+    assert tgc.is_exposed(f"'{KEY}'") and not tgc.is_exposed(SECRET) and not tgc.is_exposed("")
+    monkeypatch.setattr(tgc, "EXPOSED_FILE", str(tmp_path / "absent.json"))
+    assert tgc.exposed_fingerprints() == set() and not tgc.is_exposed(KEY)

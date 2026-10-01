@@ -514,6 +514,8 @@ Compte réel :
    (lecture du compte, aucun ordre) : des clés inversées ou appartenant au
    testnet sont corrigées automatiquement, et rien n'est écrit si Binance les
    refuse. Les clés ne passent ni par l'écran ni par l'historique du terminal.
+   Une clé déjà montrée dans une conversation ou une capture est refusée (le bot
+   en garde l'empreinte, jamais la clé) : créez-en une neuve.
    `BINANCE_TESTNET` ne concerne que le mode réel : le paper suit toujours le
    vrai marché.
 3. Lancez `python trendguard_bot.py verify` : droits de la clé (retrait

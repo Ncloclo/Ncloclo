@@ -650,3 +650,24 @@ def test_security_report_send_and_alert_cause(tmp_path):
     row = app._alerts_check(st)
     assert row["ok"] is False and "introuvable" in row["detail"]
     assert "cause à corriger, constatée le" in row["detail"] and "mot de passe refusés" in row["detail"]
+
+
+def test_security_center_flags_an_exposed_key_in_service(tmp_path, monkeypatch):
+    """Clé partagée par erreur : un rappel tant qu'aucune empreinte n'est
+    connue ; ✗ si la clé en service est une clé exposée ; ✓ sinon."""
+    import hashlib
+
+    from trendguard import config as tgc
+    exposed = tmp_path / "e.json"
+    monkeypatch.setattr(tgc, "EXPOSED_FILE", str(exposed))
+    app = ps.build_app(_cfg(tmp_path))
+
+    def row():
+        return next(c for c in app._key_checks() if c["label"] == "Clé partagée par erreur")
+    assert row()["ok"] is None
+    exposed.write_text(json.dumps({"sha256": [hashlib.sha256(b"K" * 64).hexdigest()]}), encoding="utf-8")
+    monkeypatch.setenv("BINANCE_API_KEY", "K" * 64)
+    monkeypatch.setenv("BINANCE_API_SECRET", "S" * 64)
+    assert row()["ok"] is False and "LA CLÉ EN SERVICE A ÉTÉ MONTRÉE" in row()["detail"]
+    monkeypatch.setenv("BINANCE_API_KEY", "N" * 64)
+    assert row()["ok"] is True and "jamais été montrée" in row()["detail"]

@@ -27,6 +27,32 @@ n'est pas prêt pour de l'argent réel : il lui faut des alertes
 qui arrivent, une machine allumée en permanence avec une adresse fixe, et
 plusieurs semaines de paper avec des trades vendus.
 
+## Clés exposées retirées (1er octobre, 7 h)
+
+Votre demande : supprimer les clés exposées signalées par le rapport. Le
+rapport n'a jamais contenu de clé : la ligne « Clé partagée par erreur » était
+un rappel. Recherche sur tout le PC, sans jamais afficher une clé (empreintes et
+comptes seulement) :
+
+- **la clé que le bot utilise n'est pas une clé exposée** (ni la clé API, ni
+  son secret) ; aucune clé exposée dans le dépôt ni dans son historique sur
+  GitHub, ni dans les journaux, les rapports, les sauvegardes ou l'historique
+  des commandes ;
+- trois clés exposées restaient en clair sur le PC : dans trois conversations
+  de Claude Code (49 fois) et dans le fichier `key.txt` du Bureau (une clé et
+  son secret). Elles y sont remplacées par des étoiles, sans rien changer
+  d'autre (le reste de `key.txt` est intact, les conversations restent
+  lisibles) ;
+- le bot garde seulement leurs empreintes (irréversibles), dans un fichier
+  privé exclu de GitHub : `set-keys` refuse désormais une clé exposée, et le
+  centre de sécurité dit « la clé en service n'a jamais été montrée » (ou le
+  contraire, en rouge).
+
+**Ce que seul vous pouvez faire** : supprimer ces trois clés sur Binance
+(Gestion des API ▸ Supprimer), si ce n'est pas déjà fait. Tant qu'elles
+existent sur Binance, quelqu'un qui les a lues pourrait s'en servir (sans
+pouvoir retirer d'argent : le retrait était interdit).
+
 ## Diagnostic approfondi du 1er octobre, 5 h
 
 **Verdict : le bot et sa stratégie vont bien, la sécurité est au vert ; ce qui
@@ -577,7 +603,7 @@ conforme**.
 
 | N° | Constat | Gravité | Recommandation |
 | --- | --- | --- | --- |
-| S1 | Clés montrées dans une conversation : l'ancienne clé, puis la nouvelle clé API (collée plusieurs fois ; son secret, lui, n'a pas été montré) | **Élevée avant le réel** | Supprimer ces clés sur Binance et en créer une neuve, saisie avec `set-keys` |
+| S1 | Clés montrées dans une conversation : l'ancienne clé, puis la nouvelle clé API (collée plusieurs fois ; son secret, lui, n'a pas été montré) | **Élevée avant le réel** | **Fait de notre côté le 01/10** : les trois clés exposées sont retirées de ce PC (conversations de Claude Code, fichier `key.txt` du Bureau), la clé en service n'en fait pas partie, `set-keys` les refuse et le centre de sécurité le vérifie. Reste à vous : les supprimer sur Binance |
 | S2 | La clé enregistrée n'a pas le droit « Trading Spot » | Aucune en paper | **Changé le 30/09** : droit coché par vous, avec la restriction IP ; retrait toujours interdit |
 | S3 | Pas de restriction d'adresse IP sur la clé | Moyenne | **Fait le 30/09** : restriction active ; à mettre à jour quand l'adresse de la connexion change |
 | S4 | En paper, les clés du `.env` étaient transmises à Binance : une clé supprimée aurait pu empêcher le bot de redémarrer | Moyenne | **Corrigé** : en paper, aucune clé n'est transmise (test ajouté) |

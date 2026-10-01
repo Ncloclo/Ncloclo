@@ -5,12 +5,13 @@ Partie du bot TrendGuard (paquet trendguard, point d'entrée : trendguard_bot.py
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import logging
 import os
 import time
 from dataclasses import dataclass
 from logging.handlers import RotatingFileHandler
-from typing import Dict, Tuple
+from typing import Dict, Optional, Set, Tuple
 
 import v29
 
@@ -279,6 +280,26 @@ def build_guard_logger(log_file: str) -> logging.Logger:
 # non celui du dossier courant : lancé d'ailleurs, set-keys écrirait des
 # clés que le bot ne lirait jamais.
 ENV_FILE = os.path.join(v29.APP_DIR, ".env")
+
+
+# Empreintes SHA-256 (irréversibles) des clés Binance exposées, montrées dans
+# une conversation ou une capture : le bot refuse de les enregistrer, et le
+# centre de sécurité signale celle qui serait encore en service. Aucune clé
+# dans ce fichier, privé tout de même (.gitignore).
+EXPOSED_FILE = os.path.join(v29.APP_DIR, "trendguard.cles_exposees.json")
+
+
+def exposed_fingerprints(path: Optional[str] = None) -> Set[str]:
+    """Empreintes des clés exposées connues (vide si le fichier manque)."""
+    data = autonomy.read_json(path or EXPOSED_FILE)
+    return {h for h in data.get("sha256", []) if isinstance(h, str) and len(h) == 64}
+
+
+def is_exposed(value: str, path: Optional[str] = None) -> bool:
+    """Cette clé (ou ce secret) a-t-elle été exposée ? Comparée par empreinte,
+    jamais en clair."""
+    v = (value or "").strip().strip("'\"")
+    return bool(v) and hashlib.sha256(v.encode()).hexdigest() in exposed_fingerprints(path)
 
 
 def set_env_var(path: str, name: str, value: str) -> None:
