@@ -404,9 +404,24 @@ python trendguard_bot.py watch --no-ai          # sans IA (mots-clés seulement)
 ```
 
 Sans clé d'IA, la veille fonctionne quand même : annonces officielles et
-mots-clés. Chaque IA facture ses appels, à raison d'un rapport par jour. Reddit
-refuse les requêtes sans application enregistrée : les réseaux sociaux et les
-forums passent par la recherche web de Perplexity.
+mots-clés. Chaque IA facture ses appels, à raison d'un rapport par jour.
+
+### Noyau de savoir (`trendguard/savoir.py`, [`docs/SAVOIR.md`](docs/SAVOIR.md))
+
+Toutes les heures, dans un processus à part, le bot lit la presse
+spécialisée, Google et Bing Actualités, les forums (Reddit, Hacker News), le
+réseau social StockTwits, les tendances de CoinGecko, l'indice Fear & Greed
+(avec tout son historique depuis 2018) et, si des clés sont enregistrées,
+l'avis des IA. Chaque texte devient une connaissance datée ; le noyau grandit à
+chaque lecture.
+
+Chaque source est jugée sur les cours réels, 7 jours après chacun de ses avis :
+« fiable » ou « trompeuse » seulement après 20 semaines et avec 99 % de
+certitude. L'avis des seules sources prouvées peut reporter un achat, jamais
+plus (ni vente, ni achat, ni risque en plus, ni règle changée) ; chaque report
+est vérifié et le bot les suspend s'ils coûtent plus qu'ils n'évitent. Bilan
+dans le panneau (Veille ▸ Noyau de savoir), dans le rapport quotidien et avec
+`python trendguard_bot.py savoir`.
 
 ### Revue hebdomadaire par Claude Code
 

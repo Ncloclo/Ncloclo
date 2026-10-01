@@ -249,7 +249,31 @@ class DemoData:
                                           "error": "clé refusée (exemple)"}]},
                 "ai": {"configured": ["Claude", "GPT", "Gemini", "Mistral"],
                        "possible": ["Claude", "GPT", "Gemini", "DeepSeek", "Mistral", "Kimi",
-                                    "Perplexity", "Grok"]}}
+                                    "Perplexity", "Grok"]},
+                "savoir": self.savoir()}
+
+    def savoir(self) -> Dict[str, Any]:
+        """Noyau de savoir de démonstration (même forme que savoir.summary)."""
+        at = datetime.now(timezone.utc).replace(minute=5, second=0, microsecond=0).isoformat()
+        scores = [{"source": "Fear & Greed", "weeks": 389, "rate": 0.537, "chance": 0.488, "edge": 0.049,
+                   "t": 1.96, "verdict": "hasard"},
+                  {"source": "StockTwits", "weeks": 6, "rate": 0.58, "chance": 0.5, "edge": 0.08,
+                   "t": 1.1, "verdict": "observation"},
+                  {"source": "Reddit", "weeks": 6, "rate": 0.47, "chance": 0.5, "edge": -0.03,
+                   "t": -0.5, "verdict": "observation"}]
+        return {"counts": {"docs": 1840, "today": 312, "views": 4210, "sources": 9, "mb": 1.4,
+                           "kinds": {"presse": 96, "recherche": 118, "forum": 74, "social": 16, "tendance": 8}},
+                "text": "1 840 connaissances gardées (312 aujourd'hui), 9 sources suivies, aucune source "
+                        "prouvée pour l'instant ; en observation : StockTwits (6 semaine(s) sur 20)",
+                "kinds": {"articles de presse": 96, "résultats de moteurs de recherche": 118,
+                          "messages de forums": 74, "relevés de réseau social": 16, "tendances": 8},
+                "last_run": {"at": at, "read": {"Presse spécialisée": 75, "Google Actualités": 100,
+                                                "Bing Actualités": 12, "Reddit": 75, "Hacker News": 40,
+                                                "StockTwits": 8, "Tendances CoinGecko": 2, "Fear & Greed": 1},
+                             "errors": {}},
+                "bilan": {"scores": scores, "opinion": {}, "holds": {}, "influence": True,
+                          "record": {"checked": 0, "helped": 0, "avg_pct": None}, "proven": []},
+                "recent": []}
 
     def log_tail(self, lines: int = 300) -> List[str]:
         now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")

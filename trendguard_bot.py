@@ -35,6 +35,7 @@ Outils (mêmes options qu'avant, après le nom de l'outil) :
   python trendguard_bot.py animation                    # page du rejeu
   python trendguard_bot.py evolution [examen|regles]    # évolution encadrée
   python trendguard_bot.py rapport [maintenant]         # rapport quotidien
+  python trendguard_bot.py savoir [collecter]           # noyau de savoir
 
 Ce fichier est le seul point d'entrée : le code est rangé dans le paquet
 trendguard/ (voir docs/ARCHITECTURE.md) et tous ses noms restent

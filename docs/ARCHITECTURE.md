@@ -97,6 +97,7 @@ sont jamais envoyés sur GitHub. VS Code les masque dans l'explorateur
 | `journal.py` | journaux muets des simulations et des vérifications (`silent_logger`) |
 | `alerts.py` | alertes Telegram, e-mail et WhatsApp ; un canal dont le mot de passe est refusé trois fois n'essaie plus qu'une fois par jour |
 | `market_watch.py` | veille : annonces officielles de Binance, actualités, avis des IA |
+| `savoir.py` | noyau de savoir : presse, moteurs de recherche, forums, réseau social, tendances et avis des IA lus toutes les heures, chaque source jugée sur les cours réels ; l'avis des sources prouvées peut seulement reporter un achat |
 | `watch_claude.py` | avis de Claude pour la veille |
 | `diagnostics.py` | auto-diagnostic hebdomadaire (lecture seule) |
 | `strategy_lab.py` | laboratoire des stratégies |

@@ -1,8 +1,9 @@
 """Les routines du bot TrendGuard, autour de la décision quotidienne :
 disponibilité (uptime.py) et alimentation du portable, évolution encadrée
 (evolution.py), rapport quotidien (report.py), veille officielle
-(market_watch.py), horloge, auto-diagnostic, anticipation de la clôture,
-apprentissage libre (learning.py) et point de situation du journal.
+(market_watch.py), noyau de savoir (savoir.py), horloge, auto-diagnostic,
+anticipation de la clôture, apprentissage libre (learning.py) et point de
+situation du journal.
 
 Partie de la classe TrendGuardBot (bot.py), qui en hérite.
 """
@@ -16,7 +17,7 @@ import pandas as pd
 
 import v29
 
-from . import anticipation, autonomy, evolution, learning, report, systeme, uptime
+from . import anticipation, autonomy, evolution, learning, report, savoir, systeme, uptime
 from . import diagnostics as dg
 from . import market_watch as mw
 from . import trend_strategy as ts
@@ -126,6 +127,53 @@ class RoutinesMixin:
                 self.logger.info("[RAPPORT] analyse profonde, sécurité et rapport du jour lancés")
         except Exception as e:
             self.logger.warning(f"[RAPPORT] rapport du jour impossible : {e}")
+
+    # ---------- Noyau de savoir (savoir.py) ----------
+
+    def _launch_savoir(self) -> None:
+        """Lecture d'Internet par le noyau de savoir toutes les
+        TG_SAVOIR_MINUTES, dans un processus séparé : le bot surveille ses
+        stops pendant ce temps, et une source en panne ne le gêne jamais."""
+        if not (self.g.savoir and self.track_uptime):
+            return
+        last = float(self.state.get("savoir_launched_at") or 0.0)
+        if time.time() - last < self.g.savoir_minutes * 60:
+            return
+        self.state["savoir_launched_at"] = time.time()
+        held = ",".join(sorted(self._holdings()))
+        if not autonomy.launch_tool(self.g, ["savoir", "collecter"] + (["--detenues", held] if held else []),
+                                    ".savoir.log"):
+            self.logger.warning("[SAVOIR] lecture d'Internet impossible à lancer")
+
+    def _savoir_holds(self, day: str, close: Any) -> Dict[str, Dict[str, Any]]:
+        """Bilan du noyau de savoir à la décision : sources jugées sur les
+        cours réels, avis du bot, achats à reporter (sources prouvées
+        seulement). Une panne ne bloque jamais la décision : aucun report."""
+        if not self.g.savoir:
+            return {}
+        memory = None
+        try:
+            memory = savoir.Memory(self.g.savoir_db)
+            res = savoir.judge(memory, close, day)
+            counts = memory.counts(day)
+        except Exception as e:
+            self.logger.warning(f"[SAVOIR] bilan impossible : {e}")
+            return {}
+        finally:
+            if memory is not None:
+                memory.close()
+        before = set((self.state.get("savoir") or {}).get("proven") or [])
+        self.state["savoir"] = {"day": day, "line": savoir.reasoning_line(res, counts),
+                                "proven": res["proven"], "holds": sorted(res["holds"]),
+                                "influence": res["influence"]}
+        for s in sorted(set(res["proven"]) - before):
+            sc = next(x for x in res["scores"] if x["source"] == s)
+            self.logger.info(f"[SAVOIR] compétence acquise : {s} est {sc['verdict']} "
+                             f"({fr(sc['rate'] * 100, '.0f')} % de réussite contre "
+                             f"{fr(sc['chance'] * 100, '.0f')} % pour le hasard, {sc['weeks']} semaines)")
+        for s in sorted(before - set(res["proven"])):
+            self.logger.info(f"[SAVOIR] {s} n'est plus prouvée : son avis ne compte plus")
+        return res["holds"]
 
     def _report_after_skill(self, today: str) -> None:
         """Compétence ou expérience acquise (réglage adopté, confirmé ou

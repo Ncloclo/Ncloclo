@@ -54,8 +54,9 @@ export const STATUS = {
   wait: ["muted", "Pas de cassure"], weak: ["muted", "Tendance faible"],
   illiquid: ["muted", "Peu échangée"], young: ["muted", "Trop récente"],
   nodata: ["muted", "Données insuffisantes"], halted: ["down", "Arrêt d'urgence"],
+  savoir: ["warn", "Achat reporté (savoir)"],
 };
-export const CANDIDATE = new Set(["watch", "full", "bear", "deferred"]);
+export const CANDIDATE = new Set(["watch", "full", "bear", "deferred", "savoir"]);
 
 // ---------- Préférences locales ----------
 export const prefs = {

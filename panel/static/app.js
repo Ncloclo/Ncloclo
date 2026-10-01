@@ -1027,6 +1027,32 @@ async function renderWatch() {
   help.replaceChildren();
   if (free.length) help.append("Facultatif : pour ajouter l'avis d'une IA, ", el("code", "", "python trendguard_bot.py watch set-key claude"), ` (au choix : ${free.join(", ")}). La clé se saisit masquée ; une IA conseille, elle ne passe jamais d'ordre.`);
   $("#w-report").textContent = w.report_text || "Aucun rapport : la veille tourne chaque jour avec le bot (python trendguard_bot.py watch pour un rapport immédiat).";
+  renderKnowledge(w.savoir);
+}
+// Noyau de savoir : ce que le bot a lu, qui a raison, son avis.
+const VERDICT = { fiable: ["up", "Fiable"], trompeuse: ["down", "Trompeuse (à lire à l'envers)"], hasard: ["", "Pas mieux que le hasard"], observation: ["", "En observation"] };
+function renderKnowledge(k) {
+  $("#w-know-card").hidden = !k;
+  if (!k) return;
+  const c = k.counts || {}, last = k.last_run || {}, b = k.bilan || {};
+  $("#w-know-sub").textContent = `${nf(0).format(c.docs || 0)} connaissances · ${nf(1).format(c.mb || 0)} Mo`;
+  const rows = [["ok", k.text]];
+  const kinds = Object.entries(k.kinds || {}).map(([label, n]) => `${nf(0).format(n)} ${label}`);
+  if (kinds.length) rows.push(["ok", `Lu aujourd'hui : ${kinds.join(", ")}.`]);
+  const read = Object.entries(last.read || {}).map(([s, n]) => `${s} ${n}`);
+  if (last.at) rows.push(["ok", `Dernière lecture : ${ftime(Date.parse(last.at) / 1000)} — ${read.join(", ") || "rien de nouveau"}.`]);
+  Object.entries(last.errors || {}).forEach(([s, e]) => rows.push(["warn", `${s} : ${e} (nouvel essai à la prochaine lecture)`]));
+  Object.entries(b.opinion || {}).forEach(([a, o]) => rows.push([o.value <= -0.5 ? "warn" : "ok", `Avis du bot sur ${up(a)} : ${nf(2).format(o.value)} (${o.sources.join(", ")})`]));
+  const rec = b.record || {};
+  if (rec.checked) rows.push(["ok", `Reports d'achat vérifiés : ${rec.checked}, utiles ${rec.helped} (la crypto a baissé) ; variation moyenne ${nf(1).format(rec.avg_pct)} %.`]);
+  $("#w-know").replaceChildren(...rows.map(([cls, t]) => el("li", cls, t)));
+  table($("#w-know-table"), ["Source", "Semaines vérifiées", "Réussite", "Hasard", "Verdict"],
+    (b.scores || []).map((s) => {
+      const v = VERDICT[s.verdict] || ["", s.verdict];
+      const early = s.weeks < 5;                                    // trop tôt pour un taux
+      return { cells: [s.source, `${s.weeks}${s.verdict === "observation" ? " / 20" : ""}`, early ? "–" : `${nf(0).format(s.rate * 100)} %`, early ? "–" : `${nf(0).format(s.chance * 100)} %`, v[1]],
+        cls: [null, null, null, null, v[0]] };
+    }), null, "Pas encore de bilan : il se fait à chaque décision quotidienne (00:02 UTC).");
 }
 
 // ---------- Journal ----------

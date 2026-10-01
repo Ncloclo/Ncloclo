@@ -17,7 +17,7 @@ import pandas as pd
 
 import v29
 
-from . import anticipation, autonomy, evolution, learning
+from . import anticipation, autonomy, evolution, learning, savoir
 from . import trend_strategy as ts
 from .bot_execution import ExecutionMixin
 from .bot_routines import RoutinesMixin
@@ -363,6 +363,7 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         except Exception as e:           # apprendre ne bloque jamais le trading
             self.logger.warning(f"[APPRENTISSAGE] relevé impossible : {e}")
         self._launch_report(now)
+        self._launch_savoir()
         # Horloge réelle (et non `now`, simulé en rejeu) : sert au contrôle
         # de santé du conteneur.
         self.state["last_cycle_ts"] = time.time()
@@ -680,6 +681,15 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         if not self.state.get("halted"):
             eligible = {a: s for a, s in snap.items()
                         if self._can_enter(a) and a in allowed}
+            # Savoir du bot : une crypto qu'il voit nettement en baisse, sur
+            # l'avis de sources PROUVÉES, n'est pas achetée aujourd'hui.
+            for a, h in self._savoir_holds(day, close).items():
+                if a in eligible and a not in holdings:
+                    eligible.pop(a)
+                    self._entry_notes[a] = ("savoir", savoir.hold_text(a, h))
+                    if ts.entry_signal(snap[a], p):
+                        self.logger.info(f"[SAVOIR] achat de {a.upper()} reporté : avis du bot "
+                                         f"{fr(h['value'], '+.2f')} ({', '.join(h['sources'])})")
             for a in sorted(snap):
                 v = self._vetoed(a)
                 if v and a not in holdings and ts.entry_signal(snap[a], p):
@@ -735,6 +745,9 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
                          f"par deux jusqu'au {until}.")
         if self.state.get("halted") and self.state.get("resume_note"):
             extra.append(f"Arrêt d'urgence : {self.state['resume_note']}.")
+        sv = self.state.get("savoir") or {}
+        if sv.get("day") == day and sv.get("line"):
+            extra.append(sv["line"])
         r = explain_decision(day, bull, self._btc_gap(close, day), snap, holdings, exits,
                              [e["asset"] for e in entries], notes,
                              bool(self.state.get("halted")), mult, self.p,

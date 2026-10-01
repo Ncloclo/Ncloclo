@@ -330,6 +330,10 @@ test("positions, veille, journal, réglages et thème", async ({ page }) => {
   await expect(page.locator("#w-peg")).toHaveText("1,0002");
   await expect(page.locator("#w-ai li")).toHaveCount(4);                        // une ligne par IA consultée
   await expect(page.locator("#w-ai-sub")).toHaveText("4 configurées");
+  await expect(page.locator("#w-know-card")).toBeVisible();                     // noyau de savoir
+  await expect(page.locator("#w-know li").first()).toContainText("connaissances gardées");
+  await expect(page.locator("#w-know-table tbody tr")).toHaveCount(3);          // une ligne par source jugée
+  await expect(page.locator("#w-know-table tbody tr").first()).toContainText("Pas mieux que le hasard");
   await page.locator('.tab[data-tab="log"]').click();
   await expect(page.locator("#log li").first()).toBeVisible();
   await page.locator('.tab[data-tab="settings"]').click();

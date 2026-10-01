@@ -683,7 +683,8 @@ TOOLS = {"alerts": ("alerts", "alertes : configurer | tester"),
          "lab": ("strategy_lab", "laboratoire des stratégies (--cache data_binance)"),
          "animation": ("replay_animation", "page d'animation du rejeu"),
          "evolution": ("evolution", "évolution encadrée : [statut] | examen | quotidien | revenir | regles"),
-         "rapport": ("report", "rapport quotidien, sécurité et diagnostic : [dernier] | maintenant | quotidien")}
+         "rapport": ("report", "rapport quotidien, sécurité et diagnostic : [dernier] | maintenant | quotidien"),
+         "savoir": ("savoir", "noyau de savoir : [bilan] | collecter")}
 
 
 def _parser() -> argparse.ArgumentParser:

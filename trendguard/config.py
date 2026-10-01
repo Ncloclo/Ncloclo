@@ -56,6 +56,10 @@ TG_ENV_DOC: Dict[str, str] = {
     "TG_VEILLE": "true : annonces officielles Binance lues chaque jour (retrait = achats bloqués)",
     "TG_VEILLE_IA": "true : rapport quotidien des IA (conseil seulement, clés dans .env)",
     "TG_VEILLE_DB": "Base de la veille (mémoire des IA et des annonces)",
+    "TG_SAVOIR": "true : noyau de savoir (presse, moteurs de recherche, forums, réseau social, "
+                 "tendances, avis des IA), lu toutes les heures et jugé sur les cours réels",
+    "TG_SAVOIR_MINUTES": "Minutes entre deux lectures d'Internet par le noyau de savoir (15 au moins)",
+    "TG_SAVOIR_DB": "Base du noyau de savoir (textes lus, avis des sources, reports d'achat)",
     "PANEL_HOST": "Panneau : 127.0.0.1 (ce PC) ou 0.0.0.0 (téléphone, mot de passe requis)",
     "PANEL_PORT": "Panneau : port web (8765)",
     "TG_ALLOW_RECOVERY": "true : adopter les ordres du bot inconnus de la base (base perdue)",
@@ -128,6 +132,12 @@ class GuardConfig:
     auto_fix: bool = False
     auto_update: bool = False
     watch_db: str = ""
+    # Noyau de savoir (savoir.py) : lecture d'Internet toutes les heures,
+    # sources jugées sur les cours réels ; ne peut que reporter un achat.
+    # Activé par l'environnement.
+    savoir: bool = False
+    savoir_minutes: int = 60
+    savoir_db: str = ""
     max_capital: float = 0.0            # 0 = tout le compte
     keep_awake: bool = False            # anti-veille (activé par l'environnement)
     max_spread: float = 0.005           # ruse : carnet anormal → achat différé
@@ -165,6 +175,8 @@ class GuardConfig:
             raise ValueError("TG_MAX_SPREAD doit être dans ]0, 0.2[.")
         if self.entry_retry_hours < 0:
             raise ValueError("TG_ENTRY_RETRY_HOURS doit être >= 0.")
+        if self.savoir_minutes < 15:
+            raise ValueError("TG_SAVOIR_MINUTES doit être >= 15 (sources publiques ménagées).")
         self.params.validate()
         for name, default in (
                 ("db_file", os.path.join(v29.APP_DIR, f"trendguard_{self.run_mode}.db")),
@@ -233,6 +245,9 @@ def load_guard_config_from_env() -> GuardConfig:
         auto_fix=v29._env_b("TG_AUTOCORRECTION", True),
         auto_update=v29._env_b("TG_MISE_A_JOUR", True),
         watch_db=v29._env_s("TG_VEILLE_DB", os.path.join(v29.APP_DIR, "trendguard_veille.db")),
+        savoir=v29._env_b("TG_SAVOIR", True),
+        savoir_minutes=v29._env_i("TG_SAVOIR_MINUTES", 60),
+        savoir_db=v29._env_s("TG_SAVOIR_DB", os.path.join(v29.APP_DIR, "trendguard_savoir.db")),
         max_capital=v29._env_f("TG_MAX_CAPITAL", 0.0),
         keep_awake=v29._env_b("TG_KEEP_AWAKE", True),
         max_spread=v29._env_f("TG_MAX_SPREAD", 0.005),

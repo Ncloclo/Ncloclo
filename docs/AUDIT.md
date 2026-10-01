@@ -843,6 +843,7 @@ Points faibles :
 | 28 | Panneau ▸ Cryptos : une case cochée ne doit jamais être effacée par une actualisation | Code | **fait** (01/10, 15 h) : H9 |
 | 29 | Au bureau, rester sur le réseau Wi-Fi stable (B) et décocher « Se connecter automatiquement » pour l'autre ; oublier les réseaux Wi-Fi qui ne servent plus | Vous | dès que possible (01/10, 16 h) : I1, I3 |
 | 30 | Rapport qui lit le journal du Wi-Fi (coupures par réseau, réseau à préférer, partage de connexion d'un téléphone) | Code, avec votre accord | proposé (01/10, 16 h) : I6 |
+| 31 | Noyau de savoir : presse, moteurs de recherche, forums, réseau social, tendances et avis des IA lus toutes les heures, chaque source jugée sur les cours réels ; l'avis des sources prouvées peut seulement reporter un achat | Code, à votre demande | **fait** (01/10, 20 h) : [`SAVOIR.md`](SAVOIR.md) |
 
 Fait depuis l'audit du matin : chemins de secours des ordres réels testés (et
 un défaut corrigé), blocage des mots de passe ratés, écriture sûre du choix des

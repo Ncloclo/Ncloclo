@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 
 import v29
 from trendguard import market_watch as mw
+from trendguard import savoir
 from trendguard.journal import silent_logger
 
 from .market import Market
@@ -206,7 +207,24 @@ class BotData:
                 con.close()
         vetoes = [dict(v, asset=a) for a, v in sorted((state.get("vetoes") or {}).items())]
         return {"last": state.get("last_watch"), "vetoes": vetoes, "report_text": text,
-                "report": watch_summary(rep), "ai": ai_summary()}
+                "report": watch_summary(rep), "ai": ai_summary(), "savoir": self.savoir()}
+
+    def savoir(self) -> Optional[Dict[str, Any]]:
+        """Noyau de savoir (lecture seule) : taille, dernière lecture,
+        fiabilité des sources, avis du bot ; None s'il n'existe pas encore."""
+        path = getattr(self.g, "savoir_db", "") or savoir.DEFAULT_DB
+        if not getattr(self.g, "savoir", False) or not os.path.exists(path):
+            return None
+        try:
+            memory = savoir.Memory(path, readonly=True)
+        except sqlite3.Error:
+            return None
+        try:
+            return savoir.summary(memory, datetime.now(timezone.utc).date().isoformat())
+        except (sqlite3.Error, ValueError, KeyError):
+            return None
+        finally:
+            memory.close()
 
     def reasoning(self, state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         return reasoning_view(self.state() if state is None else state)

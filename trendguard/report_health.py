@@ -6,16 +6,17 @@ stratégie, compétences acquises, code et contrôles GitHub. Lecture seule.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import evolution, learning
+from . import evolution, learning, savoir
 from .systeme import Check, Deps, chk, ci_status, pc_resources, repo_slug
 from .systeme import git as _git
 from .texte import fr
@@ -291,10 +292,31 @@ def strategy_checks(gcfg: Any, deps: Deps) -> List[Check]:
     return out
 
 
+def knowledge_check(gcfg: Any) -> List[Check]:
+    """Noyau de savoir : ce qu'il a lu, les sources prouvées, ses reports
+    d'achat ; une information, jamais un point à corriger."""
+    path = getattr(gcfg, "savoir_db", "") or ""
+    if not getattr(gcfg, "savoir", False) or not path or not os.path.exists(path):
+        return []
+    memory = savoir.Memory(path, readonly=True)
+    try:
+        s = savoir.summary(memory, datetime.now(timezone.utc).date().isoformat())
+    finally:
+        memory.close()
+    errors = (s.get("last_run") or {}).get("errors") or {}
+    return [chk("Noyau de savoir", None, s["text"] + (f" ; sources en panne à la dernière lecture : "
+                                                      f"{', '.join(errors)}" if errors else ""))]
+
+
 def skills_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
-    """Compétences acquises : apprentissage libre et évolution encadrée."""
+    """Compétences acquises : apprentissage libre, noyau de savoir et
+    évolution encadrée."""
     lr = learning.summary(st.get("learning"))
     out = [chk("Apprentissage libre", None, lr["text"])]
+    try:
+        out += knowledge_check(gcfg)
+    except Exception as e:           # un bilan illisible n'empêche pas le rapport
+        out.append(chk("Noyau de savoir", None, f"bilan illisible : {e}"))
     if lr["brier_raw"] is not None:
         # Une information, jamais un point à corriger : l'apprentissage se
         # juge sur la durée (au moins 100 prévisions comparées à la clôture).
