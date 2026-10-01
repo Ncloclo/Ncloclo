@@ -247,6 +247,29 @@ test("cryptos : sélection auto (les 21 cochées), sélection manuelle (les 10 p
   expect(errors).toEqual([]);
 });
 
+test("cryptos : une case cochée pendant une actualisation de la liste n'est pas perdue", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.request.post(BASE + "/api/selection", { headers: { "X-TrendGuard": "1" }, data: { mode: "manual", manual: [] } });
+  await page.goto(BASE + "/#assets");
+  await expect(page.locator("#sel-count")).toHaveText("0 / 21");
+  const eth = page.locator('#asset-grid article[data-asset="eth"] .pick input');
+  await expect(eth).toBeEnabled();
+  await page.route("**/api/assets", async (route) => {                // la liste relue arrive en retard…
+    await new Promise((r) => setTimeout(r, 1000));
+    await route.continue();
+  });
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));   // … actualisation lancée
+  await page.waitForTimeout(700);
+  await eth.check();                                                    // cochée avant l'arrivée de l'ancienne liste
+  await expect(page.locator("#sel-count")).toHaveText("1 / 21");
+  await page.waitForTimeout(1500);                                      // les listes en retard sont arrivées
+  await expect(eth).toBeChecked();
+  await expect(page.locator("#sel-count")).toHaveText("1 / 21");
+  await page.unroute("**/api/assets");
+  await page.request.post(BASE + "/api/selection", { headers: { "X-TrendGuard": "1" }, data: { mode: "auto" } });
+  expect(errors).toEqual([]);
+});
+
 test("cryptos : cartes, filtre et recherche", async ({ page }) => {
   await page.goto(BASE + "/#assets");
   await expect(page.locator("#asset-grid .asset")).toHaveCount(21);

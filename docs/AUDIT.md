@@ -69,6 +69,7 @@ mémoire. Diagnostic de la stratégie conforme, sauf la place sur le disque.
 | H4 | Réseau instable : prix indisponibles à 12 h 21, 13 h 48 et de 14 h 03 à 14 h 06, contrôle de la clé du rapport hors délai ; latence de 400 à 450 ms vers Binance. Tout est rattrapé au cycle suivant | Faible | Rien à faire ; compté dans le rapport |
 | H5 | **Toujours aucune alerte ne vous arrive** : e-mail en pause après 3 refus du mot de passe (un essai par jour), WhatsApp pas configuré ; la fenêtre « alerts configurer » attend depuis la veille à 18 h 39 | **Élevée** | Vous : mot de passe d'application Gmail dans cette fenêtre, puis CallMeBot pour WhatsApp |
 | H6 | Vie privée : le dépôt est public et contient vos adresses publiques passées (quatre lignes de cet audit, un test) | Faible (adresses changeantes) | Code : les remplacer par des adresses d'exemple, et un test qui refuse toute adresse réelle dans les fichiers publiés (H8) |
+| H9 | **Panneau ▸ Cryptos, sélection manuelle : une case cochée pouvait être effacée**, et la sélection enregistrée n'était alors pas celle affichée : case cochée juste après « Tout décocher », « Tout cocher » ou « Les 10 plus rentables », ou pendant l'actualisation automatique de la liste (toutes les 15 secondes). Rejoué : « Tout décocher », puis ETH coché, et 9 cryptos enregistrées au lieu d'une. Trouvé par les contrôles GitHub (test du navigateur en échec à 14 h 32, deux fois de suite) | Moyenne ; sans effet aujourd'hui (sélection auto, cases verrouillées) | **Corrigé** (01/10, 15 h) : une case en attente n'est plus effacée, les boutons mettent les cases à jour tout de suite, les enregistrements passent un par un, dans l'ordre ; un test du navigateur rejoue la course (il échoue sur l'ancien code) |
 
 Code : 70 modules, 25 554 lignes ; les fonctions les plus chargées du bot
 sont la veille du marché (30 embranchements), le contrôle du système du
@@ -793,6 +794,7 @@ Points faibles :
 | 25 | Faire acheter plus le bot (budget libéré quand les stops montent, 8 % cumulé, 0,75 % par achat) | Étude, à votre demande | **écarté** (01/10, 13 h) : plus de trades, mais moins bon ([`ADAPTATION.md`](ADAPTATION.md), section 6) |
 | 26 | Libérer le disque (6 % libre) et la mémoire (94 %) : trier Téléchargements (25 Go, sans toucher au dossier `claude`, qui contient le bot), fermer des onglets de Chrome (7,2 Go), puis redémarrer le PC | Vous | **dès que possible** (01/10, 14 h) : H1, H2 |
 | 27 | Rapport qui dit où part la place du disque et quels programmes prennent la mémoire ; adresses publiques retirées des fichiers publiés | Code, avec votre accord | proposé (01/10, 14 h) : H7, H8 |
+| 28 | Panneau ▸ Cryptos : une case cochée ne doit jamais être effacée par une actualisation | Code | **fait** (01/10, 15 h) : H9 |
 
 Fait depuis l'audit du matin : chemins de secours des ordres réels testés (et
 un défaut corrigé), blocage des mots de passe ratés, écriture sûre du choix des

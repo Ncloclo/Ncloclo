@@ -798,6 +798,26 @@ function arrangeAssets() {
   });
 }
 let SEL = { mode: "auto", active: [] };
+// Cases cochées ou décochées pas encore enregistrées (crypto → cochée) : ni une
+// actualisation de la liste, ni une liste lue avant le dernier enregistrement
+// (version dépassée) ne les effacent.
+const PICKS = new Map();
+let selVersion = 0, pickTimer = 0, selQueue = Promise.resolve();
+const picked = (a) => (PICKS.has(a) ? PICKS.get(a) : SEL.active.includes(a));
+function syncPicks() {
+  ASSETS.forEach((a) => { a.selected = picked(a.asset); });
+  $$("#asset-grid .pick input").forEach((box) => {
+    box.checked = picked(box.dataset.pick);
+    box.disabled = SEL.mode === "auto";
+    box.closest(".asset").classList.toggle("unselected", !box.checked);
+  });
+}
+// Un enregistrement à la fois, dans l'ordre des clics : chacun part de la
+// sélection laissée par le précédent.
+function queueSelection(job) {
+  selQueue = selQueue.then(job, job);
+  return selQueue;
+}
 function renderSelection(sel) {
   SEL = sel;
   $$("[data-sel]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.sel === sel.mode)));
@@ -808,51 +828,63 @@ function renderSelection(sel) {
     : `Sélection manuelle : au départ, les ${sel.n_top} cryptos les plus rentables sur 2 ans (bénéfice des achats ET des ventes) sont cochées${sel.top.length ? ` (${sel.top.map(up).join(", ")})` : ", dès que le classement est calculé"} ; cochez ou décochez celles que le bot peut acheter.${sel.active.length ? "" : " Tant qu'aucune n'est cochée, le bot n'achète rien."} Une crypto décochée déjà détenue reste gérée jusqu'à sa vente. Pour mémoire, les 21 ont fait mieux par le passé (sélection auto).`;
 }
 async function saveSelection(mode, manual, preset) {
+  selVersion += 1;
   try {
     const r = await api("/api/selection", { body: preset ? { mode, preset } : manual ? { mode, manual } : { mode } });
     toast(r.mode === "auto" ? `Sélection auto : les ${r.active.length} cryptos sont achetables.` : r.active.length ? `Sélection manuelle : ${r.active.length} crypto${r.active.length > 1 ? "s" : ""} achetable${r.active.length > 1 ? "s" : ""}.` : "Sélection manuelle : aucune crypto cochée, cochez celles que le bot peut acheter.", "ok");
-    ASSETS.forEach((a) => { a.selected = r.active.includes(a.asset); });
     renderSelection(r);
+    syncPicks();                        // cases à jour tout de suite, sans attendre la liste
     return r;
   } catch (e) {
     toast(`Sélection non enregistrée : ${e.message}`, "err");
     return null;
+  } finally {
+    selVersion += 1;                    // une liste lue pendant l'enregistrement est dépassée
   }
 }
-let pickTimer = 0;
-function onPick() {
+// Les cases en attente, appliquées à la dernière sélection enregistrée.
+async function savePicks() {
+  const sent = new Map(PICKS), want = new Set(SEL.active);
+  sent.forEach((on, a) => { if (on) want.add(a); else want.delete(a); });
+  const r = await saveSelection("manual", ASSETS.map((x) => x.asset).filter((a) => want.has(a)));
+  sent.forEach((on, a) => { if (!r || PICKS.get(a) === on) PICKS.delete(a); });
+  syncPicks();
+  renderAssets().catch(() => {});
+}
+function onPick(box) {
+  PICKS.set(box.dataset.pick, box.checked);
+  box.closest(".asset").classList.toggle("unselected", !box.checked);
   clearTimeout(pickTimer);
-  pickTimer = setTimeout(async () => {
-    const manual = $$("#asset-grid .pick input").filter((b) => b.checked).map((b) => b.dataset.pick);
-    await saveSelection("manual", manual);
-    renderAssets().catch(() => {});
-  }, 400);
+  pickTimer = setTimeout(() => queueSelection(savePicks).catch(() => {}), 400);
+}
+// Les boutons de sélection remplacent les cases pas encore enregistrées.
+function presetSelection(text, mode, manual, preset) {
+  clearTimeout(pickTimer);
+  PICKS.clear();
+  return withLoader(text, () => queueSelection(async () => {
+    await saveSelection(mode, manual, preset);
+    await renderAssets();
+  }));
 }
 $$("[data-sel]").forEach((b) => b.addEventListener("click", () => {
   if (SEL.mode === b.dataset.sel) return;
   const auto = b.dataset.sel === "auto";
-  withLoader(auto ? "Sélection auto : les 21 cryptos…" : "Sélection manuelle : les 10 cryptos les plus rentables…", async () => {
-    await saveSelection(b.dataset.sel, undefined, auto ? undefined : "top");   // manuel : les 10 plus rentables
-    await renderAssets();
-  });
+  presetSelection(auto ? "Sélection auto : les 21 cryptos…" : "Sélection manuelle : les 10 cryptos les plus rentables…",
+    b.dataset.sel, undefined, auto ? undefined : "top");          // manuel : les 10 plus rentables
 }));
 $("[data-sel-top]").addEventListener("click", () => {
-  withLoader("Sélection : les 10 cryptos les plus rentables…", async () => {
-    await saveSelection("manual", undefined, "top");
-    await renderAssets();
-  });
+  presetSelection("Sélection : les 10 cryptos les plus rentables…", "manual", undefined, "top");
 });
 $$("[data-sel-all]").forEach((b) => b.addEventListener("click", () => {
   const all = b.dataset.selAll === "1";
-  withLoader(all ? "Sélection : les 21 cryptos…" : "Sélection : aucune crypto…", async () => {
-    await saveSelection("manual", all ? ASSETS.map((a) => a.asset) : []);
-    await renderAssets();
-  });
+  presetSelection(all ? "Sélection : les 21 cryptos…" : "Sélection : aucune crypto…", "manual",
+    all ? ASSETS.map((a) => a.asset) : []);
 }));
 async function renderAssets() {
+  const v = selVersion;
   const d = await api("/api/assets");
   ASSETS = d.assets;
-  renderSelection(d.selection);
+  if (v === selVersion) renderSelection(d.selection);   // sinon : lue avant le dernier enregistrement
   const grid = $("#asset-grid");
   d.assets.forEach((r, k) => {
     let card = grid.querySelector(`[data-asset="${r.asset}"]`);
@@ -879,7 +911,7 @@ async function renderAssets() {
       pick.append(box, el("span", "", "Achetable"));
       pick.addEventListener("click", (e) => e.stopPropagation());
       pick.addEventListener("keydown", (e) => e.stopPropagation());
-      box.addEventListener("change", () => onPick());
+      box.addEventListener("change", () => onPick(box));
       card.append(top, el("span", "name", r.name), pick, el("span", "px"), svg, el("p", "rank"), el("p", "why"), bottom);
       const open = () => openDetail({ kind: "asset", asset: r.asset });
       card.addEventListener("click", open);
@@ -906,16 +938,13 @@ async function renderAssets() {
     const why = card.querySelector(".why");
     why.textContent = r.why || "";
     why.hidden = !r.why;
-    const box = card.querySelector(".pick input");
-    box.checked = !!r.selected;
-    box.disabled = SEL.mode === "auto";
-    card.classList.toggle("unselected", !r.selected);
     const rk = card.querySelector(".rank");
     rk.textContent = r.rank ? `N° ${r.rank.rank} sur 2 ans : ${fR(r.rank.total_r)} en ${r.rank.trades} trade${r.rank.trades > 1 ? "s" : ""} (achats et ventes)` : "";
     rk.hidden = !r.rank;
     if (r.veto_reason) card.title = r.veto_reason;
     card.querySelector(".vol").textContent = `Vol. 24 h ${fvol(r.volume_quote)}`;
   });
+  syncPicks();
   arrangeAssets();
   if (d.stale) toast("Cours Binance momentanément indisponibles : dernières valeurs affichées.", "err");
 }
