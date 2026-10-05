@@ -6,10 +6,13 @@ stratégie », mesuré honnêtement.
 Trois questions, un protocole unique (choix sur 2018-2022, vérification sur
 2023 → aujourd'hui, période jamais utilisée pour choisir) :
 
-  1. Tournoi : sept stratégies définies À L'AVANCE (famille suivi de
+  1. Tournoi : douze stratégies définies À L'AVANCE (famille suivi de
      tendance, régimes alternatifs, rotation de momentum, retour à la
-     moyenne à fort taux de réussite), toutes avec 1 % de risque par trade,
-     les mêmes plafonds, frais et slippage que TrendGuard.
+     moyenne à fort taux de réussite, et les stratégies publiées de traders
+     célèbres : Tortues de Richard Dennis, croisement 50/200 de Paul Tudor
+     Jones, bandes de John Bollinger, RSI(2) de Larry Connors, double
+     momentum de Gary Antonacci), toutes avec 1 % de risque par trade, les
+     mêmes plafonds, frais et slippage que TrendGuard.
   2. Méta-apprentissage : un « chef d'orchestre » qui, tous les 6 mois,
      confie le capital à la stratégie la plus performante des 24 derniers
      mois (ou le répartit selon leurs Sharpe). Bat-il la stratégie fixe ?
@@ -71,6 +74,17 @@ def lab_features(close: pd.DataFrame, volume: pd.DataFrame, p: ts.TrendParams
         f["sma150"] = c.rolling(150, min_periods=150).mean()
         f["sma5"] = c.rolling(5, min_periods=5).mean()
         f["rsi2"] = rsi(c, 2)
+        # Traders célèbres : canaux de Donchian (Tortues), moyennes 20, 50 et
+        # 200 jours, bandes de Bollinger, rendement sur 12 mois.
+        prev = c.shift(1)
+        for n in (20, 55):
+            f[f"hi{n}"] = prev.rolling(n, min_periods=n).max()
+        for n in (10, 20):
+            f[f"lo{n}"] = prev.rolling(n, min_periods=n).min()
+        for n in (20, 50, 200):
+            f[f"sma{n}"] = c.rolling(n, min_periods=n).mean()
+        f["sd20"] = c.rolling(20, min_periods=20).std()
+        f["ret365"] = c / c.shift(365) - 1
         feats[a] = {k: f[k].values for k in f.columns}
     return feats
 
@@ -194,8 +208,21 @@ CANDIDATES: Tuple[Candidate, ...] = (
     Candidate("Rotation momentum", "Momentum relatif",
               "Chaque lundi : les 5 meilleurs momentums 90 j ; sortie si rang > 8"),
     Candidate("Retour à la moyenne", "Contrarien (fort taux de réussite)",
-              "Achat si RSI(2) < 10 au-dessus de la moyenne 150 j ; "
+              "RSI(2) de Larry Connors : achat si RSI(2) < 10 au-dessus de la moyenne 150 j ; "
               "vente au retour sur la moyenne 5 j ou après 10 j"),
+    Candidate("Tortues, système 1 (R. Dennis)", "Traders célèbres : suivi de tendance",
+              "Cassure du plus haut 20 j ; vente sous le plus bas 10 j ; stop à 2 × volatilité"),
+    Candidate("Tortues, système 2 (R. Dennis)", "Traders célèbres : suivi de tendance",
+              "Cassure du plus haut 55 j ; vente sous le plus bas 20 j ; stop à 2 × volatilité"),
+    Candidate("Croisement 50/200 (P. T. Jones)", "Traders célèbres : moyennes mobiles",
+              "Achat si la moyenne 50 j passe au-dessus de la moyenne 200 j ; vente au "
+              "croisement inverse ou au stop"),
+    Candidate("Cassure de Bollinger (J. Bollinger)", "Traders célèbres : volatilité",
+              "Achat au-dessus de la bande haute (moyenne 20 j + 2 écarts-types) ; vente "
+              "sous la moyenne 20 j ou au stop"),
+    Candidate("Double momentum (G. Antonacci)", "Traders célèbres : momentum relatif et absolu",
+              "Le 1er de chaque mois : les 3 meilleures sur 12 mois, si ce rendement est "
+              "positif (sinon USDT) ; vente quand elles sortent du lot ou au stop"),
 )
 NAMES = [c.name for c in CANDIDATES]
 
@@ -232,6 +259,9 @@ class Lab:
 
     def run(self, name: str, start: str, end: str
             ) -> Tuple[pd.Series, List[Dict[str, Any]]]:
+        """Courbe du capital et trades du candidat `name` sur la période :
+        variantes de TrendGuard par ts.backtest, les autres (rotation,
+        retour à la moyenne, traders célèbres) par le simulateur générique."""
         p = self.p
         if name == REF:
             return self._tg(p, start, end)
@@ -247,7 +277,103 @@ class Lab:
             return self._rotation(start, end)
         if name == "Retour à la moyenne":
             return self._mean_reversion(start, end)
+        if name == "Tortues, système 1 (R. Dennis)":
+            return self._turtle(start, end, 20, 10)
+        if name == "Tortues, système 2 (R. Dennis)":
+            return self._turtle(start, end, 55, 20)
+        if name == "Croisement 50/200 (P. T. Jones)":
+            return self._golden_cross(start, end)
+        if name == "Cassure de Bollinger (J. Bollinger)":
+            return self._bollinger(start, end)
+        if name == "Double momentum (G. Antonacci)":
+            return self._dual_momentum(start, end)
         raise KeyError(name)
+
+    def _turtle(self, start: str, end: str, n_in: int, n_out: int):
+        """Tortues de Richard Dennis et William Eckhardt (1983) : cassure du
+        plus haut de `n_in` jours, sortie sous le plus bas de `n_out` jours,
+        stop initial à 2 × volatilité (le « 2N »). Achat seulement : pas de
+        vente à découvert sur Binance Spot."""
+        p = dataclasses.replace(self.p, init_stop_atr=2.0)
+        hi, lo = f"hi{n_in}", f"lo{n_out}"
+
+        def entry_fn(s, ctx):
+            return eligible(s, p) and ts._finite(s[hi]) and s["close"] > s[hi]
+
+        def exit_fn(h, s, ctx):
+            if s["close"] <= h["stop"]:
+                return "STOP"
+            if ts._finite(s[lo]) and s["close"] < s[lo]:
+                return "CANAL"
+            return None
+
+        return simulate(self.close, self.feats, self.btc, p, start, end,
+                        entry_fn=entry_fn, exit_fn=exit_fn, rank_fn=lambda s: s["mom"])
+
+    def _golden_cross(self, start: str, end: str):
+        """Moyenne 50 jours au-dessus de la moyenne 200 jours (le filtre de
+        tendance que Paul Tudor Jones dit appliquer à tout) ; vente au
+        croisement inverse ou au stop de protection."""
+        p = self.p
+
+        def entry_fn(s, ctx):
+            return eligible(s, p) and ts._finite(s["sma50"], s["sma200"]) and s["sma50"] > s["sma200"]
+
+        def exit_fn(h, s, ctx):
+            if s["close"] <= h["stop"]:
+                return "STOP"
+            if ts._finite(s["sma50"], s["sma200"]) and s["sma50"] < s["sma200"]:
+                return "CROISEMENT"
+            return None
+
+        return simulate(self.close, self.feats, self.btc, p, start, end,
+                        entry_fn=entry_fn, exit_fn=exit_fn, rank_fn=lambda s: s["mom"])
+
+    def _bollinger(self, start: str, end: str, k: float = 2.0):
+        """Bandes de John Bollinger : clôture au-dessus de la moyenne 20 jours
+        + `k` écarts-types ; vente sous la moyenne 20 jours ou au stop."""
+        p = self.p
+
+        def entry_fn(s, ctx):
+            return (eligible(s, p) and ts._finite(s["sma20"], s["sd20"])
+                    and s["close"] > s["sma20"] + k * s["sd20"])
+
+        def exit_fn(h, s, ctx):
+            if s["close"] <= h["stop"]:
+                return "STOP"
+            if ts._finite(s["sma20"]) and s["close"] < s["sma20"]:
+                return "MOYENNE"
+            return None
+
+        return simulate(self.close, self.feats, self.btc, p, start, end,
+                        entry_fn=entry_fn, exit_fn=exit_fn, rank_fn=lambda s: s["mom"])
+
+    def _dual_momentum(self, start: str, end: str, top: int = 3):
+        """Double momentum de Gary Antonacci : le 1er de chaque mois, les
+        `top` meilleures sur 12 mois (momentum relatif), seulement si leur
+        rendement sur 12 mois est positif (momentum absolu) ; sinon USDT."""
+        p = self.p
+        cache: Dict[int, List[str]] = {}
+
+        def best(ctx):
+            i = ctx["i"]
+            if i not in cache:
+                el = sorted(((s["ret365"], a) for a, s in ctx["snap"].items()
+                             if eligible(s, p) and ts._finite(s["ret365"]) and s["ret365"] > 0),
+                            reverse=True)
+                cache[i] = [a for _r, a in el[:top]]
+            return cache[i]
+
+        def exit_fn(h, s, ctx):
+            if s["close"] <= h["stop"]:
+                return "STOP"
+            if ctx["date"].day == 1 and s["_a"] not in best(ctx):
+                return "RANG"
+            return None
+
+        return simulate(self.close, self.feats, self.btc, p, start, end,
+                        entry_fn=lambda s, ctx: s["_a"] in best(ctx), exit_fn=exit_fn,
+                        rank_fn=lambda s: s["ret365"], entry_day=lambda d: d.day == 1)
 
     def _rotation(self, start: str, end: str, top: int = 5, keep: int = 8):
         p = self.p
@@ -485,11 +611,11 @@ def lab_report(close: pd.DataFrame, volume: pd.DataFrame, source: str,
     w_h, _ = meta_weights(rets, trend3, meta_start)
     variants = {
         "TrendGuard seule (référence)": rets[REF],
-        "Chef d'orchestre : meilleure des 7 sur 24 mois": blend(rets, NAMES, w_best),
-        "Chef d'orchestre : 7 pondérées par Sharpe 24 mois": blend(rets, NAMES, w_soft),
+        f"Chef d'orchestre : meilleure des {len(NAMES)} sur 24 mois": blend(rets, NAMES, w_best),
+        f"Chef d'orchestre : {len(NAMES)} pondérées par Sharpe 24 mois": blend(rets, NAMES, w_soft),
         "Chef d'orchestre : meilleur horizon de tendance": blend(rets, trend3, w_h),
         "Répartition fixe : 3 horizons de tendance": blend(rets, trend3),
-        "Répartition fixe : les 7 stratégies": blend(rets, NAMES),
+        f"Répartition fixe : les {len(NAMES)} stratégies": blend(rets, NAMES),
     }
     L.append("### 2. Méta-apprentissage : suivre la stratégie qui marche le mieux ?\n")
     L.append(f"Tous les 6 mois depuis {meta_start[:4]}, le chef d'orchestre regarde "
@@ -506,7 +632,7 @@ def lab_report(close: pd.DataFrame, volume: pd.DataFrame, source: str,
         meta_tab[label] = (a, b)
         L.append(f"| {label} |" + _st(a) + _st(b))
     L.append("")
-    L.append("Stratégie confiée par le chef d'orchestre (7 candidates) : "
+    L.append(f"Stratégie confiée par le chef d'orchestre ({len(NAMES)} candidates) : "
              + ", ".join(f"{d[:7]} → {n}" for d, n in picks) + "\n")
     ref_a, ref_b = meta_tab["TrendGuard seule (référence)"]
     wins = [lbl for lbl, (a, b) in meta_tab.items()
@@ -557,19 +683,26 @@ INTRO = """# Laboratoire de stratégies — le bot peut-il « apprendre la meill
 effondrés). Frais 0,1 % et slippage 0,1 % par côté, 1 % du capital risqué
 par trade, mêmes plafonds de portefeuille pour toutes les stratégies.
 
-Protocole : les sept stratégies sont écrites **avant** de regarder leurs
+Protocole : les douze stratégies sont écrites **avant** de regarder leurs
 résultats. La sélection se fait sur 2018-2022, puis est vérifiée sur
-2023 → aujourd'hui, période qui n'a servi à aucun choix.
+2023 → aujourd'hui, période qui n'a servi à aucun choix. Cinq d'entre elles
+sont les stratégies publiées de traders célèbres (Tortues de Richard Dennis,
+croisement 50/200 de Paul Tudor Jones, bandes de John Bollinger, double
+momentum de Gary Antonacci ; le retour à la moyenne est le RSI(2) de Larry
+Connors), écrites telles qu'ils les ont décrites, adaptées seulement à ce
+que permet Binance Spot (achat seul, même filtre de marché que TrendGuard).
+Leur histoire et ce qu'il faut en retenir : [`TRADING.md`](TRADING.md).
 """
 
 OUTRO = """## Ce que le bot en retient
 
 - **Il réévalue les alternatives en continu, mais n'en change pas seul.**
-  `python trendguard_bot.py diagnose` (et le diagnostic automatique hebdomadaire)
-  classe les sept stratégies sur les 24 derniers mois et affiche la probabilité
-  historique de gain par durée. Confier le capital à la meilleure des sept
-  stratégies récentes a fait moins bien que TrendGuard seule sur les deux
-  périodes (section 2) : ce classement est une information, pas un ordre.
+  `python trendguard_bot.py diagnose` (et le diagnostic automatique
+  hebdomadaire) classe les douze stratégies sur les 24 derniers mois et
+  affiche la probabilité historique de gain par durée. Ce classement est une
+  information, pas un ordre : une stratégie ne remplace TrendGuard que si
+  elle fait mieux sur les deux périodes (section 1), et confier le capital à
+  la meilleure du moment n'a pas fait mieux que de s'y tenir (section 2).
 - **« 99 % de réussite et 1 % de perte maximale » n'existe pas trade par
   trade.** La section 1 le montre : la stratégie au meilleur taux de réussite
   (retour à la moyenne) ne gagne presque rien. La limite de 1 % s'applique à

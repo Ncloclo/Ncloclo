@@ -55,3 +55,8 @@ eslint.json
 # Mesure de couverture des tests (python -m coverage)
 .coverage
 htmlcov/
+
+# Documents personnels et outils locaux du propriétaire (jamais publiés :
+# le dépôt est public)
+*.docx
+.vscode/gemini-mcp/

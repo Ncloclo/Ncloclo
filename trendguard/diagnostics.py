@@ -14,7 +14,7 @@ ALERTE avec une recommandation :
                    de confiance) — c'est la partie « apprentissage »
   7. Réel vs attendu  les trades du bot sont-ils compatibles avec la
                    distribution historique ? (test statistique)
-  8. Alternatives  tournoi des sept stratégies du laboratoire sur les
+  8. Alternatives  tournoi des stratégies du laboratoire sur les
                    24 derniers mois (strategy_lab.py) : TrendGuard reste-t-elle
                    compétitive ?
 

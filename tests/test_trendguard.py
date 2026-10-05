@@ -554,6 +554,41 @@ def test_capital_cap_kill_switch_uses_bot_equity(logger):
     assert bot.state["halted"]                    # alors que le compte ne perd que 5 %
 
 
+def test_a_new_paper_capital_starts_a_new_trial_instead_of_a_false_emergency_stop(logger):
+    """Le 4 octobre : capital du paper passé de 10 000 à 100 USDT (et plafond
+    à 100) avec 6 positions taillées pour 10 000 ; le bot comparait 100 USDT au
+    plus haut de 10 074 et déclenchait l'arrêt d'urgence (−97,7 %). Désormais :
+    nouvel essai paper au nouveau capital, l'ancien archivé, aucun arrêt."""
+    close, _volume = synthetic_market()
+    bot, _fb = make_bot("paper", close, logger, paper_capital=100.0, max_capital=100.0)
+    assert bot.boot()
+    assert bot.state["capital_basis"] == {"max_capital": 100.0, "paper_capital": 100.0}
+    # L'état laissé par l'ancienne version, avant le changement de capital.
+    old_book = {"cash": 3440.69, "holdings": {"aave": {"qty": 5.7, "entry": 154.6, "stop": 137.5, "high": 165.3,
+                                                       "entry_date": "2026-09-26T22:53:17+00:00",
+                                                       "risk_quote": 100.0, "cost": 884.7}}}
+    bot.state.update(paper=old_book, start_equity=10_000.0, peak_equity=10_074.83, halted=True,
+                     halt_reason="baisse de 97,7 % depuis le plus haut (limite 40 %)", halted_at="2026-10-03",
+                     trades=[{"asset": "ltc", "pnl": -100.0}])
+    bot.state.pop("capital_basis")
+    sent = []
+    bot.notifier = lambda msg, **kw: sent.append(msg)
+    bot._capital_basis()
+    assert bot.state["paper"] == {"cash": 100.0, "holdings": {}}
+    assert not bot.state["halted"] and bot.state["halt_reason"] is None and bot.state["peak_equity"] is None
+    assert bot.state["start_equity"] == 100.0 and bot.state["trades"] == []
+    arch = bot.state["paper_archive"][-1]
+    assert arch["capital"] == 10_000.0 and "aave" in arch["holdings"] and arch["trades"][0]["asset"] == "ltc"
+    assert arch["halted"] and "10 000 → 100" in sent[0] and "archivé" in sent[0]
+    # Plus rien ne change au démarrage suivant.
+    bot._capital_basis()
+    assert len(bot.state["paper_archive"]) == 1
+    # Plafond seul changé (en réel, par exemple) : positions gardées, le plus haut repart du capital actuel.
+    bot.state.update(paper=old_book, peak_equity=10_074.83, capital_basis={"max_capital": 0.0, "paper_capital": 100.0})
+    bot._capital_basis()
+    assert bot.state["paper"] is old_book and bot.state["peak_equity"] is None
+
+
 def _verify(bot, fb, close, volume, day_idx=SIM_FROM + 60, **kw):
     import io
     feed(fb, close, volume)

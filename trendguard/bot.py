@@ -161,12 +161,66 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
                 self.logger.critical(f"[BOOT] {msg}")
                 self.notifier(f"🛑 {msg}", critical=True, dedup_key="tg-foreign")
                 return False
+        self._capital_basis()
         self._save_state()
         n_pos = len(self._holdings())
         self.logger.info(f"[BOOT] TrendGuard {self.g.run_mode.upper()} — "
                          f"{len(self.slots)} paires, {n_pos} position(s), "
                          f"risque {fr(self.p.risk_pct*100, '.2f')} %/trade")
         return True
+
+    # ---------- Capital confié au bot ----------
+
+    def _capital_basis(self) -> None:
+        """Capital confié au bot (TG_MAX_CAPITAL, et TG_PAPER_CAPITAL en paper)
+        changé depuis le dernier démarrage. En paper : nouvel essai avec le
+        nouveau capital, l'ancien portefeuille fictif archivé (ses positions,
+        taillées pour l'ancien capital, n'ont plus de sens). Dans tous les cas :
+        le plus haut repart du nouveau capital. Sans cela, l'arrêt d'urgence
+        comparerait le nouveau capital au plus haut de l'ancien et se
+        déclencherait à tort (le 4 octobre : 10 074 USDT contre 100)."""
+        basis = {"max_capital": float(self.g.max_capital),
+                 "paper_capital": None if self.live else float(self.g.paper_capital)}
+        old = self.state.get("capital_basis")
+        if not isinstance(old, dict):
+            # Suivi absent (version précédente) : le capital du paper se lit
+            # dans start_equity ; le plafond, lui, n'était pas suivi.
+            old = {"max_capital": basis["max_capital"],
+                   "paper_capital": None if self.live else float(self.state.get("start_equity")
+                                                                 or basis["paper_capital"])}
+        self.state["capital_basis"] = basis
+        if old == basis:
+            return
+        if not self.live and old.get("paper_capital") != basis["paper_capital"]:
+            self._restart_paper(old.get("paper_capital"))
+            return
+        self.state["peak_equity"] = None          # repart du capital actuel à la décision
+        self.logger.warning(f"[CAPITAL] plafond confié au bot changé : {fr(old.get('max_capital') or 0, ',.0f')} → "
+                            f"{fr(basis['max_capital'], ',.0f')} {self.g.quote} ; le plus haut repart du "
+                            "capital actuel (arrêt d'urgence mesuré sur ce capital)")
+
+    def _restart_paper(self, old_capital: Any) -> None:
+        """Nouvel essai paper au capital de TG_PAPER_CAPITAL ; l'ancien
+        (portefeuille, trades clos, dates) est gardé dans paper_archive."""
+        st, book = self.state, self.state.get("paper") or {}
+        st.setdefault("paper_archive", []).append({
+            "capital": old_capital, "started_at": st.get("started_at"), "ended_at": v29._utcnow_iso(),
+            "cash": book.get("cash"), "holdings": book.get("holdings") or {}, "trades": st.get("trades") or [],
+            "realized_pnl_total": st.get("realized_pnl_total", 0.0),
+            "halted": bool(st.get("halted")), "halt_reason": st.get("halt_reason")})
+        st["paper"] = {"cash": float(self.g.paper_capital), "holdings": {}}
+        st.update(start_equity=float(self.g.paper_capital), peak_equity=None, last_equity=None,
+                  trades=[], realized_pnl_total=0.0, started_at=v29._utcnow_iso(), halted=False,
+                  halt_reason=None, halted_at=None, resume_note=None, risk_mult=1.0)
+        for k in ("pending_entries", "auto_resumed_at", "auto_resumes"):
+            st.pop(k, None)
+        held = ", ".join(a.upper() for a in sorted(book.get("holdings") or {})) or "aucune position"
+        msg = (f"capital du paper changé : {fr(float(old_capital or 0), ',.0f')} → "
+               f"{fr(self.g.paper_capital, ',.0f')} {self.g.quote}. Nouvel essai paper avec ce capital ; "
+               f"l'ancien ({held}) est archivé. Un arrêt d'urgence venu de ce changement, et non d'une "
+               "perte, est levé.")
+        self.logger.warning(f"[CAPITAL] {msg}")
+        self.notifier(f"ℹ️ TrendGuard : {msg}", dedup_key=f"tg-capital-{self.g.paper_capital}")
 
     # ---------- Persistance ----------
 
