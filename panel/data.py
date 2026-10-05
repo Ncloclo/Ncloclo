@@ -12,8 +12,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import v29
+from trendguard import libre, savoir
 from trendguard import market_watch as mw
-from trendguard import savoir
 from trendguard.journal import silent_logger
 
 from .market import Market
@@ -220,8 +220,11 @@ class BotData:
         except sqlite3.Error:
             return None
         try:
-            return savoir.summary(memory, datetime.now(timezone.utc).date().isoformat())
-        except (sqlite3.Error, ValueError, KeyError):
+            out = savoir.summary(memory, datetime.now(timezone.utc).date().isoformat())
+            st = self.state()
+            out["libre"] = libre.summary(memory.get("libre"), st.get("last_equity"), st.get("start_equity"))
+            return out
+        except (sqlite3.Error, ValueError, KeyError, TypeError):
             return None
         finally:
             memory.close()

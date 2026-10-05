@@ -17,7 +17,7 @@ Depuis le 29 septembre 2026, le bot suit une charte en deux parties :
 | Prévisions | chaque probabilité annoncée (vente, achat, marché baissier), relevée 12, 6, 3 et 1 heure avant la clôture, comparée à ce qui s'est passé | les probabilités suivantes sont corrigées par cette expérience : panneau, alertes d'anticipation, Rachelle |
 | Ruse | le bilan des achats différés : achetés plus tard et à quel prix, ou abandonnés | affiché dans Réglages ▸ Autonomie |
 | Veille | les annonces officielles de Binance (retraits de cryptos), relues toutes les heures au lieu d'une fois par jour | achats bloqués dans l'heure ; alerte si la crypto est détenue |
-| Savoir ([`SAVOIR.md`](SAVOIR.md)) | toutes les heures : presse, Google et Bing Actualités, Reddit, Hacker News, StockTwits, tendances CoinGecko, Fear & Greed et avis des IA ; chaque source jugée sur les cours réels 7 jours plus tard | l'avis des seules sources prouvées (20 semaines, 99 %) peut reporter un achat, jamais plus ; les reports se jugent eux-mêmes et se suspendent s'ils coûtent |
+| Savoir ([`SAVOIR.md`](SAVOIR.md)) | toutes les 15 minutes : presse, Google et Bing Actualités, Reddit, Hacker News, StockTwits, tendances CoinGecko, Fear & Greed et avis des IA ; chaque source jugée sur les cours réels 7 jours plus tard | l'avis des seules sources prouvées (20 semaines, 99 %) peut reporter un achat, jamais plus ; les reports se jugent eux-mêmes et se suspendent s'ils coûtent |
 
 **Précis** : la normale d'un carnet part de la médiane des 24 premiers relevés,
 puis suit une moyenne glissante où un relevé aberrant (krach éclair) pèse au

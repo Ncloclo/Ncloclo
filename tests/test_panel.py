@@ -256,7 +256,10 @@ def test_anticipation_and_security_endpoints(demo_server, monkeypatch):
     assert code == 200 and sec["total"] == len(sec["checks"]) >= 9 and sec["ok"] >= 6
     assert b"factice" not in body and b"enregistr" in body                       # présence seulement
     ans = _json(base + "/api/assistant", method="POST", body={"message": "Que va faire le bot ce soir ?"})[1]
-    assert "ICP" in ans["answer"] and "probabilité" in ans["answer"]
+    if f["sells"][0]["prob"] >= 0.05:                                # selon l'heure : ICP probable ou non
+        assert "ICP" in ans["answer"] and "probabilité" in ans["answer"]
+    else:                                                            # (peu avant minuit UTC)
+        assert "Aucune vente probable" in ans["answer"]
     ans = _json(base + "/api/assistant", method="POST", body={"message": "Suis-je en sécurité ?"})[1]
     assert "protections sur" in ans["answer"] and ans["actions"][0]["href"] == "#settings"
 

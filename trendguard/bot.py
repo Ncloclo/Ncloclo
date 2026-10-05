@@ -756,6 +756,7 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
                     entries.append(done)
                     cash_left -= done["cost"]
         self.state["last_decision_day"] = day
+        self._libre_step(day, close)
         self._explain(day, bull, close, snap, late + exits, entries, mult, now, allowed)
         self._summary(day, bull, equity, late + exits, entries, prices)
 
@@ -802,6 +803,8 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         sv = self.state.get("savoir") or {}
         if sv.get("day") == day and sv.get("line"):
             extra.append(sv["line"])
+        if sv.get("libre_day") == day and sv.get("libre_line"):
+            extra.append(sv["libre_line"])
         r = explain_decision(day, bull, self._btc_gap(close, day), snap, holdings, exits,
                              [e["asset"] for e in entries], notes,
                              bool(self.state.get("halted")), mult, self.p,

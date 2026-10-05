@@ -273,7 +273,13 @@ class DemoData:
                              "errors": {}},
                 "bilan": {"scores": scores, "opinion": {}, "holds": {}, "influence": True,
                           "record": {"checked": 0, "helped": 0, "avg_pct": None}, "proven": []},
-                "recent": []}
+                "recent": [],
+                "libre": {"equity": 103.4, "pct": 3.4, "main_pct": 1.2, "positions": ["sol", "xrp"],
+                          "rules": {"buy": 0.3, "sell": -0.2, "stop": 0.08},
+                          "notes": ["achète XRP (avis +0,42)"], "trades": 4,
+                          "top_sources": [["StockTwits", 1.8], ["Google Actualités", 1.2], ["Reddit", 0.7]],
+                          "curve": [], "text": "Bot libre (argent fictif) : 103,40 USDT (+3,4 % depuis le "
+                                              "2026-10-06), 2 position(s) ; bot principal : +1,2 %"}}
 
     def log_tail(self, lines: int = 300) -> List[str]:
         now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")

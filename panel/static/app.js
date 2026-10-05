@@ -1043,6 +1043,15 @@ function renderKnowledge(k) {
   if (last.at) rows.push(["ok", `Dernière lecture : ${ftime(Date.parse(last.at) / 1000)} — ${read.join(", ") || "rien de nouveau"}.`]);
   Object.entries(last.errors || {}).forEach(([s, e]) => rows.push(["warn", `${s} : ${e} (nouvel essai à la prochaine lecture)`]));
   Object.entries(b.opinion || {}).forEach(([a, o]) => rows.push([o.value <= -0.5 ? "warn" : "ok", `Avis du bot sur ${up(a)} : ${nf(2).format(o.value)} (${o.sources.join(", ")})`]));
+  const free = k.libre || {};
+  $("#w-free").hidden = !free.text;
+  if (free.text) {
+    const items = [["ok", free.text + "."]];
+    if (free.main_pct != null) items.push([free.pct >= free.main_pct ? "ok" : "warn", `Bot libre ${nf(1).format(free.pct)} % contre ${nf(1).format(free.main_pct)} % pour le bot principal, depuis leur départ.`]);
+    (free.notes || []).forEach((n) => items.push(["ok", `Dernière décision : ${n}.`]));
+    if ((free.top_sources || []).length) items.push(["ok", `Sources qu'il écoute le plus : ${free.top_sources.map(([s, w]) => `${s} (× ${nf(1).format(w)})`).join(", ")}.`]);
+    $("#w-free-list").replaceChildren(...items.map(([cls, t]) => el("li", cls, t)));
+  }
   const rec = b.record || {};
   if (rec.checked) rows.push(["ok", `Reports d'achat vérifiés : ${rec.checked}, utiles ${rec.helped} (la crypto a baissé) ; variation moyenne ${nf(1).format(rec.avg_pct)} %.`]);
   $("#w-know").replaceChildren(...rows.map(([cls, t]) => el("li", cls, t)));

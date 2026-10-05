@@ -3,7 +3,7 @@
 Noyau de savoir de TrendGuard : le bot lit Internet, garde tout ce qu'il
 apprend et mesure qui a raison (docs/SAVOIR.md).
 
-Toutes les heures (TG_SAVOIR_MINUTES), dans un processus séparé :
+Toutes les 15 minutes (TG_SAVOIR_MINUTES), dans un processus séparé :
   - presse spécialisée : CoinDesk, Cointelegraph, Decrypt ;
   - moteurs de recherche : Google Actualités, Bing Actualités ;
   - forums : Reddit (r/CryptoCurrency, r/Bitcoin, r/ethereum), Hacker News ;

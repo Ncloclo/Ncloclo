@@ -844,6 +844,7 @@ Points faibles :
 | 29 | Au bureau, rester sur le réseau Wi-Fi stable (B) et décocher « Se connecter automatiquement » pour l'autre ; oublier les réseaux Wi-Fi qui ne servent plus | Vous | dès que possible (01/10, 16 h) : I1, I3 |
 | 30 | Rapport qui lit le journal du Wi-Fi (coupures par réseau, réseau à préférer, partage de connexion d'un téléphone) | Code, avec votre accord | **fait** (01/10, 21 h) : I6 |
 | 31 | Noyau de savoir : presse, moteurs de recherche, forums, réseau social, tendances et avis des IA lus toutes les heures, chaque source jugée sur les cours réels ; l'avis des sources prouvées peut seulement reporter un achat | Code, à votre demande | **fait** (01/10, 20 h) : [`SAVOIR.md`](SAVOIR.md) |
+| 32 | Bot libre (second portefeuille fictif qui agit librement sur le noyau de savoir et révise ses propres règles), lecture d'Internet toutes les 15 minutes ; capital changé sans faux arrêt d'urgence ; cinq stratégies de traders célèbres au tournoi ; guide du trading | Code, à votre demande | **fait** (05/10) : [`LIBRE.md`](LIBRE.md), [`TRADING.md`](TRADING.md) ; refusés : lecture à la seconde, dark web et Tor, Kali Linux, modèle d'IA à entraîner |
 
 Fait depuis l'audit du matin : chemins de secours des ordres réels testés (et
 un défaut corrigé), blocage des mots de passe ratés, écriture sûre du choix des

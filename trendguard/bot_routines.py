@@ -17,7 +17,7 @@ import pandas as pd
 
 import v29
 
-from . import anticipation, autonomy, evolution, learning, report, savoir, systeme, uptime
+from . import anticipation, autonomy, evolution, learning, libre, report, savoir, systeme, uptime
 from . import diagnostics as dg
 from . import market_watch as mw
 from . import trend_strategy as ts
@@ -174,6 +174,33 @@ class RoutinesMixin:
         for s in sorted(before - set(res["proven"])):
             self.logger.info(f"[SAVOIR] {s} n'est plus prouvée : son avis ne compte plus")
         return res["holds"]
+
+    def _libre_step(self, day: str, close: Any) -> None:
+        """La journée du bot libre (libre.py), à la décision : il apprend de
+        la veille, révise ses règles, se fait son avis et agit, dans son
+        propre portefeuille fictif gardé dans le noyau de savoir. Jamais
+        bloquant pour le bot principal, jamais d'argent réel."""
+        if not (self.g.savoir and self.g.libre):
+            return
+        memory = None
+        try:
+            memory = savoir.Memory(self.g.savoir_db)
+            book = memory.get("libre")
+            if not isinstance(book, dict) or book.get("capital") != float(self.g.paper_capital):
+                book = libre.new(self.g.paper_capital, day)       # capital changé : nouvel essai
+            today, yesterday = libre.last_views(memory, day)
+            notes = libre.step(book, day, close, today, yesterday)
+            memory.put("libre", book)
+        except Exception as e:
+            self.logger.warning(f"[LIBRE] journée du bot libre impossible : {e}")
+            return
+        finally:
+            if memory is not None:
+                memory.close()
+        s = libre.summary(book, self.state.get("last_equity"), self.state.get("start_equity"))
+        self.state.setdefault("savoir", {}).update(libre_day=day, libre_line=s["text"] + ".")
+        if notes:
+            self.logger.info("[LIBRE] " + " ; ".join(notes))
 
     def _report_after_skill(self, today: str) -> None:
         """Compétence ou expérience acquise (réglage adopté, confirmé ou

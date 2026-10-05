@@ -17,7 +17,7 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import evolution, learning, savoir
+from . import evolution, learning, libre, savoir
 from .systeme import (
     Check,
     Deps,
@@ -431,8 +431,16 @@ def knowledge_check(gcfg: Any) -> List[Check]:
     finally:
         memory.close()
     errors = (s.get("last_run") or {}).get("errors") or {}
-    return [chk("Noyau de savoir", None, s["text"] + (f" ; sources en panne à la dernière lecture : "
-                                                      f"{', '.join(errors)}" if errors else ""))]
+    out = [chk("Noyau de savoir", None, s["text"] + (f" ; sources en panne à la dernière lecture : "
+                                                     f"{', '.join(errors)}" if errors else ""))]
+    memory = savoir.Memory(path, readonly=True)
+    try:
+        free = libre.summary(memory.get("libre"))
+    finally:
+        memory.close()
+    if free:
+        out.append(chk("Bot libre", None, free["text"]))
+    return out
 
 
 def skills_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:

@@ -421,7 +421,15 @@ certitude. L'avis des seules sources prouvées peut reporter un achat, jamais
 plus (ni vente, ni achat, ni risque en plus, ni règle changée) ; chaque report
 est vérifié et le bot les suspend s'ils coûtent plus qu'ils n'évitent. Bilan
 dans le panneau (Veille ▸ Noyau de savoir), dans le rapport quotidien et avec
-`python trendguard_bot.py savoir`.
+`python trendguard_bot.py savoir`. Lecture toutes les 15 minutes.
+
+### Bot libre (`trendguard/libre.py`, [`docs/LIBRE.md`](docs/LIBRE.md))
+
+À votre demande, un second portefeuille fictif agit librement à côté du bot
+principal : il apprend chaque jour quelles sources du noyau de savoir voient
+juste, se fait son propre avis, achète et vend seul, et révise ses propres
+règles chaque semaine. Il ne touche jamais au bot principal ni à l'argent
+réel ; les deux capitaux s'affichent côte à côte pour juger sur pièces.
 
 ### Revue hebdomadaire par Claude Code
 

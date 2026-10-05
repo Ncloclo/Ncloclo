@@ -8,7 +8,7 @@ son propre avis et agit seul.
 Ce document dit ce que le bot fait désormais, ce qu'il ne fait pas, et
 pourquoi. Code : `trendguard/savoir.py`.
 
-## Ce qu'il lit, toutes les heures
+## Ce qu'il lit, toutes les 15 minutes
 
 | Famille | Sources | Ce que le bot en garde |
 | --- | --- | --- |
@@ -72,8 +72,9 @@ cours.
 - **Pas « chaque seconde ».** Le bot décide une fois par jour, à la clôture :
   une information à la seconde n'y change rien. Les sources publiques bloquent
   ceux qui lisent trop vite (Reddit l'a déjà fait pendant les essais), et la
-  nuit le bot passe par le partage de connexion de votre téléphone. Une
-  lecture par heure suffit ; `TG_SAVOIR_MINUTES` la règle (15 au moins).
+  nuit le bot passe par le partage de connexion de votre téléphone. Il lit
+  toutes les 15 minutes, le plus souvent que ces sites tolèrent ;
+  `TG_SAVOIR_MINUTES` la règle (15 au moins).
 - **Pas de conscience, pas de « perfection ».** Un programme ne pense pas et
   ne ressent rien ; promettre l'inverse serait mentir. Ce qu'il peut avoir,
   et a désormais : une mémoire qui grandit, une mesure honnête de qui a
@@ -116,11 +117,12 @@ Chaque IA devient alors une source du noyau, jugée comme les autres.
 Une lecture dure une quinzaine de secondes, dans un processus à part : le bot
 surveille ses stops pendant ce temps, et une source en panne n'arrête ni les
 autres ni le bot. Les pages sont demandées compressées : environ 300 Ko par
-lecture, 7 Mo par jour. Le noyau pèse 0,5 Mo au départ (dont l'historique de
+lecture, 25 à 30 Mo par jour (`TG_SAVOIR_MINUTES=60` pour quatre fois moins). Le noyau pèse 0,5 Mo au départ (dont l'historique de
 Fear & Greed) et grandit d'environ 150 Ko par jour.
 
 | Variable | Rôle |
 | --- | --- |
 | `TG_SAVOIR` | `true` (par défaut) : noyau de savoir actif |
-| `TG_SAVOIR_MINUTES` | minutes entre deux lectures (60 par défaut, 15 au moins) |
+| `TG_SAVOIR_MINUTES` | minutes entre deux lectures (15 par défaut et au moins) |
+| `TG_BOT_LIBRE` | `true` (par défaut) : bot libre, à côté du bot principal ([`LIBRE.md`](LIBRE.md)) |
 | `TG_SAVOIR_DB` | fichier du noyau (`trendguard_savoir.db`, privé, exclu de GitHub) |

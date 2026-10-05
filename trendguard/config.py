@@ -58,7 +58,9 @@ TG_ENV_DOC: Dict[str, str] = {
     "TG_VEILLE_DB": "Base de la veille (mémoire des IA et des annonces)",
     "TG_SAVOIR": "true : noyau de savoir (presse, moteurs de recherche, forums, réseau social, "
                  "tendances, avis des IA), lu toutes les heures et jugé sur les cours réels",
-    "TG_SAVOIR_MINUTES": "Minutes entre deux lectures d'Internet par le noyau de savoir (15 au moins)",
+    "TG_SAVOIR_MINUTES": "Minutes entre deux lectures d'Internet par le noyau de savoir (15 au moins, 15 par défaut)",
+    "TG_BOT_LIBRE": "true : bot libre, second portefeuille fictif qui agit librement sur le noyau de savoir "
+                    "et ses propres règles, à côté du bot principal (jamais d'argent réel)",
     "TG_SAVOIR_DB": "Base du noyau de savoir (textes lus, avis des sources, reports d'achat)",
     "PANEL_HOST": "Panneau : 127.0.0.1 (ce PC) ou 0.0.0.0 (téléphone, mot de passe requis)",
     "PANEL_PORT": "Panneau : port web (8765)",
@@ -136,8 +138,11 @@ class GuardConfig:
     # sources jugées sur les cours réels ; ne peut que reporter un achat.
     # Activé par l'environnement.
     savoir: bool = False
-    savoir_minutes: int = 60
+    savoir_minutes: int = 15
     savoir_db: str = ""
+    # Bot libre (libre.py) : second portefeuille fictif, sans épreuves, à côté
+    # du bot principal ; activé par l'environnement.
+    libre: bool = False
     max_capital: float = 0.0            # 0 = tout le compte
     keep_awake: bool = False            # anti-veille (activé par l'environnement)
     max_spread: float = 0.005           # ruse : carnet anormal → achat différé
@@ -246,7 +251,8 @@ def load_guard_config_from_env() -> GuardConfig:
         auto_update=v29._env_b("TG_MISE_A_JOUR", True),
         watch_db=v29._env_s("TG_VEILLE_DB", os.path.join(v29.APP_DIR, "trendguard_veille.db")),
         savoir=v29._env_b("TG_SAVOIR", True),
-        savoir_minutes=v29._env_i("TG_SAVOIR_MINUTES", 60),
+        savoir_minutes=v29._env_i("TG_SAVOIR_MINUTES", 15),
+        libre=v29._env_b("TG_BOT_LIBRE", True),
         savoir_db=v29._env_s("TG_SAVOIR_DB", os.path.join(v29.APP_DIR, "trendguard_savoir.db")),
         max_capital=v29._env_f("TG_MAX_CAPITAL", 0.0),
         keep_awake=v29._env_b("TG_KEEP_AWAKE", True),
