@@ -454,6 +454,15 @@ def ai_views(watch_db: str) -> List[Tuple[str, str, str, float]]:
     return [(d, f"IA {p}", a, float(s)) for d, p, a, s in rows]
 
 
+def why_failed(e: BaseException) -> str:
+    """Pourquoi une source n'a pas pu être lue. Ces sources se lisent sans
+    clé : un refus (401, 403) vient d'une limite de lecture ou d'un blocage
+    du site, pas d'une clé."""
+    if isinstance(e, mw.HttpError) and e.status in (401, 403):
+        return "accès refusé par le site (limite de lecture ou blocage), nouvel essai à la prochaine lecture"
+    return mw.friendly_error(e)
+
+
 def collect(memory: Memory, universe: Sequence[str], held: Iterable[str], now: datetime,
             fetch: Fetch = http_get, watch_db: str = "") -> Dict[str, Any]:
     """Une lecture d'Internet : chaque famille de sources, les avis des IA,
@@ -468,7 +477,7 @@ def collect(memory: Memory, universe: Sequence[str], held: Iterable[str], now: d
         try:
             got = reader(ctx)
         except Exception as e:
-            errors[name] = mw.friendly_error(e)
+            errors[name] = why_failed(e)
             continue
         read[name] = len(got)
         docs += got

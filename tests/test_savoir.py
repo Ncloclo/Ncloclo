@@ -117,6 +117,8 @@ def test_a_broken_source_never_stops_the_others(memory):
     assert set(run["errors"]) == {"StockTwits", "Reddit"} and "réseau coupé" in run["errors"]["Reddit"]
     assert run["read"]["Presse spécialisée"] == 9                  # 3 flux de 3 articles
     assert memory.get("last_run")["errors"] == run["errors"]
+    from trendguard import market_watch as mw
+    assert "limite de lecture ou blocage" in savoir.why_failed(mw.HttpError(403, "Forbidden"))
 
 
 def test_old_texts_are_pruned_but_views_are_kept(memory):
