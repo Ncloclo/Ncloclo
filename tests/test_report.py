@@ -526,6 +526,42 @@ def test_report_reads_the_wifi_log():
     assert rph.wifi_check(rp.Deps(run=lambda cmd, **kw: proc("", 1), platform="win32"), now) == []
 
 
+def test_report_reads_windows_crashes():
+    """Plantages de Windows (journal « Kernel-Power », ID 41) des 7 derniers
+    jours : date, code d'écran bleu expliqué en français, alerte s'il y en a
+    plusieurs."""
+    now = datetime(2026, 10, 6, 0, 0, tzinfo=timezone.utc)
+
+    def run(cmd, **kw):
+        assert cmd[0] == "powershell" and "Kernel-Power" in cmd[-1]
+        return proc("2026-10-05T14:05:00.0000000Z|26")
+
+    c = rph.crash_check(rp.Deps(run=run, platform="win32"), now)[0]
+    assert c["label"] == "Plantages de Windows (7 j)" and c["ok"] is None   # un seul : information
+    assert c["detail"] == "05/10 14h05 : code 26" and c["reco"] == ""
+
+    def two(cmd, **kw):
+        return proc("2026-10-02T09:00:00.0000000Z|0\n2026-10-05T14:05:00.0000000Z|26")
+
+    c2 = rph.crash_check(rp.Deps(run=two, platform="win32"), now)[0]
+    assert c2["ok"] is False                                              # deux en 7 jours : alerte
+    assert "02/10 09h00 : redémarrage sans arrêt propre" in c2["detail"]
+    assert "05/10 14h05 : code 26" in c2["detail"]
+    assert "Plusieurs plantages cette semaine" in c2["reco"]
+
+    def known(cmd, **kw):
+        return proc("2026-10-05T14:05:00.0000000Z|0x1A\n2026-10-05T14:06:00.0000000Z|0x1A")
+
+    c3 = rph.crash_check(rp.Deps(run=known, platform="win32"), now)[0]
+    assert "mémoire vive ou disque à vérifier" in c3["detail"]
+
+    old = rph.crash_check(rp.Deps(run=lambda cmd, **kw: proc("2026-09-20T00:00:00.0000000Z|0"),
+                                  platform="win32"), now)
+    assert old == []                                                      # plus de 7 jours : ignoré
+    assert rph.crash_check(rp.Deps(run=run, platform="linux"), now) == []
+    assert rph.crash_check(rp.Deps(run=lambda cmd, **kw: proc("", 1), platform="win32"), now) == []
+
+
 class WindowsRun(FakeRun):
     """Commandes de Windows en plus : chiffrement du disque, mises à jour."""
 

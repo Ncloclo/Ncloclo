@@ -319,6 +319,71 @@ def wifi_check(deps: Deps, now: datetime) -> List[Check]:
     return [chk("Wi-Fi (24 h)", False if bad else None, " ; ".join(parts), reco)]
 
 
+# Plantages de Windows des 7 derniers jours (journal « Kernel-Power », ID 41) :
+# posé après tout redémarrage sans arrêt propre (écran bleu, coupure de
+# courant, blocage puis bouton d'alimentation). BugcheckCode : "0" si aucun
+# bogue identifié (coupure de courant, blocage matériel), sinon le code de
+# l'écran bleu, en hexadécimal.
+CRASH_SCRIPT = (
+    "Get-WinEvent -FilterHashtable @{LogName='System'; ProviderName='Microsoft-Windows-Kernel-Power';"
+    "Id=41; StartTime=(Get-Date).AddDays(-7)} -ErrorAction SilentlyContinue | "
+    "ForEach-Object { $d = ([xml]$_.ToXml()).Event.EventData.Data; '{0}|{1}' -f "
+    "$_.TimeCreated.ToUniversalTime().ToString('o'), ($d | Where-Object Name -eq 'BugcheckCode').'#text' }")
+CRASH_ALERT_MIN = 2             # plantages en 7 jours à partir desquels une alerte part
+# Codes d'écran bleu les plus courants, expliqués en français ; les autres
+# restent affichés en hexadécimal, sans fausse certitude sur leur cause.
+BUGCHECK_FR = {
+    "0": "redémarrage sans arrêt propre (coupure de courant ou blocage), sans bogue identifié",
+    "0x1a": "0x1A, gestion de la mémoire (mémoire vive ou disque à vérifier)",
+    "0x3b": "0x3B, accès mémoire interdit par un pilote",
+    "0x7e": "0x7E, erreur non gérée d'un pilote",
+    "0x9f": "0x9F, un pilote n'a pas répondu à temps (souvent au réveil de veille)",
+    "0x133": "0x133, le système a manqué un battement d'horloge",
+}
+
+
+def crash_explain(code: str) -> str:
+    """Code d'écran bleu (BugcheckCode) expliqué en français quand il est
+    connu, sinon affiché tel quel."""
+    known = BUGCHECK_FR.get(code.strip().lower())
+    return known if known else f"code {code}"
+
+
+def crash_events(deps: Deps) -> List[Tuple[datetime, str]]:
+    """(heure UTC, code d'écran bleu) des plantages de Windows des 7 derniers
+    jours, dans l'ordre ; vide ailleurs ou si le journal est illisible."""
+    if not deps.platform.startswith("win"):
+        return []
+    try:
+        r = deps.run(["powershell", "-NoProfile", "-Command", CRASH_SCRIPT], timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    out = []
+    for line in (r.stdout or "").splitlines() if r.returncode == 0 else []:
+        parts = line.strip().split("|")
+        if len(parts) != 2:
+            continue
+        try:
+            t = datetime.fromisoformat(parts[0].replace("Z", "+00:00")).astimezone(timezone.utc)
+        except ValueError:
+            continue
+        out.append((t, parts[1].strip() or "0"))
+    return sorted(out)
+
+
+def crash_check(deps: Deps, now: datetime) -> List[Check]:
+    """Plantages de Windows (écran bleu, arrêt brutal) des 7 derniers jours :
+    date, code expliqué en français ; alerte s'il y en a plusieurs."""
+    events = [(t, code) for t, code in crash_events(deps) if t >= now - timedelta(days=7)]
+    if not events:
+        return []
+    detail = " ; ".join(f"{t.strftime('%d/%m %Hh%M')} : {crash_explain(code)}" for t, code in events)
+    many = len(events) >= CRASH_ALERT_MIN
+    reco = ("Plusieurs plantages cette semaine : vérifiez la mémoire (mdsched.exe), les mises à jour "
+            "de Windows et des pilotes (surtout ceux du disque)." if many else "")
+    return [chk("Plantages de Windows (7 j)", False if many else None, detail, reco)]
+
+
 def resource_checks(deps: Optional[Deps] = None, root: str = "", detail: bool = False,
                     prev_free: Optional[float] = None,
                     r: Optional[Dict[str, Any]] = None) -> List[Check]:

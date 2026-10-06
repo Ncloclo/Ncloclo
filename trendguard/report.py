@@ -41,6 +41,7 @@ from .report_health import (
     bot_checks,
     check_log,
     code_checks,
+    crash_check,
     panel_fetch,
     resource_checks,
     skills_checks,
@@ -171,7 +172,8 @@ def build(gcfg: Any, env: Dict[str, str], deps: Optional[Deps] = None,
     prev = load_latest(gcfg) or {}
     res = pc_resources(deps, root)
     health = bot_checks(gcfg, st, status, now) + resource_checks(
-        deps, root, detail=True, prev_free=(prev.get("resources") or {}).get("disk_free"), r=res) + wifi_check(deps, now)
+        deps, root, detail=True, prev_free=(prev.get("resources") or {}).get("disk_free"), r=res
+    ) + wifi_check(deps, now) + crash_check(deps, now)
     health.insert(0, chk("Panneau de contrôle", "ms" in pnl,
                          f"en marche, répond en {pnl['ms']} ms" if "ms" in pnl else "injoignable",
                          "" if "ms" in pnl else "Relancez le panneau (il démarre avec l'ordinateur)."))
