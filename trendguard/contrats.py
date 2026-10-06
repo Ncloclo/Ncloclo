@@ -20,7 +20,7 @@ import math
 import re
 import uuid
 from dataclasses import MISSING, dataclass, field, fields
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any, ClassVar, Dict, List, Optional, Tuple
 
@@ -484,6 +484,241 @@ class ModelDisagreement:
             raise ContractError("INCONSISTENT", "un désaccord oppose au moins deux positions")
 
 
+ASSET_CLASSES = ("EQUITY", "ETF", "BOND", "INDEX", "FX", "COMMODITY", "CRYPTO", "RATE", "DERIVATIVE")
+INSTRUMENT_STATUSES = ("TRADING", "VETO", "DELISTED", "NO_DATA")
+SIGNAL_DIRECTIONS = ("LONG", "SHORT", "NEUTRAL")
+SIGNAL_TYPES = ("TREND", "MOMENTUM", "MEAN_REVERSION", "BREAKOUT", "VALUE", "QUALITY", "GROWTH", "MACRO", "EVENT",
+                "SENTIMENT", "VOLATILITY", "STATISTICAL_ARBITRAGE")
+HORIZONS = ("INTRADAY", "SHORT_TERM", "MEDIUM_TERM", "LONG_TERM")
+SIGNAL_STATUSES = ("CANDIDATE", "VALIDATED", "REJECTED", "EXPIRED")
+ANALYSIS_RECOMMENDATIONS = ("BUY_SIGNAL", "WATCH", "NO_TRADE")
+SCENARIO_NAMES = ("EXTREME", "STRESS", "BEAR", "BASE", "BULL")
+INSTRUMENT_RE = re.compile(r"^[a-z]+:[a-z]+:[A-Z0-9]+-[A-Z0-9]+$")
+
+
+def _day(name: str, v: Any) -> None:
+    if not isinstance(v, str) or not DAY_RE.match(v):
+        raise ContractError("INVALID_FIELD", f"{name} : date AAAA-MM-JJ attendue ({v!r})")
+
+
+def _opt01(name: str, v: Any) -> Optional[float]:
+    return None if v is None else _score01(name, v)
+
+
+def _plain(obj: Any) -> Any:
+    """Un contrat en dictionnaire simple (pour JSON), contrats imbriqués compris."""
+    if hasattr(obj, "__dataclass_fields__"):
+        return {f.name: _plain(getattr(obj, f.name)) for f in fields(obj)}
+    if isinstance(obj, (list, tuple)):
+        return [_plain(x) for x in obj]
+    if isinstance(obj, dict):
+        return {k: _plain(v) for k, v in obj.items()}
+    return obj
+
+
+@dataclass(frozen=True)
+class Instrument:
+    """Un instrument du référentiel (Instrument.v1, §8 de l'étape 7)."""
+    instrument_id: str
+    symbol: str
+    base: str
+    quote: str
+    exchange: str
+    asset_class: str
+    currency: str
+    timezone: str
+    calendar: str
+    listing_date: Optional[str]
+    status: str
+    tick_size: Optional[float] = None
+    lot_step: Optional[float] = None
+    min_notional: Optional[float] = None
+
+    def __post_init__(self) -> None:
+        if not INSTRUMENT_RE.match(self.instrument_id or ""):
+            raise ContractError("INVALID_FIELD", f"instrument_id : place:marché:BASE-DEVISE attendu ({self.instrument_id!r})")
+        _enum("asset_class", self.asset_class, ASSET_CLASSES)
+        _enum("status", self.status, INSTRUMENT_STATUSES)
+        if self.listing_date is not None:
+            _day("listing_date", self.listing_date)
+        for name in ("tick_size", "lot_step", "min_notional"):
+            if getattr(self, name) is not None:
+                _number(name, getattr(self, name))
+
+
+@dataclass(frozen=True)
+class Feature:
+    """Un indicateur du magasin (Feature.v1, §21 de l'étape 7, §42 des
+    contrats) : valeur (None : non mesurable, jamais 0), version, fin des
+    données qui l'ont produit."""
+    instrument_id: str
+    day: str
+    name: str
+    value: Optional[float]
+    version: str
+    data_cutoff_at: str
+
+    def __post_init__(self) -> None:
+        _day("day", self.day)
+        if not re.fullmatch(r"[a-z0-9_]+", self.name or ""):
+            raise ContractError("INVALID_FIELD", f"name : nom d'indicateur attendu ({self.name!r})")
+        if self.value is not None:
+            object.__setattr__(self, "value", _number("value", self.value, positive=False))
+        if not SEMVER.match(self.version):
+            raise ContractError("INVALID_VERSION", f"version MAJEUR.MINEUR.CORRECTIF attendue ({self.version!r})")
+        check_timestamp("data_cutoff_at", self.data_cutoff_at)
+        end = datetime.fromisoformat(self.day).replace(tzinfo=timezone.utc) + timedelta(days=1)
+        if datetime.fromisoformat(self.data_cutoff_at.replace("Z", "+00:00")) > end:
+            raise ContractError("LOOK_AHEAD", f"{self.name} du {self.day} : données jusqu'au {self.data_cutoff_at}, "
+                                              "après la bougie (regard vers le futur)")
+
+
+@dataclass(frozen=True)
+class Forecast:
+    """Prévision de fréquence (Forecast.v1, §29) : probabilités observées
+    dans un passé comparable, intervalle, nombre de cas ; jamais un prix."""
+    instrument_id: str
+    day: str
+    horizon_days: int
+    p_up: float
+    p_target: float
+    target: float
+    p_drawdown20: float
+    expected_return: float
+    q10: float
+    q90: float
+    ci_low: float
+    ci_high: float
+    cases: int
+    version: str
+
+    def __post_init__(self) -> None:
+        _day("day", self.day)
+        if not isinstance(self.horizon_days, int) or self.horizon_days <= 0:
+            raise ContractError("OUT_OF_RANGE", "horizon_days : entier positif attendu")
+        for name in ("p_up", "p_target", "p_drawdown20", "ci_low", "ci_high"):
+            object.__setattr__(self, name, _score01(name, getattr(self, name)))
+        if not self.ci_low <= self.p_up <= self.ci_high:
+            raise ContractError("INCONSISTENT", "la probabilité doit être dans son intervalle")
+        if self.q10 > self.q90:
+            raise ContractError("INCONSISTENT", "intervalle de rendement inversé")
+        _count("cases", self.cases)
+
+
+@dataclass(frozen=True)
+class Scenario:
+    """Un scénario (Scenario.v1, §28)."""
+    name: str
+    probability: float
+    cases: int
+    expected_return: Optional[float]
+    expected_volatility: Optional[float]
+    expected_drawdown: Optional[float]
+    invalidating: str
+
+    def __post_init__(self) -> None:
+        _enum("name", self.name, SCENARIO_NAMES)
+        object.__setattr__(self, "probability", _score01("probability", self.probability))
+        _count("cases", self.cases)
+
+
+@dataclass(frozen=True)
+class ScenarioSet:
+    """Les scénarios d'un instrument : leurs probabilités font 1 (contrôlé)."""
+    instrument_id: str
+    day: str
+    horizon_days: int
+    scenarios: Tuple[Scenario, ...]
+    cases: int
+    version: str
+
+    def __post_init__(self) -> None:
+        _day("day", self.day)
+        if sorted(s.name for s in self.scenarios) != sorted(SCENARIO_NAMES):
+            raise ContractError("INCONSISTENT", "chaque scénario une fois : " + ", ".join(SCENARIO_NAMES))
+        if abs(sum(s.probability for s in self.scenarios) - 1) > 1e-6:
+            raise ContractError("PROBABILITIES", "la somme des probabilités des scénarios doit faire 1")
+        if sum(s.cases for s in self.scenarios) != self.cases:
+            raise ContractError("INCONSISTENT", "les cas des scénarios doivent faire le total")
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
+@dataclass(frozen=True)
+class FinancialSignal:
+    """Signal financier (FinancialSignal.v1, §32 des contrats, §23 de l'étape
+    7) : candidat seulement ; rendement attendu None tant qu'il n'est pas
+    mesuré ; un signal n'est jamais une autorisation."""
+    signal_id: str
+    instrument_id: str
+    direction: str
+    signal_type: str
+    strength: float
+    confidence: Optional[Confidence]
+    horizon: str
+    entry_condition: str
+    exit_condition: str
+    expected_return: Optional[float]
+    expected_risk: Optional[float]
+    source_features: Tuple[str, ...]
+    model_version: str
+    status: str
+    day: str
+
+    def __post_init__(self) -> None:
+        _enum("direction", self.direction, SIGNAL_DIRECTIONS)
+        _enum("signal_type", self.signal_type, SIGNAL_TYPES)
+        _enum("horizon", self.horizon, HORIZONS)
+        _enum("status", self.status, SIGNAL_STATUSES)
+        object.__setattr__(self, "strength", _score01("strength", self.strength))
+        object.__setattr__(self, "expected_risk", _opt01("expected_risk", self.expected_risk))
+        _day("day", self.day)
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
+@dataclass(frozen=True)
+class FinancialAnalysis:
+    """Analyse d'une crypto (FinancialAnalysis.v1, §60 et §37 de l'étape 7) :
+    recommandation, raisons de ne pas acheter (codes du contrat NO_TRADE),
+    classement indicatif, confiances séparées, détails, preuves, risques,
+    contradictions, conditions d'invalidation. Jamais une autorisation."""
+    instrument_id: str
+    day: str
+    recommendation: str
+    reasons: Tuple[str, ...]
+    reason_texts: Tuple[str, ...]
+    opportunity: Optional[float]
+    confidence: Dict[str, Any]
+    details: Dict[str, Any]
+    evidence: Tuple[str, ...]
+    risks: Tuple[str, ...]
+    contradictions: Tuple[str, ...]
+    invalidating: Tuple[str, ...]
+    authorized: bool = False
+
+    def __post_init__(self) -> None:
+        _enum("recommendation", self.recommendation, ANALYSIS_RECOMMENDATIONS)
+        for r in self.reasons:
+            _enum("reasons", r, NO_TRADE_REASONS)
+        hard = [r for r in self.reasons if r != "LOW_CONFIDENCE"]
+        if self.recommendation == "NO_TRADE" and not hard:
+            raise ContractError("INCONSISTENT", "« pas de trade » dit toujours pourquoi")
+        if self.recommendation == "BUY_SIGNAL" and self.reasons:
+            raise ContractError("INCONSISTENT", "un signal d'achat ne peut avoir de raison de s'abstenir")
+        if len(self.reasons) != len(self.reason_texts):
+            raise ContractError("INCONSISTENT", "chaque raison a son explication")
+        object.__setattr__(self, "opportunity", _opt01("opportunity", self.opportunity))
+        if self.authorized:
+            raise ContractError("POLICY", "une analyse n'est jamais une autorisation", category="POLICY")
+        _day("day", self.day)
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
 def ohlcv_violations(rows: Any) -> int:
     """Bougies incohérentes (§41) : plus haut sous l'ouverture, la clôture
     ou le plus bas ; plus bas au-dessus ; volume négatif. Une bougie
@@ -553,7 +788,8 @@ def validate(schema: str, data: Dict[str, Any]) -> ValidationResult:
 
 SCHEMAS.update({c.__name__: c for c in (OrderIntent, RiskDecision, ExecutionAuthorization, SafeModeState,
                                         Confidence, Uncertainty, Provenance, Money, Envelope, LLMExecution,
-                                        ModelConsensus, ModelDisagreement)})
+                                        ModelConsensus, ModelDisagreement, Instrument, Feature, Forecast,
+                                        Scenario, FinancialSignal)})
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -776,6 +1012,40 @@ REGISTRY: Tuple[Contract, ...] = (
              "ouverte ou fermée, et chaque condition manquante", "mesure impossible : porte fermée",
              "aucune option ne la contourne ; fermée, aucun achat réel", "une fois par jour", "à la décision suivante",
              "une mesure par jour", "raisonnement et rapport quotidien", 1, ("trendguard/chantiers.py",)),
+    Contract("Instrument.v1", "référentiel des instruments (cryptos suivies)", "cœur financier (finance.py)",
+             "analyses, panneau", "liste des cryptos, première bougie, veto de la veille, règles de cotation connues",
+             "identifiant stable place:marché:BASE-DEVISE, classe, devise, calendrier 24/7, état",
+             "règle de cotation inconnue : vide, jamais inventée", "lecture seule", "à la décision", "aucun",
+             "un identifiant par instrument", "analyse du jour", 3, ("trendguard/finance.py",), classification="PUBLIC"),
+    Contract("Feature.v1", "indicateur versionné du magasin (technique, quantitatif)", "cœur financier (finance.py)",
+             "analyses, journal financier", "bougies clôturées", "valeur (vide si non mesurable), version, fin des "
+             "données", "données postérieures à la bougie : refusé (regard vers le futur)", "lecture seule",
+             "à la décision", "aucun", "un indicateur par crypto, jour et version", "journal financier", 3,
+             ("trendguard/finance.py", "trendguard/donnees.py"), classification="PUBLIC"),
+    Contract("Forecast.v1", "prévision de fréquence à 30 jours", "cœur financier (finance.py)",
+             "analyses, journal financier, calibration", "clôtures passées dans un marché comparable",
+             "probabilité de hausse et son intervalle, rendement moyen et intervalle de 80 %, nombre de cas",
+             "moins de 12 cas : aucune prévision", "jamais un prix annoncé ni un ordre", "à la décision",
+             "évaluée à l'échéance", "une prévision par crypto et par jour", "journal financier (évaluation comprise)",
+             2, ("trendguard/finance.py",), classification="PUBLIC"),
+    Contract("Scenario.v1", "scénarios à 30 jours : fort recul, crise, baisse, central, hausse",
+             "cœur financier (finance.py)", "analyses, Rachelle", "clôtures passées dans un marché comparable",
+             "probabilité (leur somme fait 1), rendement, volatilité et baisse moyens, conditions d'invalidation",
+             "somme différente de 1 ou scénario manquant : refusé", "information", "à la demande", "aucun",
+             "un jeu par crypto et par jour", "analyse", 2, ("trendguard/finance.py",), classification="PUBLIC"),
+    Contract("FinancialSignal.v1", "signal de la règle au format commun", "cœur financier (finance.py)",
+             "analyses, journal", "indicateurs de la règle, régime de BTC",
+             "direction, type, force, confiance, horizon, conditions d'entrée et de sortie, risque attendu, "
+             "version de la règle", "rendement attendu inconnu : vide", "candidat seulement : la porte décide",
+             "à la décision", "aucun", "un signal par crypto et par jour", "analyse", 2,
+             ("trendguard/finance.py",), classification="PUBLIC"),
+    Contract("FinancialAnalysis.v1", "analyse d'une crypto par le cœur financier (aide à la décision)",
+             "cœur financier (finance.py)", "journal financier, Rachelle, rapport, commande finance",
+             "indicateurs, qualité, régime, liens entre cryptos, calendrier, sentiment, prévisions, comité",
+             "signal, à surveiller ou pas de trade avec les raisons, classement indicatif, confiances, preuves, "
+             "risques, contradictions, conditions d'invalidation", "« pas de trade » sans raison : refusé",
+             "jamais une autorisation", "à la décision", "aucun", "une analyse par crypto et par jour",
+             "journal financier", 2, ("trendguard/finance.py",)),
     Contract("HealthReport.v1", "rapport quotidien et centre de sécurité", "rapport (report.py)",
              "vous (e-mail, panneau)", "état du bot, PC, journal, GitHub", "constats conformes, à corriger, informations",
              "source illisible : information", "lecture seule", "00:30 UTC", "rattrapé au retour du PC",

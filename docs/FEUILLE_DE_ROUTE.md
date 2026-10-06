@@ -28,6 +28,7 @@ Tiré du registre `trendguard/chantiers.py` (`python -m trendguard.chantiers` le
 | TASK-000022 | Panneau de contrôle et Rachelle | P2 | en service et surveillé | transverse | 100 % | oui | 3 (sécurité), 4 (données), 8 (souple) |
 | TASK-000023 | Centre de commande 3D | P4 | à faire | transverse | 80 % | oui | 22 (souple) |
 | TASK-000024 | Durcissement de production (PC, sauvegardes, reprise) | P0 | en cours | transverse | 100 % | oui | 3 (sécurité), 4 (à l'exécution) |
+| TASK-000025 | Cœur d'intelligence financière | P1 | en service et surveillé | intelligence | 100 % | oui | 5 (données), 2 (données), 9 (souple), 7 (souple) |
 
 ## Chemin critique jusqu'au réel
 
@@ -38,7 +39,7 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 - **Porte 1 (Fondations)** : franchie — Contrats de données ✓ ; Base de données et journal financier ✓ ; Sécurité de base ✓ ; Observabilité et audit ✓
 - **Porte 2 (Cognition)** : franchie — Noyau cognitif ✓ ; Intelligence financière (savoir, veille, régimes, calendrier) ✓ ; Auto-évaluation (diagnostic expert, leçons des trades) ✓
 - **Porte 3 (Multi-agents et multi-modèles)** : franchie — Socle multi-agents et comité ✓ ; Socle multi-modèles d'IA ✓
-- **Porte 4 (Intelligence financière)** : franchie — Données de marché et qualité ✓ ; Intelligence financière (savoir, veille, régimes, calendrier) ✓ ; Moteur quantitatif (risque d'un jour, résistance, attribution) ✓ ; Analyse fondamentale —
+- **Porte 4 (Intelligence financière)** : franchie — Données de marché et qualité ✓ ; Intelligence financière (savoir, veille, régimes, calendrier) ✓ ; Cœur d'intelligence financière ✓ ; Moteur quantitatif (risque d'un jour, résistance, attribution) ✓ ; Analyse fondamentale —
 - **Porte 5 (Stratégie)** : franchie — Stratégie et évolution encadrée ✓ ; Rejeu et études (backtest, deux époques, crises) ✓
 - **Porte 6 (Risque)** : franchie — Moteur de risque, garde « pas de trade », arrêt d'urgence ✓ ; Portefeuille (taille, plafonds, sélection) ✓ ; Politique, autorisation et porte d'exécution ✓
 - **Porte 7 (Paper)** : franchie — Paper trading ✓ ; Observabilité et audit ✓
@@ -70,7 +71,7 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Priorité, état, risque | P0, en service et surveillé, high |
 | Propriétaire | bot |
 | Dépend de | Contrats de données (contrat) |
-| Bloque | Observabilité et audit, Noyau cognitif, Moteur de risque, garde « pas de trade », arrêt d'urgence |
+| Bloque | Observabilité et audit, Noyau cognitif, Moteur de risque, garde « pas de trade », arrêt d'urgence, Cœur d'intelligence financière |
 | Code | `trendguard/donnees.py` |
 | Tests | `tests/test_donnees.py` |
 | Contrats | `DecisionRecord.v1`, `TradeRecord.v1` |
@@ -121,7 +122,7 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Priorité, état, risque | P0, en service et surveillé, high |
 | Propriétaire | bot |
 | Dépend de | Contrats de données (contrat) |
-| Bloque | Intelligence financière (savoir, veille, régimes, calendrier), Moteur quantitatif (risque d'un jour, résistance, attribution), Stratégie et évolution encadrée, Rejeu et études (backtest, deux époques, crises) |
+| Bloque | Intelligence financière (savoir, veille, régimes, calendrier), Moteur quantitatif (risque d'un jour, résistance, attribution), Stratégie et évolution encadrée, Rejeu et études (backtest, deux époques, crises), Cœur d'intelligence financière |
 | Code | `trendguard/qualite.py`, `trendguard/bot.py` |
 | Tests | `tests/test_analyse.py`, `tests/test_contrats_donnees.py` |
 | Contrats | `MarketData.v1`, `OHLCV.v1` |
@@ -155,7 +156,7 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Priorité, état, risque | P1, en service et surveillé, medium |
 | Propriétaire | bot |
 | Dépend de | Noyau cognitif (dure), Contrats de données (contrat) |
-| Bloque | Socle multi-modèles d'IA |
+| Bloque | Socle multi-modèles d'IA, Cœur d'intelligence financière |
 | Code | `trendguard/agents.py`, `trendguard/comite.py` |
 | Tests | `tests/test_agents.py` |
 | Contrats | `CommitteeView.v1`, `Confidence.v1` |
@@ -190,7 +191,7 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Priorité, état, risque | P1, en service et surveillé, medium |
 | Propriétaire | bot |
 | Dépend de | Données de marché et qualité (données), Socle multi-modèles d'IA (souple) |
-| Bloque | Moteur quantitatif (risque d'un jour, résistance, attribution), Stratégie et évolution encadrée, Recherche autonome |
+| Bloque | Moteur quantitatif (risque d'un jour, résistance, attribution), Stratégie et évolution encadrée, Recherche autonome, Cœur d'intelligence financière |
 | Code | `trendguard/savoir.py`, `trendguard/market_watch.py`, `trendguard/regimes.py`, `trendguard/evenements.py` |
 | Tests | `tests/test_savoir.py`, `tests/test_market_watch.py`, `tests/test_analyse.py` |
 | Contrats | `KnowledgeHold.v1`, `AIOpinion.v1`, `ModelDisagreement.v1` |
@@ -458,3 +459,20 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Acceptation | rapport quotidien sans point de sécurité à corriger |
 | Santé | 100 % (seuil 95 %) |
 | Note | dépend aussi de vous : points « à corriger » du rapport quotidien |
+
+### TASK-000025 — Cœur d'intelligence financière
+
+| Rubrique | |
+| --- | --- |
+| Priorité, état, risque | P1, en service et surveillé, medium |
+| Propriétaire | bot |
+| Dépend de | Données de marché et qualité (données), Base de données et journal financier (données), Intelligence financière (savoir, veille, régimes, calendrier) (souple), Socle multi-agents et comité (souple) |
+| Bloque | rien |
+| Code | `trendguard/finance.py` |
+| Tests | `tests/test_finance.py` |
+| Contrats | `Instrument.v1`, `Feature.v1`, `Forecast.v1`, `Scenario.v1`, `FinancialSignal.v1`, `FinancialAnalysis.v1` |
+| Documentation | [`FINANCE.md`](FINANCE.md) |
+| Sécurité | indicateurs sans regard vers le futur (test, base) ; une analyse n'est jamais une autorisation |
+| Observabilité | analyses, indicateurs et prévisions au journal ; calibration au rapport |
+| Acceptation | chaque crypto analysée chaque nuit ; prévisions évaluées à 30 jours ; aucun trade changé |
+| Santé | 100 % (seuil 85 %) |

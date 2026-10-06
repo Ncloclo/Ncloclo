@@ -601,6 +601,21 @@ def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
                                               "donnees, puis signalez-le (rien n'est corrigé en silence)."))
         except Exception as e:           # un bilan illisible n'empêche pas le rapport
             out.append(chk("Journal financier", None, f"illisible ({type(e).__name__})"))
+    fi = st.get("finance") or {}
+    if fi.get("day"):
+        cal, fis = fi.get("calibration") or {}, fi.get("fis") or {}
+        text = (f"décision du {fi['day']} : {len(fi.get('assets') or {})} crypto(s) analysée(s), "
+                f"{len(fi.get('signals') or [])} signal(s), {fi.get('no_trade', 0)} « pas de trade »")
+        text += (f" ; prévisions évaluées : {cal['n']}, Brier {fr(cal['brier'], '.3f')} (hasard : 0,250), "
+                 f"direction juste {fr(cal['hit_ratio'] * 100, '.0f')} %" if cal.get("n") else
+                 " ; aucune prévision encore évaluée (échéance 30 jours)")
+        if fis.get("score") is not None:
+            text += f" ; note d'intelligence financière {fr(fis['score'] * 100, '.0f')}/100"
+        if fi.get("drift"):
+            text += " ; dérive : " + " ; ".join(fi["drift"][:3])
+        if fi.get("contagion"):
+            text += " ; contagion : les cryptos bougent ensemble"
+        out.append(chk("Intelligence financière", None, text + " (consultatif)"))
     entries = registre.load(registre.registry_path(gcfg))
     if entries:
         last = entries[-1]

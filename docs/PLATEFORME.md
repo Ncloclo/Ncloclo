@@ -325,6 +325,29 @@ réussie sur Binance réel (`python trendguard_bot.py verify`). Où elle en est 
 `python trendguard_bot.py chantiers portes`, le rapport quotidien, ou Rachelle
 (« sommes-nous prêts pour le réel ? »).
 
+## Étape 7 du prompt : cœur d'intelligence financière
+
+Le septième document demande un « docteur en finance » : qualité des données,
+indicateurs versionnés, anti-fuite, technique, quantitatif, sentiment, régime,
+liens entre actifs, scénarios, prévisions, signal, classement, « pas de
+trade », confiance, mémoire et calibration. Appliqué à TrendGuard :
+`finance.py`, qui analyse chaque nuit chaque crypto, et
+`python trendguard_bot.py finance aave`. Détail : [`FINANCE.md`](FINANCE.md).
+
+| Exigence de l'étape 7 | Ce qui a été fait |
+| --- | --- |
+| Instruments, données, qualité (§6-10) | référentiel des cryptos ; note de qualité par crypto (complétude, fraîcheur, cohérence, fiabilité) |
+| Indicateurs, anti-fuite (§14-16, §21-22) | 16 indicateurs versionnés avec la fin de leurs données ; recalculés sur les seules données connues : identiques (test) ; refusés par la base s'ils dépassent leur bougie |
+| Régime, liens, sentiment, calendrier (§17-20) | quatre lectures du régime ; contagion entre cryptos ; sources prouvées ; grandes annonces (prudence seulement) |
+| Scénarios, prévisions, calibration (§28-35) | fréquences d'un passé comparable avec intervalle et nombre de cas ; cinq scénarios dont la somme fait 1 ; chaque prévision comparée au résultat à 30 jours (Brier, direction, biais) |
+| Signal, classement, « pas de trade » (§23-25) | signal de la règle au format commun ; classement indicatif aux pondérations versionnées ; raisons de s'abstenir au format commun |
+| Explication, confiance, sécurité (§30, §37-38, §63) | preuves, risques, contradictions, confiances séparées, conditions d'invalidation ; jamais une autorisation |
+
+**Ce qui ne s'applique pas** : analyse fondamentale et valorisation (les
+cryptos n'ont ni bilan ni bénéfice), actions, obligations, devises, séries
+macroéconomiques (non collectées), modèles ARIMA ou d'apprentissage profond
+(aucun gain prouvé). L'analyse le dit à chaque fois, sans rien simuler.
+
 ## Ce qui reste (votre accord d'abord)
 
 1. **Débat des IA** (§43) : rôles haussier, baissier, critique et synthèse

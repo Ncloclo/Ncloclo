@@ -605,6 +605,29 @@ def a_modeles(ctx: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def a_analyse(ctx: Dict[str, Any]) -> str:
+    fi = ctx.get("finance") or {}
+    assets = fi.get("assets") or {}
+    words = set(norm(ctx.get("message", "")).split())
+    named = [a for a in assets if a in words]
+    names = {"BUY_SIGNAL": "signal d'achat de la règle", "WATCH": "à surveiller", "NO_TRADE": "pas de trade"}
+    if not assets:
+        return ("**Analyse financière** : chaque nuit, le bot analyse chaque crypto (qualité des données, "
+                "indicateurs, régime, liens entre cryptos, prévisions de fréquence, scénarios) et dit « signal », "
+                "« à surveiller » ou « pas de trade », avec ses raisons. Pour une crypto : "
+                "python trendguard_bot.py finance aave.")
+    lines = [f"**Analyse financière** (bougie du {fi.get('day')}) :"]
+    for a in named or fi.get("top") or []:
+        x = assets[a]
+        p = (f" ; dans le passé comparable, hausse à 30 jours {fr(x['p_up'] * 100, '.0f')} % des fois "
+             f"({x.get('cases')} cas)" if x.get("p_up") is not None else "")
+        lines.append(f"- {a.upper()} : {names.get(x['reco'], x['reco'])}"
+                     + (f" ({' ; '.join(x['reasons'][:2])})" if x.get("reasons") else "") + p + ".")
+    lines.append("Une analyse aide à comprendre ; elle ne décide pas : la règle du bot et la porte d'exécution "
+                 "décident. Une fréquence passée n'est pas une promesse.")
+    return "\n".join(lines)
+
+
 def a_chantiers(ctx: Dict[str, Any]) -> str:
     cs = ctx.get("chantiers") or {}
     lines = ["**Feuille de route** : " + (f"{cs.get('components', 0)} composants suivis, chacun avec sa priorité, "
@@ -820,6 +843,9 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
                    "ses propres reglages", "modifier ses reglages", "change ses reglages",
                    "changer les regles", "change ses regles"),
      a_evolution, [{"label": "Réglages ▸ autonomie", "href": "#settings"}]),
+    ("analyse", ("analyse financiere", "analyse de", "analyser", "opportunite", "opportunites", "scenario",
+                 "scenarios", "probabilite de hausse", "prevision a 30 jours", "pas de trade"), a_analyse,
+     [{"label": "Ce que pense le bot", "href": "#dash"}]),
     ("chantiers", ("feuille de route", "chantiers", "priorites", "passer en reel", "porte du reel",
                    "pret pour le reel", "quand passer en reel", "portes"), a_chantiers,
      [{"label": "Réglages ▸ rapport", "href": "#settings"}]),

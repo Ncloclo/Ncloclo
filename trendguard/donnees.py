@@ -196,6 +196,58 @@ MIGRATIONS: Tuple[Migration, ...] = (
         "ALTER TABLE fin_decisions ADD COLUMN data_cutoff_at TEXT "
         "CHECK (data_cutoff_at IS NULL OR data_cutoff_at <= date(day, '+1 day') || 'T00:00:00+00:00')",
     ), down=("ALTER TABLE fin_decisions DROP COLUMN data_cutoff_at",)),
+    # Étape 7 : magasin d'indicateurs, prévisions et leur évaluation, analyses
+    # du cœur financier (consultatif), en ajout seulement.
+    Migration(4, "cœur d'intelligence financière", up=(
+        """CREATE TABLE fin_features (
+            id INTEGER PRIMARY KEY,
+            day TEXT NOT NULL CHECK (day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+            asset TEXT NOT NULL,
+            name TEXT NOT NULL,
+            value REAL,
+            version TEXT NOT NULL,
+            data_cutoff_at TEXT NOT NULL CHECK (data_cutoff_at <= date(day, '+1 day') || 'T00:00:00+00:00'),
+            created_at TEXT NOT NULL,
+            UNIQUE (day, asset, name, version))""",
+        *_append_only("fin_features"),
+        "CREATE INDEX fin_features_asset ON fin_features(asset, day)",
+        """CREATE TABLE fin_forecasts (
+            id INTEGER PRIMARY KEY,
+            day TEXT NOT NULL CHECK (day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+            asset TEXT NOT NULL,
+            horizon_days INTEGER NOT NULL CHECK (horizon_days > 0),
+            due_day TEXT NOT NULL CHECK (due_day > day),
+            p_up REAL NOT NULL CHECK (p_up BETWEEN 0 AND 1),
+            ci_low REAL NOT NULL CHECK (ci_low BETWEEN 0 AND p_up),
+            ci_high REAL NOT NULL CHECK (ci_high BETWEEN p_up AND 1),
+            expected_return REAL,
+            cases INTEGER NOT NULL CHECK (cases >= 0),
+            close REAL NOT NULL CHECK (close > 0),
+            version TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE (day, asset, horizon_days, version))""",
+        *_append_only("fin_forecasts"),
+        "CREATE INDEX fin_forecasts_due ON fin_forecasts(due_day)",
+        """CREATE TABLE fin_forecast_evaluations (
+            forecast_id INTEGER PRIMARY KEY REFERENCES fin_forecasts(id),
+            actual_return REAL NOT NULL,
+            hit INTEGER NOT NULL CHECK (hit IN (0, 1)),
+            brier REAL NOT NULL CHECK (brier BETWEEN 0 AND 1),
+            evaluated_at TEXT NOT NULL)""",
+        *_append_only("fin_forecast_evaluations"),
+        """CREATE TABLE fin_analyses (
+            id INTEGER PRIMARY KEY,
+            day TEXT NOT NULL CHECK (day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+            asset TEXT NOT NULL,
+            recommendation TEXT NOT NULL CHECK (recommendation IN ('BUY_SIGNAL', 'WATCH', 'NO_TRADE')),
+            reasons TEXT NOT NULL CHECK (json_valid(reasons)),
+            opportunity REAL CHECK (opportunity IS NULL OR opportunity BETWEEN 0 AND 1),
+            version TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE (day, asset, version))""",
+        *_append_only("fin_analyses"),
+    ), down=("DROP TABLE IF EXISTS fin_analyses", "DROP TABLE IF EXISTS fin_forecast_evaluations",
+             "DROP TABLE IF EXISTS fin_forecasts", "DROP TABLE IF EXISTS fin_features")),
 )
 
 
@@ -237,6 +289,15 @@ TABLES: Tuple[Table, ...] = (
     Table("fin_committee_views", "avis consultatif du comité d'agents sur chaque crypto proposée par la règle "
           "(jamais modifié), pour mesurer s'il aurait aidé", "rapport, diagnostic", "bot, à la décision, en ajout "
           "seulement", "CommitteeView.v1", "toujours", "par décision : avis du jour"),
+    Table("fin_features", "magasin d'indicateurs versionnés de chaque crypto, avec la fin de leurs données",
+          "analyses, études", "bot, à la décision, en ajout seulement", "Feature.v1", "toujours",
+          "par crypto : son historique d'indicateurs"),
+    Table("fin_forecasts", "prévisions de fréquence à 30 jours de chaque crypto", "calibration, rapport",
+          "bot, à la décision, en ajout seulement", "Forecast.v1", "toujours", "par échéance : prévisions à évaluer"),
+    Table("fin_forecast_evaluations", "chaque prévision comparée au résultat (réussite, score de Brier)",
+          "calibration, rapport", "bot, à l'échéance, en ajout seulement", "Forecast.v1", "toujours"),
+    Table("fin_analyses", "analyse du jour de chaque crypto : signal, à surveiller ou pas de trade, et pourquoi",
+          "rapport, Rachelle", "bot, à la décision, en ajout seulement", "FinancialAnalysis.v1", "toujours"),
 )
 
 
@@ -473,6 +534,51 @@ class Journal:
         return {"views": int(views), "by": {r["rec"]: {"trades": int(r["n"]), "avg_r": round(float(r["r"] or 0), 2)}
                                             for r in rows}}
 
+    def record_finance(self, day: str, asset: str, features: Dict[str, Optional[float]], feature_version: str,
+                       cutoff: str, analysis: Dict[str, Any], forecast: Optional[Dict[str, Any]],
+                       close: Optional[float], horizon_due: Optional[str]) -> None:
+        """Le cœur financier du jour pour une crypto (une transaction) :
+        indicateurs, analyse et prévision ; une ligne déjà gardée n'est
+        jamais remplacée."""
+        now = _now()
+        with self._tx():
+            for name, value in features.items():
+                self.conn.execute("INSERT OR IGNORE INTO fin_features (day, asset, name, value, version, "
+                                  "data_cutoff_at, created_at) VALUES (?,?,?,?,?,?,?)",
+                                  (day, asset, name, value, feature_version, cutoff, now))
+            self.conn.execute("INSERT OR IGNORE INTO fin_analyses (day, asset, recommendation, reasons, opportunity, "
+                              "version, created_at) VALUES (?,?,?,?,?,?,?)",
+                              (day, asset, analysis["recommendation"], _json(list(analysis["reasons"])),
+                               analysis.get("opportunity"), analysis["version"], now))
+            if forecast and close and close > 0 and horizon_due:
+                self.conn.execute("INSERT OR IGNORE INTO fin_forecasts (day, asset, horizon_days, due_day, p_up, "
+                                  "ci_low, ci_high, expected_return, cases, close, version, created_at) "
+                                  "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                                  (day, asset, forecast["horizon_days"], horizon_due, forecast["p_up"],
+                                   forecast["ci_low"], forecast["ci_high"], forecast["expected_return"],
+                                   forecast["cases"], float(close), forecast["version"], now))
+
+    def due_forecasts(self, day: str) -> List[Dict[str, Any]]:
+        """Prévisions arrivées à échéance et pas encore évaluées."""
+        return [dict(r) for r in self.conn.execute(
+            "SELECT f.id, f.asset, f.close, f.p_up, f.due_day FROM fin_forecasts f WHERE f.due_day <= ? AND NOT "
+            "EXISTS (SELECT 1 FROM fin_forecast_evaluations e WHERE e.forecast_id = f.id) ORDER BY f.id", (day,))]
+
+    def record_forecast_evaluation(self, forecast_id: int, actual_return: float, hit: float, brier: float) -> None:
+        """Le résultat d'une prévision (jamais modifié ensuite)."""
+        with self._tx():
+            self.conn.execute("INSERT OR IGNORE INTO fin_forecast_evaluations VALUES (?,?,?,?,?)",
+                              (int(forecast_id), float(actual_return), int(hit), float(brier), _now()))
+
+    def forecast_outcomes(self) -> List[Tuple[float, float]]:
+        """(probabilité annoncée, issue 0/1) de chaque prévision évaluée."""
+        have = {r[0] for r in self.conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        if "fin_forecast_evaluations" not in have:
+            return []
+        return [(float(r[0]), 1.0 if r[1] > 0 else 0.0) for r in self.conn.execute(
+            "SELECT f.p_up, e.actual_return FROM fin_forecasts f JOIN fin_forecast_evaluations e "
+            "ON e.forecast_id = f.id ORDER BY f.id")]
+
     def for_checks(self) -> Dict[str, Any]:
         """Ce que le diagnostic expert compare à d'autres sources : date de
         création du journal, achats exécutés, positions ouvertes, trades."""
@@ -515,7 +621,9 @@ class Journal:
         if bad:
             problems.append(f"{bad} achat(s) exécuté(s) sans contrôle approuvé")
         triggers = {r[0] for r in self.conn.execute("SELECT name FROM sqlite_master WHERE type='trigger'")}
-        for t in ("fin_risk_checks", "fin_executions", "fin_committee_views")[:2 + (2 in applied)]:
+        guarded = {"fin_risk_checks": 1, "fin_executions": 1, "fin_committee_views": 2, "fin_features": 4,
+                   "fin_forecasts": 4, "fin_forecast_evaluations": 4, "fin_analyses": 4}
+        for t in (name for name, version in guarded.items() if version in applied):
             if not {f"{t}_update_refuse", f"{t}_delete_refuse"} <= triggers:
                 problems.append(f"{t} : protection d'ajout seul absente")
         expected = {m.version: m.checksum for m in MIGRATIONS}
@@ -563,7 +671,8 @@ def catalog() -> str:
                  "    fin_orders ||--o{ fin_executions : executions",
                  "    fin_orders ||--o| fin_trades : achat",
                  "    fin_orders ||--|| fin_trades : vente",
-                 "    fin_decisions ||--o{ fin_committee_views : avis", "```", ""]
+                 "    fin_decisions ||--o{ fin_committee_views : avis",
+                 "    fin_forecasts ||--o| fin_forecast_evaluations : evaluation", "```", ""]
         for t in TABLES:
             cols = j.conn.execute(f"PRAGMA table_info({t.name})").fetchall()
             idx = [r[1] for r in j.conn.execute(f"PRAGMA index_list({t.name})") if not r[1].startswith("sqlite_")]

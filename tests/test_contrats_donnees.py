@@ -164,7 +164,7 @@ def test_the_buy_chain_is_correlated_and_caused(logger, tmp_path):
 
 def test_a_decision_cannot_look_into_the_future():
     j = donnees.Journal(":memory:")
-    assert max(j.applied()) == 3
+    assert max(j.applied()) >= 3
     j.record_decision("2026-10-05", "paper", {"a": 1}, True, None, 100.0, False, False, [], 90.0,
                       "2026-10-06T00:00:00+00:00")
     with pytest.raises(ValueError):
@@ -175,7 +175,7 @@ def test_a_decision_cannot_look_into_the_future():
                        "safe_mode, garde_blocked, data_source, created_at, data_cutoff_at) SELECT 'D-x', "
                        "'2026-10-03', 'paper', strategy_version_id, 1, 1, 0, 0, '[]', 's', 't', "
                        "'2026-10-06T00:00:00+00:00' FROM fin_decisions")
-    assert j.verify()["ok"] and j.rollback(2) == [3] and j.migrate() == [3]
+    assert j.verify()["ok"] and j.rollback(2) == [4, 3] and j.migrate() == [3, 4]
 
 
 # ---------- Bougies vérifiées (§41) ----------

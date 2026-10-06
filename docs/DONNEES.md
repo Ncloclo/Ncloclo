@@ -13,6 +13,7 @@ erDiagram
     fin_orders ||--o| fin_trades : achat
     fin_orders ||--|| fin_trades : vente
     fin_decisions ||--o{ fin_committee_views : avis
+    fin_forecasts ||--o| fin_forecast_evaluations : evaluation
 ```
 
 ## `fin_schema_migrations`
@@ -248,4 +249,102 @@ Avis consultatif du comité d'agents sur chaque crypto proposée par la règle (
 | `reasons` | TEXT | oui |  |
 | `votes` | TEXT | oui |  |
 | `agents_version` | TEXT | oui |  |
+| `created_at` | TEXT | oui |  |
+
+## `fin_features`
+
+Magasin d'indicateurs versionnés de chaque crypto, avec la fin de leurs données.
+
+| Rubrique | |
+| --- | --- |
+| Propriétaire | `trendguard/donnees.py` (domaine « fin_ ») |
+| Lue par | analyses, études |
+| Écrite par | bot, à la décision, en ajout seulement |
+| Contrat | Feature.v1 |
+| Durée de vie | toujours |
+| Index | `fin_features_asset` (par crypto : son historique d'indicateurs) |
+
+| Colonne | Type | Obligatoire | Clé |
+| --- | --- | --- | --- |
+| `id` | INTEGER | oui | primaire |
+| `day` | TEXT | oui |  |
+| `asset` | TEXT | oui |  |
+| `name` | TEXT | oui |  |
+| `value` | REAL | non |  |
+| `version` | TEXT | oui |  |
+| `data_cutoff_at` | TEXT | oui |  |
+| `created_at` | TEXT | oui |  |
+
+## `fin_forecasts`
+
+Prévisions de fréquence à 30 jours de chaque crypto.
+
+| Rubrique | |
+| --- | --- |
+| Propriétaire | `trendguard/donnees.py` (domaine « fin_ ») |
+| Lue par | calibration, rapport |
+| Écrite par | bot, à la décision, en ajout seulement |
+| Contrat | Forecast.v1 |
+| Durée de vie | toujours |
+| Index | `fin_forecasts_due` (par échéance : prévisions à évaluer) |
+
+| Colonne | Type | Obligatoire | Clé |
+| --- | --- | --- | --- |
+| `id` | INTEGER | oui | primaire |
+| `day` | TEXT | oui |  |
+| `asset` | TEXT | oui |  |
+| `horizon_days` | INTEGER | oui |  |
+| `due_day` | TEXT | oui |  |
+| `p_up` | REAL | oui |  |
+| `ci_low` | REAL | oui |  |
+| `ci_high` | REAL | oui |  |
+| `expected_return` | REAL | non |  |
+| `cases` | INTEGER | oui |  |
+| `close` | REAL | oui |  |
+| `version` | TEXT | oui |  |
+| `created_at` | TEXT | oui |  |
+
+## `fin_forecast_evaluations`
+
+Chaque prévision comparée au résultat (réussite, score de Brier).
+
+| Rubrique | |
+| --- | --- |
+| Propriétaire | `trendguard/donnees.py` (domaine « fin_ ») |
+| Lue par | calibration, rapport |
+| Écrite par | bot, à l'échéance, en ajout seulement |
+| Contrat | Forecast.v1 |
+| Durée de vie | toujours |
+| Index | clé primaire seulement |
+
+| Colonne | Type | Obligatoire | Clé |
+| --- | --- | --- | --- |
+| `forecast_id` | INTEGER | oui | primaire |
+| `actual_return` | REAL | oui |  |
+| `hit` | INTEGER | oui |  |
+| `brier` | REAL | oui |  |
+| `evaluated_at` | TEXT | oui |  |
+
+## `fin_analyses`
+
+Analyse du jour de chaque crypto : signal, à surveiller ou pas de trade, et pourquoi.
+
+| Rubrique | |
+| --- | --- |
+| Propriétaire | `trendguard/donnees.py` (domaine « fin_ ») |
+| Lue par | rapport, Rachelle |
+| Écrite par | bot, à la décision, en ajout seulement |
+| Contrat | FinancialAnalysis.v1 |
+| Durée de vie | toujours |
+| Index | clé primaire seulement |
+
+| Colonne | Type | Obligatoire | Clé |
+| --- | --- | --- | --- |
+| `id` | INTEGER | oui | primaire |
+| `day` | TEXT | oui |  |
+| `asset` | TEXT | oui |  |
+| `recommendation` | TEXT | oui |  |
+| `reasons` | TEXT | oui |  |
+| `opportunity` | REAL | non |  |
+| `version` | TEXT | oui |  |
 | `created_at` | TEXT | oui |  |

@@ -694,6 +694,7 @@ TOOLS = {"alerts": ("alerts", "alertes : configurer | tester"),
          "expert": ("expert", "diagnostic expert du noyau cognitif (lecture seule) : [--rapide]"),
          "comite": ("comite", "avis consultatif du comité d'agents : <crypto> | --banc"),
          "chantiers": ("chantiers", "feuille de route et portes : [statut] | portes | document"),
+         "finance": ("finance", "analyse financière d'une crypto (consultative) : <crypto> [--json]"),
          "modeles": ("modeles", "modèles d'IA : [statut] | banc")}
 
 

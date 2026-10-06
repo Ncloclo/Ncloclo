@@ -268,19 +268,27 @@ COMPONENTS: Tuple[Component, ...] = (
               observability="rapport quotidien", owner="vous et le bot", risk="HIGH",
               acceptance="rapport quotidien sans point de sécurité à corriger",
               note="dépend aussi de vous : points « à corriger » du rapport quotidien"),
+    Component(_c(25), "Cœur d'intelligence financière", "P1", "MONITORED", "INTELLIGENCE",
+              deps=((_c(5), "DATA"), (_c(2), "DATA"), (_c(9), "SOFT"), (_c(7), "SOFT")),
+              files=("trendguard/finance.py",), tests=("tests/test_finance.py",),
+              contracts=("Instrument.v1", "Feature.v1", "Forecast.v1", "Scenario.v1", "FinancialSignal.v1",
+                         "FinancialAnalysis.v1"), docs=("docs/FINANCE.md",),
+              security="indicateurs sans regard vers le futur (test, base) ; une analyse n'est jamais une "
+              "autorisation", observability="analyses, indicateurs et prévisions au journal ; calibration au rapport",
+              acceptance="chaque crypto analysée chaque nuit ; prévisions évaluées à 30 jours ; aucun trade changé"),
 )
 
 GATES: Tuple[Tuple[str, str, Tuple[str, ...]], ...] = (
     ("1", "Fondations", (_c(1), _c(2), _c(3), _c(4))),
     ("2", "Cognition", (_c(6), _c(9), _c(20))),
     ("3", "Multi-agents et multi-modèles", (_c(7), _c(8))),
-    ("4", "Intelligence financière", (_c(5), _c(9), _c(10))),
+    ("4", "Intelligence financière", (_c(5), _c(9), _c(25), _c(10))),
     ("5", "Stratégie", (_c(11), _c(12))),
     ("6", "Risque", (_c(13), _c(14), _c(16))),
     ("7", "Paper", (_c(15), _c(4))),
 )
 NOT_APPLICABLE = {"4": "analyse fondamentale : sans objet (des cryptos n'ont ni bilan ni bénéfice) ; la "
-                       "macroéconomie passe par le calendrier des annonces"}
+                       "macroéconomie passe par le calendrier des annonces (docs/FINANCE.md)"}
 
 
 def by_id() -> Dict[str, Component]:

@@ -20,6 +20,9 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `EntryPlan.v1` | stratégie | exécution | 1.0.0 | INTERNAL | cœur |
 | `EvolutionChange.v1` | évolution (evolution.py) | bot, à la décision suivante | 1.0.0 | INTERNAL | cœur |
 | `ExpertDiagnosis.v1` | diagnostic expert (expert.py) | rapport quotidien, Rachelle, panneau | 1.0.0 | INTERNAL | cœur |
+| `FinancialAnalysis.v1` | cœur financier (finance.py) | journal financier, Rachelle, rapport, commande finance | 1.0.0 | INTERNAL | cœur |
+| `FinancialSignal.v1` | cœur financier (finance.py) | analyses, journal | 1.0.0 | PUBLIC | cœur |
+| `Forecast.v1` | cœur financier (finance.py) | analyses, journal financier, calibration | 1.0.0 | PUBLIC | cœur |
 | `KnowledgeHold.v1` | noyau de savoir (savoir.py) | décision du jour | 1.0.0 | INTERNAL | cœur |
 | `LLMExecution.v1` | exécution des modèles (modeles.py) | trace des IA, rapport, panneau | 1.0.0 | INTERNAL | cœur |
 | `ModelBenchmark.v1` | banc (modeles.py) | routeur (approbation), fiche du modèle, rapport | 1.0.0 | INTERNAL | cœur |
@@ -28,9 +31,12 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `ModelSelection.v1` | routeur (modeles.py) | exécution des modèles | 1.0.0 | INTERNAL | cœur |
 | `PortfolioAnalysis.v1` | décision du jour (risque.py, stress.py, attribution.py) | panneau, rapport, raisonnement | 1.0.0 | INTERNAL | cœur |
 | `PromptVersion.v1` | socle des modèles (modeles.py) | exécution des modèles, veille, Rachelle, banc | 1.0.0 | INTERNAL | cœur |
+| `Scenario.v1` | cœur financier (finance.py) | analyses, Rachelle | 1.0.0 | PUBLIC | cœur |
 | `Signal.v1` | stratégie (trend_strategy.py) | plan d'achat | 1.0.0 | INTERNAL | cœur |
 | `DecisionRecord.v1` | décision du jour | journal financier, lignée des trades | 1.0.0 | CONFIDENTIAL | données |
 | `Experiment.v1` | évolution, études (registre.py) | rejeu, contrôle, rapport | 1.0.0 | INTERNAL | données |
+| `Feature.v1` | cœur financier (finance.py) | analyses, journal financier | 1.0.0 | PUBLIC | données |
+| `Instrument.v1` | cœur financier (finance.py) | analyses, panneau | 1.0.0 | PUBLIC | données |
 | `MarketData.v1` | Binance (klines publiques) | décision du jour, régimes, qualité | 1.0.0 | INTERNAL | données |
 | `OHLCV.v1` | Binance (klines publiques) | décision du jour, qualité des données | 1.0.0 | PUBLIC | données |
 | `Envelope.v1` | tout module (contrats.py) | tout module | 1.0.0 | INTERNAL | support |
@@ -340,6 +346,60 @@ Diagnostic expert du bot (noyau cognitif).
 | Trace (audit) | fichier du diagnostic, rapport |
 | Fichiers | `trendguard/expert.py`, `trendguard/cognitif.py` |
 
+## FinancialAnalysis.v1
+
+Analyse d'une crypto par le cœur financier (aide à la décision).
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | cœur financier (finance.py) |
+| Consommateur | journal financier, Rachelle, rapport, commande finance |
+| Entrée | indicateurs, qualité, régime, liens entre cryptos, calendrier, sentiment, prévisions, comité |
+| Sortie | signal, à surveiller ou pas de trade avec les raisons, classement indicatif, confiances, preuves, risques, contradictions, conditions d'invalidation |
+| Erreurs | « pas de trade » sans raison : refusé |
+| Droits | jamais une autorisation |
+| Délai | à la décision |
+| Nouveaux essais | aucun |
+| Unicité | une analyse par crypto et par jour |
+| Trace (audit) | journal financier |
+| Fichiers | `trendguard/finance.py` |
+
+## FinancialSignal.v1
+
+Signal de la règle au format commun.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | cœur financier (finance.py) |
+| Consommateur | analyses, journal |
+| Entrée | indicateurs de la règle, régime de BTC |
+| Sortie | direction, type, force, confiance, horizon, conditions d'entrée et de sortie, risque attendu, version de la règle |
+| Erreurs | rendement attendu inconnu : vide |
+| Droits | candidat seulement : la porte décide |
+| Délai | à la décision |
+| Nouveaux essais | aucun |
+| Unicité | un signal par crypto et par jour |
+| Trace (audit) | analyse |
+| Fichiers | `trendguard/finance.py` |
+
+## Forecast.v1
+
+Prévision de fréquence à 30 jours.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | cœur financier (finance.py) |
+| Consommateur | analyses, journal financier, calibration |
+| Entrée | clôtures passées dans un marché comparable |
+| Sortie | probabilité de hausse et son intervalle, rendement moyen et intervalle de 80 %, nombre de cas |
+| Erreurs | moins de 12 cas : aucune prévision |
+| Droits | jamais un prix annoncé ni un ordre |
+| Délai | à la décision |
+| Nouveaux essais | évaluée à l'échéance |
+| Unicité | une prévision par crypto et par jour |
+| Trace (audit) | journal financier (évaluation comprise) |
+| Fichiers | `trendguard/finance.py` |
+
 ## KnowledgeHold.v1
 
 Achat reporté par le noyau de savoir.
@@ -484,6 +544,24 @@ Invite enregistrée : version, empreinte exacte, statut.
 | Trace (audit) | trace des appels |
 | Fichiers | `trendguard/modeles.py` |
 
+## Scenario.v1
+
+Scénarios à 30 jours : fort recul, crise, baisse, central, hausse.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | cœur financier (finance.py) |
+| Consommateur | analyses, Rachelle |
+| Entrée | clôtures passées dans un marché comparable |
+| Sortie | probabilité (leur somme fait 1), rendement, volatilité et baisse moyens, conditions d'invalidation |
+| Erreurs | somme différente de 1 ou scénario manquant : refusé |
+| Droits | information |
+| Délai | à la demande |
+| Nouveaux essais | aucun |
+| Unicité | un jeu par crypto et par jour |
+| Trace (audit) | analyse |
+| Fichiers | `trendguard/finance.py` |
+
 ## Signal.v1
 
 Cassure du plus haut de 30 jours, momentum 90 jours.
@@ -537,6 +615,42 @@ Expérience notée au registre (réglages, données, version du code, résultats
 | Unicité | un identifiant par expérience |
 | Trace (audit) | fichier du registre |
 | Fichiers | `trendguard/registre.py` |
+
+## Feature.v1
+
+Indicateur versionné du magasin (technique, quantitatif).
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | cœur financier (finance.py) |
+| Consommateur | analyses, journal financier |
+| Entrée | bougies clôturées |
+| Sortie | valeur (vide si non mesurable), version, fin des données |
+| Erreurs | données postérieures à la bougie : refusé (regard vers le futur) |
+| Droits | lecture seule |
+| Délai | à la décision |
+| Nouveaux essais | aucun |
+| Unicité | un indicateur par crypto, jour et version |
+| Trace (audit) | journal financier |
+| Fichiers | `trendguard/finance.py`, `trendguard/donnees.py` |
+
+## Instrument.v1
+
+Référentiel des instruments (cryptos suivies).
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | cœur financier (finance.py) |
+| Consommateur | analyses, panneau |
+| Entrée | liste des cryptos, première bougie, veto de la veille, règles de cotation connues |
+| Sortie | identifiant stable place:marché:BASE-DEVISE, classe, devise, calendrier 24/7, état |
+| Erreurs | règle de cotation inconnue : vide, jamais inventée |
+| Droits | lecture seule |
+| Délai | à la décision |
+| Nouveaux essais | aucun |
+| Unicité | un identifiant par instrument |
+| Trace (audit) | analyse du jour |
+| Fichiers | `trendguard/finance.py` |
 
 ## MarketData.v1
 

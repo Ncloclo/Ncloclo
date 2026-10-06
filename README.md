@@ -457,6 +457,11 @@ socle multi-modèles d'IA ([`docs/MODELES.md`](docs/MODELES.md),
 banc d'évaluation réussi ; la mieux notée répond, sa réponse est vérifiée, une
 IA en panne est remplacée (repli noté), un secret ne sort jamais du PC ;
 aucune clé d'IA aujourd'hui, donc rien n'est présenté comme disponible.
+Étape 7 : cœur d'intelligence financière ([`docs/FINANCE.md`](docs/FINANCE.md),
+`python trendguard_bot.py finance aave`) : chaque nuit, chaque crypto analysée
+(qualité, indicateurs, régime, scénarios, prévisions de fréquence évaluées à
+30 jours) et dite « signal », « à surveiller » ou « pas de trade », sans
+jamais changer une décision.
 Cadre de priorités et de dépendances
 ([`docs/FEUILLE_DE_ROUTE.md`](docs/FEUILLE_DE_ROUTE.md),
 `python trendguard_bot.py chantiers portes`) : chaque composant prouvé, et

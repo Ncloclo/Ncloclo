@@ -59,6 +59,8 @@ TG_ENV_DOC: Dict[str, str] = {
     "TG_SAVOIR": "true : noyau de savoir (presse, moteurs de recherche, forums, réseau social, "
                  "tendances, avis des IA), lu toutes les heures et jugé sur les cours réels",
     "TG_SAVOIR_MINUTES": "Minutes entre deux lectures d'Internet par le noyau de savoir (15 au moins, 15 par défaut)",
+    "TG_FINANCE": "true : cœur d'intelligence financière (analyse consultative de chaque crypto à la décision, "
+                  "prévisions de fréquence évaluées à 30 jours ; ne change aucune décision)",
     "TG_BOT_LIBRE": "true : bot libre, second portefeuille fictif qui agit librement sur le noyau de savoir "
                     "et ses propres règles, à côté du bot principal (jamais d'argent réel)",
     "TG_SAVOIR_DB": "Base du noyau de savoir (textes lus, avis des sources, reports d'achat)",
@@ -155,6 +157,9 @@ class GuardConfig:
     db_file: str = ""
     log_file: str = ""
     lock_file: str = ""
+    # Cœur d'intelligence financière (finance.py) : analyse consultative de
+    # chaque crypto à la décision ; activé par l'environnement.
+    finance: bool = False
     # Porte du réel (chantiers.py) : toujours appliquée hors essais (aucune
     # variable ne la désactive) ; fermée, aucun achat réel.
     release_gate: bool = False
@@ -255,6 +260,7 @@ def load_guard_config_from_env() -> GuardConfig:
         watch_db=v29._env_s("TG_VEILLE_DB", os.path.join(v29.APP_DIR, "trendguard_veille.db")),
         savoir=v29._env_b("TG_SAVOIR", True),
         savoir_minutes=v29._env_i("TG_SAVOIR_MINUTES", 15),
+        finance=v29._env_b("TG_FINANCE", True),
         libre=v29._env_b("TG_BOT_LIBRE", True),
         savoir_db=v29._env_s("TG_SAVOIR_DB", os.path.join(v29.APP_DIR, "trendguard_savoir.db")),
         max_capital=v29._env_f("TG_MAX_CAPITAL", 0.0),

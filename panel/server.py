@@ -339,7 +339,8 @@ class PanelApp(SecurityCenter):
                 "expert": autonomy.read_json(expert.path_for(self.g)) if expert.path_for(self.g) else {},
                 "comite": self.data.state().get("comite") or {},
                 "modeles": modeles.status(path=modeles.ledger_path(getattr(self.g, "watch_db", ""))),
-                "chantiers": chantiers.summary(self.g, self.data.state())}
+                "chantiers": chantiers.summary(self.g, self.data.state()),
+                "finance": self.data.state().get("finance") or {}}
 
     def anticipation_view(self) -> Dict[str, Any]:
         """Ce que le bot fera probablement à la prochaine clôture, avec les

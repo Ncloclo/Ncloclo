@@ -61,13 +61,13 @@ def test_migrations_are_versioned_reversible_and_protected(tmp_path):
     changed = dataclasses.replace(donnees.MIGRATIONS[0], up=donnees.MIGRATIONS[0].up + ("SELECT 1",))
     with pytest.raises(donnees.MigrationError):
         j.migrate([changed])                                     # migration modifiée après coup : refusée
-    assert j.rollback(1) == [3, 2] and j.verify()["ok"] and j.verify()["schema"] == 1   # ancien schéma : lisible
+    assert j.rollback(1) == [4, 3, 2] and j.verify()["ok"] and j.verify()["schema"] == 1   # ancien schéma : lisible
     assert j.rollback(0) == [1] and j.applied() == {}
     assert not j.conn.execute("SELECT 1 FROM sqlite_master WHERE name='fin_orders'").fetchone()
-    assert j.migrate() == [1, 2, 3] and j.verify()["ok"]
+    assert j.migrate() == [1, 2, 3, 4] and j.verify()["ok"]
     j.close()
     ro = donnees.Journal(path, readonly=True)
-    assert ro.verify()["schema"] == 3
+    assert ro.verify()["schema"] == 4
     with pytest.raises(sqlite3.OperationalError):
         _decision(ro)                                            # lecture seule : aucune écriture
     ro.close()

@@ -647,6 +647,7 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
                                 + ", ".join(a.upper() for a in failed))
         close = pd.DataFrame(closes).sort_index()
         volume = pd.DataFrame(vols).reindex(close.index)
+        self._last_volume = volume                 # volumes en USD, pour le cœur financier
         feats: Dict[str, pd.DataFrame] = {}
         for a in close.columns:
             first_valid = close[a].first_valid_index()
@@ -959,6 +960,7 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         self.state["last_decision_day"] = day
         self._day_risk(day, close, equity)
         self._events_day(day, close, now)
+        self._finance(day, close, feats)
         self._libre_step(day, close, snap)
         self._explain(day, bull, close, snap, late + exits, entries, mult, now, allowed)
         self._journal_signals(day, snap, exits)

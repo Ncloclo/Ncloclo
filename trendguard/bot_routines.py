@@ -23,6 +23,7 @@ from . import (
     comite,
     evenements,
     evolution,
+    finance,
     learning,
     libre,
     modeles,
@@ -276,6 +277,68 @@ class RoutinesMixin:
         if views:
             self.logger.info("[COMITÉ] " + " ; ".join(v["text"].split(" — ")[0] for v in views.values()))
             self._journal("record_committee", f"D-{day}", list(views.values()), comite.VERSION)
+
+    def _finance(self, day: str, close: Any, feats: Dict[str, Any]) -> None:
+        """Cœur d'intelligence financière (finance.py) à chaque décision :
+        indicateurs versionnés, prévisions de fréquence et analyse de chaque
+        crypto, gardés dans le journal financier ; prévisions arrivées à
+        échéance comparées au résultat. Consultatif : aucune décision ne
+        change ; une panne ne bloque jamais le bot."""
+        if not self.g.finance:
+            return
+        try:
+            c = close
+            vol = getattr(self, "_last_volume", None)
+            v = None if vol is None else vol.reindex(c.index)
+            rg = self.state.get("regime_detail") or {}
+            sv = self.state.get("savoir") or {}
+            ev = self.state.get("evenements") or {}
+            g_ = self.state.get("garde") or {}
+            blocks = list(g_.get("blocked") or []) if g_.get("day") == day else []
+            if self.state.get("halted"):
+                blocks.append("arrêt d'urgence déclenché")
+            calib = finance.calibration(self._journal("forecast_outcomes") or [])
+            ctx = {"cross": finance.cross_asset(c, day), "regime": rg if rg.get("day") == day else None,
+                   "sentiment": ({a: o.get("value") for a, o in (sv.get("opinion") or {}).items()}
+                                 if sv.get("day") == day else {}),
+                   "committee": (self.state.get("comite") or {}).get("views") or {}, "calibration": calib,
+                   "events": [x.get("label") for x in (ev.get("upcoming") or [])] if ev.get("day") == day else [],
+                   "policy_blocks": blocks, "vetoed": {a for a in (self.state.get("vetoes") or {}) if self._vetoed(a)},
+                   "ohlcv_bad": getattr(self, "_ohlcv_bad", {})}
+            frames, out, qualities = {}, {}, []
+            due = (pd.Timestamp(day, tz="UTC") + pd.Timedelta(days=finance.HORIZON)).strftime("%Y-%m-%d")
+            for a in c.columns:
+                frames[a] = finance.features(c[a], c["btc"] if "btc" in c else None, None if v is None else v[a])
+                an = finance.analyze(a, c, v, day, self.p, dict(ctx, feature_frame=frames[a], strat=feats.get(a)))
+                d = an.details
+                qualities.append(d["quality"]["quality"])
+                self._journal("record_finance", day, a, d["features"], finance.FEATURE_VERSION, d["data_cutoff_at"],
+                              {"recommendation": an.recommendation, "reasons": an.reasons,
+                               "opportunity": an.opportunity, "version": finance.ANALYSIS_VERSION},
+                              d["forecast"], float(c[a].iloc[-1]) if pd.notna(c[a].iloc[-1]) else None, due)
+                fc = d["forecast"] or {}
+                out[a] = {"reco": an.recommendation, "reasons": list(an.reason_texts), "opportunity": an.opportunity,
+                          "p_up": fc.get("p_up"), "ci": [fc.get("ci_low"), fc.get("ci_high")], "cases": fc.get("cases")}
+            evaluated = 0
+            for row in self._journal("due_forecasts", day) or []:
+                at = pd.Timestamp(row["due_day"], tz="UTC")
+                if row["asset"] in close.columns and at in close.index and pd.notna(close.loc[at, row["asset"]]):
+                    actual = float(close.loc[at, row["asset"]]) / float(row["close"]) - 1
+                    e = finance.evaluate_forecast(float(row["p_up"]), actual)
+                    self._journal("record_forecast_evaluation", row["id"], actual, e["hit"], e["brier"])
+                    evaluated += 1
+            calib = finance.calibration(self._journal("forecast_outcomes") or [])
+            complete = [x["opportunity"] is not None for x in out.values()]
+            fis = finance.intelligence_score(qualities, calib, sum(complete) / len(complete) if complete else 0.0)
+            top = sorted((a for a in out if out[a]["opportunity"] is not None),
+                         key=lambda a: -out[a]["opportunity"])[:5]
+            self.state["finance"] = {"day": day, "assets": out, "top": top, "fis": fis, "calibration": calib,
+                                     "evaluated": evaluated, "drift": finance.drift(frames, day),
+                                     "contagion": ctx["cross"].get("contagion"),
+                                     "no_trade": sum(1 for x in out.values() if x["reco"] == "NO_TRADE"),
+                                     "signals": sorted(a for a, x in out.items() if x["reco"] == "BUY_SIGNAL")}
+        except Exception as e:           # consultatif : jamais bloquant
+            self.logger.warning(f"[FINANCE] analyse impossible : {e}")
 
     def _events_day(self, day: str, close: Any, now: datetime) -> None:
         """Calendrier économique à la décision (evenements.py) : annonces
