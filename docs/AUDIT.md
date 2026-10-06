@@ -72,6 +72,14 @@ corriger : alertes, disponibilité, risque configuré, disque.
   principal (5 millions de dollars échangés par jour au moins), pour rester
   réaliste le jour où il jouerait de l'argent réel.
 
+**Suite donnée le 6 octobre : J10 et J11 appliquées.** Le rapport lit le
+journal de Windows et liste les plantages des 30 derniers jours, écran bleu
+expliqué en clair (celui du 5 octobre : « une page relue depuis le fichier
+d'échange ne correspondait plus à ce qui avait été écrit ») ; information au
+premier, à corriger dès deux en 7 jours ; le centre de sécurité du panneau le
+reprend. Le bot libre n'achète plus que des cryptos assez échangées ; ETC,
+déjà détenue, se vendra selon ses règles.
+
 ## Diagnostic approfondi du 1er octobre, 16 h
 
 **Verdict : rien n'a bougé dans le bot depuis 14 h, et la cause des coupures
@@ -889,7 +897,7 @@ Points faibles :
 | 31 | Noyau de savoir : presse, moteurs de recherche, forums, réseau social, tendances et avis des IA lus toutes les heures, chaque source jugée sur les cours réels ; l'avis des sources prouvées peut seulement reporter un achat | Code, à votre demande | **fait** (01/10, 20 h) : [`SAVOIR.md`](SAVOIR.md) |
 | 32 | Bot libre (second portefeuille fictif qui agit librement sur le noyau de savoir et révise ses propres règles), lecture d'Internet toutes les 15 minutes ; capital changé sans faux arrêt d'urgence ; cinq stratégies de traders célèbres au tournoi ; guide du trading | Code, à votre demande | **fait** (05/10) : [`LIBRE.md`](LIBRE.md), [`TRADING.md`](TRADING.md) ; refusés : lecture à la seconde, dark web et Tor, Kali Linux, modèle d'IA à entraîner |
 | 33 | Écran bleu de Windows du 5/10 : diagnostic de la mémoire (`mdsched`), mises à jour de Windows et du pilote Intel Optane/RST | Vous | dès que possible (06/10) : J2 |
-| 34 | Rapport qui surveille les plantages de Windows ; filtre de liquidité pour le bot libre | Code, avec votre accord | proposé (06/10) : J10, J11 |
+| 34 | Rapport qui surveille les plantages de Windows ; filtre de liquidité pour le bot libre | Code, avec votre accord | **fait** (06/10) : J10, J11 |
 
 Fait depuis l'audit du matin : chemins de secours des ordres réels testés (et
 un défaut corrigé), blocage des mots de passe ratés, écriture sûre du choix des

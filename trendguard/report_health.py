@@ -255,6 +255,88 @@ PHONE_HINTS = re.compile(r"\b(oppo|redmi|xiaomi|poco|tecno|infinix|itel|galaxy|s
                          r"huawei|pixel|nokia|vivo|realme|oneplus|moto|androidap)\b", re.I)
 
 
+# Plantages de Windows des 30 derniers jours (journal Système, Kernel-Power
+# 41 : redémarrage sans arrêt propre) : heure UTC, code de l'écran bleu (0 :
+# arrêt brutal sans écran bleu), premier paramètre, bouton d'alimentation.
+CRASH_SCRIPT = (
+    "Get-WinEvent -FilterHashtable @{LogName='System'; Id=41; StartTime=(Get-Date).AddDays(-30)} "
+    "-ErrorAction SilentlyContinue | ForEach-Object { $d = ([xml]$_.ToXml()).Event.EventData.Data; "
+    "'{0}|{1}|{2}|{3}' -f $_.TimeCreated.ToUniversalTime().ToString('o'), "
+    "($d | Where-Object Name -eq 'BugcheckCode').'#text', "
+    "($d | Where-Object Name -eq 'BugcheckParameter1').'#text', "
+    "($d | Where-Object Name -eq 'PowerButtonTimestamp').'#text' }")
+CRASHES_MAX_WEEK = 2            # plantages en 7 jours à partir desquels c'est à corriger
+# Les écrans bleus les plus courants, en clair.
+BUGCHECKS = {
+    0x0A: "pilote ou mémoire (IRQL_NOT_LESS_OR_EQUAL)", 0x1A: "gestion de la mémoire (MEMORY_MANAGEMENT)",
+    0x3B: "erreur d'un service du système, souvent un pilote (SYSTEM_SERVICE_EXCEPTION)",
+    0x50: "mémoire ou pilote (PAGE_FAULT_IN_NONPAGED_AREA)",
+    0x7A: "lecture du disque ratée (KERNEL_DATA_INPAGE_ERROR)",
+    0x7E: "pilote défaillant (SYSTEM_THREAD_EXCEPTION_NOT_HANDLED)",
+    0x9F: "pilote bloqué à la mise en veille ou au réveil (DRIVER_POWER_STATE_FAILURE)",
+    0xD1: "pilote défaillant (DRIVER_IRQL_NOT_LESS_OR_EQUAL)",
+    0xEF: "processus vital de Windows arrêté (CRITICAL_PROCESS_DIED)",
+    0x124: "erreur matérielle (WHEA_UNCORRECTABLE_ERROR)",
+    0x139: "contrôle de sécurité du noyau (KERNEL_SECURITY_CHECK_FAILURE)"}
+BUGCHECK_DETAILS = {(0x1A, 0x3F): "une page relue depuis le fichier d'échange ne correspondait plus à ce qui "
+                                  "avait été écrit : mémoire, disque ou pilote"}
+CRASH_RECO = ("Lancez le diagnostic de la mémoire de Windows (touche Windows, tapez mdsched), installez les "
+              "mises à jour de Windows et des pilotes (disque, Intel Optane/RST), et vérifiez le disque "
+              "(chkdsk) ; si cela se répète, faites contrôler le PC.")
+
+
+def crash_events(deps: Deps) -> Optional[List[Tuple[datetime, int, int, bool]]]:
+    """(heure UTC, code de l'écran bleu, premier paramètre, bouton
+    d'alimentation maintenu) des plantages de Windows sur 30 jours ; None
+    ailleurs que sous Windows ou si le journal est illisible."""
+    if not deps.platform.startswith("win"):
+        return None
+    try:
+        r = deps.run(["powershell", "-NoProfile", "-Command", CRASH_SCRIPT], timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if r.returncode != 0:
+        return None
+    out = []
+    for line in (r.stdout or "").splitlines():
+        parts = line.strip().split("|")
+        if len(parts) != 4:
+            continue
+        try:
+            t = datetime.fromisoformat(parts[0].replace("Z", "+00:00")).astimezone(timezone.utc)
+            code, param = int(parts[1] or "0", 0), int(parts[2] or "0", 0)   # décimal ou 0x…
+        except ValueError:
+            continue
+        out.append((t, code, param, (parts[3] or "0") not in ("0", "")))
+    return sorted(out)
+
+
+def crash_text(code: int, param: int, button: bool) -> str:
+    """Un plantage, en clair."""
+    if code == 0:
+        return ("arrêt forcé au bouton d'alimentation" if button
+                else "arrêt brutal sans écran bleu (coupure de courant, batterie vide ou PC figé)")
+    what = BUGCHECK_DETAILS.get((code, param)) or BUGCHECKS.get(code, "cause à rechercher")
+    return f"écran bleu 0x{code:X} : {what}"
+
+
+def crash_check(deps: Deps, now: datetime) -> List[Check]:
+    """Plantages de Windows (écran bleu, arrêt brutal) sur 7 et 30 jours :
+    une information au premier, à corriger dès 2 en 7 jours. Rien ailleurs
+    que sous Windows."""
+    events = crash_events(deps)
+    if events is None:
+        return []
+    month = [e for e in events if e[0] >= now - timedelta(days=30)]
+    week = [e for e in month if e[0] >= now - timedelta(days=7)]
+    if not month:
+        return [chk("Plantages de Windows", True, "aucun en 30 jours")]
+    listed = " ; ".join(f"{t:%d/%m %H:%M} UTC, {crash_text(c, p, b)}" for t, c, p, b in month[-3:])
+    bad = len(week) >= CRASHES_MAX_WEEK
+    return [chk("Plantages de Windows", False if bad else None,
+                f"{len(week)} en 7 jours, {len(month)} en 30 jours : {listed}", CRASH_RECO)]
+
+
 def wifi_events(deps: Deps) -> List[Tuple[datetime, str, str, str]]:
     """(heure UTC, 8001 ou 8003, réseau, raison) du journal Wi-Fi de Windows,
     dans l'ordre ; vide ailleurs ou s'il est illisible."""

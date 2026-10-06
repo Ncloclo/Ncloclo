@@ -756,7 +756,7 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
                     entries.append(done)
                     cash_left -= done["cost"]
         self.state["last_decision_day"] = day
-        self._libre_step(day, close)
+        self._libre_step(day, close, snap)
         self._explain(day, bull, close, snap, late + exits, entries, mult, now, allowed)
         self._summary(day, bull, equity, late + exits, entries, prices)
 

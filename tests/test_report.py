@@ -526,6 +526,29 @@ def test_report_reads_the_wifi_log():
     assert rph.wifi_check(rp.Deps(run=lambda cmd, **kw: proc("", 1), platform="win32"), now) == []
 
 
+def test_report_watches_windows_crashes():
+    """Plantages de Windows (journal Système) : en clair, une information au
+    premier, à corriger dès deux en une semaine ; aucun : conforme."""
+    now = datetime(2026, 10, 6, 1, 0, tzinfo=timezone.utc)
+    bsod = "2026-10-05T14:06:24.1508478Z|26|0x3f|0"
+
+    def deps(lines, rc=0, platform="win32"):
+        def run(cmd, **kw):
+            assert cmd[0] == "powershell" and "Id=41" in cmd[-1]
+            return proc("\n".join(lines), rc)
+        return rp.Deps(run=run, platform=platform)
+    one = rph.crash_check(deps([bsod]), now)[0]
+    assert one["label"] == "Plantages de Windows" and one["ok"] is None
+    assert "écran bleu 0x1A : une page relue depuis le fichier d'échange" in one["detail"] and "mdsched" in one["reco"]
+    two = rph.crash_check(deps([bsod, "2026-10-03T08:00:00Z|0|0|0", "2026-09-10T08:00:00Z|159|3|0"]), now)[0]
+    assert two["ok"] is False and two["detail"].startswith("2 en 7 jours, 3 en 30 jours")
+    assert "arrêt brutal sans écran bleu" in two["detail"] and "pilote bloqué à la mise en veille" in two["detail"]
+    assert rph.crash_text(0, 0, True) == "arrêt forcé au bouton d'alimentation"
+    assert rph.crash_check(deps([]), now)[0]["ok"] is True                   # aucun en 30 jours
+    assert rph.crash_check(deps([], rc=1), now) == []                         # journal illisible : rien
+    assert rph.crash_check(deps([bsod], platform="linux"), now) == []
+
+
 class WindowsRun(FakeRun):
     """Commandes de Windows en plus : chiffrement du disque, mises à jour."""
 

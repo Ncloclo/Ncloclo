@@ -20,6 +20,8 @@ avec le même capital que le paper. Code : `trendguard/libre.py`.
 3. **Il agit seul.** Il vend une crypto vue en baisse ou dont la perte
    atteint son stop, puis achète celles qu'il voit le plus en hausse : 20 %
    du capital par position, 5 positions au plus, frais et glissement comptés.
+   Comme le bot principal, il n'achète que des cryptos assez échangées (5
+   millions de dollars par jour au moins), pour rester réaliste.
 4. **Il améliore ses propres règles et les applique.** Chaque semaine, il
    rejoue ses avis passés avec d'autres seuils d'achat et de vente et
    d'autres stops, et adopte sur-le-champ ceux qui auraient le plus rapporté.

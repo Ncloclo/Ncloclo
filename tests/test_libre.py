@@ -99,3 +99,17 @@ def test_the_free_bot_runs_beside_the_main_bot_without_changing_it(logger, tmp_p
     m.close()
     assert book["capital"] == 10_000.0 and len(book["equity"]) == 60 and book["trades"]
     assert any(line.startswith("Bot libre (argent fictif)") for line in bot.state["reasoning"]["lines"])
+
+
+def test_the_free_bot_buys_only_cryptos_traded_enough():
+    """Même filtre de liquidité que le bot principal : une crypto trop peu
+    échangée n'est pas achetée, même vue en forte hausse ; une crypto déjà
+    détenue se vend toujours."""
+    book = libre.new(1000.0, "2026-10-06")
+    acts = libre.trade_day(book, "2026-10-06", {"etc": 9.0, "bnb": 600.0}, {"etc": 0.9, "bnb": 0.5},
+                           libre.DEFAULT_RULES, liquid={"bnb"})
+    assert acts == ["achète BNB (avis +0,50)"] and "etc" not in book["holdings"]
+    book["holdings"]["etc"] = {"qty": 2.0, "entry": 10.0, "cost": 20.0, "date": "2026-10-05"}
+    acts = libre.trade_day(book, "2026-10-07", {"etc": 9.0, "bnb": 600.0}, {"etc": -0.5, "bnb": 0.5},
+                           libre.DEFAULT_RULES, liquid={"bnb"})
+    assert acts == ["vend ETC (stop)"]

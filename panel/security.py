@@ -196,6 +196,14 @@ class SecurityCenter:
         except OSError:
             return []
 
+    def _crash_check(self) -> List[Dict[str, Any]]:
+        """Plantages de Windows : le constat du dernier rapport quotidien
+        (lire le journal de Windows à chaque actualisation serait trop lent)."""
+        r = self.report_view()
+        found = [c for s in r.get("sections") or [] for c in s.get("checks") or []
+                 if c.get("label") == "Plantages de Windows"]
+        return self._from_report(found[:1])
+
     def _report_check(self) -> Dict[str, Any]:
         """Rapport quotidien : date et verdict du dernier ; à corriger s'il a
         plus de 36 heures."""
@@ -250,6 +258,7 @@ class SecurityCenter:
             self._uptime_check(st),
             *self._power_check(),
             *self._resource_checks(),
+            *self._crash_check(),
             self._evolution_check(),
             self._report_check(),
             self._alerts_check(st),

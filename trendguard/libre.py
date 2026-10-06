@@ -28,7 +28,7 @@ from __future__ import annotations
 import itertools
 import math
 from datetime import date, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from .texte import fr
 
@@ -84,9 +84,11 @@ def equity(book: Dict[str, Any], prices: Dict[str, float]) -> float:
 
 
 def trade_day(book: Dict[str, Any], day: str, prices: Dict[str, float], op: Dict[str, float],
-              rules: Dict[str, float], record: bool = True) -> List[str]:
+              rules: Dict[str, float], record: bool = True,
+              liquid: Optional[Set[str]] = None) -> List[str]:
     """Une journée de décisions : ventes (stop touché ou avis baissier),
-    puis achats des cryptos vues en hausse, les plus haut placées d'abord.
+    puis achats des cryptos vues en hausse, les plus haut placées d'abord,
+    parmi les assez échangées (`liquid`, même filtre que le bot principal).
     Renvoie les actions, en clair. Une crypto vendue n'est pas rachetée le
     même jour."""
     acts, sold = [], set()
@@ -111,7 +113,7 @@ def trade_day(book: Dict[str, Any], day: str, prices: Dict[str, float], op: Dict
         if v < rules["buy"] or len(book["holdings"]) >= MAX_POSITIONS:
             break
         px = prices.get(a)
-        if a in book["holdings"] or a in sold or not px:
+        if a in book["holdings"] or a in sold or not px or (liquid is not None and a not in liquid):
             continue
         cost = min(book["cash"], POSITION_PCT * eq)
         if cost < MIN_ORDER:
@@ -150,7 +152,7 @@ def tune(opinions: Dict[str, Dict[str, float]], close: Any, current: Dict[str, f
 
 
 def step(book: Dict[str, Any], day: str, close: Any, today: Dict[str, Dict[str, float]],
-         yesterday: Dict[str, Dict[str, float]]) -> List[str]:
+         yesterday: Dict[str, Dict[str, float]], liquid: Optional[Set[str]] = None) -> List[str]:
     """La journée du bot libre, à la décision du bot principal : il apprend
     de la veille, révise ses règles chaque semaine, se fait son avis, agit."""
     days = [str(d.date()) for d in close.index]
@@ -177,7 +179,7 @@ def step(book: Dict[str, Any], day: str, close: Any, today: Dict[str, Dict[str, 
             notes.append(f"nouvelles règles adoptées : achat dès {fr(rules['buy'], '+.1f')}, vente sous "
                          f"{fr(rules['sell'], '+.1f')}, stop à −{fr(rules['stop'] * 100, '.0f')} %")
             book["rules"] = rules
-    notes += trade_day(book, day, prices, op, book["rules"])
+    notes += trade_day(book, day, prices, op, book["rules"], liquid=liquid)
     book["equity"] = (book["equity"] + [[day, round(equity(book, prices), 2)]])[-400:]
     book["last_day"] = day
     book["notes"] = notes

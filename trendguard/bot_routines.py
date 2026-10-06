@@ -175,7 +175,7 @@ class RoutinesMixin:
             self.logger.info(f"[SAVOIR] {s} n'est plus prouvée : son avis ne compte plus")
         return res["holds"]
 
-    def _libre_step(self, day: str, close: Any) -> None:
+    def _libre_step(self, day: str, close: Any, snap: Optional[Dict[str, Dict[str, float]]] = None) -> None:
         """La journée du bot libre (libre.py), à la décision : il apprend de
         la veille, révise ses règles, se fait son avis et agit, dans son
         propre portefeuille fictif gardé dans le noyau de savoir. Jamais
@@ -189,7 +189,11 @@ class RoutinesMixin:
             if not isinstance(book, dict) or book.get("capital") != float(self.g.paper_capital):
                 book = libre.new(self.g.paper_capital, day)       # capital changé : nouvel essai
             today, yesterday = libre.last_views(memory, day)
-            notes = libre.step(book, day, close, today, yesterday)
+            # Même filtre de liquidité que le bot principal (5 M$ par jour).
+            liquid = None if snap is None else {
+                a for a, s in snap.items()
+                if ts._finite(s.get("vol30")) and s["vol30"] >= self.p.min_volume_usd}
+            notes = libre.step(book, day, close, today, yesterday, liquid=liquid)
             memory.put("libre", book)
         except Exception as e:
             self.logger.warning(f"[LIBRE] journée du bot libre impossible : {e}")
