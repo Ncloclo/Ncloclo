@@ -447,7 +447,11 @@ données ([`docs/DONNEES.md`](docs/DONNEES.md),
 relue. Étape 4 : noyau cognitif ([`docs/COGNITIF.md`](docs/COGNITIF.md)) ; le
 bot fait lui-même son « analyse et diagnostic expert »
 (`python trendguard_bot.py expert`, et chaque nuit), propose sans jamais agir,
-et Rachelle en résume le résultat.
+et Rachelle en résume le résultat. Étape 5 : comité de onze agents financiers
+([`docs/AGENTS.md`](docs/AGENTS.md)), qui donne chaque nuit un avis motivé et
+consultatif sur les cryptos que la règle propose d'acheter
+(`python trendguard_bot.py comite aave`) ; éprouvé sur 8 ans, il ne ferait
+pas mieux que la règle en décidant seul, il reste donc consultatif.
 
 ### Bot libre (`trendguard/libre.py`, [`docs/LIBRE.md`](docs/LIBRE.md))
 

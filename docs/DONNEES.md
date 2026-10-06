@@ -12,6 +12,7 @@ erDiagram
     fin_orders ||--o{ fin_executions : executions
     fin_orders ||--o| fin_trades : achat
     fin_orders ||--|| fin_trades : vente
+    fin_decisions ||--o{ fin_committee_views : avis
 ```
 
 ## `fin_schema_migrations`
@@ -221,3 +222,29 @@ Trades clos reliés à leur ordre d'achat et de vente, analyse après trade.
 | `regime` | TEXT | non |  |
 | `lesson` | TEXT | non |  |
 | `reason` | TEXT | oui |  |
+
+## `fin_committee_views`
+
+Avis consultatif du comité d'agents sur chaque crypto proposée par la règle (jamais modifié), pour mesurer s'il aurait aidé.
+
+| Rubrique | |
+| --- | --- |
+| Propriétaire | `trendguard/donnees.py` (domaine « fin_ ») |
+| Lue par | rapport, diagnostic |
+| Écrite par | bot, à la décision, en ajout seulement |
+| Contrat | CommitteeView.v1 |
+| Durée de vie | toujours |
+| Index | `fin_committee_views_decision` (par décision : avis du jour) |
+
+| Colonne | Type | Obligatoire | Clé |
+| --- | --- | --- | --- |
+| `id` | INTEGER | oui | primaire |
+| `decision_id` | TEXT | oui |  |
+| `asset` | TEXT | oui |  |
+| `recommendation` | TEXT | oui |  |
+| `consensus` | REAL | oui |  |
+| `disagreement` | TEXT | oui |  |
+| `reasons` | TEXT | oui |  |
+| `votes` | TEXT | oui |  |
+| `agents_version` | TEXT | oui |  |
+| `created_at` | TEXT | oui |  |

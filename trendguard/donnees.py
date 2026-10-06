@@ -173,6 +173,23 @@ MIGRATIONS: Tuple[Migration, ...] = (
         "DROP TABLE IF EXISTS fin_signals", "DROP TABLE IF EXISTS fin_decisions",
         "DROP TABLE IF EXISTS fin_strategy_versions",
     )),
+    Migration(2, "avis du comité d'agents", up=(
+        """CREATE TABLE fin_committee_views (
+            id INTEGER PRIMARY KEY,
+            decision_id TEXT NOT NULL REFERENCES fin_decisions(id),
+            asset TEXT NOT NULL,
+            recommendation TEXT NOT NULL CHECK (recommendation IN ('ACHAT', 'CONSERVER', 'ATTENDRE',
+                                                                   'PAS_DE_TRADE', 'PLUS_DE_RECHERCHE', 'BLOCAGE')),
+            consensus REAL NOT NULL CHECK (consensus BETWEEN -100 AND 100),
+            disagreement TEXT NOT NULL CHECK (disagreement IN ('LOW', 'MEDIUM', 'HIGH')),
+            reasons TEXT NOT NULL CHECK (json_valid(reasons)),
+            votes TEXT NOT NULL CHECK (json_valid(votes)),
+            agents_version TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE (decision_id, asset))""",
+        *_append_only("fin_committee_views"),
+        "CREATE INDEX fin_committee_views_decision ON fin_committee_views(decision_id)",
+    ), down=("DROP TABLE IF EXISTS fin_committee_views",)),
 )
 
 
@@ -210,6 +227,9 @@ TABLES: Tuple[Table, ...] = (
     Table("fin_trades", "trades clos reliés à leur ordre d'achat et de vente, analyse après trade",
           "lignée, attribution, rapport", "bot, à la vente", "TradeRecord.v1", "toujours",
           "par ordre d'achat (lignée) ; par date de clôture (bilans)"),
+    Table("fin_committee_views", "avis consultatif du comité d'agents sur chaque crypto proposée par la règle "
+          "(jamais modifié), pour mesurer s'il aurait aidé", "rapport, diagnostic", "bot, à la décision, en ajout "
+          "seulement", "CommitteeView.v1", "toujours", "par décision : avis du jour"),
 )
 
 
@@ -412,6 +432,29 @@ class Journal:
             out["data"] = {"source": d["data_source"], "quality": d["data_quality"], "day": d["day"]}
         return out
 
+    def record_committee(self, decision_id: str, views: Sequence[Dict[str, Any]], agents_version: str) -> int:
+        """Avis du comité d'agents du jour (le premier avis par crypto est
+        gardé, jamais modifié)."""
+        with self._tx():
+            for v in views:
+                self.conn.execute(
+                    "INSERT OR IGNORE INTO fin_committee_views (decision_id, asset, recommendation, consensus, "
+                    "disagreement, reasons, votes, agents_version, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                    (decision_id, v["asset"], v["recommendation"], float(v["consensus"]), v["disagreement"],
+                     _json(v.get("reasons") or []), _json(v.get("votes") or {}), agents_version, _now()))
+        return len(views)
+
+    def committee_record(self) -> Dict[str, Dict[str, Any]]:
+        """Ce qu'a donné chaque recommandation du comité sur les trades
+        réellement achetés ensuite : nombre de trades clos et R moyen."""
+        rows = self.conn.execute(
+            "SELECT v.recommendation AS rec, COUNT(t.id) AS n, AVG(t.r) AS r FROM fin_committee_views v "
+            "JOIN fin_orders o ON o.decision_id = v.decision_id AND o.asset = v.asset AND o.side = 'BUY' "
+            "JOIN fin_trades t ON t.entry_order_id = o.id GROUP BY v.recommendation").fetchall()
+        views = self.conn.execute("SELECT COUNT(*) FROM fin_committee_views").fetchone()[0]
+        return {"views": int(views), "by": {r["rec"]: {"trades": int(r["n"]), "avg_r": round(float(r["r"] or 0), 2)}
+                                            for r in rows}}
+
     def for_checks(self) -> Dict[str, Any]:
         """Ce que le diagnostic expert compare à d'autres sources : date de
         création du journal, achats exécutés, positions ouvertes, trades."""
@@ -429,8 +472,11 @@ class Journal:
                                                    (limit,))]
 
     def counts(self) -> Dict[str, int]:
+        """Lignes de chaque table (0 pour une table d'une migration pas
+        encore appliquée)."""
+        have = {r[0] for r in self.conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         return {t.name: int(self.conn.execute(f"SELECT COUNT(*) FROM {t.name}").fetchone()[0])  # noqa: S608
-                for t in TABLES}
+                if t.name in have else 0 for t in TABLES}
 
     def verify(self) -> Dict[str, Any]:
         """Intégrité du journal : clés étrangères, achats sans contrôle ou
@@ -451,10 +497,11 @@ class Journal:
         if bad:
             problems.append(f"{bad} achat(s) exécuté(s) sans contrôle approuvé")
         triggers = {r[0] for r in self.conn.execute("SELECT name FROM sqlite_master WHERE type='trigger'")}
-        for t in ("fin_risk_checks", "fin_executions"):
+        for t in ("fin_risk_checks", "fin_executions", "fin_committee_views")[:2 + (2 in applied)]:
             if not {f"{t}_update_refuse", f"{t}_delete_refuse"} <= triggers:
                 problems.append(f"{t} : protection d'ajout seul absente")
-        if applied != {m.version: m.checksum for m in MIGRATIONS}:
+        expected = {m.version: m.checksum for m in MIGRATIONS}
+        if any(expected.get(v) != c for v, c in applied.items()):
             problems.append("schéma différent des migrations du code")
         return {"ok": not problems, "problems": problems, "counts": self.counts(),
                 "schema": max(applied) if applied else 0}
@@ -497,7 +544,8 @@ def catalog() -> str:
                  "    fin_risk_checks ||--o| fin_orders : autorise",
                  "    fin_orders ||--o{ fin_executions : executions",
                  "    fin_orders ||--o| fin_trades : achat",
-                 "    fin_orders ||--|| fin_trades : vente", "```", ""]
+                 "    fin_orders ||--|| fin_trades : vente",
+                 "    fin_decisions ||--o{ fin_committee_views : avis", "```", ""]
         for t in TABLES:
             cols = j.conn.execute(f"PRAGMA table_info({t.name})").fetchall()
             idx = [r[1] for r in j.conn.execute(f"PRAGMA index_list({t.name})") if not r[1].startswith("sqlite_")]

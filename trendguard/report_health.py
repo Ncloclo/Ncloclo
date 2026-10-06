@@ -584,8 +584,16 @@ def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
             j = donnees.Journal(db, readonly=True)
             try:
                 v = j.verify()
+                cr = j.committee_record() if v["schema"] >= 2 else {"views": 0, "by": {}}
             finally:
                 j.close()
+            if cr["views"]:
+                by = " ; ".join(f"« {r.lower().replace('_', ' ')} » : {x['trades']} trade(s), "
+                                f"{fr(x['avg_r'], '+.2f')} R en moyenne" for r, x in sorted(cr["by"].items()))
+                out.append(chk("Comité d'agents", None, f"{cr['views']} avis consultatif(s) gardé(s)"
+                               + (f" ; trades achetés ensuite selon l'avis : {by}" if by else
+                                  " ; aucun trade clos à comparer pour l'instant")
+                               + " (jugé à partir de 20 trades par avis)"))
             out.append(chk("Journal financier", v["ok"], donnees.describe(v),
                            "" if v["ok"] else "Le journal financier a un défaut : python trendguard_bot.py "
                                               "donnees, puis signalez-le (rien n'est corrigé en silence)."))

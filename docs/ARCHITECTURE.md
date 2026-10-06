@@ -111,6 +111,8 @@ sont jamais envoyés sur GitHub. VS Code les masque dans l'explorateur
 | `audit.py` | journal d'audit chaîné : chaque opération critique, toute modification détectée |
 | `cognitif.py` | noyau cognitif : plan en graphe de tâches validé, orchestration (états, délais, nouveaux essais selon la cause, annulation), vérification croisée, incertitude, décision jamais autorisée seule |
 | `expert.py` | diagnostic expert par le noyau cognitif (lecture seule), chaque jour à 00:45 UTC et à la demande |
+| `agents.py` | socle multi-agents : manifestes, registre (quarantaine, disjoncteur, mesures), bus de messages, tableau noir cloisonné, superviseur, débat, désaccord, consensus |
+| `comite.py` | comité de onze agents financiers, consultatif : avis motivé sur chaque crypto que la règle propose d'acheter, banc d'essai |
 | `donnees.py` | socle de données : journal financier (décisions, signaux, contrôles du risque, ordres, exécutions, trades) dans la base du bot, migrations, lignée de chaque trade |
 | `libre.py` | bot libre : second portefeuille fictif qui apprend de chaque source, se fait son avis, agit seul et révise ses propres règles chaque semaine, à côté du bot principal |
 | `savoir.py` | noyau de savoir : presse, moteurs de recherche, forums, réseau social, tendances et avis des IA lus toutes les 15 minutes, chaque source jugée sur les cours réels ; l'avis des sources prouvées peut seulement reporter un achat |

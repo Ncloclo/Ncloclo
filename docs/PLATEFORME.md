@@ -207,6 +207,33 @@ en mode dégradé sûr) ; une mémoire vectorielle n'aurait rien de plus à
 chercher que le noyau de savoir ; pas d'API réseau supplémentaire (le
 panneau n'écoute que ce PC) ; et jamais d'IA sur le chemin des ordres.
 
+## Étape 5 du prompt : socle multi-agents et comité d'agents financiers
+
+Le cinquième document demande une « intelligence collective contrôlée » :
+des agents spécialisés, déclarés et limités, qui débattent, se critiquent,
+se vérifient et forment un consensus, sans jamais pouvoir passer un ordre.
+Appliqué à TrendGuard : un socle multi-agents (`agents.py`) et un comité de
+onze agents financiers (`comite.py`) qui donne chaque nuit son avis sur les
+cryptos que la règle propose d'acheter. Détail : [`AGENTS.md`](AGENTS.md).
+
+| Exigence de l'étape 5 | Ce qui a été fait |
+| --- | --- |
+| Registre, manifestes, cycle de vie (§4-5, §62) | chaque agent déclaré (version, rôle, lectures permises, poids, veto, délai) ; un agent qui demanderait de passer des ordres est refusé |
+| Superviseur, équipe, délégation (§11-16) | équipe choisie par capacités ; analyses en parallèle puis contrôles, sur le moteur d'orchestration de l'étape 4 |
+| Bus de messages, tableau noir cloisonné (§18-21) | messages tracés et non rejouables ; chaque agent ne lit que ses rubriques ; pas d'avis des autres avant le sien |
+| Débat, désaccord, consensus, quorum (§23-26) | révision sur preuves seulement ; désaccord mesuré ; consensus pondéré, dit « faible » quand il l'est ; agents critiques obligatoires |
+| Critique, équipe rouge, vérification indépendante, « pas de trade » (§27-29, §43) | onze agents : données, technique, quant, régime, sentiment, risque (veto), portefeuille, « pas de trade », critique, équipe rouge, vérificateur |
+| Quarantaine, disjoncteur, panne (§45-46, §50, §74) | violation : quarantaine ; trois échecs : disjoncteur ; agent critique absent : BLOCAGE |
+| Sécurité financière, quatre yeux (§44, §60-61, §82) | une recommandation n'est jamais une autorisation ; aucun agent n'a accès aux ordres ; la règle et la porte décident |
+| Banc d'essai et évaluation (§53-54) | 8 scénarios de référence ; et le comité éprouvé sur 8 ans : [`COMITE_ETUDE.md`](COMITE_ETUDE.md) |
+
+**Ce que dit l'évaluation sur 8 ans** : les achats que le comité approuve
+font un peu mieux en moyenne (+1,20 R contre +1,08 R), mais n'acheter que sur
+son avis aurait fait nettement moins bien (Calmar 0,83 au lieu de 1,54 sur
+2018-2022, 1,20 au lieu de 1,33 depuis 2023). Il reste donc consultatif ; ses
+avis sont mesurés sur les trades réels, et une règle ne sera proposée que
+s'ils font mieux de façon nette.
+
 ## Ce qui reste (votre accord d'abord)
 
 1. **Débat des IA** (§43) : rôles haussier, baissier, critique et synthèse

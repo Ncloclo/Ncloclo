@@ -20,6 +20,7 @@ import v29
 from . import (
     anticipation,
     autonomy,
+    comite,
     evenements,
     evolution,
     learning,
@@ -202,7 +203,7 @@ class RoutinesMixin:
         before = set((self.state.get("savoir") or {}).get("proven") or [])
         self.state["savoir"] = {"day": day, "line": savoir.reasoning_line(res, counts),
                                 "proven": res["proven"], "holds": sorted(res["holds"]),
-                                "influence": res["influence"]}
+                                "influence": res["influence"], "opinion": res.get("opinion") or {}}
         for s in sorted(set(res["proven"]) - before):
             sc = next(x for x in res["scores"] if x["source"] == s)
             self.logger.info(f"[SAVOIR] compétence acquise : {s} est {sc['verdict']} "
@@ -242,6 +243,38 @@ class RoutinesMixin:
         self.state.setdefault("savoir", {}).update(libre_day=day, libre_line=s["text"] + ".")
         if notes:
             self.logger.info("[LIBRE] " + " ; ".join(notes))
+
+    COMMITTEE_MAX = 6           # cryptos examinées par le comité à chaque décision
+
+    def _committee(self, day: str, close: Any, snap: Dict[str, Dict[str, float]], held: Dict[str, float],
+                   equity: float, blocked: List[str], safe: bool, allowed: Any) -> None:
+        """Avis consultatif du comité d'agents (comite.py) sur les cryptos
+        que la règle propose d'acheter : gardé dans l'état, le raisonnement
+        et le journal financier, pour mesurer avec le temps s'il aurait aidé.
+        Il ne change aucune décision ; une panne ne bloque jamais le bot."""
+        cands = sorted((a for a, s in snap.items() if a in allowed and ts.entry_signal(s, self.p)),
+                       key=lambda a: -float(snap[a].get("mom") or 0))[:self.COMMITTEE_MAX]
+        sv = self.state.get("savoir") or {}
+        ranking = {r["asset"]: r for r in ((self.state.get("selection") or {}).get("ranking") or [])}
+        rg = self.state.get("regime_detail") or {}
+        q = self.state.get("qualite") or {}
+        policy = {"halted": bool(self.state.get("halted")), "safe_mode": safe, "garde_blocked": list(blocked)}
+        views = {}
+        try:
+            for a in cands:
+                data = comite.board(a, day, close, snap[a], self.p, held, equity,
+                                    float(self.state.get("risk_mult") or 1.0), policy,
+                                    sv.get("opinion") if sv.get("day") == day else {}, ranking,
+                                    regime=rg if rg.get("day") == day else None,
+                                    quality=q if q.get("day") == day else None)
+                view, _res = comite.evaluate(a, data, self.agents)
+                views[a] = comite.as_dict(view)
+        except Exception as e:           # consultatif : jamais bloquant
+            self.logger.warning(f"[COMITÉ] avis impossible : {e}")
+        self.state["comite"] = {"day": day, "views": views, "agents": self.agents.metrics()}
+        if views:
+            self.logger.info("[COMITÉ] " + " ; ".join(v["text"].split(" — ")[0] for v in views.values()))
+            self._journal("record_committee", f"D-{day}", list(views.values()), comite.VERSION)
 
     def _events_day(self, day: str, close: Any, now: datetime) -> None:
         """Calendrier économique à la décision (evenements.py) : annonces

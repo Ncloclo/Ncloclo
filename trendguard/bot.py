@@ -21,6 +21,7 @@ from . import (
     anticipation,
     audit,
     autonomy,
+    comite,
     donnees,
     evolution,
     garde,
@@ -69,6 +70,9 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         self._restart_flag = False          # redémarrage prévu (nouvelle version)
         # Journal d'audit (audit.py) : le bot en est le seul écrivain.
         self.audit = audit.AuditLog(audit.path_for(gcfg))
+        # Comité d'agents (comite.py) : registre gardé tout le temps du
+        # processus (quarantaine, disjoncteurs, mesures de chaque agent).
+        self.agents = comite.registry()
         # Journal financier (donnees.py) : décisions, signaux, contrôles du
         # risque, ordres, exécutions, trades, dans la base du bot.
         try:
@@ -910,6 +914,7 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
                       (self.state.get("regime_detail") or {}).get("texte"), equity,
                       bool(self.state.get("halted")), safe.active, blocked,
                       (self.state.get("qualite") or {}).get("score"))
+        held_before = {a: float(h.risk_quote) for a, h in holdings.items()}
         if not self.state.get("halted") and not blocked and not safe.active:
             eligible = {a: s for a, s in snap.items()
                         if self._can_enter(a) and a in allowed}
@@ -934,6 +939,7 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
                 if done is not None:
                     entries.append(done)
                     cash_left -= done["cost"]
+        self._committee(day, close, snap, held_before, equity, blocked, safe.active, allowed)
         self.state["last_decision_day"] = day
         self._day_risk(day, close, equity)
         self._events_day(day, close, now)
@@ -1009,6 +1015,10 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
                          f"par deux jusqu'au {until}.")
         if self.state.get("halted") and self.state.get("resume_note"):
             extra.append(f"Arrêt d'urgence : {self.state['resume_note']}.")
+        cm = self.state.get("comite") or {}
+        if cm.get("day") == day and cm.get("views"):
+            extra.append("Comité d'agents (consultatif, la règle décide) : "
+                         + " ; ".join(v["text"].split(" — ")[0] for v in cm["views"].values()) + ".")
         sv = self.state.get("savoir") or {}
         if sv.get("day") == day and sv.get("line"):
             extra.append(sv["line"])

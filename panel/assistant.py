@@ -565,6 +565,28 @@ def a_expert(ctx: Dict[str, Any]) -> str:
             "seul. Pour le refaire : python trendguard_bot.py expert.")
 
 
+def a_comite(ctx: Dict[str, Any]) -> str:
+    cm = ctx.get("comite") or {}
+    views = cm.get("views") or {}
+    words = set(norm(ctx.get("message", "")).split())
+    named = [v for a, v in views.items() if a in words]
+    if named:
+        lines = [f"**Avis du comité d'agents** (bougie du {cm.get('day')}) :"]
+        for v in named:
+            lines.append(f"- {v['text']}")
+            lines += [f"  - {r}" for r in v.get("reasons", [])[1:3]]
+    elif views:
+        lines = [f"**Comité d'agents** (bougie du {cm.get('day')}), sur les cryptos que la règle proposait :"]
+        lines += [f"- {v['text'].split(' — ')[0]}" for v in views.values()]
+    else:
+        lines = ["**Comité d'agents** : chaque nuit, onze agents (données, technique, quant, régime, sentiment, "
+                 "risque, portefeuille, « pas de trade », critique, équipe rouge, vérificateur) donnent leur avis "
+                 "sur les cryptos que la règle propose d'acheter. Aucune n'était proposée à la dernière décision. "
+                 "Pour une crypto précise : python trendguard_bot.py comite aave."]
+    lines.append("Leur avis est consultatif : la règle du bot et la porte d'exécution décident, jamais un agent.")
+    return "\n".join(lines)
+
+
 def a_learning(ctx: Dict[str, Any]) -> str:
     lr = (ctx.get("status") or {}).get("learning") or {}
     lines = [
@@ -748,6 +770,9 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("autonomy", ("autonome", "autonomie", "redemarrage", "redemarrer", "demarrer avec",
                   "ordinateur", "veille du pc", "plantage", "superviseur", "eteint"), a_autonomy,
      [{"label": "Réglages ▸ autonomie", "href": "#settings"}]),
+    ("comite", ("comite", "comite d agents", "agents", "avis des agents", "que penses tu de",
+                "que pensez vous de", "que pense le bot de", "avis sur"), a_comite,
+     [{"label": "Ce que pense le bot", "href": "#dash"}]),
     ("expert", ("diagnostic expert", "diagnostique expert", "analyse et diagnostic",
                 "analyse et diagnostique", "diagnostic", "diagnostique", "expert"), a_expert,
      [{"label": "Réglages ▸ rapport", "href": "#settings"}]),
@@ -832,6 +857,7 @@ def local_answer(message: str, ctx: Dict[str, Any]) -> Dict[str, Any]:
         found = useful
     best = found[0][1]
     tid, _keys, fn, actions = TOPIC_BY_ID[best]
+    ctx = dict(ctx, message=message)          # un sujet peut viser une crypto précise
     text = fn(ctx)
     # Deux sujets aussi probables : les deux réponses (ex. « stop et risque »).
     if (tid not in SOCIAL and len(found) > 1 and found[1][0] == found[0][0]
