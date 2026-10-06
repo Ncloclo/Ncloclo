@@ -1,4 +1,4 @@
-# Audit et diagnostic expert de TrendGuard — 28 septembre au 1er octobre 2026
+# Audit et diagnostic expert de TrendGuard — 28 septembre au 6 octobre 2026
 
 Cinq diagnostics successifs : l'audit du 28, le diagnostic approfondi du 29
 (disponibilité, robustesse, alertes), celui du 30 à 10 h (alimentation,
@@ -8,8 +8,9 @@ restructuration du code (épreuves de résistance). Puis, à 21 h, le palier de
 risque et la reprise prudente de l'arrêt d'urgence, à 22 h un sixième
 diagnostic, clé Binance enfin acceptée, le 1er octobre à 2 h la sécurité
 renforcée et le rapport après chaque compétence acquise, à 5 h un septième
-diagnostic, à 14 h un huitième (disque, mémoire, PC déplacé) et à 16 h un
-neuvième (Wi-Fi). Méthode :
+diagnostic, à 14 h un huitième (disque, mémoire, PC déplacé), à 16 h un
+neuvième (Wi-Fi) et le 6 octobre un dixième (faux arrêt d'urgence, écran
+bleu). Méthode :
 diagnostic de la stratégie sur les données publiques de
 Binance (`python trendguard_bot.py diagnose`), état du bot dans le panneau,
 journal du bot, du superviseur et de Windows, vérification Binance (`verify`,
@@ -28,6 +29,48 @@ La clé Binance est refusée dès que le PC change de réseau. Le bot n'est pas
 prêt pour de l'argent réel : il lui faut des alertes qui arrivent, une machine
 fixe allumée en permanence avec une adresse fixe, de l'argent sur le compte,
 et plusieurs semaines de paper avec des trades vendus.
+
+## Diagnostic approfondi du 6 octobre, 0 h
+
+**Verdict : le bot repart sain, après une vraie panne ; c'est désormais le PC
+qui inquiète : un écran bleu de Windows le 5 octobre.** Rapport du bot (5/10,
+23 h 28) : 36 contrôles conformes sur 49 (sécurité : 19 sur 23), 4 points à
+corriger : alertes, disponibilité, risque configuré, disque.
+
+### État du bot (06/10, 0 h 05)
+
+- Nouvel essai paper depuis le 5 octobre à 22 h 42, avec 100 USDT (votre
+  réglage). Première décision à 00:03 : trois achats, AAVE, ICP et ADA, de 10 à
+  13 USDT chacun, 1 USDT risqué par achat ; stops à 7 à 10 % sous les cours.
+- L'ancien essai (10 000 USDT, du 26 septembre au 5 octobre) est archivé : six
+  positions, environ +3,7 % non réalisés à l'archivage, aucune vente.
+- Bot libre : premier jour, 100 USDT fictifs placés en cinq positions de 20
+  USDT (DOGE, AAVE, ETC, XLM, BNB), surtout sur l'avis de StockTwits.
+- Noyau de savoir : 3 661 connaissances, 739 lues dans la journée ; aucune
+  source prouvée (Fear & Greed : pas mieux que le hasard).
+- Mémoire et disque un peu mieux : 18,7 Go libres (8 %) après le redémarrage
+  du PC, qui a rendu la place du fichier d'échange.
+
+### Constats du 6 octobre
+
+| N° | Constat | Gravité | Suite |
+| --- | --- | --- | --- |
+| J1 | **Faux arrêt d'urgence du 4 au 5 octobre.** Le capital du paper est passé de 10 000 à 100 USDT (avec un plafond de 100) alors que six positions taillées pour 10 000 étaient ouvertes : le bot a comparé 100 USDT à son plus haut de 10 074 et s'est arrêté (−97,7 %), sans aucune perte réelle ; aucun achat possible pendant près de deux jours | **Élevée** | **Corrigé** le 5/10 à 22 h 42 : un changement de capital ouvre un nouvel essai paper (l'ancien archivé) ou, pour le plafond seul, fait repartir le plus haut du capital actuel. Premiers achats du nouvel essai cette nuit |
+| J2 | **Écran bleu de Windows** le 5 octobre à 14 h 05, juste après une sortie de veille : erreur 0x1A, une page relue depuis le fichier d'échange ne correspondait plus à ce qui avait été écrit (contrôle d'intégrité). Cause possible : mémoire vive, disque (ici un disque dur accéléré par une mémoire Intel Optane, déclaré sain) ou pilote. Un seul cas en 30 jours ; le bot est reparti avec Windows | **Élevée** si cela se répète | Vous : diagnostic de la mémoire de Windows (`mdsched`), mises à jour de Windows et du pilote Intel Optane/RST. Code : le rapport surveille les écrans bleus (J10) |
+| J3 | Risque configuré par vous : 10 % cumulé et 20 positions (au lieu de 6 % et 8). Avec 100 USDT, chaque position fait 10 à 25 USDT ; DASH et ZEC ne peuvent pas être achetées (stop trop loin : moins de 10 USDT par position) | Votre choix | Rien ; le rapport le signale chaque jour |
+| J4 | Bot libre : il a tout investi le premier jour, surtout sur l'avis de StockTwits, dont les auteurs sont presque toujours optimistes ; il a acheté ETC, que le bot principal exclut comme trop peu échangée. Ses poids apprendront qui a raison | Information | Code, à votre choix : même filtre de liquidité que le bot principal (J11) |
+| J5 | Disponibilité : 88 % sur 7 jours (contre 71 % le 1er octobre) ; arrêts du 5 octobre : l'écran bleu, puis 2 h 05 de veille l'après-midi | Moyenne | PC branché, à poste fixe pour le réel |
+| J6 | Alertes toujours muettes : l'e-mail est en pause après 6 refus du mot de passe | **Élevée** | Vous : mot de passe d'application Gmail |
+| J7 | Clé Binance refusée la nuit (partage de connexion du téléphone, adresse changeante) ; StockTwits refuse souvent les lectures, Hacker News dépasse ses délais sur cette connexion | Faible en paper | Rien ; constats déjà suivis (I1, I2) |
+
+### Améliorations proposées (votre accord d'abord)
+
+- **J10** : le rapport et le centre de sécurité surveillent les plantages de
+  Windows (écran bleu, arrêt brutal) : date, code d'erreur expliqué en
+  français, conseil, et alerte s'il y en a plusieurs en une semaine.
+- **J11** : le bot libre applique le même filtre de liquidité que le bot
+  principal (5 millions de dollars échangés par jour au moins), pour rester
+  réaliste le jour où il jouerait de l'argent réel.
 
 ## Diagnostic approfondi du 1er octobre, 16 h
 
@@ -845,6 +888,8 @@ Points faibles :
 | 30 | Rapport qui lit le journal du Wi-Fi (coupures par réseau, réseau à préférer, partage de connexion d'un téléphone) | Code, avec votre accord | **fait** (01/10, 21 h) : I6 |
 | 31 | Noyau de savoir : presse, moteurs de recherche, forums, réseau social, tendances et avis des IA lus toutes les heures, chaque source jugée sur les cours réels ; l'avis des sources prouvées peut seulement reporter un achat | Code, à votre demande | **fait** (01/10, 20 h) : [`SAVOIR.md`](SAVOIR.md) |
 | 32 | Bot libre (second portefeuille fictif qui agit librement sur le noyau de savoir et révise ses propres règles), lecture d'Internet toutes les 15 minutes ; capital changé sans faux arrêt d'urgence ; cinq stratégies de traders célèbres au tournoi ; guide du trading | Code, à votre demande | **fait** (05/10) : [`LIBRE.md`](LIBRE.md), [`TRADING.md`](TRADING.md) ; refusés : lecture à la seconde, dark web et Tor, Kali Linux, modèle d'IA à entraîner |
+| 33 | Écran bleu de Windows du 5/10 : diagnostic de la mémoire (`mdsched`), mises à jour de Windows et du pilote Intel Optane/RST | Vous | dès que possible (06/10) : J2 |
+| 34 | Rapport qui surveille les plantages de Windows ; filtre de liquidité pour le bot libre | Code, avec votre accord | proposé (06/10) : J10, J11 |
 
 Fait depuis l'audit du matin : chemins de secours des ordres réels testés (et
 un défaut corrigé), blocage des mots de passe ratés, écriture sûre du choix des
