@@ -38,6 +38,7 @@ import v29
 
 from . import autonomy, maintenance
 from .report_health import (
+    analysis_checks,
     bot_checks,
     check_log,
     code_checks,
@@ -185,6 +186,7 @@ def build(gcfg: Any, env: Dict[str, str], deps: Optional[Deps] = None,
         {"title": "Centre de sécurité du panneau", "checks": panel_sec},
         {"title": "Santé du bot (le fond)", "checks": health},
         {"title": "Stratégie (le fond)", "checks": strategy_checks(gcfg, deps)},
+        {"title": "Risque et analyse du portefeuille", "checks": analysis_checks(gcfg, st)},
         {"title": "Compétences acquises", "checks": skills_checks(gcfg, st)},
         {"title": "Code, journal et panneau (la forme)", "checks": form},
     ]

@@ -254,6 +254,7 @@ class Supervisor:
     BACKOFF_SEC = (10, 30, 60, 120, 300, 600)
     PLANNED_WAIT_SEC = 2         # redémarrage prévu (nouvelle version)
     STALL_SEC = 30 * 60          # sans signe de vie du bot : bloqué
+    SUSPEND_GAP_SEC = 120.0      # deux relevés plus espacés : le PC sortait de veille
     HEALTHY_SEC = 60 * 60        # 1 h sans incident : l'attente repart de 10 s
     POLL_SEC = 2.0
     EXTERNAL_POLL_SEC = 30.0
@@ -350,8 +351,12 @@ class Supervisor:
 
     def _watch(self, started: float) -> Optional[int]:
         """Attend la fin du bot : code de sortie, ou None s'il était bloqué
-        (arrêté de force)."""
+        (arrêté de force). Au réveil du PC (deux relevés très espacés : il
+        dormait), le bot, endormi lui aussi, a de nouveau STALL_SEC pour
+        donner signe de vie : une veille n'est pas un blocage (le 6 octobre,
+        le bot était arrêté de force à chaque réveil)."""
         asked = False
+        last = self.clock()
         while True:
             code = self.child.poll()
             if code is not None:
@@ -361,6 +366,12 @@ class Supervisor:
                 asked = True
                 _touch(self.f_stop)          # arrêt propre à la fin du cycle en cours
                 self.log.info("[SUPERVISEUR] arrêt demandé → le bot termine son cycle")
+            now = self.clock()
+            if now - last > self.SUSPEND_GAP_SEC:
+                self.log.info(f"[SUPERVISEUR] réveil du PC après {_fdur(now - last)} de veille : le bot a "
+                              f"{self.STALL_SEC // 60} min pour reprendre")
+                started = now
+            last = now
             silent = self._silence(started)
             if silent > self.STALL_SEC:
                 self.log.critical(f"[SUPERVISEUR] aucun signe de vie du bot depuis "

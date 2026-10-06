@@ -431,7 +431,12 @@ ajouté, ce qui viendra. Ajouts du 6 octobre : régimes de marché et conditions
 où la stratégie gagne le moins ([`docs/REGIMES.md`](docs/REGIMES.md)), garde
 « NO TRADE » avant les achats (données, krach, perte du jour, disque), analyse
 après chaque trade (leçon, meilleur et pire moment), risque d'un jour du
-portefeuille (VaR, CVaR).
+portefeuille (VaR, CVaR). Deuxième phase : qualité des données notée avant
+chaque décision, tests de résistance des positions (krachs, crise de
+liquidité, décrochage de l'USDT), attribution des résultats (page Positions),
+calendrier des grandes annonces américaines (page Veille, information), et
+registre des expériences rejouables avec la carte du modèle
+(`python trendguard_bot.py registre carte`).
 
 ### Bot libre (`trendguard/libre.py`, [`docs/LIBRE.md`](docs/LIBRE.md))
 

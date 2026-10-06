@@ -508,6 +508,7 @@ class PanelApp(SecurityCenter):
             "/api/equity": lambda: self._equity_view(int(q("days", "90"))),
             "/api/positions": self.data.positions,
             "/api/trades": lambda: {"trades": self.data.trades()},
+            "/api/analyse": self.data.analyse,
             "/api/assets": self.assets,
             "/api/candles": lambda: self.candles(q("asset", "btc"), q("interval", "1h"),
                                                  int(q("limit", "300"))),

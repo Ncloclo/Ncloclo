@@ -325,10 +325,15 @@ test("positions, veille, journal, réglages et thème", async ({ page }) => {
   await page.goto(BASE + "/#positions");
   await expect(page.locator("#p-table tbody tr")).toHaveCount(6);
   await expect(page.locator("#t-table tbody tr")).toHaveCount(6);
+  await expect(page.locator("#a-card")).toBeVisible();                          // analyse du portefeuille
+  await expect(page.locator("#a-list li").first()).toContainText("Résultat réalisé");
+  await expect(page.locator("#a-stress tbody tr")).toHaveCount(7);              // sept tests de résistance
   await page.locator('.tab[data-tab="watch"]').click();
   await expect(page.locator("#w-report")).toContainText("VEILLE");
   await expect(page.locator("#w-fng")).toHaveText("70 · Avidité");             // indicateurs de la veille
   await expect(page.locator("#w-peg")).toHaveText("1,0002");
+  await expect(page.locator("#w-cal-card")).toBeVisible();                      // calendrier économique
+  await expect(page.locator("#w-cal li").first()).toContainText("compte rendu de la Fed");
   await expect(page.locator("#w-ai li")).toHaveCount(4);                        // une ligne par IA consultée
   await expect(page.locator("#w-ai-sub")).toHaveText("4 configurées");
   await expect(page.locator("#w-know-card")).toBeVisible();                     // noyau de savoir

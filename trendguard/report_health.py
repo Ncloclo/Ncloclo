@@ -17,7 +17,7 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import evolution, learning, libre, postmortem, savoir
+from . import attribution, evolution, learning, libre, postmortem, registre, risque, savoir
 from .systeme import (
     Check,
     Deps,
@@ -522,6 +522,41 @@ def knowledge_check(gcfg: Any) -> List[Check]:
         memory.close()
     if free:
         out.append(chk("Bot libre", None, free["text"]))
+    return out
+
+
+def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
+    """Risque et analyse du portefeuille, d'après la dernière décision :
+    qualité des données, VaR, tests de résistance, attribution des
+    résultats, calendrier économique, registre des expériences. Des
+    informations, jamais des points à corriger."""
+    out: List[Check] = []
+    q = st.get("qualite") or {}
+    if q.get("text"):
+        out.append(chk("Qualité des données", True if q.get("score", 0) >= 90 else None,
+                       f"bougie du {q.get('day')} : {q['text']}"))
+    rj = st.get("risque_jour") or {}
+    if rj.get("var_pct") is not None:
+        out.append(chk("Risque d'un jour (VaR)", None, risque.describe(rj)))
+    sr = st.get("stress") or {}
+    if sr.get("text"):
+        out.append(chk("Tests de résistance", None, sr["text"]))
+    out.append(chk("Attribution des résultats", None,
+                   attribution.attribution(st.get("trades") or [], {})["text"]))
+    ev = st.get("evenements") or {}
+    if ev:
+        nxt = ev.get("upcoming") or []
+        out.append(chk("Calendrier économique", None,
+                       (f"{len(nxt)} annonce(s) américaine(s) importante(s) dans les 48 heures"
+                        if nxt else "aucune annonce américaine importante dans les 48 heures")
+                       + f" ; {(ev.get('reaction') or {}).get('text', '')}"
+                       + (f" ; dernière lecture ratée : {ev['error']}" if ev.get("error") else "")))
+    entries = registre.load(registre.registry_path(gcfg))
+    if entries:
+        last = entries[-1]
+        out.append(chk("Registre des expériences", None,
+                       f"{len(entries)} expérience(s) notée(s) ; dernière : {last.get('id')} du "
+                       f"{str(last.get('at', ''))[:10]} ({last.get('kind')})"))
     return out
 
 

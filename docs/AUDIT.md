@@ -9,8 +9,9 @@ risque et la reprise prudente de l'arrêt d'urgence, à 22 h un sixième
 diagnostic, clé Binance enfin acceptée, le 1er octobre à 2 h la sécurité
 renforcée et le rapport après chaque compétence acquise, à 5 h un septième
 diagnostic, à 14 h un huitième (disque, mémoire, PC déplacé), à 16 h un
-neuvième (Wi-Fi) et le 6 octobre un dixième (faux arrêt d'urgence, écran
-bleu). Méthode :
+neuvième (Wi-Fi), le 6 octobre un dixième (faux arrêt d'urgence, écran
+bleu) et à 12 h 30 un onzième (deux arrêts brutaux de Windows, veilles prises
+pour des blocages). Méthode :
 diagnostic de la stratégie sur les données publiques de
 Binance (`python trendguard_bot.py diagnose`), état du bot dans le panneau,
 journal du bot, du superviseur et de Windows, vérification Binance (`verify`,
@@ -20,15 +21,82 @@ aucun ordre), tests, analyse statique, failles connues des dépendances
 ## Verdict
 
 **Le bot, sa stratégie et son code sont sains ; ce qui l'entoure ne l'est pas
-encore.** Au 1er octobre à 16 h, la stratégie est conforme, le journal ne
+encore.** Au 6 octobre à 12 h 30, la stratégie est conforme, le journal ne
 contient aucune erreur du bot, les tests et les contrôles de GitHub sont au
-vert, les bibliothèques du bot sans faille connue. Les faiblesses sont autour
-du bot : le PC portable (déplacé deux fois par jour, 71 % de disponibilité sur
-7 jours, disque et mémoire presque pleins) et les alertes qui n'arrivent pas.
+vert. Les faiblesses sont autour du bot : le PC portable (deux arrêts brutaux
+de Windows en 21 heures, mémoire suspecte ; déplacé deux fois par jour, 88 %
+de disponibilité sur 7 jours, disque presque plein) et les alertes qui
+n'arrivent pas.
 La clé Binance est refusée dès que le PC change de réseau. Le bot n'est pas
 prêt pour de l'argent réel : il lui faut des alertes qui arrivent, une machine
 fixe allumée en permanence avec une adresse fixe, de l'argent sur le compte,
 et plusieurs semaines de paper avec des trades vendus.
+
+## Diagnostic approfondi du 6 octobre, 12 h 30
+
+**Verdict : le bot et sa stratégie restent sains ; le PC ne l'est pas : deux
+arrêts brutaux de Windows en 21 heures, et deux mises en veille ce matin que
+le superviseur prenait pour un bot bloqué (défaut corrigé).** Rapport
+de la nuit (00:30) : 33 contrôles conformes sur 51 (sécurité : 18 sur 23), 7
+points à corriger.
+
+### État du bot (06/10, 12 h 30)
+
+- En marche (paper, 100 USDT), relancé à 11 h 39 avec la première phase du
+  prompt maître ; panneau qui répond en 100 ms ; PC sur secteur, batterie à
+  100 %.
+- Capital 99,75 USDT (−0,25 %) ; trois positions achetées cette nuit : AAVE
+  +0,1 %, ADA +2,6 %, ICP −4,5 %, à 3,5 % de son stop (vendue si la clôture
+  de minuit passe dessous : ce serait le premier trade clos de l'essai) ; 35 %
+  du capital investi, 1 USDT de risque par position.
+- Décision de 00:02 prise à 00:03 avec les 21 bougies. Diagnostic de la
+  stratégie conforme : de 2019 à aujourd'hui sur les données de Binance,
+  +45,5 % par an, pire baisse −33 %, 427 trades, +1,17 R par trade ; 12
+  derniers mois +26,2 % ; +1,05 R par trade sur les 107 trades des 24 derniers
+  mois. Aucune stratégie du tournoi ne justifie de changer.
+- Évolution : 10 réglages essayés, aucun ne réussit toutes les épreuves ;
+  palier de risque gardé à 1 % (1,25 % refusé).
+- Noyau de savoir : environ 300 textes par lecture, toutes les 15 minutes ;
+  aucune source prouvée. Bot libre : 99,80 USDT (−0,2 %).
+- Tests de résistance (nouveaux, positions de 12 h 30) : un krach de 50 % sans
+  exécution des stops coûterait 17,6 % du capital, à 22 points de l'arrêt
+  d'urgence ; tous les stops touchés à la fois : 3,4 %.
+
+### Constats de 12 h 30
+
+| N° | Constat | Gravité | Suite |
+| --- | --- | --- | --- |
+| K1 | **Deux arrêts brutaux de Windows en 21 heures** : l'écran bleu du 5 octobre à 14 h 05 (0x1A, gestion de la mémoire), puis le 6 octobre à 10 h 37 un arrêt sans écran bleu, PC sur secteur, ni en veille ni bouton d'alimentation appuyé : le PC s'est figé, ou a perdu son alimentation, sans laisser de trace d'erreur. Le PC a deux barrettes de mémoire de marques différentes (8 Go KingSpec et 8 Go Crucial) : suspect n° 1. Aucune erreur du disque ni erreur matérielle signalée par Windows ; aucun test de la mémoire lancé depuis le 5 | **Élevée**, bloquant pour le réel | Vous : test de la mémoire (`mdsched`, « Redémarrer maintenant », ou au démarrage Échap puis F2 : HP PC Hardware Diagnostics ▸ Tests des composants ▸ Mémoire). S'il trouve une erreur, ou au troisième plantage : retirer la barrette KingSpec et faire tourner le PC sur la seule Crucial |
+| K2 | **Le superviseur arrêtait de force le bot à chaque réveil du PC** (5 h 41 et 8 h 15) : au réveil, le dernier signe de vie du bot datait d'avant la veille (1 h 55 et 1 h 32 plus tôt) ; il le croyait bloqué, le tuait en pleine reprise et comptait une erreur. Sans effet en paper ; risqué en réel (arrêt entre un ordre et son enregistrement) | Moyenne | **Corrigé** : un réveil est reconnu (deux relevés du superviseur espacés de plus de 2 minutes) ; le bot a de nouveau 30 minutes pour reprendre, seul un vrai silence le fait relancer |
+| K3 | **Deux mises en veille cette nuit et ce matin, 3 h 29 de bot arrêté** (disponibilité du jour : 77 %). À 3 h 46 et 6 h 43, le chargeur débranché, ou une coupure de courant, alors que le capot était fermé : « capot fermé » est réglé sur « ne rien faire » sur secteur, mais sur « veille » sur batterie, et Windows s'endort 2 secondes plus tard. À 3 h 46, sans doute une coupure de courant : le PC s'est réveillé au retour du courant, à 5 h 41. Et sur batterie, Windows endort aussi le PC « pour inactivité » après 10 minutes malgré la demande anti-veille du bot (5 fois dans la semaine, dont le 5 octobre à 13 h 55) | Moyenne | Vous : garder le PC branché ; la nuit, laisser le capot ouvert, et régler « Sur batterie, mettre en veille après : Jamais » (Paramètres ▸ Système ▸ Alimentation et batterie). Une coupure de courant ne l'endormira plus ; à la batterie critique, Windows le met en veille prolongée, sans perte. Capot fermé sur batterie : gardez « veille », pour le transport dans un sac |
+| K4 | Clé Binance refusée en ce moment : le PC est sur le réseau Wi-Fi A du bureau (2 coupures en 24 h), dont l'adresse n'est pas autorisée ; le réseau B n'a eu aucune coupure. La nuit, le partage de connexion du téléphone (3 coupures) | Faible en paper | Vous : au bureau, le réseau B (ligne 29) |
+| K5 | Clé Binance : deux droits superflus, les transferts internes et les transferts universels (constat du rapport de la nuit) ; le bot n'a besoin que de la lecture et du trading Spot | Moyenne en réel | Vous : Binance ▸ Gestion des API ▸ Modifier les restrictions, décocher ces deux droits |
+| K6 | Alertes toujours muettes : e-mail en pause après 7 refus du mot de passe ; aucune des alertes de la nuit (batterie, arrêts) ne vous est parvenue | **Élevée** | Vous : mot de passe d'application Gmail (ligne 1) |
+| K7 | Disque : 18,0 Go libres (8 %), dont 25,2 Go dans Téléchargements | Moyenne | Vous : trier Téléchargements (ligne 26) |
+| K8 | Propositions sur GitHub : la n° 5 (surveillance des plantages) est déjà en service depuis J10 et en conflit ; n° 3 et n° 4 anciennes ; n° 6, revue de la semaine : « rien à changer » | Faible | Vous : fermer n° 3, 4 et 5 ; fusionner ou fermer n° 6, à votre choix |
+| K9 | Une faille connue dans `multidict` 6.7.1, corrigée en 6.9.1, mais ccxt 4.5.85, sa dernière version, impose 6.7.1 (constat de l'amélioration quotidienne) | Information | Le contrôle des failles du rapport l'affiche ; corrigé dès que ccxt l'acceptera |
+
+Livré en même temps, à votre demande « améliore avec ce prompt » : la
+deuxième phase du prompt maître (qualité des données, tests de résistance,
+attribution des résultats, calendrier économique, registre des expériences et
+carte du modèle), détail dans [`PLATEFORME.md`](PLATEFORME.md). Prochaine grande
+annonce américaine : le compte rendu de la Fed, mercredi 7 octobre à 18 h UTC
+(information, aucun achat bloqué).
+
+### Améliorations proposées (votre accord d'abord)
+
+- **K10** : quand un plantage touche la mémoire (écran bleu 0x1A, 0x50…) ou
+  qu'il y en a deux en 7 jours, le rapport liste les barrettes de mémoire et
+  signale des marques différentes : le conseil dit laquelle tester ou retirer
+  en premier.
+- **K11** : l'alerte « le bot a été arrêté » donne la vraie cause lue dans le
+  journal de Windows (capot fermé sur batterie, chargeur débranché, coupure
+  de courant, inactivité) et le geste qui l'évite, au lieu de « PC éteint ou
+  en veille ».
+- **K12** : le bot règle lui-même « sur batterie, mettre en veille après :
+  Jamais » (aujourd'hui, il ne règle que le secteur), réversible par la
+  commande `rapport restaurer` comme les autres réglages de veille. Le
+  revers : pendant une coupure, la batterie se vide au lieu de dormir.
 
 ## Diagnostic approfondi du 6 octobre, 0 h
 
@@ -899,6 +967,12 @@ Points faibles :
 | 33 | Écran bleu de Windows du 5/10 : diagnostic de la mémoire (`mdsched`), mises à jour de Windows et du pilote Intel Optane/RST | Vous | dès que possible (06/10) : J2 |
 | 34 | Rapport qui surveille les plantages de Windows ; filtre de liquidité pour le bot libre | Code, avec votre accord | **fait** (06/10) : J10, J11 |
 | 35 | Prompt maître appliqué : régimes de marché, garde « NO TRADE », analyse après trade, risque d'un jour (VaR, CVaR) ; phases suivantes proposées | Code, à votre demande | **fait** (06/10) : [`PLATEFORME.md`](PLATEFORME.md) |
+| 36 | Prompt maître, deuxième phase : qualité des données, tests de résistance, attribution des résultats, calendrier économique, registre des expériences et carte du modèle | Code, à votre demande | **fait** (06/10, 13 h) : [`PLATEFORME.md`](PLATEFORME.md) |
+| 37 | Superviseur : une veille du PC n'est plus prise pour un blocage du bot | Code | **fait** (06/10, 13 h) : K2 |
+| 38 | Tester la mémoire du PC (`mdsched` ou HP PC Hardware Diagnostics) ; en cas d'erreur ou de troisième plantage, retirer la barrette KingSpec | Vous | **dès que possible** (06/10) : K1 |
+| 39 | Garder le PC branché ; la nuit, capot ouvert et « sur batterie, mettre en veille après : Jamais » | Vous | dès ce soir : K3 |
+| 40 | Clé Binance : décocher les transferts internes et universels | Vous | avant le réel : K5 |
+| 41 | Rapport qui nomme la barrette de mémoire suspecte ; alerte d'arrêt qui donne la vraie cause de la veille ; veille sur batterie réglée par le bot | Code, avec votre accord | proposé (06/10) : K10, K11, K12 |
 
 Fait depuis l'audit du matin : chemins de secours des ordres réels testés (et
 un défaut corrigé), blocage des mots de passe ratés, écriture sûre du choix des

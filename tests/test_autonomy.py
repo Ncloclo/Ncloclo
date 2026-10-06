@@ -166,6 +166,40 @@ def test_bot_alive_signal_prevents_the_stall_kill(tmp_path, logger):
     assert not launched[0][2].terminated and sup.restarts == 0
 
 
+def test_a_sleeping_pc_is_not_a_stalled_bot(tmp_path, logger):
+    """Le PC dort 2 h : à son réveil, le bot (endormi lui aussi) n'est pas
+    arrêté de force ; il a de nouveau 30 min pour donner signe de vie, et
+    seul un vrai silence après le réveil le fait relancer."""
+    alive = None
+
+    def beat(t):
+        open(alive, "a").close()
+        os.utime(alive, (t, t))
+
+    def scenario(resumes):
+        nonlocal alive
+        g, clock = _cfg(tmp_path / str(resumes)), Clock()
+        (tmp_path / str(resumes)).mkdir()
+        alive = autonomy.sidecar(g.lock_file, ".alive")
+        t0 = clock()
+        sup, launched = _supervisor(g, logger, clock, [(4 * 3600, 0), (60, 0)])
+        state = {"slept": False}
+
+        def hook(t):
+            if not state["slept"] and t > t0 + 600:
+                state["slept"] = True
+                clock.t += 2 * 3600                     # veille de 2 h, signe de vie périmé
+            elif t < t0 + 600 or (resumes and t > t0 + 600 + 2 * 3600 + 60):
+                beat(clock.t)                           # avant la veille, et 1 min après le réveil
+        clock.hooks.append(hook)
+        sup.run()
+        return launched, sup
+    launched, sup = scenario(resumes=True)
+    assert not launched[0][2].terminated and sup.restarts == 0
+    launched, sup = scenario(resumes=False)              # le bot ne repart pas : bloqué
+    assert launched[0][2].terminated and sup.restarts == 1
+
+
 def test_external_bot_is_watched_then_taken_over(tmp_path, logger):
     g, clock = _cfg(tmp_path), Clock()
     t0 = clock()

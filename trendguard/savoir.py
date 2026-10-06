@@ -65,6 +65,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set,
 
 import v29
 
+from . import evenements
 from . import market_watch as mw
 from .texte import fr
 
@@ -692,6 +693,8 @@ def render(s: Dict[str, Any]) -> str:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    """Ligne de commande du noyau de savoir : bilan (défaut), ou une lecture
+    d'Internet (collecter), calendrier économique compris."""
     from .config import load_guard_config_from_env
     ap = argparse.ArgumentParser(description="Noyau de savoir de TrendGuard")
     ap.add_argument("action", nargs="?", default="bilan", choices=["bilan", "collecter"])
@@ -705,6 +708,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.action == "collecter":
             held = [a for a in args.detenues.split(",") if a]
             run = collect(memory, [a.lower() for a in gcfg.universe], held, now, watch_db=gcfg.watch_db)
+            try:            # calendrier économique : information, relu au plus toutes les 6 heures
+                evenements.refresh(memory, now, http_get)
+            except Exception as e:
+                print(f"{now:%Y-%m-%d %H:%M:%S} UTC calendrier économique illisible : {e}")
             got = sum(run["read"].values())
             print(f"{now:%Y-%m-%d %H:%M:%S} UTC lecture : {got} texte(s) ; "
                   + (f"en panne : {', '.join(run['errors'])}" if run["errors"] else "toutes les sources lues"))

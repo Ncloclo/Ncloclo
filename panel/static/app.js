@@ -951,7 +951,8 @@ async function renderAssets() {
 }
 
 // ---------- Positions ----------
-function table(node, head, rows, onRow, empty = "Rien à afficher.") {
+// `tk` : première colonne écrite comme un symbole (BTC, ETH…) ; false pour un texte.
+function table(node, head, rows, onRow, empty = "Rien à afficher.", tk = true) {
   const thead = el("thead"), tr = el("tr");
   head.forEach((h) => { const th = el("th", "", h); th.scope = "col"; tr.append(th); });
   thead.append(tr);
@@ -964,7 +965,7 @@ function table(node, head, rows, onRow, empty = "Rien à afficher.") {
   }
   rows.forEach(({ cells, cls, key }) => {
     const r = el("tr", onRow ? "click" : "");
-    cells.forEach((c, j) => r.append(el("td", (j === 0 ? "tk " : "") + ((cls && cls[j]) || ""), c)));
+    cells.forEach((c, j) => r.append(el("td", (j === 0 && tk ? "tk " : "") + ((cls && cls[j]) || ""), c)));
     if (onRow) {
       r.tabIndex = 0;
       r.addEventListener("click", () => onRow(key));
@@ -975,7 +976,8 @@ function table(node, head, rows, onRow, empty = "Rien à afficher.") {
   node.replaceChildren(thead, tb);
 }
 async function renderPositions() {
-  const [pos, tr] = await Promise.all([api("/api/positions"), api("/api/trades")]);
+  const [pos, tr, an] = await Promise.all([api("/api/positions"), api("/api/trades"), api("/api/analyse").catch(() => null)]);
+  renderAnalysis(an);
   const open = (a) => openDetail({ kind: "asset", asset: a });
   table($("#p-table"), ["Crypto", "Achat le", "Prix d'achat", "Cours", "Vente auto si clôture <", "Gain verrouillé", "Écart à la vente", "Résultat", "En R (≈)"],
     pos.positions.map((p) => {
@@ -995,6 +997,29 @@ async function renderPositions() {
 
 // Leçon de chaque trade clos (analyse après trade, trendguard/postmortem.py).
 const LESSON = { tendance: "Tendance captée", faux_depart: "Faux départ (normal)", gain_rendu: "Gain rendu en partie", urgence: "Sortie d'urgence", ordinaire: "Trade ordinaire" };
+const usdSigned = (v) => `${sign(v)}${nf(2).format(Math.abs(v || 0))} USDT`;
+
+// Analyse du portefeuille : d'où viennent les résultats (attribution.py),
+// risque d'un jour, tests de résistance (stress.py), qualité des données.
+function renderAnalysis(a) {
+  $("#a-card").hidden = !a;
+  if (!a) return;
+  const at = a.attribution || {}, st = a.stress || {}, q = a.qualite || {}, rk = a.risque || {};
+  const rows = [["ok", `Résultat réalisé ${usdSigned(at.realized)}, en cours ${usdSigned(at.unrealized)}.`]];
+  (at.why || []).forEach((w) => rows.push(["ok", w.charAt(0).toUpperCase() + w.slice(1) + "."]));
+  if (rk.var_pct != null) rows.push(["ok", `Risque d'un jour : 1 jour sur 20, perte de plus de ${nf(1).format(rk.var_pct)} % du capital (${nf(1).format(rk.cvar_pct)} % en moyenne ces jours-là).`]);
+  if (st.text) rows.push([/déclencherait/.test(st.text) ? "warn" : "ok", st.text]);
+  if (q.text) rows.push([q.score >= 90 ? "ok" : "warn", `Qualité des données : ${q.text}.`]);
+  $("#a-list").replaceChildren(...rows.map(([k, t]) => el("li", k, t)));
+  $("#a-sub").textContent = st.day || q.day ? `décision du ${fdate(st.day || q.day)}` : "";
+  table($("#a-table"), ["Crypto", "Trades clos", "Réalisé", "En cours", "Total"],
+    (at.assets || []).map((r) => ({ key: r.asset, cells: [up(r.asset), String(r.trades), usdSigned(r.realized), usdSigned(r.unrealized), usdSigned(r.total)],
+      cls: { 4: r.total >= 0 ? "up" : "down" } })),
+    (asset) => openDetail({ kind: "asset", asset }), "Pas encore de résultat à attribuer.");
+  table($("#a-stress"), ["Scénario", "Perte", "Part du capital"],
+    (st.rows || []).map((r) => ({ cells: [r.name, `−${nf(2).format(r.loss_usdt)} USDT`, `−${nf(1).format(r.loss_pct)} %`], cls: { 2: "down" } })),
+    null, "Aucune position : rien à tester, le capital est en USDT.", false);
+}
 
 // ---------- Veille ----------
 async function renderWatch() {
@@ -1008,6 +1033,7 @@ async function renderWatch() {
     ...((last && last.alerts) || []).map((a) => ["warn", a])];
   if (!items.length) items.push(["ok", "Aucune alerte."]);
   $("#w-list").replaceChildren(...items.map(([k, t]) => el("li", k, t)));
+  renderCalendar(w.evenements);
   const r = w.report || {}, ai = w.ai || { configured: [], possible: [] };
   const FNG = { "extreme fear": "Peur extrême", fear: "Peur", neutral: "Neutre", greed: "Avidité", "extreme greed": "Avidité extrême" };
   const fng = $("#w-fng");
@@ -1032,6 +1058,23 @@ async function renderWatch() {
   if (free.length) help.append("Facultatif : pour ajouter l'avis d'une IA, ", el("code", "", "python trendguard_bot.py watch set-key claude"), ` (au choix : ${free.join(", ")}). La clé se saisit masquée ; une IA conseille, elle ne passe jamais d'ordre.`);
   $("#w-report").textContent = w.report_text || "Aucun rapport : la veille tourne chaque jour avec le bot (python trendguard_bot.py watch pour un rapport immédiat).";
   renderKnowledge(w.savoir);
+}
+// Calendrier économique (trendguard/evenements.py) : information seulement.
+const dCal = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
+function renderCalendar(c) {
+  $("#w-cal-card").hidden = !c;
+  if (!c) return;
+  const now = Date.now();
+  const rows = (c.events || []).map((e) => {
+    const t = Date.parse(e.at), past = t < now, soon = !past && t - now < 48 * 3600e3;
+    const nums = [e.forecast && `prévision ${e.forecast}`, e.previous && `précédent ${e.previous}`].filter(Boolean).join(", ");
+    return [soon ? "warn" : "ok", `${dCal.format(new Date(t))} UTC — ${e.label}${nums ? ` · ${nums}` : ""}${past ? " · passée" : ""}`];
+  });
+  if (!rows.length) rows.push(["ok", "Aucune grande annonce américaine prévue d'ici 7 jours."]);
+  if (c.reaction && c.reaction.text) rows.push(["ok", `Mesure : ${c.reaction.text}.`]);
+  if (c.error) rows.push(["warn", `Dernière lecture ratée : ${c.error} (nouvel essai dans l'heure).`]);
+  $("#w-cal").replaceChildren(...rows.map(([k, t]) => el("li", k, t)));
+  $("#w-cal-sub").textContent = c.fetched_at ? `lu le ${ftime(Date.parse(c.fetched_at) / 1000)}` : "pas encore lu";
 }
 // Noyau de savoir : ce que le bot a lu, qui a raison, son avis.
 const VERDICT = { fiable: ["up", "Fiable"], trompeuse: ["down", "Trompeuse (à lire à l'envers)"], hasard: ["", "Pas mieux que le hasard"], observation: ["", "En observation"] };

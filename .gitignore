@@ -14,6 +14,9 @@
 *.selection.json
 *.evolution.json
 *.evolution.json.tmp
+# Registre des expériences (registre.py)
+*.registre.json
+*.registre.json.tmp
 *.rapport.json
 *.rapport.json.tmp
 # Alertes en pause après trois refus du mot de passe (alerts.py)

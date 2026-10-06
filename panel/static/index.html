@@ -222,6 +222,15 @@
           <div class="card-head"><h2>Trades clos</h2><span class="sub" id="t-sub"></span></div>
           <div class="scroll-x" tabindex="0"><table id="t-table"></table></div>
         </div>
+        <div class="card" id="a-card" hidden>
+          <div class="card-head"><h2>Analyse du portefeuille</h2><span class="sub" id="a-sub"></span></div>
+          <ul id="a-list" class="alert-list"></ul>
+          <h3 class="sec-title">D'où viennent les résultats</h3>
+          <div class="scroll-x" tabindex="0"><table id="a-table"></table></div>
+          <h3 class="sec-title">Tests de résistance</h3>
+          <div class="scroll-x" tabindex="0"><table id="a-stress"></table></div>
+          <p class="sub">Une mesure, pas une prévision : ce que coûteraient des chocs extrêmes aux positions du moment, calculé à chaque décision. Aucune de ces analyses ne passe d'ordre.</p>
+        </div>
       </section>
 
       <!-- Veille -->
@@ -234,6 +243,10 @@
           <div class="kpi card"><span class="label">Actualités lues</span><strong class="num" id="w-items">—</strong><span class="sub" id="w-items-sub"></span></div>
         </div>
         <div class="card"><div class="card-head"><h2>Alertes et retraits annoncés</h2></div><ul id="w-list" class="alert-list"></ul></div>
+        <div class="card" id="w-cal-card" hidden><div class="card-head"><h2>Calendrier économique</h2><span class="sub" id="w-cal-sub"></span></div>
+          <ul id="w-cal" class="alert-list"></ul>
+          <p class="sub">Grandes annonces américaines (Fed, inflation, emploi), d'après le calendrier public de ForexFactory, à l'heure UTC. Information seulement : aucun achat n'est bloqué tant qu'un effet n'est pas prouvé.</p>
+        </div>
         <div class="card"><div class="card-head"><h2>Avis des IA</h2><span class="sub" id="w-ai-sub"></span></div><ul id="w-ai" class="alert-list"></ul><p class="sub" id="w-ai-help"></p></div>
         <div class="card" id="w-know-card"><div class="card-head"><h2>Noyau de savoir</h2><span class="sub" id="w-know-sub"></span></div>
           <ul id="w-know" class="alert-list"></ul>

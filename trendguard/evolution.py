@@ -55,7 +55,7 @@ import pandas as pd
 
 import v29
 
-from . import autonomy
+from . import autonomy, registre
 from . import diagnostics as dg
 from . import trend_strategy as ts
 from .texte import fr
@@ -654,18 +654,35 @@ def last_change(gcfg: Any) -> Optional[Dict[str, Any]]:
 # La routine quotidienne
 # ══════════════════════════════════════════════════════════════════════
 
+def _register(record: Optional[Callable[[Dict[str, Any]], Any]], j: Judge, kind: str,
+              params: Dict[str, ts.TrendParams], conclusion: str, details: Dict[str, Any]) -> None:
+    """Expérience notée au registre (registre.py) : réglages, résultats sur
+    les deux époques, empreinte des données. Un registre illisible ne bloque
+    jamais l'évolution."""
+    if record is None:
+        return
+    try:
+        record(registre.experiment(kind, j.close, j.volume, j.periods, params,
+                                   {k: [j.period(p, i) for i in (0, 1)] for k, p in params.items()},
+                                   conclusion, details))
+    except Exception as e:
+        print(f"Registre des expériences : expérience non notée ({type(e).__name__} : {e})")
+
+
 def run_daily(base: ts.TrendParams, path: str, today: date,
               judge_factory: Callable[[], Judge], storm: bool = False,
               notify: Callable[[str], None] = lambda _t: None,
-              force: bool = False, risk: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+              force: bool = False, risk: Optional[Dict[str, Any]] = None,
+              record: Optional[Callable[[Dict[str, Any]], Any]] = None) -> Dict[str, Any]:
     """Routine quotidienne de l'évolution encadrée (une fois par jour, sauf
     `force`) : rien par tempête ; l'essai en cours est jugé à son terme
     (confirmé ou annulé) ; sinon, après le repos, des réglages voisins sont
     éprouvés et un seul n'est adopté que s'il réussit toutes les épreuves.
     Puis, si `risk` est donné (paliers permis, arrêt d'urgence, baisse et
     marché du bot, alerte), la routine du palier de risque (run_risk) : un
-    seul changement à l'essai à la fois, réglage ou palier. État enregistré
-    dans `path`, puis renvoyé."""
+    seul changement à l'essai à la fois, réglage ou palier. Chaque épreuve
+    et chaque fin d'essai est notée par `record` (registre des expériences).
+    État enregistré dans `path`, puis renvoyé."""
     st = load_state(path)
     day = today.isoformat()
     if st.get("last_run") == day and not force:
@@ -724,6 +741,8 @@ def run_daily(base: ts.TrendParams, path: str, today: date,
                 note(f"Essai raté : {pr['text']} ({versus}). Retour aux anciens réglages à la "
                      f"prochaine décision ; niveau {st['level']}, {LEVELS[st['level'] - 1].name}.",
                      "annule", alert=True)
+            _register(record, j, "essai", {"ancien": apply(base, pr["old"]), "nouveau": apply(base, pr["new"])},
+                      st["last_text"], {"depuis": pr["since"], "rendement_nouveau": rn, "rendement_ancien": ro})
     elif st.get("rest_until") and day < st["rest_until"]:
         note(f"Repos jusqu'au {st['rest_until']} : on laisse le marché juger le dernier "
              "changement.", "repos")
@@ -748,6 +767,12 @@ def run_daily(base: ts.TrendParams, path: str, today: date,
                    else f" {res['failures'][0]}." if res["failures"] else "")
             note(f"{res['tried']} réglages essayés au niveau {lv.name} ; aucun ne réussit toutes "
                  f"les épreuves : le bot garde les siens.{why}", "garde")
+        tried = {"actuel": cur}
+        if res["chosen"]:
+            tried["candidat"] = dataclasses.replace(cur, **res["chosen"])
+        _register(record, judge(), "evolution", tried, st["last_text"],
+                  {"niveau": lv.name, "essayes": res["tried"], "premiere_epreuve": res["passed_first"],
+                   "epreuves": [[t[0], bool(t[1]), t[2]] for t in res.get("trials", [])]})
     if risk is not None:
         run_risk(st, apply(base, st["params"]), today, judge, risk["steps"], risk["kill"],
                  risk.get("dd"), risk.get("bull"), storm=storm,
@@ -928,7 +953,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             st = run_daily(gcfg.params, path, today, judge, storm=args.tempete, force=args.force,
                            notify=lambda t: hub(f"🧬 TrendGuard — évolution : {t}",
                                                 dedup_key=f"evolution-{today}", critical=True,
-                                                sync=True), risk=risk)
+                                                sync=True), risk=risk,
+                           record=lambda e: registre.record(registre.registry_path(gcfg), e))
         finally:
             hub.close()
         print(f"{stamp} {st.get('last_text', '')}")

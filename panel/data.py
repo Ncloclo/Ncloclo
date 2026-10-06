@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import v29
-from trendguard import libre, savoir
+from trendguard import attribution, evenements, libre, savoir
 from trendguard import market_watch as mw
 from trendguard.journal import silent_logger
 
@@ -189,6 +189,17 @@ class BotData:
         state = self.state() if state is None else state
         return list(reversed(state.get("trades", [])))[:300]
 
+    def analyse(self, state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Analyse du portefeuille (page Positions) : d'où viennent les
+        résultats (positions au cours du moment), risque d'un jour, tests de
+        résistance et qualité des données de la dernière décision."""
+        state = self.state() if state is None else state
+        pos = self.positions(state)["positions"]
+        open_pnl = {p["asset"]: (p["price"] - p["entry"]) * p["qty"] for p in pos if p.get("price")}
+        return {"attribution": attribution.attribution(state.get("trades") or [], open_pnl),
+                "risque": state.get("risque_jour") or {}, "stress": state.get("stress") or {},
+                "qualite": state.get("qualite") or {}}
+
     # ---------- Veille et journal ----------
 
     def watch(self, state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -207,7 +218,32 @@ class BotData:
                 con.close()
         vetoes = [dict(v, asset=a) for a, v in sorted((state.get("vetoes") or {}).items())]
         return {"last": state.get("last_watch"), "vetoes": vetoes, "report_text": text,
-                "report": watch_summary(rep), "ai": ai_summary(), "savoir": self.savoir()}
+                "report": watch_summary(rep), "ai": ai_summary(), "savoir": self.savoir(),
+                "evenements": self.evenements(state)}
+
+    def evenements(self, state: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+        """Calendrier économique (lecture seule) : annonces américaines
+        importantes de la veille à dans 7 jours, réaction du bitcoin mesurée à
+        la dernière décision ; None sans noyau de savoir."""
+        path = getattr(self.g, "savoir_db", "") or savoir.DEFAULT_DB
+        if not getattr(self.g, "savoir", False) or not os.path.exists(path):
+            return None
+        try:
+            memory = savoir.Memory(path, readonly=True)
+        except sqlite3.Error:
+            return None
+        try:
+            book = memory.get(evenements.KEY)
+        except (sqlite3.Error, ValueError):
+            return None
+        finally:
+            memory.close()
+        state = self.state() if state is None else state
+        now = datetime.now(timezone.utc)
+        book = book if isinstance(book, dict) else {}
+        return {"events": evenements.window(book, now - timedelta(days=1), now + timedelta(days=7)),
+                "reaction": (state.get("evenements") or {}).get("reaction"),
+                "fetched_at": book.get("fetched_at"), "error": book.get("error") or ""}
 
     def savoir(self) -> Optional[Dict[str, Any]]:
         """Noyau de savoir (lecture seule) : taille, dernière lecture,

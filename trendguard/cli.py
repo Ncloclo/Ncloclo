@@ -684,7 +684,8 @@ TOOLS = {"alerts": ("alerts", "alertes : configurer | tester"),
          "animation": ("replay_animation", "page d'animation du rejeu"),
          "evolution": ("evolution", "évolution encadrée : [statut] | examen | quotidien | revenir | regles"),
          "rapport": ("report", "rapport quotidien, sécurité et diagnostic : [dernier] | maintenant | quotidien"),
-         "savoir": ("savoir", "noyau de savoir : [bilan] | collecter")}
+         "savoir": ("savoir", "noyau de savoir : [bilan] | collecter"),
+         "registre": ("registre", "registre des expériences : [liste] | voir <n°> | rejouer <n°> | controle | carte")}
 
 
 def _parser() -> argparse.ArgumentParser:

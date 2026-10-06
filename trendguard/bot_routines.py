@@ -17,7 +17,18 @@ import pandas as pd
 
 import v29
 
-from . import anticipation, autonomy, evolution, learning, libre, report, savoir, systeme, uptime
+from . import (
+    anticipation,
+    autonomy,
+    evenements,
+    evolution,
+    learning,
+    libre,
+    report,
+    savoir,
+    systeme,
+    uptime,
+)
 from . import diagnostics as dg
 from . import market_watch as mw
 from . import trend_strategy as ts
@@ -205,6 +216,25 @@ class RoutinesMixin:
         self.state.setdefault("savoir", {}).update(libre_day=day, libre_line=s["text"] + ".")
         if notes:
             self.logger.info("[LIBRE] " + " ; ".join(notes))
+
+    def _events_day(self, day: str, close: Any, now: datetime) -> None:
+        """Calendrier économique à la décision (evenements.py) : annonces
+        américaines des 48 prochaines heures et réaction mesurée du bitcoin
+        les jours d'annonce. Une information : rien n'est bloqué."""
+        if not self.g.savoir:
+            return
+        memory = None
+        try:
+            memory = savoir.Memory(self.g.savoir_db)
+            book = memory.get(evenements.KEY)
+        except Exception as e:
+            self.logger.warning(f"[CALENDRIER] lecture impossible : {e}")
+            return
+        finally:
+            if memory is not None:
+                memory.close()
+        btc = close["btc"] if "btc" in close.columns else None
+        self.state["evenements"] = evenements.day_view(book, btc, now, day)
 
     def _report_after_skill(self, today: str) -> None:
         """Compétence ou expérience acquise (réglage adopté, confirmé ou

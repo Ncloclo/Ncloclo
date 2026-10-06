@@ -10,6 +10,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Tuple
 
+from trendguard import attribution, evenements, stress
 from trendguard.texte import fr
 
 from .data import merge_buys, reasoning_view
@@ -230,8 +231,26 @@ class DemoData:
                          "entry_date": (now - timedelta(days=25 + 9 * i)).isoformat(),
                          "entry": px * 0.95, "exit": px * (0.95 + 0.02 * r),
                          "pnl": round(100 * r, 2), "r": r,
-                         "reason": "STOP" if r < 0 else "EXCHANGE_STOP", "days": 20})
+                         "reason": "STOP" if r < 0 else "EXCHANGE_STOP", "days": 20,
+                         "lesson": "tendance" if r >= 2 else "faux_depart" if r < 0 else "ordinaire",
+                         "regime": "haussière, volatilité normale, risk-on"})
         return rows
+
+    def analyse(self, state: Any = None) -> Dict[str, Any]:
+        """Analyse d'exemple du portefeuille (même forme que BotData.analyse)."""
+        st = self.state()
+        pos = self.positions()["positions"]
+        eq, day = st["last_equity"], st["last_decision_day"]
+        # Positions d'exemple ramenées à 60 % du capital : tailles réalistes.
+        held = {p["asset"]: {"qty": eq * 0.6 / len(pos) / p["price"], "price": p["price"], "stop": p["stop"]}
+                for p in pos}
+        rows = stress.scenarios(held, eq * 0.4, eq)
+        return {"attribution": attribution.attribution(self.trades(), {p["asset"]: (p["price"] - p["entry"]) * p["qty"]
+                                                                       for p in pos}),
+                "risque": {"day": day, "var_pct": 3.1, "cvar_pct": 4.6, "invested_pct": 61.0, "days": 365},
+                "stress": {"day": day, "rows": rows, "text": stress.describe(rows, 0.40, 0.02)},
+                "qualite": {"day": day, "score": 100.0, "issues": [],
+                            "text": "100/100 : dates, valeurs et cours de l'année sans défaut"}}
 
     def watch(self, state: Any = None) -> Dict[str, Any]:
         st = self.state()
@@ -250,7 +269,17 @@ class DemoData:
                 "ai": {"configured": ["Claude", "GPT", "Gemini", "Mistral"],
                        "possible": ["Claude", "GPT", "Gemini", "DeepSeek", "Mistral", "Kimi",
                                     "Perplexity", "Grok"]},
-                "savoir": self.savoir()}
+                "savoir": self.savoir(), "evenements": self.evenements()}
+
+    def evenements(self) -> Dict[str, Any]:
+        """Calendrier économique d'exemple (même forme que BotData.evenements)."""
+        now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+        rows = (("FOMC Meeting Minutes", 30, "", ""), ("CPI m/m", 54, "0.3%", "0.4%"),
+                ("Unemployment Claims", 54, "226K", "231K"), ("Retail Sales m/m", 78, "0.4%", "0.6%"))
+        return {"events": [{"title": t, "label": evenements.label(t), "forecast": f, "previous": p,
+                            "at": (now + timedelta(hours=h)).isoformat(timespec="minutes")} for t, h, f, p in rows],
+                "reaction": {"days": 4, "ratio": None, "text": "4 jour(s) d'annonce mesuré(s) ; conclusion à partir de 10"},
+                "fetched_at": now.isoformat(timespec="seconds"), "error": ""}
 
     def savoir(self) -> Dict[str, Any]:
         """Noyau de savoir de démonstration (même forme que savoir.summary)."""

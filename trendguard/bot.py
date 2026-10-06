@@ -24,9 +24,11 @@ from . import (
     garde,
     learning,
     postmortem,
+    qualite,
     regimes,
     risque,
     savoir,
+    stress,
 )
 from . import trend_strategy as ts
 from .bot_execution import ExecutionMixin
@@ -190,17 +192,25 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
             return None
 
     def _day_risk(self, day: str, close: pd.DataFrame, equity: float) -> None:
-        """VaR et CVaR d'un jour du portefeuille après la décision
-        (risque.py) ; une mesure ratée ne bloque jamais la décision."""
+        """Risque du portefeuille après la décision : VaR et CVaR d'un jour
+        (risque.py) et tests de résistance (stress.py) ; une mesure ratée ne
+        bloque jamais la décision."""
+        r, rows = None, []
         try:
             last = close.iloc[-1]
-            values = {a: h.qty * float(last[a]) for a, h in self._holdings().items()
-                      if a in close.columns and math.isfinite(float(last[a]))}
+            held = {a: h for a, h in self._holdings().items()
+                    if a in close.columns and math.isfinite(float(last[a]))}
+            values = {a: h.qty * float(last[a]) for a, h in held.items()}
             r = risque.var_cvar(close, values, equity)
+            rows = stress.scenarios({a: {"qty": h.qty, "price": float(last[a]), "stop": h.stop}
+                                     for a, h in held.items()}, equity - sum(values.values()), equity)
         except Exception as e:
             self.logger.warning(f"[RISQUE] mesure impossible : {e}")
-            r = None
         self.state["risque_jour"] = dict(r, day=day) if r else {}
+        peak = float(self.state.get("peak_equity") or equity)
+        dd = max(0.0, 1 - equity / peak) if peak > 0 else 0.0
+        self.state["stress"] = ({"day": day, "rows": rows, "text": stress.describe(rows, self.g.kill_drawdown, dd)}
+                                if rows else {})
 
     # ---------- Capital confié au bot ----------
 
@@ -789,6 +799,13 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         if gentle < 1.0:
             self.logger.info("[REPRISE] reprise en douceur après l'arrêt d'urgence : risque par "
                              "achat × 0,5")
+        # Qualité des données du jour (information) ; la garde bloque déjà
+        # les achats quand trop de clôtures manquent.
+        try:
+            self.state["qualite"] = qualite.quality(close, day)
+        except Exception as e:
+            self.logger.warning(f"[DONNÉES] qualité illisible : {e}")
+            self.state["qualite"] = {}
         # Garde « NO TRADE » : un seul « non » et aucun achat aujourd'hui.
         gate = garde.checks(day, close, equity, float(prev_equity) if prev_equity else None, self._disk_free_gb())
         blocked = garde.blocking(gate)
@@ -820,6 +837,7 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
                     cash_left -= done["cost"]
         self.state["last_decision_day"] = day
         self._day_risk(day, close, equity)
+        self._events_day(day, close, now)
         self._libre_step(day, close, snap)
         self._explain(day, bull, close, snap, late + exits, entries, mult, now, allowed)
         self._summary(day, bull, equity, late + exits, entries, prices)
@@ -863,6 +881,15 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         rj = self.state.get("risque_jour") or {}
         if rj.get("day") == day:
             extra.append(risque.describe(rj))
+        sr = self.state.get("stress") or {}
+        if sr.get("day") == day and sr.get("text"):
+            extra.append(sr["text"])
+        q = self.state.get("qualite") or {}
+        if q.get("day") == day and q.get("score", 100) < 100:
+            extra.append(f"Qualité des données : {q['text']}.")
+        ev = self.state.get("evenements") or {}
+        if ev.get("day") == day and ev.get("line"):
+            extra.append(ev["line"])
         if step > 1.0:
             extra.append(f"Palier de risque : {fr(self.p.risk_pct * step * 100, 'g')} % par achat, "
                          f"choisi par l'analyse du bot ; retour immédiat à "

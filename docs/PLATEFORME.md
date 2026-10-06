@@ -7,9 +7,10 @@ quantitative, risque, trading) pour améliorer le bot.
 Le prompt lui-même impose d'avancer par phases validées (§57, §58) et de ne
 jamais passer du code au réel sans étapes (§54). Je l'ai donc appliqué comme
 une **grille d'exigences** : ce que le bot faisait déjà, ce qui manquait et a
-été ajouté le 6 octobre, ce qui viendra ensuite, et ce qui ne s'applique pas.
-Pas de réécriture : le bot tourne, ses 560 tests passent, et ses règles sont
-éprouvées sur 8 ans.
+été ajouté le 6 octobre (en deux phases, à votre deuxième demande « améliore
+avec ce prompt »), ce qui viendra ensuite, et ce qui ne s'applique pas. Pas de
+réécriture : le bot tourne, ses tests passent, et ses règles sont éprouvées
+sur 8 ans.
 
 ## Ce que le bot faisait déjà
 
@@ -41,6 +42,23 @@ Pas de réécriture : le bot tourne, ses 560 tests passent, et ses règles sont
 | Journal des trades et analyse après trade (§37, §38) | `postmortem.py` : régime à l'achat, meilleur et pire moment en R, glissement sous le stop, leçon en clair ; colonne « Leçon » dans le panneau, bilan dans le rapport | aucun : apprendre et expliquer |
 | VaR et CVaR (§13, §23) | `risque.py` : risque d'un jour du portefeuille, année écoulée rejouée avec les positions actuelles | aucun : mesure affichée dans le raisonnement |
 
+## Ajouté le 6 octobre, deuxième phase
+
+| Exigence du prompt | Ce qui a été fait | Effet sur les décisions |
+| --- | --- | --- |
+| Qualité des données (§11) | `qualite.py` : note sur 100 des clôtures de l'année avant chaque décision (dernière bougie du jour, une bougie par jour, ni doublon ni trou, aucun prix manquant, nul ou négatif, pas de cours figé trois jours, mouvements de plus de 50 % en un jour signalés) | aucun : la garde bloque déjà les achats quand trop de clôtures manquent ; la note s'affiche dans le rapport, et dans le raisonnement dès qu'elle baisse |
+| Tests de résistance élargis (§35) | `stress.py` : à chaque décision, ce que coûteraient aux positions du moment un krach de 20, 35 ou 50 % sans exécution des stops (ou Binance en panne pendant la chute), une crise de liquidité (ventes 10 % sous les stops), un pic de volatilité (tous les stops touchés, 2 % de glissement), le retrait de la cote de la plus grosse position, un décrochage de l'USDT de 10 % ; et si l'arrêt d'urgence se déclencherait | aucun : mesure (raisonnement, page Positions, rapport) |
+| Attribution de performance (§36) | `attribution.py` : résultat par crypto (réalisé et en cours), par régime à l'achat, par type de sortie, par leçon ; part des gains venue des trois meilleurs trades ; « pourquoi ai-je gagné, pourquoi ai-je perdu ? » en clair | aucun : page Positions et rapport |
+| Calendrier d'événements (§33) | `evenements.py` : annonces américaines à fort impact (Fed, inflation, emploi…) d'après le calendrier public de ForexFactory, relu au plus toutes les 6 heures par le noyau de savoir ; montrées dans la page Veille et dans le raisonnement 48 heures avant ; gardées pour mesurer, avec le temps, combien le bitcoin bouge ces jours-là | aucun : aucun achat n'est bloqué tant qu'un effet n'est pas prouvé (au moins 10 jours d'annonce mesurés, puis une étude) |
+| Registre des expériences et des versions (§41, §42), carte du modèle (§50) | `registre.py` : chaque épreuve quotidienne de l'évolution et chaque fin d'essai notées (numéro, date, version du code, empreinte des données, réglages, résultats, conclusion) ; `registre rejouer <n°>` refait l'expérience et dit si les résultats sont identiques ; `registre carte` : usage, règles en vigueur, validation, limites, garde-fous | aucun : traçabilité ; l'évolution décide comme avant |
+
+Commandes :
+
+    python trendguard_bot.py registre                 # les dernières expériences
+    python trendguard_bot.py registre rejouer E0001   # refaite à l'identique ?
+    python trendguard_bot.py registre controle        # rejeu des réglages en vigueur, noté
+    python trendguard_bot.py registre carte           # la carte du modèle
+
 **Ce que dit l'étude des régimes** : depuis 2018, la stratégie n'a perdu en
 moyenne dans aucun régime où elle achète. Elle gagne le moins en phase de
 « reprise » (+0,29 R par trade) et quand l'appétit pour le risque est
@@ -64,21 +82,16 @@ mauvaise journée fait manquer des reprises. Les seuils retenus ne changent
 aucun résultat passé et bloquent seulement l'exceptionnel (krach, donnée
 aberrante).
 
-## Phases suivantes proposées (votre accord d'abord)
+## Ce qui reste (votre accord d'abord)
 
-1. **Registre des expériences et des versions** (§41, §42, §50) : chaque
-   épreuve de l'évolution et chaque étude enregistrées avec la version du
-   code, les données, les réglages et les résultats, pour pouvoir tout
-   rejouer.
-2. **Débat des IA** (§43) : rôles haussier, baissier, critique et synthèse
-   dans la veille, dès que des clés d'IA sont enregistrées.
-3. **Calendrier d'événements** (§33) : décisions de la banque centrale
-   américaine, inflation, emploi, affichés et notés (information).
-4. **Tests de résistance élargis** (§35) : krach crypto corrélé, crise de
-   liquidité (glissement multiplié par dix), pic de volatilité.
-5. **Attribution de performance** (§36) : résultat par crypto, par régime,
-   par type de sortie.
-6. **Réel** (§22, §29) : seulement après des semaines de paper avec des
+1. **Débat des IA** (§43) : rôles haussier, baissier, critique et synthèse
+   dans la veille. Il attend des clés d'IA : sans elles, il n'y a personne
+   pour débattre (`python trendguard_bot.py watch set-key claude`, clé
+   saisie masquée).
+2. **Effet des annonces économiques** : quand le calendrier aura mesuré au
+   moins 10 jours d'annonce, une étude dira si s'abstenir d'acheter ces
+   jours-là aurait aidé ; une règle ne sera proposée que si elle est prouvée.
+3. **Réel** (§22, §29) : seulement après des semaines de paper avec des
    trades vendus, des alertes qui arrivent, une machine fixe et de l'argent
    sur le compte.
 
@@ -90,7 +103,7 @@ aberrante).
 | Vente à découvert, couverture, levier (§17) | Binance Spot, achat seul, par choix de sécurité : on ne perd au pire que ce qu'on a acheté |
 | Pile FastAPI, PostgreSQL, Redis, React, base vectorielle (§55) | pour un bot qui tourne sur un seul PC, SQLite et le panneau actuel suffisent ; tout réécrire coûterait des mois sans rendre le bot plus sûr ni plus rentable. L'architecture reste modulaire : un module par rôle |
 | Agents « docteur en finance », « gérant de portefeuille »… (§3) | ces rôles sont tenus par des règles testées et par les IA consultées, pas par des promesses d'expertise |
-| Macro complète (§7) | pas de données macro gratuites et fiables intégrées ; le régime de BTC et la veille en tiennent lieu |
+| Macro complète (§7) | pas de données macro gratuites et fiables intégrées ; le régime de BTC, la veille et le calendrier des annonces américaines en tiennent lieu |
 
 Les règles d'or du prompt sont celles du bot depuis le début : préférer « NO
 TRADE » à un trade mal justifié (§62), ne jamais croire un bon backtest seul
