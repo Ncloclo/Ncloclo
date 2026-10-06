@@ -302,8 +302,9 @@ test("anticipation de la prochaine clôture et centre de sécurité", async ({ p
   await expect(page.locator("#detail-title")).toHaveText("ICP/USDT");
   await page.keyboard.press("Escape");
   await page.locator('.tab[data-tab="settings"]').click();
-  await expect(page.locator("#s-sec li")).toHaveCount(14);
-  await expect(page.locator("#s-sec-score")).toHaveText(/^\d+ \/ 14$/);
+  await expect(page.locator("#s-sec li")).toHaveCount(15);                     // dont la garde avant achat
+  await expect(page.locator("#s-sec-score")).toHaveText(/^\d+ \/ 15$/);
+  await expect(page.locator("#s-sec")).toContainText("Garde avant achat");
   await expect(page.locator("#s-sec")).toContainText("Rapport quotidien");
   await expect(page.locator("#s-rep-score")).toHaveText(/^\d+ \/ \d+$/);        // rapport quotidien
   await page.locator("#s-rep-open").click();
