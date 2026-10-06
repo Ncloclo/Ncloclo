@@ -196,6 +196,19 @@ class SecurityCenter:
         except OSError:
             return []
 
+    def _garde_check(self, st: Dict[str, Any]) -> Dict[str, Any]:
+        """Garde « NO TRADE » de la dernière décision (garde.py) : ce qu'elle
+        a vérifié, et si elle a bloqué les achats (une protection, pas une
+        panne)."""
+        g = st.get("garde") or {}
+        if not g.get("checks"):
+            return self._check("Garde avant achat", None, "vérifiée à chaque décision de 00:02 UTC")
+        if g.get("blocked"):
+            return self._check("Garde avant achat", None, f"aucun achat le {g.get('day')} : "
+                               + " ; ".join(g["blocked"]))
+        return self._check("Garde avant achat", True, f"décision du {g.get('day')} : "
+                           + ", ".join(c["label"].lower() for c in g["checks"]) + " conformes")
+
     def _crash_check(self) -> List[Dict[str, Any]]:
         """Plantages de Windows : le constat du dernier rapport quotidien
         (lire le journal de Windows à chaque actualisation serait trop lent)."""
@@ -259,6 +272,7 @@ class SecurityCenter:
             *self._power_check(),
             *self._resource_checks(),
             *self._crash_check(),
+            self._garde_check(st),
             self._evolution_check(),
             self._report_check(),
             self._alerts_check(st),

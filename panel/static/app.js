@@ -156,7 +156,8 @@ async function renderDash() {
   const reg = $("#d-regime");
   reg.textContent = S.regime_bull == null ? "—" : S.regime_bull ? "Haussier" : "Baissier";
   reg.className = S.regime_bull ? "up" : S.regime_bull === false ? "down" : "";
-  $("#d-regime-sub").textContent = S.regime_bull ? "achats autorisés" : S.regime_bull === false ? "aucun achat, stops resserrés" : "";
+  const rd = (S.regime_detail || {}).texte;
+  $("#d-regime-sub").textContent = (S.regime_bull ? "achats autorisés" : S.regime_bull === false ? "aucun achat, stops resserrés" : "") + (rd ? ` · ${rd}` : "");
   const dd = $("#d-dd");
   dd.textContent = S.drawdown_pct == null ? "—" : S.drawdown_pct < 0 ? fpct(S.drawdown_pct) : "Aucune";
   dd.className = "num " + (S.drawdown_pct < -10 ? "down" : "");
@@ -986,11 +987,14 @@ async function renderPositions() {
   const trades = tr.trades;
   const wins = trades.filter((t) => t.pnl > 0).length;
   $("#t-sub").textContent = trades.length ? `${trades.length} trades · ${nf(0).format(wins / trades.length * 100)} % gagnants` : "";
-  table($("#t-table"), ["Crypto", "Achat", "Vente", "Prix d'achat", "Prix de vente", "Raison", "Résultat", "En R"],
-    trades.map((t) => ({ key: t.asset, cells: [up(t.asset), fdate(t.entry_date), fdate(t.date), fpx(t.entry), fpx(t.exit), REASON[t.reason] || t.reason || "", `${sign(t.pnl)}${nf(2).format(Math.abs(t.pnl || 0))} USDT`, fR(t.r)],
+  table($("#t-table"), ["Crypto", "Achat", "Vente", "Prix d'achat", "Prix de vente", "Raison", "Résultat", "En R", "Leçon"],
+    trades.map((t) => ({ key: t.asset, cells: [up(t.asset), fdate(t.entry_date), fdate(t.date), fpx(t.entry), fpx(t.exit), REASON[t.reason] || t.reason || "", `${sign(t.pnl)}${nf(2).format(Math.abs(t.pnl || 0))} USDT`, fR(t.r), LESSON[t.lesson] || ""],
       cls: { 6: t.pnl > 0 ? "up" : "down", 7: t.r > 0 ? "up" : "down" } })), open,
     "Aucun trade clos pour l'instant : le premier apparaîtra ici quand le bot vendra une position.");
 }
+
+// Leçon de chaque trade clos (analyse après trade, trendguard/postmortem.py).
+const LESSON = { tendance: "Tendance captée", faux_depart: "Faux départ (normal)", gain_rendu: "Gain rendu en partie", urgence: "Sortie d'urgence", ordinaire: "Trade ordinaire" };
 
 // ---------- Veille ----------
 async function renderWatch() {

@@ -898,6 +898,7 @@ Points faibles :
 | 32 | Bot libre (second portefeuille fictif qui agit librement sur le noyau de savoir et révise ses propres règles), lecture d'Internet toutes les 15 minutes ; capital changé sans faux arrêt d'urgence ; cinq stratégies de traders célèbres au tournoi ; guide du trading | Code, à votre demande | **fait** (05/10) : [`LIBRE.md`](LIBRE.md), [`TRADING.md`](TRADING.md) ; refusés : lecture à la seconde, dark web et Tor, Kali Linux, modèle d'IA à entraîner |
 | 33 | Écran bleu de Windows du 5/10 : diagnostic de la mémoire (`mdsched`), mises à jour de Windows et du pilote Intel Optane/RST | Vous | dès que possible (06/10) : J2 |
 | 34 | Rapport qui surveille les plantages de Windows ; filtre de liquidité pour le bot libre | Code, avec votre accord | **fait** (06/10) : J10, J11 |
+| 35 | Prompt maître appliqué : régimes de marché, garde « NO TRADE », analyse après trade, risque d'un jour (VaR, CVaR) ; phases suivantes proposées | Code, à votre demande | **fait** (06/10) : [`PLATEFORME.md`](PLATEFORME.md) |
 
 Fait depuis l'audit du matin : chemins de secours des ordres réels testés (et
 un défaut corrigé), blocage des mots de passe ratés, écriture sûre du choix des

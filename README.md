@@ -423,6 +423,16 @@ est vérifié et le bot les suspend s'ils coûtent plus qu'ils n'évitent. Bilan
 dans le panneau (Veille ▸ Noyau de savoir), dans le rapport quotidien et avec
 `python trendguard_bot.py savoir`. Lecture toutes les 15 minutes.
 
+### Prompt maître appliqué ([`docs/PLATEFORME.md`](docs/PLATEFORME.md))
+
+Les exigences du « prompt maître » (plateforme IA, finance quantitative,
+risque, trading) servent de grille : ce que le bot faisait déjà, ce qui a été
+ajouté, ce qui viendra. Ajouts du 6 octobre : régimes de marché et conditions
+où la stratégie gagne le moins ([`docs/REGIMES.md`](docs/REGIMES.md)), garde
+« NO TRADE » avant les achats (données, krach, perte du jour, disque), analyse
+après chaque trade (leçon, meilleur et pire moment), risque d'un jour du
+portefeuille (VaR, CVaR).
+
 ### Bot libre (`trendguard/libre.py`, [`docs/LIBRE.md`](docs/LIBRE.md))
 
 À votre demande, un second portefeuille fictif agit librement à côté du bot

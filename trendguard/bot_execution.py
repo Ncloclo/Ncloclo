@@ -13,7 +13,7 @@ import ccxt
 
 import v29
 
-from . import learning
+from . import learning, postmortem
 from . import trend_strategy as ts
 from .bot_types import Slot
 from .texte import fr
@@ -32,6 +32,7 @@ class ExecutionMixin:
                 continue
             before = self._closed_count(s)
             opened, bought = s.ctx.position.opened_at, s.ctx.position.buy_price
+            info = self._live_info(s)
             try:
                 s.eng.resolve_pending(s.ctx)
                 if s.ctx.position.in_position:
@@ -43,7 +44,7 @@ class ExecutionMixin:
             except Exception as e:
                 self.logger.exception(f"[PROT] {s.symbol} : {e}")
             finally:
-                self._harvest_live_trade(s, before, "EXCHANGE_STOP", opened, bought)
+                self._harvest_live_trade(s, before, "EXCHANGE_STOP", opened, bought, info)
                 self._save_slot(s)
 
     def _maintain_paper(self) -> None:
@@ -70,11 +71,13 @@ class ExecutionMixin:
         book["cash"] += proceeds
         pnl = proceeds - h["cost"]
         opened = v29._parse_iso(h["entry_date"]) or self._now
-        self._record_trade({"asset": a, "date": self._now.isoformat(),
-                            "days": (self._now - opened).days,
-                            "entry_date": h["entry_date"], "entry": h["entry"],
-                            "exit": px, "pnl": pnl,
-                            "r": pnl / h["risk_quote"], "reason": reason})
+        trade = {"asset": a, "date": self._now.isoformat(), "days": (self._now - opened).days,
+                 "entry_date": h["entry_date"], "entry": h["entry"], "exit": px, "pnl": pnl,
+                 "r": pnl / h["risk_quote"], "reason": reason}
+        close = getattr(self, "_last_close", None)
+        series = close[a] if close is not None and a in close else None
+        self._record_trade(postmortem.enrich(trade, series, h["qty"], h["risk_quote"], h.get("stop"),
+                                             h.get("regime")))
 
     # ---------- Décision journalière ----------
 
@@ -98,9 +101,10 @@ class ExecutionMixin:
             return
         before = self._closed_count(s)
         opened, bought = s.ctx.position.opened_at, s.ctx.position.buy_price
+        info = self._live_info(s)
         ref = s.ex.get_ticker()["bid"]
         s.eng.close_position(s.ctx, f"TREND_{reason}", ref)
-        self._harvest_live_trade(s, before, reason, opened, bought)
+        self._harvest_live_trade(s, before, reason, opened, bought, info)
         self._save_slot(s)
 
     def _raise_exchange_stops(self, holdings: Dict[str, ts.Holding],
@@ -335,7 +339,7 @@ class ExecutionMixin:
                 "qty": plan["qty"], "entry": plan["entry"], "stop": plan["stop"],
                 "high": plan["ref_price"], "entry_date": now.isoformat(),
                 "risk_quote": plan["risk_quote"], "cost": plan["cost"],
-                "disaster": disaster}
+                "disaster": disaster, "regime": (self.state.get("regime_detail") or {}).get("texte")}
             self.logger.info(
                 f"[ENTRY] {a.upper()} qty={plan['qty']:.6f} @ "
                 f"{plan['entry']:.6f} stop={plan['stop']:.6f} "
@@ -354,6 +358,7 @@ class ExecutionMixin:
                   "score": int(plan["mom"] * 10)},
             candle_ts=int(now.timestamp() * 1000))
         if res == v29.EntryResult.OPENED:
+            self.state.setdefault("entry_regimes", {})[a] = (self.state.get("regime_detail") or {}).get("texte")
             s.ctx.position.highest_close = plan["ref_price"]
             s.ctx.position.soft_stop = plan["stop"]
             p = s.ctx.position

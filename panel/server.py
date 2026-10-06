@@ -206,6 +206,8 @@ class PanelApp(SecurityCenter):
             "resume_note": st.get("resume_note") if st.get("halted") else None,
             "kill_resume_days": getattr(self.g, "kill_resume_days", 0),
             "regime_bull": st.get("last_regime_bull"), "risk_mult": st.get("risk_mult", 1.0),
+            "regime_detail": st.get("regime_detail") or {}, "garde": st.get("garde") or {},
+            "risque_jour": st.get("risque_jour") or {},
             "last_decision_day": st.get("last_decision_day"),
             "last_buy": self._last_buy(st),
             "selection": {k: v for k, v in self.selection_view(st).items()

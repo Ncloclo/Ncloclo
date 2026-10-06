@@ -97,6 +97,10 @@ sont jamais envoyés sur GitHub. VS Code les masque dans l'explorateur
 | `journal.py` | journaux muets des simulations et des vérifications (`silent_logger`) |
 | `alerts.py` | alertes Telegram, e-mail et WhatsApp ; un canal dont le mot de passe est refusé trois fois n'essaie plus qu'une fois par jour |
 | `market_watch.py` | veille : annonces officielles de Binance, actualités, avis des IA |
+| `regimes.py` | régimes de marché : tendance de BTC, volatilité, appétit pour le risque, phase ; information et journal des trades, aucune décision |
+| `garde.py` | garde « NO TRADE » avant les achats du jour : données, mouvement de BTC, perte du jour, disque ; seuils sans effet sur 8 ans de résultats |
+| `postmortem.py` | analyse après chaque trade : régime à l'achat, meilleur et pire moment en R, glissement, leçon |
+| `risque.py` | risque d'un jour du portefeuille (VaR et CVaR historiques) |
 | `libre.py` | bot libre : second portefeuille fictif qui apprend de chaque source, se fait son avis, agit seul et révise ses propres règles chaque semaine, à côté du bot principal |
 | `savoir.py` | noyau de savoir : presse, moteurs de recherche, forums, réseau social, tendances et avis des IA lus toutes les 15 minutes, chaque source jugée sur les cours réels ; l'avis des sources prouvées peut seulement reporter un achat |
 | `watch_claude.py` | avis de Claude pour la veille |

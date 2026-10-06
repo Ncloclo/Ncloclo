@@ -17,7 +17,17 @@ import pandas as pd
 
 import v29
 
-from . import anticipation, autonomy, evolution, learning, savoir
+from . import (
+    anticipation,
+    autonomy,
+    evolution,
+    garde,
+    learning,
+    postmortem,
+    regimes,
+    risque,
+    savoir,
+)
 from . import trend_strategy as ts
 from .bot_execution import ExecutionMixin
 from .bot_routines import RoutinesMixin
@@ -169,6 +179,29 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
                          f"risque {fr(self.p.risk_pct*100, '.2f')} %/trade")
         return True
 
+    # ---------- Garde et risque d'un jour ----------
+
+    def _disk_free_gb(self) -> Optional[float]:
+        """Place libre sur le disque du bot, en Go (None si illisible)."""
+        try:
+            import shutil
+            return shutil.disk_usage(v29.APP_DIR).free / 2 ** 30
+        except OSError:
+            return None
+
+    def _day_risk(self, day: str, close: pd.DataFrame, equity: float) -> None:
+        """VaR et CVaR d'un jour du portefeuille après la décision
+        (risque.py) ; une mesure ratée ne bloque jamais la décision."""
+        try:
+            last = close.iloc[-1]
+            values = {a: h.qty * float(last[a]) for a, h in self._holdings().items()
+                      if a in close.columns and math.isfinite(float(last[a]))}
+            r = risque.var_cvar(close, values, equity)
+        except Exception as e:
+            self.logger.warning(f"[RISQUE] mesure impossible : {e}")
+            r = None
+        self.state["risque_jour"] = dict(r, day=day) if r else {}
+
     # ---------- Capital confié au bot ----------
 
     def _capital_basis(self) -> None:
@@ -287,8 +320,18 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
                      "mode": self.g.run_mode, "note": note})
         self.state["buys"] = buys[-self.BUYS_KEPT:]
 
+    def _live_info(self, s: Slot) -> Optional[Dict[str, Any]]:
+        """Ce qu'il faut garder d'une position réelle avant sa vente, pour
+        l'analyse après trade (postmortem.py)."""
+        p = s.ctx.position
+        if not p.in_position:
+            return None
+        return {"qty": p.amount_held, "risk": p.risk_quote_initial, "stop": p.soft_stop or p.sl_price,
+                "regime": (self.state.get("entry_regimes") or {}).get(s.base.lower())}
+
     def _harvest_live_trade(self, s: Slot, n_before: int, reason: str,
-                            opened_at: Optional[str] = None, buy_price: float = 0.0) -> None:
+                            opened_at: Optional[str] = None, buy_price: float = 0.0,
+                            info: Optional[Dict[str, Any]] = None) -> None:
         pf = s.ctx.portfolio
         if pf.stats_wins + pf.stats_losses > n_before and pf.last_trades:
             t = pf.last_trades[-1]
@@ -305,6 +348,12 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
             if opened:
                 trade["entry_date"] = opened.isoformat()
                 trade["days"] = (self._now - opened).days
+            info = info or {}
+            close = getattr(self, "_last_close", None)
+            series = close[s.base.lower()] if close is not None and s.base.lower() in close else None
+            trade = postmortem.enrich(trade, series, float(info.get("qty") or 0.0), float(info.get("risk") or 0.0),
+                                      info.get("stop"), info.get("regime"))
+            (self.state.get("entry_regimes") or {}).pop(s.base.lower(), None)
             self._record_trade(trade)
 
     def _log_equity(self, equity: float, cash: float) -> None:
@@ -695,10 +744,18 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         else:
             self._raise_paper_disaster(holdings, snap)
         equity, cash = self._equity_and_cash(prices)
+        prev_equity = self.state.get("last_equity")
         self.state.setdefault("start_equity", equity)
         peak = max(float(self.state.get("peak_equity") or 0.0), equity)
         self.state["peak_equity"] = peak
         self.state["last_equity"] = equity
+        # Régime de marché du jour (information, journal des trades).
+        try:
+            reg = regimes.at(regimes.regime_frame(close), day)
+        except Exception as e:              # une lecture ratée ne bloque jamais la décision
+            self.logger.warning(f"[RÉGIME] lecture impossible : {e}")
+            reg = {}
+        self.state["regime_detail"] = dict(reg, day=day)
         self._log_equity(equity, cash)
         self.state["last_regime_bull"] = bull
         if self._auto_resume(day, equity, bull):
@@ -732,7 +789,13 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         if gentle < 1.0:
             self.logger.info("[REPRISE] reprise en douceur après l'arrêt d'urgence : risque par "
                              "achat × 0,5")
-        if not self.state.get("halted"):
+        # Garde « NO TRADE » : un seul « non » et aucun achat aujourd'hui.
+        gate = garde.checks(day, close, equity, float(prev_equity) if prev_equity else None, self._disk_free_gb())
+        blocked = garde.blocking(gate)
+        self.state["garde"] = {"day": day, "checks": gate, "blocked": blocked}
+        if blocked and not self.state.get("halted"):
+            self.logger.warning("[GARDE] aucun achat aujourd'hui : " + " ; ".join(blocked))
+        if not self.state.get("halted") and not blocked:
             eligible = {a: s for a, s in snap.items()
                         if self._can_enter(a) and a in allowed}
             # Savoir du bot : une crypto qu'il voit nettement en baisse, sur
@@ -756,6 +819,7 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
                     entries.append(done)
                     cash_left -= done["cost"]
         self.state["last_decision_day"] = day
+        self._day_risk(day, close, equity)
         self._libre_step(day, close, snap)
         self._explain(day, bull, close, snap, late + exits, entries, mult, now, allowed)
         self._summary(day, bull, equity, late + exits, entries, prices)
@@ -789,6 +853,16 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         notes.update(self._entry_notes)
         step, gentle = float(self.state.get("risk_step") or 1.0), self._gentle(day)
         extra = []
+        reg = self.state.get("regime_detail") or {}
+        if reg.get("day") == day and reg.get("texte"):
+            extra.append(f"Régime de marché : {reg['texte']} (information ; la règle reste BTC au-dessus "
+                         f"de sa moyenne {self.p.regime_sma} jours).")
+        g = self.state.get("garde") or {}
+        if g.get("day") == day and g.get("blocked") and not self.state.get("halted"):
+            extra.append("Garde « NO TRADE » : aucun achat aujourd'hui (" + " ; ".join(g["blocked"]) + ").")
+        rj = self.state.get("risque_jour") or {}
+        if rj.get("day") == day:
+            extra.append(risque.describe(rj))
         if step > 1.0:
             extra.append(f"Palier de risque : {fr(self.p.risk_pct * step * 100, 'g')} % par achat, "
                          f"choisi par l'analyse du bot ; retour immédiat à "

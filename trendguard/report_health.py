@@ -17,7 +17,7 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import evolution, learning, libre, savoir
+from . import evolution, learning, libre, postmortem, savoir
 from .systeme import (
     Check,
     Deps,
@@ -529,7 +529,8 @@ def skills_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
     """Compétences acquises : apprentissage libre, noyau de savoir et
     évolution encadrée."""
     lr = learning.summary(st.get("learning"))
-    out = [chk("Apprentissage libre", None, lr["text"])]
+    out = [chk("Apprentissage libre", None, lr["text"]),
+           chk("Journal des trades", None, postmortem.summary(st.get("trades") or [])["text"])]
     try:
         out += knowledge_check(gcfg)
     except Exception as e:           # un bilan illisible n'empêche pas le rapport
