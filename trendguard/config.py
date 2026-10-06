@@ -155,6 +155,9 @@ class GuardConfig:
     db_file: str = ""
     log_file: str = ""
     lock_file: str = ""
+    # Porte du réel (chantiers.py) : toujours appliquée hors essais (aucune
+    # variable ne la désactive) ; fermée, aucun achat réel.
+    release_gate: bool = False
 
     def __post_init__(self):
         if self.run_mode not in ("paper", "live"):
@@ -265,7 +268,8 @@ def load_guard_config_from_env() -> GuardConfig:
         binance_testnet=v29._env_b("BINANCE_TESTNET", False),
         db_file=v29._env_s("TG_DB_FILE", ""),
         log_file=v29._env_s("TG_LOG_FILE", ""),
-        lock_file=v29._env_s("TG_LOCK_FILE", ""))
+        lock_file=v29._env_s("TG_LOCK_FILE", ""),
+        release_gate=True)
 
 
 class ExchangeTimeFormatter(logging.Formatter):

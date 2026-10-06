@@ -20,6 +20,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from . import (
     attribution,
     audit,
+    chantiers,
     donnees,
     evolution,
     learning,
@@ -627,6 +628,14 @@ def skills_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
                                           "python trendguard_bot.py modeles banc"))
     except Exception as e:           # trace illisible : le rapport continue
         out.append(chk("Modèles d'IA", None, f"trace illisible ({type(e).__name__})"))
+    try:
+        g8 = chantiers.live_gate(gcfg, st)
+        closed = getattr(gcfg, "run_mode", "paper") == "live" and not g8["open"]
+        out.append(chk("Porte du réel", False if closed else None, chantiers.describe_live(g8),
+                       "Achats réels bloqués tant qu'elle est fermée : python trendguard_bot.py chantiers portes"
+                       if closed else ""))
+    except Exception as e:           # mesure impossible : le rapport continue (la porte reste fermée)
+        out.append(chk("Porte du réel", None, f"mesure impossible ({type(e).__name__})"))
     if lr["brier_raw"] is not None:
         # Une information, jamais un point à corriger : l'apprentissage se
         # juge sur la durée (au moins 100 prévisions comparées à la clôture).

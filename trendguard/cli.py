@@ -20,7 +20,7 @@ import ccxt
 
 import v29
 
-from . import alerts, autonomy, evolution, porte
+from . import alerts, autonomy, chantiers, evolution, porte
 from . import bot as _bot
 from . import diagnostics as dg
 from . import trend_strategy as ts
@@ -425,12 +425,15 @@ def cmd_verify(gcfg: GuardConfig, exchange: Any = None,
         # se vérifient sans elle, avec une connexion publique.
         say("\nLe reste est vérifié sans clé :\n")
         cmd_verify_public(gcfg, now=now, out=out)
+        chantiers.note_verification(gcfg, False, gcfg.binance_testnet)
         return 1
     _verify_balances(exchange, say)
     decision = _verify_decision(gcfg, exchange, rights, now, out, say)
     if decision is None:
+        chantiers.note_verification(gcfg, False, gcfg.binance_testnet)
         return 1
     ok = _report_decision(decision, say) and ok
+    chantiers.note_verification(gcfg, bool(ok), gcfg.binance_testnet)      # pour la porte du réel
     say("\n" + ("✅ Prêt pour le mode réel." if ok else
                 "❌ À corriger avant le mode réel (voir ci-dessus)."))
     return 0 if ok else 1
@@ -690,6 +693,7 @@ TOOLS = {"alerts": ("alerts", "alertes : configurer | tester"),
          "donnees": ("donnees", "journal financier : [verifier] | lignee [trade] | catalogue"),
          "expert": ("expert", "diagnostic expert du noyau cognitif (lecture seule) : [--rapide]"),
          "comite": ("comite", "avis consultatif du comité d'agents : <crypto> | --banc"),
+         "chantiers": ("chantiers", "feuille de route et portes : [statut] | portes | document"),
          "modeles": ("modeles", "modèles d'IA : [statut] | banc")}
 
 

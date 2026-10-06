@@ -10,6 +10,7 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `NoTradeGate.v1` | décision du jour | porte d'exécution, raisonnement | 1.0.0 | INTERNAL | critique |
 | `Order.v1` | moteur v29 (réel) | Binance Spot | 1.0.0 | INTERNAL | critique |
 | `OrderIntent.v1` | exécution (bot_execution.py) | porte d'exécution (porte.py) | 1.0.0 | INTERNAL | critique |
+| `ReleaseGate.v1` | feuille de route (chantiers.py) | porte d'exécution (achats réels), rapport, Rachelle | 1.0.0 | INTERNAL | critique |
 | `RiskCheck.v1` | exécution | porte d'exécution | 1.0.0 | INTERNAL | critique |
 | `SafeModeState.v1` | vous (commande mode-sur) | porte d'exécution, décision du jour | 1.0.0 | INTERNAL | critique |
 | `TradeRecord.v1` | exécution | journal des trades, attribution, apprentissage | 1.0.0 | INTERNAL | critique |
@@ -18,15 +19,18 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `Confidence.v1` | comité d'agents | Rachelle, panneau, journal | 1.0.0 | INTERNAL | cœur |
 | `EntryPlan.v1` | stratégie | exécution | 1.0.0 | INTERNAL | cœur |
 | `EvolutionChange.v1` | évolution (evolution.py) | bot, à la décision suivante | 1.0.0 | INTERNAL | cœur |
+| `ExpertDiagnosis.v1` | diagnostic expert (expert.py) | rapport quotidien, Rachelle, panneau | 1.0.0 | INTERNAL | cœur |
 | `KnowledgeHold.v1` | noyau de savoir (savoir.py) | décision du jour | 1.0.0 | INTERNAL | cœur |
 | `LLMExecution.v1` | exécution des modèles (modeles.py) | trace des IA, rapport, panneau | 1.0.0 | INTERNAL | cœur |
 | `ModelBenchmark.v1` | banc (modeles.py) | routeur (approbation), fiche du modèle, rapport | 1.0.0 | INTERNAL | cœur |
 | `ModelConsensus.v1` | veille (market_watch.py) | rapport de la veille, panneau, Rachelle | 1.0.0 | PUBLIC | cœur |
 | `ModelDisagreement.v1` | veille (market_watch.py) | rapport de la veille, panneau, Rachelle | 1.0.0 | PUBLIC | cœur |
 | `ModelSelection.v1` | routeur (modeles.py) | exécution des modèles | 1.0.0 | INTERNAL | cœur |
+| `PortfolioAnalysis.v1` | décision du jour (risque.py, stress.py, attribution.py) | panneau, rapport, raisonnement | 1.0.0 | INTERNAL | cœur |
 | `PromptVersion.v1` | socle des modèles (modeles.py) | exécution des modèles, veille, Rachelle, banc | 1.0.0 | INTERNAL | cœur |
 | `Signal.v1` | stratégie (trend_strategy.py) | plan d'achat | 1.0.0 | INTERNAL | cœur |
 | `DecisionRecord.v1` | décision du jour | journal financier, lignée des trades | 1.0.0 | CONFIDENTIAL | données |
+| `Experiment.v1` | évolution, études (registre.py) | rejeu, contrôle, rapport | 1.0.0 | INTERNAL | données |
 | `MarketData.v1` | Binance (klines publiques) | décision du jour, régimes, qualité | 1.0.0 | INTERNAL | données |
 | `OHLCV.v1` | Binance (klines publiques) | décision du jour, qualité des données | 1.0.0 | PUBLIC | données |
 | `Envelope.v1` | tout module (contrats.py) | tout module | 1.0.0 | INTERNAL | support |
@@ -155,6 +159,24 @@ Intention d'achat tirée du plan du jour.
 | Unicité | un achat par crypto et par décision |
 | Trace (audit) | contrôle de la porte |
 | Fichiers | `trendguard/contrats.py`, `trendguard/bot_execution.py` |
+
+## ReleaseGate.v1
+
+Porte du réel (porte 8), mesurée sur l'état du bot.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | feuille de route (chantiers.py) |
+| Consommateur | porte d'exécution (achats réels), rapport, Rachelle |
+| Entrée | portes 1 à 7, essai paper, réglages, arrêt d'urgence, mode sûr, journaux, alertes, rapport, vérification |
+| Sortie | ouverte ou fermée, et chaque condition manquante |
+| Erreurs | mesure impossible : porte fermée |
+| Droits | aucune option ne la contourne ; fermée, aucun achat réel |
+| Délai | une fois par jour |
+| Nouveaux essais | à la décision suivante |
+| Unicité | une mesure par jour |
+| Trace (audit) | raisonnement et rapport quotidien |
+| Fichiers | `trendguard/chantiers.py` |
 
 ## RiskCheck.v1
 
@@ -300,6 +322,24 @@ Réglage adopté par l'évolution encadrée.
 | Trace (audit) | registre des expériences |
 | Fichiers | `trendguard/evolution.py`, `trendguard/registre.py` |
 
+## ExpertDiagnosis.v1
+
+Diagnostic expert du bot (noyau cognitif).
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | diagnostic expert (expert.py) |
+| Consommateur | rapport quotidien, Rachelle, panneau |
+| Entrée | état, décision, audit, journal, journal du bot, PC, réseau |
+| Sortie | verdict, constats avec gravité et preuves, propositions (jamais des actions) |
+| Erreurs | outil en panne : constat « inconnu », jamais inventé |
+| Droits | lecture seule |
+| Délai | 00:45 UTC |
+| Nouveaux essais | à la nuit suivante |
+| Unicité | un diagnostic par nuit |
+| Trace (audit) | fichier du diagnostic, rapport |
+| Fichiers | `trendguard/expert.py`, `trendguard/cognitif.py` |
+
 ## KnowledgeHold.v1
 
 Achat reporté par le noyau de savoir.
@@ -408,6 +448,24 @@ Choix du modèle d'IA pour une demande, avec ses raisons.
 | Trace (audit) | raison notée avec chaque appel |
 | Fichiers | `trendguard/modeles.py` |
 
+## PortfolioAnalysis.v1
+
+Analyse du portefeuille : risque d'un jour, tests de résistance, attribution.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | décision du jour (risque.py, stress.py, attribution.py) |
+| Consommateur | panneau, rapport, raisonnement |
+| Entrée | positions, clôtures, trades clos |
+| Sortie | VaR et CVaR à 95 %, pertes par scénario, résultat par crypto |
+| Erreurs | données insuffisantes : non mesuré |
+| Droits | mesures seulement, aucune décision |
+| Délai | à la décision |
+| Nouveaux essais | aucun |
+| Unicité | une analyse par décision |
+| Trace (audit) | dans l'état du bot |
+| Fichiers | `trendguard/risque.py`, `trendguard/stress.py`, `trendguard/attribution.py` |
+
 ## PromptVersion.v1
 
 Invite enregistrée : version, empreinte exacte, statut.
@@ -461,6 +519,24 @@ Décision du jour dans le journal financier, avec la date limite de ses données
 | Unicité | une décision par jour |
 | Trace (audit) | journal financier |
 | Fichiers | `trendguard/donnees.py`, `trendguard/bot.py` |
+
+## Experiment.v1
+
+Expérience notée au registre (réglages, données, version du code, résultats).
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | évolution, études (registre.py) |
+| Consommateur | rejeu, contrôle, rapport |
+| Entrée | réglages, période, données, code |
+| Sortie | identifiant E0001…, empreinte des données, mesures, rejouable à l'identique |
+| Erreurs | rejeu différent : signalé |
+| Droits | écriture par le bot |
+| Délai | à chaque épreuve |
+| Nouveaux essais | rejeu sur demande |
+| Unicité | un identifiant par expérience |
+| Trace (audit) | fichier du registre |
+| Fichiers | `trendguard/registre.py` |
 
 ## MarketData.v1
 

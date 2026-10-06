@@ -96,7 +96,7 @@ le bot avec et sans la porte : mêmes trades).
 | --- | --- |
 | Contrats explicites, versionnés, registre des contrats, matrice, niveaux de priorité (§3-5, §41, §44, §60-61, §71) | `contrats.py` : 17 contrats (producteur, consommateur, entrée, sortie, erreurs, droits, délai, nouveaux essais, unicité, trace, fichiers, niveau) ; [`CONTRATS.md`](CONTRATS.md) en est tiré et un test vérifie qu'ils restent identiques |
 | Schémas stricts, erreurs standard (§4.3, §36, §64) | intention d'achat, décision de risque, autorisation, mode sûr : vérifiés à la création ; valeur manquante, mauvais type, hors limites ou autre version refusés, jamais corrigés en silence (enveloppe d'erreur : code, catégorie, nouvel essai possible) |
-| Moteur de risque, porte d'exécution, chaîne Signal → Décision → Risque → Autorisation → Ordre sans raccourci (§26, §28, §29, §54) | `porte.py` : 15 contrôles fixes avant CHAQUE achat, en paper comme en réel (mode réel armé, arrêt d'urgence, mode sûr, garde du jour, décision du jour, crypto autorisée, doublon, positions, risque de l'achat, risque cumulé, taille, argent disponible, stop sous le prix, montant minimum, qualité des données au moins 50/100) ; APPROVED, REJECTED ou EMERGENCY_BLOCK avec la raison ; autorisation valable 5 minutes |
+| Moteur de risque, porte d'exécution, chaîne Signal → Décision → Risque → Autorisation → Ordre sans raccourci (§26, §28, §29, §54) | `porte.py` : 16 contrôles fixes avant CHAQUE achat, en paper comme en réel (mode réel armé, porte du réel, arrêt d'urgence, mode sûr, garde du jour, décision du jour, crypto autorisée, doublon, positions, risque de l'achat, risque cumulé, taille, argent disponible, stop sous le prix, montant minimum, qualité des données au moins 50/100) ; APPROVED, REJECTED ou EMERGENCY_BLOCK avec la raison ; autorisation valable 5 minutes |
 | Le LLM n'est jamais l'autorité finale (§62-63, §73) | déjà vrai et désormais écrit dans les contrats : les IA donnent un avis, le noyau de savoir peut seulement reporter un achat, la porte est faite de règles fixes |
 | Unicité des opérations critiques (§38) | une seule intention d'achat par crypto et par décision (clé jour:crypto:BUY) ; en réel, l'intention est écrite avant l'ordre et résolue par l'identifiant client (moteur v29) |
 | Traçabilité de bout en bout (§6, §31) | chaque achat et chaque trade portent l'identifiant de la décision du jour, du contrôle du risque et de l'autorisation |
@@ -299,6 +299,31 @@ flottants arrondis à la précision de Binance ; le changer toucherait au
 chemin des ordres sans gain prouvé : le décimal sert aux frontières) ;
 identifiants lisibles gardés là où ils existent (`D-2026-10-06`) plutôt que
 des UUID, pour que vous puissiez les lire.
+
+## Cadre de priorités et de dépendances
+
+Ce document demande qu'aucune étape ne soit dite terminée parce que son code
+existe : priorités (P0 à P4), dépendances typées, états prouvés, note de santé,
+et des portes à franchir dans l'ordre, jusqu'au réel. Appliqué à TrendGuard :
+`chantiers.py`, et sa feuille de route tirée du code :
+[`FEUILLE_DE_ROUTE.md`](FEUILLE_DE_ROUTE.md).
+
+| Exigence du cadre | Ce qui a été fait |
+| --- | --- |
+| Priorités, états, dépendances typées (§2-8, §17) | 24 composants TASK-000001 à TASK-000024 : priorité, état, couche, dépendances (dure, souple, exécution, données, contrat, sécurité, validation), propriétaire, risque, critère d'acceptation |
+| Graphe sans cycle, chemin critique, dépendance inversée interdite (§9, §19, §22) | ordre de construction calculé ; chemin critique jusqu'au réel ; un composant ne dépend jamais de l'aval ; dans le code, aucun module de fondation ni d'intelligence ne charge un module qui passe des ordres (test) |
+| Définition de prêt et de terminé, santé (§15-16, §24) | un état « en service » se prouve (code, tests, contrats, documentation, sécurité, observabilité) ; note de santé pondérée et seuil par priorité |
+| Portes de mise en service (§25) | portes 1 à 7 mesurées dans le dépôt, toutes franchies ; porte 8 (réel) mesurée chaque jour sur l'état du bot |
+| Aucune porte contournée (§25, §27) | porte 8 fermée : la porte d'exécution refuse tout achat réel, même bot en mode réel ; aucune variable ne la désactive |
+| « Pas de trade » valide, pas de bouchon caché (§14, §21) | « pas de trade » reste une issue normale ; le seul bouchon (marché de démonstration du panneau) est affiché comme tel |
+
+**La porte du réel aujourd'hui** : fermée, et c'est voulu. Elle demande un
+essai paper d'au moins 60 jours avec 10 trades clos, aucun réglage à l'essai,
+ni arrêt d'urgence ni mode sûr, des journaux intacts, des alertes configurées,
+un rapport quotidien sans défaut de sécurité et une vérification sans ordre
+réussie sur Binance réel (`python trendguard_bot.py verify`). Où elle en est :
+`python trendguard_bot.py chantiers portes`, le rapport quotidien, ou Rachelle
+(« sommes-nous prêts pour le réel ? »).
 
 ## Ce qui reste (votre accord d'abord)
 

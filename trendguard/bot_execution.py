@@ -7,13 +7,13 @@ Partie de la classe TrendGuardBot (bot.py), qui en hérite.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 import ccxt
 
 import v29
 
-from . import learning, porte, postmortem
+from . import chantiers, learning, porte, postmortem
 from . import trend_strategy as ts
 from .bot_types import Slot, last_closed_day
 from .contrats import ContractError, Money, OrderIntent
@@ -396,6 +396,23 @@ class ExecutionMixin:
 
     # ---------- Porte d'exécution (porte.py) ----------
 
+    def _production(self, day: str) -> Tuple[bool, str]:
+        """Porte du réel (chantiers.py, porte 8), mesurée une fois par jour :
+        fermée, aucun achat réel (les ventes restent permises). Une mesure
+        impossible la ferme."""
+        cached = self.state.get("mise_en_production") or {}
+        if cached.get("day") != day:
+            try:
+                g8 = chantiers.live_gate(self.g, self.state)
+                cached = {"day": day, "open": bool(g8["open"]), "missing": g8["missing"][:6]}
+            except Exception as e:
+                cached = {"day": day, "open": False, "missing": [f"évaluation impossible ({type(e).__name__})"]}
+            self.state["mise_en_production"] = cached
+            if not cached["open"]:
+                self.logger.warning("[PORTE DU RÉEL] fermée : aucun achat réel ; " + " ; ".join(cached["missing"]))
+        return bool(cached["open"]), ("ouverte" if cached["open"] else
+                                      "fermée : " + " ; ".join(cached["missing"][:3]))
+
     def _gate(self, plan: Dict[str, Any], equity: float, cash: float,
               now: datetime) -> Optional[Dict[str, str]]:
         """Contrôle du risque et autorisation d'un achat (porte.py), tracés
@@ -422,7 +439,8 @@ class ExecutionMixin:
             safe_mode=porte.safe_mode(g), live=self.live,
             data_quality=(self.state.get("qualite") or {}).get("score")
             if (self.state.get("qualite") or {}).get("day") == day else None,
-            live_armed=bool(g.enable_live_trading and g.live_confirmation == "I_UNDERSTAND_RISK"))
+            live_armed=bool(g.enable_live_trading and g.live_confirmation == "I_UNDERSTAND_RISK"),
+            production=self._production(day) if self.live and g.release_gate else None)
         try:
             intent: Optional[OrderIntent] = OrderIntent.from_plan(plan, day)
             decision = porte.check(intent, pf, self.p, now)

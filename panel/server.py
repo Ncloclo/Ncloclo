@@ -31,7 +31,17 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
-from trendguard import anticipation, autonomy, evolution, expert, learning, modeles, report, uptime
+from trendguard import (
+    anticipation,
+    autonomy,
+    chantiers,
+    evolution,
+    expert,
+    learning,
+    modeles,
+    report,
+    uptime,
+)
 from trendguard import market_watch as mw
 from trendguard.texte import fr
 
@@ -328,7 +338,8 @@ class PanelApp(SecurityCenter):
                 "report": self.report_view(),
                 "expert": autonomy.read_json(expert.path_for(self.g)) if expert.path_for(self.g) else {},
                 "comite": self.data.state().get("comite") or {},
-                "modeles": modeles.status(path=modeles.ledger_path(getattr(self.g, "watch_db", "")))}
+                "modeles": modeles.status(path=modeles.ledger_path(getattr(self.g, "watch_db", ""))),
+                "chantiers": chantiers.summary(self.g, self.data.state())}
 
     def anticipation_view(self) -> Dict[str, Any]:
         """Ce que le bot fera probablement à la prochaine clôture, avec les

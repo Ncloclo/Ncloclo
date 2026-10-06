@@ -457,6 +457,10 @@ socle multi-modèles d'IA ([`docs/MODELES.md`](docs/MODELES.md),
 banc d'évaluation réussi ; la mieux notée répond, sa réponse est vérifiée, une
 IA en panne est remplacée (repli noté), un secret ne sort jamais du PC ;
 aucune clé d'IA aujourd'hui, donc rien n'est présenté comme disponible.
+Cadre de priorités et de dépendances
+([`docs/FEUILLE_DE_ROUTE.md`](docs/FEUILLE_DE_ROUTE.md),
+`python trendguard_bot.py chantiers portes`) : chaque composant prouvé, et
+une porte du réel mesurée chaque jour ; fermée, aucun achat réel.
 Spécification des contrats de données ([`docs/CONTRATS.md`](docs/CONTRATS.md)) :
 types communs, validateur, versions et migrations ; audit corrélé (chaque
 achat remonte à sa décision et à son contrôle du risque) ; bougies vérifiées ;

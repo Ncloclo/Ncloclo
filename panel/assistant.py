@@ -28,7 +28,7 @@ import threading
 import unicodedata
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from trendguard import expert, modeles
+from trendguard import chantiers, expert, modeles
 from trendguard import market_watch as mw
 from trendguard.texte import fr
 
@@ -605,6 +605,19 @@ def a_modeles(ctx: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def a_chantiers(ctx: Dict[str, Any]) -> str:
+    cs = ctx.get("chantiers") or {}
+    lines = ["**Feuille de route** : " + (f"{cs.get('components', 0)} composants suivis, chacun avec sa priorité, "
+                                          "ses dépendances et ses preuves." if cs else "état inconnu pour l'instant.")]
+    for g in cs.get("gates") or []:
+        lines.append(f"- Porte {g['gate']} ({g['name']}) : {'franchie' if g['ok'] else 'fermée'}.")
+    if cs.get("live"):
+        lines.append(f"- Porte 8 (réel) : {chantiers.describe_live(cs['live'])}.")
+    lines.append("Tant que la porte du réel est fermée, aucun achat réel n'est possible, même si le bot passe en "
+                 "mode réel. Détail : python trendguard_bot.py chantiers portes.")
+    return "\n".join(lines)
+
+
 def a_learning(ctx: Dict[str, Any]) -> str:
     lr = (ctx.get("status") or {}).get("learning") or {}
     lines = [
@@ -807,6 +820,9 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
                    "ses propres reglages", "modifier ses reglages", "change ses reglages",
                    "changer les regles", "change ses regles"),
      a_evolution, [{"label": "Réglages ▸ autonomie", "href": "#settings"}]),
+    ("chantiers", ("feuille de route", "chantiers", "priorites", "passer en reel", "porte du reel",
+                   "pret pour le reel", "quand passer en reel", "portes"), a_chantiers,
+     [{"label": "Réglages ▸ rapport", "href": "#settings"}]),
     ("modeles", ("modeles d ia", "modele d ia", "quelles ia", "quelle ia", "llm", "fournisseurs d ia",
                  "multi modeles", "plusieurs ia", "routage", "disjoncteur", "modele local", "ollama",
                  "sante des ia"), a_modeles, [{"label": "Veille", "href": "#watch"}]),

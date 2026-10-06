@@ -4,7 +4,8 @@ en paper comme en réel, sans passer par elle.
 
     plan du jour → intention d'ordre → contrôle du risque → autorisation → ordre
 
-Des règles fixes et testées, sans IA : mode réel armé, ni arrêt d'urgence ni
+Des règles fixes et testées, sans IA : mode réel armé et porte du réel
+ouverte (chantiers.py, porte 8 : mesurée sur l'état du bot), ni arrêt d'urgence ni
 mode sûr, garde « NO TRADE » du jour, décision du jour (données fraîches),
 crypto de la liste, choisie et sans veto, pas déjà détenue ni achetée deux
 fois, nombre de positions, risque de l'achat, risque cumulé, taille de la
@@ -69,6 +70,7 @@ class Portfolio:
     data_quality: Optional[float] = None           # note des données du jour (None : inconnue)
     live: bool = False
     live_armed: bool = False
+    production: Optional[Tuple[bool, str]] = None  # porte du réel (ouverte, détail) ; None : non mesurée (essais)
 
 
 def _limits(intent: OrderIntent, pf: Portfolio, p: Any) -> List[Tuple[str, bool, str]]:
@@ -82,6 +84,8 @@ def _limits(intent: OrderIntent, pf: Portfolio, p: Any) -> List[Tuple[str, bool,
     checks = [
         ("Mode réel armé", not pf.live or pf.live_armed,
          "paper" if not pf.live else ("armé" if pf.live_armed else "réel NON armé")),
+        ("Porte du réel", not pf.live or pf.production is None or pf.production[0],
+         "paper" if not pf.live else "non mesurée (essais)" if pf.production is None else pf.production[1]),
         ("Arrêt d'urgence", not pf.halted, "déclenché" if pf.halted else "prêt"),
         ("Mode sûr", not pf.safe_mode.active,
          f"actif ({pf.safe_mode.reason or 'sans raison donnée'})" if pf.safe_mode.active else "inactif"),

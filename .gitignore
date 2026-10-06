@@ -20,6 +20,8 @@
 *.audit.jsonl
 *.expert.json
 *.modeles_banc.json
+*.verification.json
+*.verification.json.tmp
 *.modeles_banc.json.tmp
 *.expert.json.tmp
 *.modesur.json
