@@ -440,7 +440,11 @@ registre des expériences rejouables avec la carte du modèle
 modules ([`docs/CONTRATS.md`](docs/CONTRATS.md)), porte d'exécution
 déterministe avant chaque achat, journal d'audit infalsifiable
 (`python trendguard_bot.py audit`), mode sûr
-(`python trendguard_bot.py mode-sur on|off`).
+(`python trendguard_bot.py mode-sur on|off`). Étape 3 : journal financier
+en tables reliées dans la base du bot, chaque trade traçable jusqu'à ses
+données ([`docs/DONNEES.md`](docs/DONNEES.md),
+`python trendguard_bot.py donnees lignee`), sauvegarde de la nuit réellement
+relue.
 
 ### Bot libre (`trendguard/libre.py`, [`docs/LIBRE.md`](docs/LIBRE.md))
 

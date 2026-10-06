@@ -686,7 +686,8 @@ TOOLS = {"alerts": ("alerts", "alertes : configurer | tester"),
          "rapport": ("report", "rapport quotidien, sécurité et diagnostic : [dernier] | maintenant | quotidien"),
          "savoir": ("savoir", "noyau de savoir : [bilan] | collecter"),
          "registre": ("registre", "registre des expériences : [liste] | voir <n°> | rejouer <n°> | controle | carte"),
-         "audit": ("audit", "journal d'audit : [verifier] | dernier")}
+         "audit": ("audit", "journal d'audit : [verifier] | dernier"),
+         "donnees": ("donnees", "journal financier : [verifier] | lignee [trade] | catalogue")}
 
 
 def _parser() -> argparse.ArgumentParser:

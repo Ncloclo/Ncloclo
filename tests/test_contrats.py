@@ -94,7 +94,7 @@ def test_decision_authorization_and_safe_mode_contracts():
 def test_gate_approves_the_normal_purchase():
     d = porte.check(_intent(), _pf(), P, NOW)
     assert d.status == "APPROVED" and d.approved_size == 0.5 and not d.blocking_reasons
-    assert len(d.limit_checks) == 14 and all(ok for _n, ok, _d in d.limit_checks)
+    assert len(d.limit_checks) == 15 and all(ok for _n, ok, _d in d.limit_checks)
     assert d.open_risk_pct == 3.0 and d.exposure_pct == pytest.approx(50.01)
     a = porte.authorize(d, _pf(), NOW)
     assert a.authorized and a.risk_check_id == d.risk_check_id and a.authorization_id.startswith("A-")
@@ -122,6 +122,7 @@ def test_gate_approves_the_normal_purchase():
     ({"stop": 100.0}, {}, "REJECTED", "stop sous le prix"),
     ({"qty": 0.05, "cost": 5.0}, {}, "REJECTED", "montant minimum"),
     ({}, {"live": True}, "REJECTED", "réel NON armé"),
+    ({}, {"data_quality": 40.0}, "REJECTED", "qualité des données"),
 ])
 def test_gate_refuses_with_reasons(change, pf, status, word):
     d = porte.check(_intent(**change), _pf(**pf), P, NOW)

@@ -21,6 +21,7 @@ from . import (
     anticipation,
     audit,
     autonomy,
+    donnees,
     evolution,
     garde,
     learning,
@@ -68,6 +69,14 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         self._restart_flag = False          # redémarrage prévu (nouvelle version)
         # Journal d'audit (audit.py) : le bot en est le seul écrivain.
         self.audit = audit.AuditLog(audit.path_for(gcfg))
+        # Journal financier (donnees.py) : décisions, signaux, contrôles du
+        # risque, ordres, exécutions, trades, dans la base du bot.
+        try:
+            self.journal: Optional[donnees.Journal] = donnees.Journal(donnees.path_for(gcfg),
+                                                                       donnees.code_version())
+        except Exception as e:           # un journal illisible ne bloque jamais le bot
+            logger.error(f"[DONNÉES] journal financier indisponible : {e}")
+            self.journal = None
         self._started_at = time.time()
         self._last_alive = 0.0
         self._last_selection_try = 0.0
@@ -324,6 +333,7 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
             f"[TRADE] {trade['asset'].upper()} {trade['reason']} "
             f"pnl={trade['pnl']:+.2f} {self.g.quote} R={trade['r']:+.2f}")
         trace = trade.get("trace") or {}
+        self._journal("record_trade", trade, float(trade.get("qty") or 0.0), self.g.run_mode, self.p.fee)
         self._audit("ordre.vente", trade["asset"], "exécuté", reason=str(trade.get("reason") or ""),
                     authorization=trace.get("authorization_id", ""), correlation_id=trace.get("decision_id", ""),
                     after={"exit": trade.get("exit"), "pnl": round(float(trade["pnl"]), 6),
@@ -340,6 +350,35 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         except (OSError, ValueError, KeyError, TypeError) as e:
             self.logger.error(f"[AUDIT] écriture impossible ({action}) : {e}")
             return False
+
+    def _journal(self, method: str, *args: Any, **kw: Any) -> Any:
+        """Écriture dans le journal financier (donnees.py) ; une erreur est
+        notée, jamais bloquante (la trace qui bloque un achat est l'audit)."""
+        if self.journal is None:
+            return None
+        try:
+            return getattr(self.journal, method)(*args, **kw)
+        except Exception as e:
+            self.logger.warning(f"[DONNÉES] {method} non enregistré : {e}")
+            return None
+
+    def _journal_signals(self, day: str, snap: Dict[str, Dict[str, float]],
+                         exits: List[Tuple[str, str]]) -> None:
+        """Signaux du jour (achats signalés, ventes) et leur issue, lue dans
+        le raisonnement."""
+        assets = (self.state.get("reasoning") or {}).get("assets") or {}
+        rows = []
+        for a, s in sorted(snap.items()):
+            if ts.entry_signal(s, self.p):
+                row = assets.get(a) or {}
+                rows.append({"asset": a, "direction": "LONG", "close": s.get("close"),
+                             "breakout_level": s.get("prior_high"), "momentum": s.get("mom"),
+                             "volatility": s.get("vol"), "outcome": row.get("status") or "signal",
+                             "detail": row.get("text")})
+        for a, reason in exits:
+            rows.append({"asset": a, "direction": "EXIT", "close": (snap.get(a) or {}).get("close"),
+                         "outcome": "sold", "detail": reason})
+        self._journal("record_signals", f"D-{day}", rows)
 
     def _watch_safe_mode(self) -> "porte.SafeModeState":
         """Mode sûr en vigueur (commande mode-sur) ; activé ou levé depuis
@@ -401,6 +440,8 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
             info = info or {}
             if info.get("trace"):
                 trade["trace"] = info["trace"]
+            if info.get("qty"):
+                trade["qty"] = float(info["qty"])
             close = getattr(self, "_last_close", None)
             series = close[s.base.lower()] if close is not None and s.base.lower() in close else None
             trade = postmortem.enrich(trade, series, float(info.get("qty") or 0.0), float(info.get("risk") or 0.0),
@@ -864,6 +905,10 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         safe = self._watch_safe_mode()
         if safe.active and not self.state.get("halted"):
             self.logger.warning(f"[MODE SÛR] aucun achat aujourd'hui ({safe.reason})")
+        self._journal("record_decision", day, self.g.run_mode, donnees.params_of(self.p), bull,
+                      (self.state.get("regime_detail") or {}).get("texte"), equity,
+                      bool(self.state.get("halted")), safe.active, blocked,
+                      (self.state.get("qualite") or {}).get("score"))
         if not self.state.get("halted") and not blocked and not safe.active:
             eligible = {a: s for a, s in snap.items()
                         if self._can_enter(a) and a in allowed}
@@ -893,6 +938,7 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         self._events_day(day, close, now)
         self._libre_step(day, close, snap)
         self._explain(day, bull, close, snap, late + exits, entries, mult, now, allowed)
+        self._journal_signals(day, snap, exits)
         self._summary(day, bull, equity, late + exits, entries, prices)
 
     # ---------- Raisonnement (affiché dans le panneau) ----------

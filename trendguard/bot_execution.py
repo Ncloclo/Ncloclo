@@ -77,6 +77,7 @@ class ExecutionMixin:
                  "r": pnl / h["risk_quote"], "reason": reason}
         if h.get("trace"):
             trade["trace"] = h["trace"]
+        trade["qty"] = h["qty"]
         close = getattr(self, "_last_close", None)
         series = close[a] if close is not None and a in close else None
         self._record_trade(postmortem.enrich(trade, series, h["qty"], h["risk_quote"], h.get("stop"),
@@ -369,10 +370,13 @@ class ExecutionMixin:
         if res == v29.EntryResult.OPENED:
             self.state.setdefault("entry_regimes", {})[a] = (self.state.get("regime_detail") or {}).get("texte")
             self.state.setdefault("entry_traces", {})[a] = trace
-            self._bought(a, plan, trace, now)
             s.ctx.position.highest_close = plan["ref_price"]
             s.ctx.position.soft_stop = plan["stop"]
             p = s.ctx.position
+            self._bought(a, plan, trace, now, qty=p.amount_held or plan["qty"],
+                         price=p.buy_price or plan["exec_price"],
+                         fees=max(0.0, ((p.cost_basis or p.buy_price or 0.0) - (p.buy_price or 0.0))
+                                  * (p.amount_held or 0.0)))
             self._record_buy(a, now, p.buy_price or plan["exec_price"], p.amount_held or plan["qty"],
                              (p.cost_basis or p.buy_price) * (p.amount_held or plan["qty"]),
                              plan["risk_quote"], "différé" if deferred else "")
@@ -381,6 +385,11 @@ class ExecutionMixin:
         else:
             self._audit("ordre.achat", a, f"non exécuté ({getattr(res, 'name', res)})", now=now,
                         authorization=trace["authorization_id"], correlation_id=trace["decision_id"])
+            self._journal("record_order", trace["key"], a, "BUY", plan["qty"], plan["exec_price"],
+                          self.g.run_mode, "SENT" if res == v29.EntryResult.ORDER_SENT else "REJECTED",
+                          decision_id=trace["decision_id"], risk_check_id=trace["risk_check_id"],
+                          authorization_id=trace["authorization_id"], stop=plan["stop"],
+                          reason=str(getattr(res, "name", res)), at=now.isoformat())
         self._save_slot(s)
         return plan if res == v29.EntryResult.OPENED else None
 
@@ -410,6 +419,8 @@ class ExecutionMixin:
             halted=bool(self.state.get("halted")),
             garde_blocked=tuple(garde.get("blocked") or ()) if garde.get("day") == day else (),
             safe_mode=porte.safe_mode(g), live=self.live,
+            data_quality=(self.state.get("qualite") or {}).get("score")
+            if (self.state.get("qualite") or {}).get("day") == day else None,
             live_armed=bool(g.enable_live_trading and g.live_confirmation == "I_UNDERSTAND_RISK"))
         try:
             intent: Optional[OrderIntent] = OrderIntent.from_plan(plan, day)
@@ -417,6 +428,7 @@ class ExecutionMixin:
         except ContractError as e:
             intent, decision = None, porte.refusal(e, a, now)
         auth = porte.authorize(decision, pf, now)
+        self._journal("record_risk_check", decision_id, a, decision, auth)
         log = self.state.setdefault("porte", {})
         if log.get("day") != day:
             log.clear()
@@ -441,10 +453,18 @@ class ExecutionMixin:
         self._note_asset(a, *self._entry_notes[a])
         return None
 
-    def _bought(self, a: str, plan: Dict[str, Any], trace: Dict[str, str], now: datetime) -> None:
-        """Achat exécuté : clé d'unicité gardée pour la journée, trace dans
-        le journal d'audit."""
+    def _bought(self, a: str, plan: Dict[str, Any], trace: Dict[str, str], now: datetime,
+                qty: Optional[float] = None, price: Optional[float] = None,
+                fees: Optional[float] = None) -> None:
+        """Achat exécuté : clé d'unicité gardée pour la journée, ordre et
+        exécution dans le journal financier, trace dans le journal d'audit."""
         self.state.setdefault("porte", {}).setdefault("keys", []).append(trace["key"])
+        qty = float(qty if qty is not None else plan["qty"])
+        price = float(price if price is not None else plan["entry"])
+        self._journal("record_order", trace["key"], a, "BUY", qty, price, self.g.run_mode, "FILLED",
+                      decision_id=trace["decision_id"], risk_check_id=trace["risk_check_id"],
+                      authorization_id=trace["authorization_id"], stop=plan["stop"],
+                      fees=fees if fees is not None else qty * price * self.p.fee, at=now.isoformat())
         self._audit("ordre.achat", a, "exécuté", now=now, authorization=trace["authorization_id"],
                     correlation_id=trace["decision_id"],
                     after={"qty": plan["qty"], "entry": plan["entry"], "stop": plan["stop"],

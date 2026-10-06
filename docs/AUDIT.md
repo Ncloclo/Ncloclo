@@ -974,6 +974,7 @@ Points faibles :
 | 40 | Clé Binance : décocher les transferts internes et universels | Vous | avant le réel : K5 |
 | 41 | Rapport qui nomme la barrette de mémoire suspecte ; alerte d'arrêt qui donne la vraie cause de la veille ; veille sur batterie réglée par le bot | Code, avec votre accord | proposé (06/10) : K10, K11, K12 |
 | 42 | Étape 2 du prompt : contrats entre les modules, porte d'exécution avant chaque achat, journal d'audit chaîné, mode sûr | Code, à votre demande | **fait** (06/10) : [`CONTRATS.md`](CONTRATS.md), [`PLATEFORME.md`](PLATEFORME.md) |
+| 43 | Étape 3 du prompt : journal financier en tables reliées (lignée de chaque trade), migrations, sauvegarde relue, porte qui refuse des données sous 50/100 | Code, à votre demande | **fait** (06/10) : [`DONNEES.md`](DONNEES.md), [`PLATEFORME.md`](PLATEFORME.md) |
 
 Fait depuis l'audit du matin : chemins de secours des ordres réels testés (et
 un défaut corrigé), blocage des mots de passe ratés, écriture sûre du choix des

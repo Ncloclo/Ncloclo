@@ -8,7 +8,9 @@ Des règles fixes et testées, sans IA : mode réel armé, ni arrêt d'urgence n
 mode sûr, garde « NO TRADE » du jour, décision du jour (données fraîches),
 crypto de la liste, choisie et sans veto, pas déjà détenue ni achetée deux
 fois, nombre de positions, risque de l'achat, risque cumulé, taille de la
-position, argent disponible, stop sous le prix, montant minimum.
+position, argent disponible, stop sous le prix, montant minimum, qualité des
+données du jour (au moins 50 sur 100 : en dessous, les données sont trop
+abîmées pour décider ; étape 3, §76).
 
 Le plan du jour respecte déjà ces limites : la porte ne change rien aux
 décisions normales (10 % de marge pour les écarts de prix et de capital entre
@@ -24,6 +26,7 @@ de lire, d'analyser, de protéger et de vendre.
 from __future__ import annotations
 
 import os
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, FrozenSet, List, Optional, Tuple
@@ -42,6 +45,7 @@ POLICY_VERSION = "porte.v1"
 MARGIN = 0.10               # écart toléré entre le plan (clôture) et l'achat (prix, capital du moment)
 MIN_NOTIONAL = 10.0         # même minimum que la taille des positions (trend_strategy.size_position)
 AUTH_SECONDS = 300          # une autorisation vaut 5 minutes
+QUALITY_MIN = 50.0          # note des données du jour (qualite.py) sous laquelle on n'achète pas
 RESTRICTIONS = ("achat au comptant (Spot), sans levier", "ordre unique pour cette crypto aujourd'hui")
 
 
@@ -62,6 +66,7 @@ class Portfolio:
     halted: bool = False
     garde_blocked: Tuple[str, ...] = ()
     safe_mode: SafeModeState = SafeModeState()
+    data_quality: Optional[float] = None           # note des données du jour (None : inconnue)
     live: bool = False
     live_armed: bool = False
 
@@ -102,6 +107,9 @@ def _limits(intent: OrderIntent, pf: Portfolio, p: Any) -> List[Tuple[str, bool,
         ("Stop sous le prix", intent.stop < intent.entry, f"stop {fr(intent.stop, '.6g')}, achat {fr(intent.entry, '.6g')}"),
         ("Montant minimum", intent.qty * intent.entry >= MIN_NOTIONAL * (1 - 1e-9),
          f"{fr(intent.qty * intent.entry, '.2f')} pour {fr(MIN_NOTIONAL, '.0f')} au moins"),
+        ("Qualité des données", pf.data_quality is None or pf.data_quality >= QUALITY_MIN,
+         "non mesurée" if pf.data_quality is None else
+         f"{fr(pf.data_quality, '.0f')}/100 ({fr(QUALITY_MIN, '.0f')} au moins)"),
     ]
     return checks
 
@@ -121,7 +129,7 @@ def check(intent: OrderIntent, pf: Portfolio, p: Any, now: datetime) -> RiskDeci
         warnings.append(f"risque de l'achat {fr(intent.risk_quote / (p.risk_pct * eq * pf.risk_mult) * 100 - 100, '.1f')} "
                         "% au-dessus du plan, dans la marge permise")
     return RiskDecision(
-        risk_check_id=f"R-{now:%Y%m%d%H%M%S}-{intent.asset}", status=status,
+        risk_check_id=f"R-{now:%Y%m%d%H%M%S}-{intent.asset}-{uuid.uuid4().hex[:6]}", status=status,
         approved_size=intent.qty if status == "APPROVED" else 0.0, expected_loss=round(intent.risk_quote, 6),
         exposure_pct=round((pf.invested + intent.cost) / eq * 100, 2) if eq > 0 else 0.0,
         open_risk_pct=round((sum(dict(pf.held_risk).values()) + intent.risk_quote) / eq * 100, 3) if eq > 0 else 0.0,
@@ -142,7 +150,8 @@ def authorize(decision: RiskDecision, pf: Portfolio, now: datetime) -> Execution
 
 def refusal(e: ContractError, asset: str, now: datetime) -> RiskDecision:
     """Intention invalide (contrat refusé) : achat refusé, avec la raison."""
-    return RiskDecision(risk_check_id=f"R-{now:%Y%m%d%H%M%S}-{asset}", status="REJECTED", approved_size=0.0,
+    return RiskDecision(risk_check_id=f"R-{now:%Y%m%d%H%M%S}-{asset}-{uuid.uuid4().hex[:6]}", status="REJECTED",
+                        approved_size=0.0,
                         expected_loss=0.0, exposure_pct=0.0, open_risk_pct=0.0,
                         limit_checks=(("Contrat OrderIntent.v1", False, str(e)),),
                         blocking_reasons=(f"intention d'achat invalide : {e}",))

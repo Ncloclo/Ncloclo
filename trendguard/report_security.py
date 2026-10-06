@@ -292,8 +292,10 @@ def backup_database(db_file: str, dest: str, day: str, keep: int = KEEP_BACKUPS)
         ok = con.execute("PRAGMA quick_check").fetchone()[0] == "ok"
     finally:
         con.close()
+    restored = restore_test(target) if ok else ""
+    ok = ok and not restored.startswith("ÉCHEC")
     base = os.path.splitext(db_file)[0]
-    for ext in (".selection.json", ".evolution.json"):
+    for ext in (".selection.json", ".evolution.json", ".registre.json", ".audit.jsonl", ".modesur.json"):
         if os.path.exists(base + ext):
             shutil.copy2(base + ext, os.path.join(dest, f"{stem}-{day}{ext}"))
     kept = sorted(glob.glob(os.path.join(dest, f"{stem}-????-??-??.db")))
@@ -304,10 +306,36 @@ def backup_database(db_file: str, dest: str, day: str, keep: int = KEEP_BACKUPS)
             except OSError:
                 pass
     size = os.path.getsize(target) // 1024
-    return chk(label, ok, f"faite ({size} Ko, intégrité vérifiée), {min(len(kept), keep)} jour(s) gardé(s)"
-               if ok else "sauvegarde abîmée : celle d'hier est gardée",
+    return chk(label, ok, f"faite ({size} Ko, intégrité vérifiée ; {restored}), {min(len(kept), keep)} jour(s) "
+               "gardé(s)" if ok else f"sauvegarde abîmée : celle d'hier est gardée ({restored or 'intégrité'})",
                "" if ok else "Vérifiez l'espace disque et relancez le rapport.",
                action=f"base sauvegardée ({os.path.basename(target)})" if ok else "")
+
+
+def restore_test(path: str) -> str:
+    """Essai de restauration (étape 3, §59) : la sauvegarde est rouverte
+    comme le ferait le bot, son état relu et son journal financier vérifié.
+    Une sauvegarde jamais relue ne compte pas."""
+    from . import donnees
+    try:
+        con = sqlite3.connect(pathlib.Path(os.path.abspath(path)).as_uri() + "?mode=ro", uri=True, timeout=10)
+        try:
+            row = con.execute("SELECT value FROM kv WHERE key='trendguard'").fetchone()
+        finally:
+            con.close()
+        st = json.loads(row[0]) if row else {}
+        held = len(((st.get("paper") or {}).get("holdings")) or {})
+        j = donnees.Journal(path, readonly=True)
+        try:
+            v = j.verify()
+        finally:
+            j.close()
+    except (sqlite3.Error, ValueError, OSError) as e:
+        return f"ÉCHEC de la restauration d'essai : {e}"
+    if not v["ok"]:
+        return "ÉCHEC de la restauration d'essai : " + " ; ".join(v["problems"])
+    return (f"restauration essayée : état du bot relu ({held} position(s) paper, "
+            f"{len(st.get('trades') or [])} trade(s)), journal financier intact ({donnees.describe(v)})")
 
 
 def check_database(db_file: str) -> Check:

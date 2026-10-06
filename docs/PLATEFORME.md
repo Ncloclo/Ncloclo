@@ -96,7 +96,7 @@ le bot avec et sans la porte : mêmes trades).
 | --- | --- |
 | Contrats explicites, versionnés, registre des contrats, matrice, niveaux de priorité (§3-5, §41, §44, §60-61, §71) | `contrats.py` : 17 contrats (producteur, consommateur, entrée, sortie, erreurs, droits, délai, nouveaux essais, unicité, trace, fichiers, niveau) ; [`CONTRATS.md`](CONTRATS.md) en est tiré et un test vérifie qu'ils restent identiques |
 | Schémas stricts, erreurs standard (§4.3, §36, §64) | intention d'achat, décision de risque, autorisation, mode sûr : vérifiés à la création ; valeur manquante, mauvais type, hors limites ou autre version refusés, jamais corrigés en silence (enveloppe d'erreur : code, catégorie, nouvel essai possible) |
-| Moteur de risque, porte d'exécution, chaîne Signal → Décision → Risque → Autorisation → Ordre sans raccourci (§26, §28, §29, §54) | `porte.py` : 14 contrôles fixes avant CHAQUE achat, en paper comme en réel (mode réel armé, arrêt d'urgence, mode sûr, garde du jour, décision du jour, crypto autorisée, doublon, positions, risque de l'achat, risque cumulé, taille, argent disponible, stop sous le prix, montant minimum) ; APPROVED, REJECTED ou EMERGENCY_BLOCK avec la raison ; autorisation valable 5 minutes |
+| Moteur de risque, porte d'exécution, chaîne Signal → Décision → Risque → Autorisation → Ordre sans raccourci (§26, §28, §29, §54) | `porte.py` : 15 contrôles fixes avant CHAQUE achat, en paper comme en réel (mode réel armé, arrêt d'urgence, mode sûr, garde du jour, décision du jour, crypto autorisée, doublon, positions, risque de l'achat, risque cumulé, taille, argent disponible, stop sous le prix, montant minimum, qualité des données au moins 50/100) ; APPROVED, REJECTED ou EMERGENCY_BLOCK avec la raison ; autorisation valable 5 minutes |
 | Le LLM n'est jamais l'autorité finale (§62-63, §73) | déjà vrai et désormais écrit dans les contrats : les IA donnent un avis, le noyau de savoir peut seulement reporter un achat, la porte est faite de règles fixes |
 | Unicité des opérations critiques (§38) | une seule intention d'achat par crypto et par décision (clé jour:crypto:BUY) ; en réel, l'intention est écrite avant l'ordre et résolue par l'identifiant client (moteur v29) |
 | Traçabilité de bout en bout (§6, §31) | chaque achat et chaque trade portent l'identifiant de la décision du jour, du contrôle du risque et de l'autorisation |
@@ -133,9 +133,52 @@ cognitif, planificateur, orchestrateur d'agents, routeur de modèles, RAG,
 synthèse (§9-19) : la décision de trading doit rester faite de règles fixes
 (§62-63), mettre un orchestrateur d'IA sur ce chemin irait contre l'étape 2
 elle-même ; Pydantic, OpenAPI (§64) : des classes Python simples suffisent,
-sans dépendance de plus ; base relationnelle complète et migrations (étape 3) :
-la base SQLite et les fichiers ci-dessus sont la source de vérité ; un schéma
-complet ne servirait qu'en passant à un serveur ou à plusieurs bots.
+sans dépendance de plus. La base de données est l'objet de l'étape 3,
+ci-dessous.
+
+## Étape 3 du prompt : base de données et socle de données
+
+Le troisième document demande un socle de données complet. Il pose lui-même
+deux règles décisives : ne créer une table que si l'on sait pourquoi elle
+existe, qui la possède, la lit, la modifie, quel contrat la protège et
+combien de temps elle vit (§84) ; ne rien ajouter sans mesure (§85), avec
+pour priorités l'exactitude, l'intégrité, la sécurité et la traçabilité
+avant tout le reste (§86). Appliquées à TrendGuard, elles donnent 8 tables,
+pas 200.
+
+| Exigence de l'étape 3 | Ce qui a été fait |
+| --- | --- |
+| Lignée financière, « exigence fondamentale » (§38, §72, §78) | `donnees.py` : journal financier dans la base du bot ; chaque trade remonte à son ordre de vente et d'achat, à leurs exécutions, au contrôle du risque et à l'autorisation, à la décision du jour, au signal, à la version de la stratégie, à la qualité et à la source des données (`python trendguard_bot.py donnees lignee`) ; un test le vérifie pour chaque trade, en paper et en réel |
+| Contraintes dans la base (§51), identifiants, dates en UTC (§53-54) | clés primaires et étrangères, CHECK (sens, quantités positives, statuts permis, achat impossible sans contrôle ni autorisation), UNIQUE (une intention, un ordre) ; UUID pour les ordres, exécutions et trades ; dates ISO en UTC |
+| Historique jamais écrasé, audit en ajout seul (§34, §46) | contrôles du risque et exécutions protégés par des déclencheurs qui refusent toute modification ou suppression ; journal d'audit chaîné (étape 2) |
+| Idempotence, rien de doublé après une panne (§69, §79) | clé d'unicité des ordres dans la base : un redémarrage au mauvais moment ne crée jamais un second ordre (testé) |
+| Migrations versionnées, reproductibles, réversibles (§58, §83) | migrations numérotées avec retour arrière et empreinte ; une migration modifiée après son application est refusée |
+| Registre des stratégies (§27) | chaque version des réglages en vigueur (évolution comprise) et du code, reliée à chaque décision |
+| Qualité des données qui bloque (§24, §75-76) | la note des données du jour est gardée avec la décision, et la porte d'exécution refuse tout achat sous 50/100 |
+| Sauvegardes réellement restaurées (§59) | la sauvegarde de la nuit est rouverte comme le ferait le bot, son état relu et son journal financier vérifié ; registre, audit et mode sûr sauvegardés avec elle |
+| Catalogue des tables, schéma (§82 A-B) | [`DONNEES.md`](DONNEES.md), tiré du code et de la base elle-même (diagramme, fiche de chaque table, colonnes, index) ; un test le garde à jour |
+| Propriété des données (§3, §48) | tables du domaine « fin_ », écrites par `donnees.py` seul ; un test refuse tout autre module qui y toucherait |
+
+**PostgreSQL : pas maintenant, et pourquoi.** La base du bot est SQLite :
+transactionnelle, avec clés étrangères, contraintes, déclencheurs et
+journal d'écriture, sur un seul PC et pour un seul utilisateur. PostgreSQL
+demanderait un serveur de plus à faire tourner, à surveiller, à sauvegarder
+et à protéger par un mot de passe, sans gain mesuré (§85). Le journal est
+écrit en SQL standard : le passage à PostgreSQL resterait possible le jour
+où le bot tournerait sur un serveur ou pour plusieurs personnes.
+
+**Pas de table pour ce qui n'existe pas dans le bot** (§84) : utilisateurs,
+organisations, rôles, sessions, conversations, tâches, agents, modèles,
+mémoire, base vectorielle, recherche, vérification, invites, réservoir
+d'indicateurs, notifications, interrupteurs de fonctions. Les données qui
+existent déjà ont leur place : noyau de savoir et calendrier
+(`trendguard_savoir.db`), expériences (registre), réglages versionnés
+(fichier de l'évolution, sa période d'essai et son retour arrière), alertes
+(journal du bot). Pas de table de positions non plus : leur source de vérité
+reste le portefeuille du bot ou Binance ; une seconde vérité serait
+concurrente (§49). Pas de file d'événements, d'« outbox » ni de file
+d'erreurs : il n'y a pas de bus d'événements à alimenter, chaque écriture
+est une transaction de la même base.
 
 ## Ce qui reste (votre accord d'abord)
 

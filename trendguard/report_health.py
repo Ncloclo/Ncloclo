@@ -17,7 +17,18 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import attribution, audit, evolution, learning, libre, postmortem, registre, risque, savoir
+from . import (
+    attribution,
+    audit,
+    donnees,
+    evolution,
+    learning,
+    libre,
+    postmortem,
+    registre,
+    risque,
+    savoir,
+)
 from .systeme import (
     Check,
     Deps,
@@ -567,6 +578,19 @@ def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
         out.append(chk("Journal d'audit", v["ok"], audit.describe(v),
                        "" if v["ok"] else "Le journal d'audit a été modifié à la main ou abîmé : ne le corrigez pas, "
                                           "gardez-le tel quel et signalez-le (le bot continue d'écrire à la suite)."))
+    db = donnees.path_for(gcfg)
+    if db != ":memory:" and os.path.exists(db):
+        try:
+            j = donnees.Journal(db, readonly=True)
+            try:
+                v = j.verify()
+            finally:
+                j.close()
+            out.append(chk("Journal financier", v["ok"], donnees.describe(v),
+                           "" if v["ok"] else "Le journal financier a un défaut : python trendguard_bot.py "
+                                              "donnees, puis signalez-le (rien n'est corrigé en silence)."))
+        except Exception as e:           # un bilan illisible n'empêche pas le rapport
+            out.append(chk("Journal financier", None, f"illisible ({type(e).__name__})"))
     entries = registre.load(registre.registry_path(gcfg))
     if entries:
         last = entries[-1]
