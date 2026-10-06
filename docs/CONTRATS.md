@@ -2,36 +2,59 @@
 
 Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le réécrit) ; un test vérifie que ce document et le registre restent identiques.
 
-| Contrat | Producteur | Consommateur | Niveau |
-| --- | --- | --- | --- |
-| `AuditEvent.v1` | bot (un seul écrivain) | rapport quotidien, commande audit | critique |
-| `ExecutionAuthorization.v1` | porte d'exécution | exécution (paper) ou moteur d'ordres v29 (réel) | critique |
-| `KillSwitch.v1` | décision du jour | porte d'exécution, panneau, rapport | critique |
-| `NoTradeGate.v1` | décision du jour | porte d'exécution, raisonnement | critique |
-| `Order.v1` | moteur v29 (réel) | Binance Spot | critique |
-| `OrderIntent.v1` | exécution (bot_execution.py) | porte d'exécution (porte.py) | critique |
-| `RiskCheck.v1` | exécution | porte d'exécution | critique |
-| `SafeModeState.v1` | vous (commande mode-sur) | porte d'exécution, décision du jour | critique |
-| `TradeRecord.v1` | exécution | journal des trades, attribution, apprentissage | critique |
-| `AIOpinion.v1` | IA consultées (market_watch.py) | veille, noyau de savoir | cœur |
-| `EntryPlan.v1` | stratégie | exécution | cœur |
-| `EvolutionChange.v1` | évolution (evolution.py) | bot, à la décision suivante | cœur |
-| `KnowledgeHold.v1` | noyau de savoir (savoir.py) | décision du jour | cœur |
-| `Signal.v1` | stratégie (trend_strategy.py) | plan d'achat | cœur |
-| `MarketData.v1` | Binance (klines publiques) | décision du jour, régimes, qualité | données |
-| `HealthReport.v1` | rapport (report.py) | vous (e-mail, panneau) | support |
-| `PanelCommand.v1` | vous (panneau) | contrôle du bot | support |
+| Contrat | Producteur (propriétaire) | Consommateurs | Version | Classification | Niveau |
+| --- | --- | --- | --- | --- | --- |
+| `AuditEvent.v2` | bot (un seul écrivain) | rapport quotidien, commande audit, diagnostic expert | 2.0.0 | CONFIDENTIAL | critique |
+| `ExecutionAuthorization.v1` | porte d'exécution | exécution (paper) ou moteur d'ordres v29 (réel) | 1.0.0 | INTERNAL | critique |
+| `KillSwitch.v1` | décision du jour | porte d'exécution, panneau, rapport | 1.0.0 | INTERNAL | critique |
+| `NoTradeGate.v1` | décision du jour | porte d'exécution, raisonnement | 1.0.0 | INTERNAL | critique |
+| `Order.v1` | moteur v29 (réel) | Binance Spot | 1.0.0 | INTERNAL | critique |
+| `OrderIntent.v1` | exécution (bot_execution.py) | porte d'exécution (porte.py) | 1.0.0 | INTERNAL | critique |
+| `RiskCheck.v1` | exécution | porte d'exécution | 1.0.0 | INTERNAL | critique |
+| `SafeModeState.v1` | vous (commande mode-sur) | porte d'exécution, décision du jour | 1.0.0 | INTERNAL | critique |
+| `TradeRecord.v1` | exécution | journal des trades, attribution, apprentissage | 1.0.0 | INTERNAL | critique |
+| `AIOpinion.v1` | IA consultées (market_watch.py) | veille, noyau de savoir | 1.0.0 | INTERNAL | cœur |
+| `CommitteeView.v1` | comité (comite.py) | journal financier, Rachelle, panneau | 1.0.0 | INTERNAL | cœur |
+| `Confidence.v1` | comité d'agents | Rachelle, panneau, journal | 1.0.0 | INTERNAL | cœur |
+| `EntryPlan.v1` | stratégie | exécution | 1.0.0 | INTERNAL | cœur |
+| `EvolutionChange.v1` | évolution (evolution.py) | bot, à la décision suivante | 1.0.0 | INTERNAL | cœur |
+| `KnowledgeHold.v1` | noyau de savoir (savoir.py) | décision du jour | 1.0.0 | INTERNAL | cœur |
+| `LLMExecution.v1` | exécution des modèles (modeles.py) | trace des IA, rapport, panneau | 1.0.0 | INTERNAL | cœur |
+| `ModelConsensus.v1` | veille (market_watch.py) | rapport de la veille, panneau, Rachelle | 1.0.0 | PUBLIC | cœur |
+| `ModelSelection.v1` | routeur (modeles.py) | exécution des modèles | 1.0.0 | INTERNAL | cœur |
+| `Signal.v1` | stratégie (trend_strategy.py) | plan d'achat | 1.0.0 | INTERNAL | cœur |
+| `DecisionRecord.v1` | décision du jour | journal financier, lignée des trades | 1.0.0 | CONFIDENTIAL | données |
+| `MarketData.v1` | Binance (klines publiques) | décision du jour, régimes, qualité | 1.0.0 | INTERNAL | données |
+| `OHLCV.v1` | Binance (klines publiques) | décision du jour, qualité des données | 1.0.0 | PUBLIC | données |
+| `Envelope.v1` | tout module (contrats.py) | tout module | 1.0.0 | INTERNAL | support |
+| `ErrorEnvelope.v2` | tout module | journal d'audit, rapport | 2.0.0 | INTERNAL | support |
+| `HealthReport.v1` | rapport (report.py) | vous (e-mail, panneau) | 1.0.0 | INTERNAL | support |
+| `PanelCommand.v1` | vous (panneau) | contrôle du bot | 1.0.0 | INTERNAL | support |
 
-## AuditEvent.v1
+## Conventions communes
+
+- Identifiants : UUID v4 pour les nouveaux contrats (messages, appels aux IA) ; les identifiants lisibles existants restent (décision `D-2026-10-06`, clé d'achat `jour:crypto:BUY`).
+- Corrélation : l'identifiant de la décision relie le contrôle du risque, l'autorisation, l'ordre et la vente ; la cause (`causation_id`) dit quel événement a provoqué le suivant.
+- Dates : UTC, ISO-8601 avec fuseau ; une heure sans fuseau est refusée.
+- Versions : MAJEUR.MINEUR.CORRECTIF ; une évolution incompatible change le MAJEUR et fournit sa migration (ErrorEnvelope v1 → v2), jamais en silence.
+- Classification : PUBLIC, INTERNAL, CONFIDENTIAL, SENSITIVE, RESTRICTED, SECRET, LOCAL_ONLY ; LOCAL_ONLY ne sort jamais du PC.
+- Montants : `Money` (décimal exact et devise) aux frontières (journal d'audit) ; le moteur de trading v29 calcule en flottants arrondis à la précision de Binance.
+- Unités : dans le nom du champ (`_usdt`, `_ms`, `_pct` en pour cent) ; un taux interne est une fraction (`risk_pct = 0.01` pour 1 %).
+- Inconnu n'est pas zéro : une valeur inconnue est vide (`None`), jamais 0 ni faux (jetons non donnés par un fournisseur, rendement attendu).
+- Confiance : un score de 0 à 1 avec sa méthode ; jamais une probabilité d'avoir raison, jamais une autorisation.
+- Immuable : décisions, contrôles du risque, exécutions, avis du comité, appels aux IA et audit sont en ajout seulement ; une correction est une nouvelle ligne.
+- Validation : `contrats.validate(schéma, données)` refuse un champ inconnu, absent, du mauvais type, hors bornes ou d'une valeur non permise ; rien n'est corrigé en silence.
+
+## AuditEvent.v2
 
 Trace infalsifiable de chaque opération critique.
 
 | Rubrique | Contrat |
 | --- | --- |
 | Producteur | bot (un seul écrivain) |
-| Consommateur | rapport quotidien, commande audit |
-| Entrée | acteur, action, objet, avant, après, raison, autorisation, résultat |
-| Sortie | ligne chaînée à la précédente par son empreinte |
+| Consommateur | rapport quotidien, commande audit, diagnostic expert |
+| Entrée | acteur, action et type d'événement (Domaine.Entité.Action), objet, avant, après (montants en décimal avec devise), raison, autorisation, résultat, corrélation (la décision) et cause |
+| Sortie | ligne chaînée à la précédente par son empreinte ; les lignes v1 restent lisibles et vérifiées |
 | Erreurs | journal illisible : achats refusés |
 | Droits | écriture par le bot seul ; aucun module ne modifie ni n'efface |
 | Délai | immédiat |
@@ -202,6 +225,42 @@ Avis des IA sur le marché (veille).
 | Trace (audit) | rapport de la veille |
 | Fichiers | `trendguard/market_watch.py` |
 
+## CommitteeView.v1
+
+Avis consultatif du comité d'agents sur une crypto.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | comité (comite.py) |
+| Consommateur | journal financier, Rachelle, panneau |
+| Entrée | marché, régime, portefeuille, politique |
+| Sortie | recommandation, consensus, confiance (Confidence.v1), incertitude, raisons, votes |
+| Erreurs | agent critique absent : BLOCAGE |
+| Droits | jamais une autorisation |
+| Délai | à la décision |
+| Nouveaux essais | aucun |
+| Unicité | un avis par crypto et par décision |
+| Trace (audit) | journal financier (avis du comité), en ajout seulement |
+| Fichiers | `trendguard/comite.py` |
+
+## Confidence.v1
+
+Confiance et incertitude d'un avis (score de 0 à 1, méthode, calibrée ou non, bases ; niveau, inconnues, impact).
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | comité d'agents |
+| Consommateur | Rachelle, panneau, journal |
+| Entrée | avis des agents |
+| Sortie | Confidence et Uncertainty |
+| Erreurs | score hors de [0, 1], méthode absente, niveau inconnu : refusé |
+| Droits | une confiance n'est jamais une probabilité d'avoir raison ni une autorisation |
+| Délai | immédiat |
+| Nouveaux essais | aucun |
+| Unicité | un avis, une confiance |
+| Trace (audit) | avec l'avis |
+| Fichiers | `trendguard/contrats.py`, `trendguard/comite.py` |
+
 ## EntryPlan.v1
 
 Taille de chaque achat (1 % de risque) sous les plafonds.
@@ -256,6 +315,60 @@ Achat reporté par le noyau de savoir.
 | Trace (audit) | reports vérifiés après 7 jours |
 | Fichiers | `trendguard/savoir.py` |
 
+## LLMExecution.v1
+
+Un appel à un modèle d'IA.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | exécution des modèles (modeles.py) |
+| Consommateur | trace des IA, rapport, panneau |
+| Entrée | demande (identifiant), modèle, invite et sa version, classe de confidentialité |
+| Sortie | identifiant d'exécution, réussi ou non, durée, jetons (inconnus : vides), erreur, repli, raison, empreinte des données envoyées |
+| Erreurs | échec : repli sur le modèle suivant, tracé |
+| Droits | clés jamais notées |
+| Délai | 60 s |
+| Nouveaux essais | repli sur un autre modèle (pas le même) |
+| Unicité | identifiant unique par appel |
+| Trace (audit) | table llm_executions, en ajout seulement |
+| Fichiers | `trendguard/modeles.py` |
+
+## ModelConsensus.v1
+
+Consensus des IA de la veille.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | veille (market_watch.py) |
+| Consommateur | rapport de la veille, panneau, Rachelle |
+| Entrée | avis validés de chaque IA, fiabilité mesurée |
+| Sortie | état (STRONG, MODERATE, WEAK, NONE, CONFLICT), accord et désaccord de 0 à 1, désaccords par crypto |
+| Erreurs | désaccord net : pas d'avis moyen |
+| Droits | conseil seulement : aucun effet sur les ordres |
+| Délai | à la veille |
+| Nouveaux essais | aucun |
+| Unicité | un consensus par jour |
+| Trace (audit) | rapport de la veille |
+| Fichiers | `trendguard/market_watch.py` |
+
+## ModelSelection.v1
+
+Choix du modèle d'IA pour une demande, avec ses raisons.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | routeur (modeles.py) |
+| Consommateur | exécution des modèles |
+| Entrée | modèles connus, confidentialité, santé, budget |
+| Sortie | modèles retenus dans l'ordre, raison de chacun, modèles écartés et pourquoi |
+| Erreurs | aucun modèle permis : réponse intégrée sans IA |
+| Droits | règles fixes |
+| Délai | immédiat |
+| Nouveaux essais | aucun |
+| Unicité | même état, même choix |
+| Trace (audit) | raison notée avec chaque appel |
+| Fichiers | `trendguard/modeles.py` |
+
 ## Signal.v1
 
 Cassure du plus haut de 30 jours, momentum 90 jours.
@@ -274,6 +387,24 @@ Cassure du plus haut de 30 jours, momentum 90 jours.
 | Trace (audit) | raisonnement du jour |
 | Fichiers | `trendguard/trend_strategy.py` |
 
+## DecisionRecord.v1
+
+Décision du jour dans le journal financier, avec la date limite de ses données (data_cutoff_at).
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | décision du jour |
+| Consommateur | journal financier, lignée des trades |
+| Entrée | jour, mode, réglages, régime, capital, gardes, qualité, fin des données utilisées |
+| Sortie | identifiant D-jour ; contrainte : les données s'arrêtent avant la décision (pas de regard vers le futur) |
+| Erreurs | données postérieures à la décision : refusées par la base |
+| Droits | bot seulement |
+| Délai | immédiat |
+| Nouveaux essais | aucun |
+| Unicité | une décision par jour |
+| Trace (audit) | journal financier |
+| Fichiers | `trendguard/donnees.py`, `trendguard/bot.py` |
+
 ## MarketData.v1
 
 Bougies journalières clôturées de Binance.
@@ -283,14 +414,68 @@ Bougies journalières clôturées de Binance.
 | Producteur | Binance (klines publiques) |
 | Consommateur | décision du jour, régimes, qualité |
 | Entrée | 21 paires, bougies jusqu'à la dernière clôture |
-| Sortie | clôtures et volumes, bougies en cours exclues |
-| Erreurs | réseau : décision reportée, BTC manquant : reportée |
+| Sortie | clôtures et volumes, bougies en cours exclues ; bougies incohérentes (OHLCV.v1) : crypto écartée du jour |
+| Erreurs | réseau : décision reportée, BTC manquant ou incohérent : reportée |
 | Droits | lecture publique |
 | Délai | 3 essais par paire |
 | Nouveaux essais | 3 essais, attente croissante |
 | Unicité | lecture seule |
 | Trace (audit) | note de qualité sur 100 |
 | Fichiers | `trendguard/bot.py`, `trendguard/qualite.py` |
+
+## OHLCV.v1
+
+Règles d'une bougie : plus haut ≥ ouverture, clôture et plus bas ; plus bas ≤ ouverture et clôture ; volume ≥ 0.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | Binance (klines publiques) |
+| Consommateur | décision du jour, qualité des données |
+| Entrée | bougies des 90 derniers jours de chaque crypto |
+| Sortie | nombre de bougies incohérentes |
+| Erreurs | une bougie incohérente : la crypto est écartée du jour (BTC : décision reportée) |
+| Droits | lecture seule |
+| Délai | à la décision |
+| Nouveaux essais | à la décision suivante |
+| Unicité | mêmes bougies, même verdict |
+| Trace (audit) | journal du bot, qualité |
+| Fichiers | `trendguard/contrats.py`, `trendguard/bot.py`, `trendguard/qualite.py` |
+
+## Envelope.v1
+
+Enveloppe commune d'un message entre modules.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | tout module (contrats.py) |
+| Consommateur | tout module |
+| Entrée | type, schéma et version, producteur, contenu, classification, provenance |
+| Sortie | identifiant, corrélation, cause, trace, horodatage UTC à la milliseconde |
+| Erreurs | UUID, version, date ou classification invalides : refusé |
+| Droits | selon la classification |
+| Délai | immédiat |
+| Nouveaux essais | aucun |
+| Unicité | identifiant unique du message |
+| Trace (audit) | selon le contenu |
+| Fichiers | `trendguard/contrats.py` |
+
+## ErrorEnvelope.v2
+
+Erreur au format commun (code, catégorie, gravité, nouvel essai permis).
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | tout module |
+| Consommateur | journal d'audit, rapport |
+| Entrée | erreur d'un contrat |
+| Sortie | code, catégorie, message, nouvel essai permis, gravité, source, détails, date, corrélation ; une erreur v1 est migrée |
+| Erreurs | catégorie ou gravité inconnues : refusé |
+| Droits | aucun |
+| Délai | immédiat |
+| Nouveaux essais | selon « retryable » |
+| Unicité | aucune |
+| Trace (audit) | selon l'erreur |
+| Fichiers | `trendguard/contrats.py` |
 
 ## HealthReport.v1
 

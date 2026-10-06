@@ -57,14 +57,14 @@ Registre des versions de la stratégie (réglages en vigueur, version du code).
 
 ## `fin_decisions`
 
-Décision du jour : marché, garde, mode sûr, arrêt d'urgence, qualité et source des données.
+Décision du jour : marché, garde, mode sûr, arrêt d'urgence, qualité, source et date limite des données.
 
 | Rubrique | |
 | --- | --- |
 | Propriétaire | `trendguard/donnees.py` (domaine « fin_ ») |
 | Lue par | lignée, rapport, panneau |
 | Écrite par | bot, une fois par jour |
-| Contrat | NoTradeGate.v1, KillSwitch.v1, MarketData.v1 |
+| Contrat | DecisionRecord.v1, NoTradeGate.v1, KillSwitch.v1, MarketData.v1 |
 | Durée de vie | toujours (une ligne par jour) |
 | Index | clé primaire seulement |
 
@@ -83,6 +83,7 @@ Décision du jour : marché, garde, mode sûr, arrêt d'urgence, qualité et sou
 | `data_quality` | REAL | non |  |
 | `data_source` | TEXT | oui |  |
 | `created_at` | TEXT | oui |  |
+| `data_cutoff_at` | TEXT | non |  |
 
 ## `fin_signals`
 

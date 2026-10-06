@@ -1,13 +1,17 @@
 """
-Journal d'audit (prompt maître, étape 2 ; docs/CONTRATS.md, AuditEvent.v1) :
+Journal d'audit (prompt maître, étape 2 ; docs/CONTRATS.md, AuditEvent.v2) :
 chaque opération critique du bot laisse une ligne qu'aucun module ne peut
 modifier sans que cela se voie.
 
-Une ligne JSON par événement : numéro, date, acteur, action, objet, avant,
-après, raison, autorisation, résultat, identifiant de corrélation (la
-décision du jour, D-AAAA-MM-JJ). Chaque ligne porte l'empreinte de la
-précédente : modifier, retirer ou intercaler une ligne casse la chaîne, et
-`verify` le dit (rapport quotidien, `python trendguard_bot.py audit`).
+Une ligne JSON par événement : numéro, date, acteur, action et son type
+canonique (Domaine.Entité.Action, spécification des contrats de données),
+objet, avant, après, raison, autorisation, résultat, identifiant de
+corrélation (la décision du jour, D-AAAA-MM-JJ) et cause (l'événement qui a
+provoqué celui-ci : le contrôle du risque pour un achat). Chaque ligne porte
+l'empreinte de la précédente : modifier, retirer ou intercaler une ligne
+casse la chaîne, et `verify` le dit (rapport quotidien,
+`python trendguard_bot.py audit`). Les lignes v1, plus anciennes, restent
+lisibles et vérifiées.
 
 Fichier <bot>.audit.jsonl à côté du bot, jamais publié. Seul le processus du
 bot y écrit, et seulement en ajoutant : ce module n'offre ni modification ni
@@ -29,6 +33,20 @@ from . import autonomy
 
 GENESIS = "0" * 64
 TAIL_BYTES = 65_536
+# Type canonique de chaque action (§47-48 de la spécification des contrats) ;
+# une action inconnue est refusée : le journal ne note que ce qu'il connaît.
+EVENT_TYPES = {
+    "porte.controle": "Risk.Assessment.Completed",
+    "ordre.achat": "Order.Buy.Executed",
+    "ordre.vente": "Order.Sell.Executed",
+    "capital.nouvel_essai": "Portfolio.Capital.Reset",
+    "mode_sur.active": "Policy.SafeMode.Activated",
+    "mode_sur.leve": "Policy.SafeMode.Lifted",
+    "arret_urgence.declenche": "Risk.KillSwitch.Triggered",
+    "arret_urgence.leve": "Risk.KillSwitch.Lifted",
+    "selection.changee": "Portfolio.Selection.Changed",
+    "reglages.evolution": "Strategy.Settings.Changed",
+}
 
 
 def path_for(gcfg: Any) -> str:
@@ -67,10 +85,11 @@ class AuditLog:
 
     def append(self, actor: str, action: str, resource: str, result: str, reason: str = "",
                before: Any = None, after: Any = None, authorization: str = "", correlation_id: str = "",
-               now: Optional[datetime] = None) -> Optional[Dict[str, Any]]:
+               now: Optional[datetime] = None, causation_id: str = "") -> Optional[Dict[str, Any]]:
         """Ajoute un événement au bout de la chaîne et le renvoie (None sans
-        fichier). Une écriture ratée lève OSError : à l'appelant de décider
-        (un achat sans trace est refusé)."""
+        fichier). Une écriture ratée lève OSError, une action inconnue
+        KeyError : à l'appelant de décider (un achat sans trace est refusé)."""
+        event_type = EVENT_TYPES[action]
         if not self.path:
             return None
         if self._tail is None:
@@ -80,7 +99,8 @@ class AuditLog:
         event = {"audit_id": n + 1, "timestamp": (now or datetime.now(timezone.utc)).isoformat(timespec="seconds"),
                  "actor": actor, "action": action, "resource": resource, "before": before, "after": after,
                  "reason": reason, "authorization": authorization, "result": result,
-                 "correlation_id": correlation_id, "prev": prev, "version": 1}
+                 "correlation_id": correlation_id, "causation_id": causation_id or None,
+                 "event_type": event_type, "prev": prev, "version": 2}
         event["hash"] = digest(event)
         with open(self.path, "a", encoding="utf-8") as fh:
             fh.write(json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n")

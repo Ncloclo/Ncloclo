@@ -22,6 +22,7 @@ from . import (
     audit,
     autonomy,
     comite,
+    contrats,
     donnees,
     evolution,
     garde,
@@ -340,7 +341,8 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         self._journal("record_trade", trade, float(trade.get("qty") or 0.0), self.g.run_mode, self.p.fee)
         self._audit("ordre.vente", trade["asset"], "exécuté", reason=str(trade.get("reason") or ""),
                     authorization=trace.get("authorization_id", ""), correlation_id=trace.get("decision_id", ""),
-                    after={"exit": trade.get("exit"), "pnl": round(float(trade["pnl"]), 6),
+                    after={"exit": contrats.money_or_none(trade.get("exit"), self.g.quote),
+                           "pnl": contrats.money_or_none(trade.get("pnl"), self.g.quote),
                            "r": round(float(trade.get("r") or 0.0), 4), "lesson": trade.get("lesson")})
 
     def _audit(self, action: str, resource: str, result: str, actor: str = "bot",
@@ -584,6 +586,7 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         now_ms = int(now.timestamp() * 1000)
         closes, vols = {}, {}
         failed: List[str] = []
+        self._ohlcv_bad: Dict[str, int] = {}
         # BTC d'abord : sans lui (régime), inutile d'interroger les autres.
         for base, s in sorted(self.slots.items(), key=lambda kv: kv[0] != "BTC"):
             df = None
@@ -611,6 +614,18 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
                 continue
             df = df[df["ts"].astype("int64") + DAY_MS <= now_ms]
             if df.empty:
+                continue
+            # Contrat OHLCV.v1 : une bougie incohérente (plus haut sous la
+            # clôture, volume négatif…) rend la crypto douteuse aujourd'hui ;
+            # traitée comme une donnée absente (BTC : décision reportée).
+            bad = contrats.ohlcv_violations(df.tail(qualite.OHLCV_DAYS))
+            if bad:
+                self.logger.warning(f"[DATA] {s.symbol} : {bad} bougie(s) incohérente(s) sur "
+                                    f"{qualite.OHLCV_DAYS} jours : écartée aujourd'hui")
+                self._ohlcv_bad[base.lower()] = bad
+                if base.upper() == "BTC":
+                    raise DecisionDeferred("bougies BTC incohérentes")
+                failed.append(base.lower())
                 continue
             idx = pd.to_datetime(df["ts"].astype("int64"), unit="ms", utc=True)
             c = pd.Series(df["close"].astype(float).values, index=idx)
@@ -897,7 +912,7 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         # Qualité des données du jour (information) ; la garde bloque déjà
         # les achats quand trop de clôtures manquent.
         try:
-            self.state["qualite"] = qualite.quality(close, day)
+            self.state["qualite"] = qualite.quality(close, day, getattr(self, "_ohlcv_bad", None))
         except Exception as e:
             self.logger.warning(f"[DONNÉES] qualité illisible : {e}")
             self.state["qualite"] = {}
@@ -913,7 +928,8 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         self._journal("record_decision", day, self.g.run_mode, donnees.params_of(self.p), bull,
                       (self.state.get("regime_detail") or {}).get("texte"), equity,
                       bool(self.state.get("halted")), safe.active, blocked,
-                      (self.state.get("qualite") or {}).get("score"))
+                      (self.state.get("qualite") or {}).get("score"),
+                      (close.index[-1] + pd.Timedelta(days=1)).isoformat() if len(close.index) else None)
         held_before = {a: float(h.risk_quote) for a, h in holdings.items()}
         if not self.state.get("halted") and not blocked and not safe.active:
             eligible = {a: s for a, s in snap.items()

@@ -42,6 +42,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import v29
 
+from . import contrats
 from . import market_watch as mw
 from .texte import fr
 
@@ -156,14 +157,21 @@ class Ledger:
         self.conn = sqlite3.connect(self.path, timeout=30)
         if self.path != ":memory:":
             self.conn.execute("PRAGMA journal_mode=WAL")
-        self.conn.execute("""CREATE TABLE IF NOT EXISTS llm_executions (
+        classes = ", ".join(f"'{c}'" for c in contrats.CLASSIFICATIONS)
+        self.conn.execute(f"""CREATE TABLE IF NOT EXISTS llm_executions (
             id INTEGER PRIMARY KEY, at REAL NOT NULL, purpose TEXT NOT NULL, provider TEXT NOT NULL,
             model TEXT NOT NULL, prompt_id TEXT NOT NULL, prompt_version TEXT NOT NULL,
-            privacy TEXT NOT NULL CHECK (privacy IN ('PUBLIC', 'INTERNAL', 'LOCAL_ONLY')),
-            ok INTEGER NOT NULL CHECK (ok IN (0, 1)), error TEXT, latency_ms INTEGER NOT NULL,
-            input_tokens INTEGER, output_tokens INTEGER, fallback_from TEXT,
-            reason TEXT, input_hash TEXT)""")
+            privacy TEXT NOT NULL CHECK (privacy IN ({classes})),
+            ok INTEGER NOT NULL CHECK (ok IN (0, 1)), error TEXT, latency_ms INTEGER NOT NULL CHECK (latency_ms >= 0),
+            input_tokens INTEGER CHECK (input_tokens IS NULL OR input_tokens >= 0),
+            output_tokens INTEGER CHECK (output_tokens IS NULL OR output_tokens >= 0), fallback_from TEXT,
+            reason TEXT, input_hash TEXT, execution_id TEXT UNIQUE, request_id TEXT)""")
+        have = {r[1] for r in self.conn.execute("PRAGMA table_info(llm_executions)")}
+        for col in ("execution_id", "request_id"):      # trace d'avant le contrat LLMExecution.v1
+            if col not in have:
+                self.conn.execute(f"ALTER TABLE llm_executions ADD COLUMN {col} TEXT")
         self.conn.execute("CREATE INDEX IF NOT EXISTS llm_exec_provider ON llm_executions(provider, id)")
+        self.conn.execute("CREATE INDEX IF NOT EXISTS llm_exec_request ON llm_executions(request_id)")
         for op in ("UPDATE", "DELETE"):
             self.conn.execute(f"CREATE TRIGGER IF NOT EXISTS llm_executions_{op.lower()} BEFORE {op} ON "
                               "llm_executions BEGIN SELECT RAISE(ABORT, 'llm_executions : ajout seulement'); END")
@@ -175,17 +183,25 @@ class Ledger:
     def record(self, purpose: str, provider: str, model: str, prompt: Tuple[str, str], privacy: str,
                ok: bool, latency_ms: int, error: str = "",
                tokens: Tuple[Optional[int], Optional[int]] = (None, None), fallback_from: str = "",
-               reason: str = "", input_hash: str = "", at: Optional[float] = None) -> None:
-        """Un appel : `prompt` est (identifiant de l'invite, version) ;
-        `reason` dit pourquoi ce modèle ; `input_hash` est l'empreinte des
-        données envoyées (jamais leur contenu)."""
+               reason: str = "", input_hash: str = "", at: Optional[float] = None,
+               request_id: str = "") -> contrats.LLMExecution:
+        """Un appel, vérifié par son contrat (LLMExecution.v1) puis noté :
+        `prompt` est (identifiant de l'invite, version) ; `reason` dit
+        pourquoi ce modèle ; `input_hash` est l'empreinte des données
+        envoyées (jamais leur contenu) ; `request_id` relie les essais d'une
+        même demande (repli compris)."""
+        status = "COMPLETED" if ok else "TIMEOUT" if error == "délai dépassé" else "FAILED"
+        ex = contrats.LLMExecution(contrats.new_id(), request_id or contrats.new_id(), purpose, provider, model,
+                                   prompt[0], prompt[1], privacy, status, int(latency_ms), tokens[0], tokens[1],
+                                   error, fallback_from, reason, input_hash)
         self.conn.execute("INSERT INTO llm_executions (at, purpose, provider, model, prompt_id, prompt_version, "
                           "privacy, ok, error, latency_ms, input_tokens, output_tokens, fallback_from, reason, "
-                          "input_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                          "input_hash, execution_id, request_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                           (at or time.time(), purpose, provider, model, prompt[0], prompt[1], privacy, int(ok),
-                           error or None, int(latency_ms), tokens[0], tokens[1], fallback_from or None,
-                           reason or None, input_hash or None))
+                           error or None, ex.latency_ms, ex.input_tokens, ex.output_tokens, fallback_from or None,
+                           reason or None, input_hash or None, ex.execution_id, ex.request_id))
         self.conn.commit()
+        return ex
 
     def last(self, n: int = 10) -> List[Dict[str, Any]]:
         """Les derniers appels, du plus récent au plus ancien (pour répondre
@@ -273,6 +289,7 @@ class Execution:
     model: str
     attempts: List[Dict[str, Any]]
     tokens: Tuple[Optional[int], Optional[int]] = (None, None)
+    request_id: str = ""
 
 
 def execute(purpose: str, prompt: Tuple[str, str], user_text: str, call: Callable[[ModelManifest], Any],
@@ -297,6 +314,7 @@ def execute(purpose: str, prompt: Tuple[str, str], user_text: str, call: Callabl
         attempts: List[Dict[str, Any]] = [{"provider": p, "refused": why} for p, why in r.refused.items()
                                           if "non configuré" not in why]
         digest = prompt_version(user_text)
+        request_id = contrats.new_id()
         previous = ""
         for name in r.selected:
             m = known[name]
@@ -309,14 +327,17 @@ def execute(purpose: str, prompt: Tuple[str, str], user_text: str, call: Callabl
             except Exception as e:
                 why = mw.friendly_error(e)
                 ledger.record(purpose, name, m.model, pid, privacy, False, int((time.time() - t0) * 1000), why,
-                              fallback_from=previous, reason=reason, input_hash=digest)
+                              fallback_from=previous, reason=reason, input_hash=digest, request_id=request_id)
                 attempts.append({"provider": name, "error": why, "retryable": why in RETRYABLE})
                 previous = name
                 continue
+            tokens = tuple(t if isinstance(t, int) and not isinstance(t, bool) and t >= 0 else None
+                           for t in (tuple(tokens or ()) + (None, None))[:2])
             ledger.record(purpose, name, m.model, pid, privacy, True, int((time.time() - t0) * 1000),
-                          tokens=tokens, fallback_from=previous, reason=reason, input_hash=digest)
+                          tokens=tokens, fallback_from=previous, reason=reason, input_hash=digest,
+                          request_id=request_id)
             attempts.append({"provider": name, "ok": True})
-            return Execution(text, name, m.model, attempts, tokens)
+            return Execution(text, name, m.model, attempts, tokens, request_id)
         return None
     finally:
         if own:
@@ -370,6 +391,7 @@ class WatchTrace:
 
     def __init__(self, path: str):
         self.path = path
+        self.request_id = contrats.new_id()
         self._ledger: Optional[Ledger] = None
 
     def _open(self) -> Ledger:
@@ -392,8 +414,10 @@ class WatchTrace:
         pid = ("veille", prompt_version(mw.SYSTEM))
         for name, r in results.items():
             self._open().record("veille", name, r.get("model", ""), pid, "PUBLIC", bool(r.get("ok")),
-                                int(float(r.get("seconds") or 0) * 1000), r.get("error", ""),
-                                reason="veille : toutes les IA configurées, en parallèle, puis consensus")
+                                int(float(r.get("seconds") or 0) * 1000),
+                                "" if r.get("ok") else (r.get("error") or "échec sans détail"),
+                                reason="veille : toutes les IA configurées, en parallèle, puis consensus",
+                                request_id=self.request_id)
 
     def close(self) -> None:
         if self._ledger is not None:
@@ -461,15 +485,15 @@ def benchmark(call: Callable[[ModelManifest, str, str], Any], env: Optional[Dict
         good, ms = 0, []
         for q, expected in BENCH:
             t0 = time.time()
+            error = ""
             try:
                 text, _tok = call(m, BENCH_SYSTEM, q)
                 good += expected in re.sub(r"[^0-9a-zà-ü]+", " ", (text or "").lower()).split()
-                ok = True
-            except Exception:
-                ok = False
+            except Exception as e:
+                error = mw.friendly_error(e)
             ms.append(int((time.time() - t0) * 1000))
             if ledger is not None:
-                ledger.record("banc", m.provider, m.model, pid, "PUBLIC", ok, ms[-1])
+                ledger.record("banc", m.provider, m.model, pid, "PUBLIC", not error, ms[-1], error)
         out.append({"provider": m.provider, "model": m.model, "accuracy": round(good / len(BENCH), 2),
                     "p50_ms": int(statistics.median(ms))})
     return out

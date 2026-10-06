@@ -102,13 +102,13 @@ sont jamais envoyés sur GitHub. VS Code les masque dans l'explorateur
 | `postmortem.py` | analyse après chaque trade : régime à l'achat, meilleur et pire moment en R, glissement, leçon |
 | `risque.py` | risque d'un jour du portefeuille (VaR et CVaR historiques) |
 | `stress.py` | tests de résistance des positions du moment : krachs sans stops, crise de liquidité, pic de volatilité, retrait de la cote, décrochage de l'USDT |
-| `qualite.py` | qualité des données : note sur 100 des clôtures avant chaque décision |
+| `qualite.py` | qualité des données : note sur 100 des clôtures avant chaque décision, bougies incohérentes comprises |
 | `attribution.py` | attribution des résultats : par crypto, régime, type de sortie, leçon ; pourquoi le bot a gagné ou perdu |
 | `evenements.py` | calendrier économique : grandes annonces américaines (information), réaction du bitcoin mesurée avec le temps |
 | `registre.py` | registre des expériences (évolution, contrôles) rejouables à l'identique, carte du modèle |
-| `contrats.py` | contrats entre les modules (registre, données vérifiées à la création) ; docs/CONTRATS.md en est tiré |
+| `contrats.py` | contrats entre les modules (registre avec version, propriétaire et classification ; types communs : confiance, incertitude, provenance, montant, enveloppe, erreur ; validateur ; migrations) ; docs/CONTRATS.md en est tiré |
 | `porte.py` | porte d'exécution : contrôle déterministe du risque et autorisation avant chaque achat ; mode sûr |
-| `audit.py` | journal d'audit chaîné : chaque opération critique, toute modification détectée |
+| `audit.py` | journal d'audit chaîné : chaque opération critique avec son type, sa décision et sa cause, toute modification détectée |
 | `cognitif.py` | noyau cognitif : plan en graphe de tâches validé, orchestration (états, délais, nouveaux essais selon la cause, annulation), vérification croisée, incertitude, décision jamais autorisée seule |
 | `expert.py` | diagnostic expert par le noyau cognitif (lecture seule), chaque jour à 00:45 UTC et à la demande |
 | `agents.py` | socle multi-agents : manifestes, registre (quarantaine, disjoncteur, mesures), bus de messages, tableau noir cloisonné, superviseur, débat, désaccord, consensus |

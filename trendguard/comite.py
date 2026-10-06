@@ -23,6 +23,7 @@ d'ordre ni autoriser un achat.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -43,6 +44,7 @@ from .agents import (
     Supervisor,
     View,
 )
+from .contrats import Confidence, Uncertainty
 from .texte import fr
 
 RECOMMENDATIONS = ("ACHAT", "CONSERVER", "ATTENDRE", "PAS_DE_TRADE", "PLUS_DE_RECHERCHE", "BLOCAGE")
@@ -365,10 +367,26 @@ def summary(view: Avis) -> str:
             f"{pros} pour, {cons} contre, désaccord {DIS_LABELS[view.disagreement]}) — {view.reasons[0]}")
 
 
+def confidence(view: Avis) -> Tuple[Confidence, Uncertainty]:
+    """Confiance et incertitude de l'avis (contrat Confidence.v1) : la force
+    du consensus des agents, non calibrée (ce n'est pas une probabilité
+    d'avoir raison) ; incertitude d'après leur désaccord et l'issue."""
+    conf = Confidence(round(min(1.0, abs(view.consensus) / 100), 2), f"consensus pondéré des agents ({VERSION})",
+                      False, ("AGENT_AGREEMENT", "DATA_COMPLETENESS"))
+    level = {"LOW": "LOW", "MEDIUM": "MEDIUM", "HIGH": "HIGH"}.get(view.disagreement, "HIGH")
+    unknowns: Tuple[str, ...] = ()
+    if view.recommendation in ("BLOCAGE", "PLUS_DE_RECHERCHE"):
+        level, unknowns = "HIGH", tuple(view.reasons[:2])
+    return conf, Uncertainty(level, ("désaccord des agents",), unknowns, ("avis consultatif : la règle décide",),
+                             "LOW")
+
+
 def as_dict(view: Avis) -> Dict[str, Any]:
+    conf, unc = confidence(view)
     return {"asset": view.asset, "recommendation": view.recommendation, "consensus": view.consensus,
             "strength": view.strength, "disagreement": view.disagreement, "reasons": list(view.reasons),
-            "votes": {k: [s, round(sc, 1)] for k, (s, sc) in view.votes.items()}, "text": summary(view)}
+            "votes": {k: [s, round(sc, 1)] for k, (s, sc) in view.votes.items()}, "text": summary(view),
+            "confidence": dataclasses.asdict(conf), "uncertainty": dataclasses.asdict(unc)}
 
 
 # ---------- Banc d'essai (scénarios de référence) ----------

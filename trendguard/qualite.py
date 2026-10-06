@@ -17,7 +17,7 @@ Une information pour le rapport et le raisonnement ; la garde « NO TRADE »
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
@@ -26,6 +26,7 @@ from .texte import fr
 YEAR = 365
 EXTREME = 0.5           # mouvement d'un jour « à vérifier »
 STALE_DAYS = 3          # cours identique ce nombre de jours de suite
+OHLCV_DAYS = 90         # bougies vérifiées (contrat OHLCV.v1) : la fenêtre des indicateurs
 
 
 def _stale_runs(s: pd.Series, n: int = STALE_DAYS) -> int:
@@ -42,10 +43,15 @@ def _stale_runs(s: pd.Series, n: int = STALE_DAYS) -> int:
     return runs
 
 
-def quality(close: pd.DataFrame, day: str) -> Dict[str, Any]:
-    """Note sur 100 des clôtures, problèmes trouvés en clair."""
+def quality(close: pd.DataFrame, day: str, ohlcv_bad: Optional[Dict[str, int]] = None) -> Dict[str, Any]:
+    """Note sur 100 des clôtures, problèmes trouvés en clair ; `ohlcv_bad` :
+    cryptos écartées du jour pour bougies incohérentes (contrat OHLCV.v1)."""
     issues: List[str] = []
     score = 100.0
+    if ohlcv_bad:
+        score -= min(30, 10 * len(ohlcv_bad))
+        issues.append(f"{sum(ohlcv_bad.values())} bougie(s) incohérente(s) (plus haut, plus bas ou volume) : "
+                      f"{', '.join(a.upper() for a in sorted(ohlcv_bad))} écartée(s) du jour")
     idx = close.index
     if idx.has_duplicates:
         score -= 30

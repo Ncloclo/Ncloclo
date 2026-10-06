@@ -456,6 +456,10 @@ socle multi-modèles d'IA ([`docs/MODELES.md`](docs/MODELES.md),
 `python trendguard_bot.py modeles`) : la meilleure IA configurée répond, une
 IA en panne est remplacée (repli noté), un secret ne sort jamais du PC ;
 aucune clé d'IA aujourd'hui, donc rien n'est présenté comme disponible.
+Spécification des contrats de données ([`docs/CONTRATS.md`](docs/CONTRATS.md)) :
+types communs, validateur, versions et migrations ; audit corrélé (chaque
+achat remonte à sa décision et à son contrôle du risque) ; bougies vérifiées ;
+chaque décision note où s'arrêtent ses données (pas de regard vers le futur).
 
 ### Bot libre (`trendguard/libre.py`, [`docs/LIBRE.md`](docs/LIBRE.md))
 

@@ -257,6 +257,36 @@ donc « non configurés », aucune mesure n'est affichée, et Rachelle comme la
 veille fonctionnent sans IA, comme avant. Tout s'allume dès qu'une clé est
 saisie (`python trendguard_bot.py watch set-key claude`).
 
+## Spécification des contrats de données v1.0
+
+Ce document demande que toute donnée qui passe d'un module à l'autre ait un
+contrat : schéma, version, identité, date, provenance, validation,
+classification et trace. L'étape 2 avait déjà posé les contrats du chemin
+d'achat ; cette spécification les complète. Tout est dans
+[`CONTRATS.md`](CONTRATS.md) (26 contrats, tirés du code), avec les
+conventions communes.
+
+| Exigence de la spécification | Ce qui a été fait |
+| --- | --- |
+| Types communs (§5, §10-14, §59) | confiance (0 à 1, méthode, jamais une probabilité d'avoir raison), incertitude, provenance, montant en décimal exact avec devise, résultat de validation, enveloppe de message, erreur au format commun |
+| Versions, compatibilité, migration (§6-7, §55-56) | versions MAJEUR.MINEUR.CORRECTIF ; versions comprises déclarées ; l'erreur v1 de l'étape 2 est migrée en v2, jamais en silence |
+| Classification (§9) | les 7 classes ; LOCAL_ONLY ne sort jamais du PC ; chaque contrat a la sienne |
+| Validateur et registre (§64-66) | `contrats.validate` refuse un champ inconnu, absent, du mauvais type, hors bornes ou d'une valeur non permise ; le registre dit propriétaire, consommateurs, version, classification |
+| Corrélation et cause (§4, §47-48) | le journal d'audit passe en v2 : type d'événement canonique (`Order.Buy.Executed`…), la décision relie tout, et chaque achat a pour cause son contrôle du risque ; montants en décimal avec devise |
+| Bougies vérifiées (§41) | une bougie incohérente (plus haut sous la clôture, volume négatif…) écarte la crypto du jour ; pour BTC, la décision attend |
+| Pas de regard vers le futur (§42) | chaque décision note la fin de ses données (`data_cutoff_at`) ; des données postérieures sont refusées, par le code puis par la base (migration 3) |
+| Appels aux IA, consensus, avis (§24, §28-29, §11-12) | chaque appel à une IA a un identifiant et sa demande (repli compris), vérifiés par contrat ; le consensus des IA a un état (fort, modéré, faible, aucun, conflit) et des scores ; l'avis du comité porte sa confiance et son incertitude |
+| Tests négatifs (§77) | champ absent, UUID, valeur non permise, quantité négative, devise, date sans fuseau, confiance hors bornes, jetons négatifs, version inconnue, classification inconnue, données périmées, ordre invalide, contrôle ou autorisation absents |
+
+**Pas appliqué, et pourquoi** : Pydantic, FastAPI, PostgreSQL, bus
+d'événements et dossier `contracts/` (un seul PC, un seul processus ; des
+classes typées de la bibliothèque standard font le même travail sans
+dépendance de plus) ; montants en décimal dans le moteur v29 (il calcule en
+flottants arrondis à la précision de Binance ; le changer toucherait au
+chemin des ordres sans gain prouvé : le décimal sert aux frontières) ;
+identifiants lisibles gardés là où ils existent (`D-2026-10-06`) plutôt que
+des UUID, pour que vous puissiez les lire.
+
 ## Ce qui reste (votre accord d'abord)
 
 1. **Débat des IA** (§43) : rôles haussier, baissier, critique et synthèse

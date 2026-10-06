@@ -16,7 +16,7 @@ import v29
 from . import learning, porte, postmortem
 from . import trend_strategy as ts
 from .bot_types import Slot, last_closed_day
-from .contrats import ContractError, OrderIntent
+from .contrats import ContractError, Money, OrderIntent
 from .texte import fr
 
 
@@ -384,7 +384,8 @@ class ExecutionMixin:
                 learning.note_deferral(self._learning(), "bought", ruse_gain)
         else:
             self._audit("ordre.achat", a, f"non exécuté ({getattr(res, 'name', res)})", now=now,
-                        authorization=trace["authorization_id"], correlation_id=trace["decision_id"])
+                        authorization=trace["authorization_id"], correlation_id=trace["decision_id"],
+                        causation_id=trace["risk_check_id"])
             self._journal("record_order", trace["key"], a, "BUY", plan["qty"], plan["exec_price"],
                           self.g.run_mode, "SENT" if res == v29.EntryResult.ORDER_SENT else "REJECTED",
                           decision_id=trace["decision_id"], risk_check_id=trace["risk_check_id"],
@@ -438,7 +439,8 @@ class ExecutionMixin:
                          after={"risk_check_id": decision.risk_check_id, "qty": decision.approved_size,
                                 "expected_loss": decision.expected_loss, "open_risk_pct": decision.open_risk_pct,
                                 "warnings": list(decision.warnings)},
-                         authorization=auth.authorization_id, correlation_id=decision_id)
+                         authorization=auth.authorization_id, correlation_id=decision_id,
+                         causation_id=decision_id)
         if auth.valid_at(now) and ok and intent is not None:
             log["approved"] += 1
             return {"decision_id": decision_id, "risk_check_id": decision.risk_check_id,
@@ -465,7 +467,9 @@ class ExecutionMixin:
                       decision_id=trace["decision_id"], risk_check_id=trace["risk_check_id"],
                       authorization_id=trace["authorization_id"], stop=plan["stop"],
                       fees=fees if fees is not None else qty * price * self.p.fee, at=now.isoformat())
+        q = self.g.quote
         self._audit("ordre.achat", a, "exécuté", now=now, authorization=trace["authorization_id"],
-                    correlation_id=trace["decision_id"],
-                    after={"qty": plan["qty"], "entry": plan["entry"], "stop": plan["stop"],
-                           "cost": plan["cost"], "risk": plan["risk_quote"], "mode": self.g.run_mode})
+                    correlation_id=trace["decision_id"], causation_id=trace["risk_check_id"],
+                    after={"qty": plan["qty"], "entry": Money.of(plan["entry"], q).as_dict(),
+                           "stop": Money.of(plan["stop"], q).as_dict(), "cost": Money.of(plan["cost"], q).as_dict(),
+                           "risk": Money.of(plan["risk_quote"], q).as_dict(), "mode": self.g.run_mode})

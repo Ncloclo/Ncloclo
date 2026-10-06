@@ -70,7 +70,7 @@ def test_order_intent_contract():
     with pytest.raises(ContractError):
         dataclasses.replace(i, side="SELL")                       # une vente ne passe jamais par la porte
     env = ContractError("WRONG_TYPE", "qty").envelope("porte", "D-x")
-    assert env["category"] == "VALIDATION_ERROR" and env["retryable"] is False and env["correlation_id"] == "D-x"
+    assert env["category"] == "VALIDATION" and env["retryable"] is False and env["correlation_id"] == "D-x"
 
 
 def test_decision_authorization_and_safe_mode_contracts():
@@ -169,7 +169,7 @@ def test_audit_chain_detects_any_change(tmp_path):
         pathlib.Path(path).write_text("\n".join(bad) + "\n", encoding="utf-8")
         v = audit.verify(path)
         assert not v["ok"] and v["bad_line"] == 2 and "MODIFIÉ" in audit.describe(v)
-    assert audit.AuditLog("").append("bot", "x", "y", "z") is None and audit.verify("")["ok"]
+    assert audit.AuditLog("").append("bot", "ordre.achat", "y", "z") is None and audit.verify("")["ok"]
 
 
 # ---------- Registre des contrats ----------
@@ -181,7 +181,7 @@ def test_contract_registry_is_complete_and_documented():
     for c in contrats.REGISTRY:
         assert all(getattr(c, f.name) not in ("", ()) for f in dataclasses.fields(c)), c.contract_id
         assert c.level in contrats.LEVELS and all((root / f).exists() for f in c.files), c.contract_id
-    assert {"OrderIntent.v1", "RiskCheck.v1", "ExecutionAuthorization.v1", "AuditEvent.v1",
+    assert {"OrderIntent.v1", "RiskCheck.v1", "ExecutionAuthorization.v1", "AuditEvent.v2",
             "SafeModeState.v1"} <= set(ids)
     assert contrats.contract("RiskCheck.v1").level == 1
     with pytest.raises(KeyError):

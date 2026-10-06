@@ -37,7 +37,7 @@ import pathlib
 import sqlite3
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import v29
@@ -190,6 +190,12 @@ MIGRATIONS: Tuple[Migration, ...] = (
         *_append_only("fin_committee_views"),
         "CREATE INDEX fin_committee_views_decision ON fin_committee_views(decision_id)",
     ), down=("DROP TABLE IF EXISTS fin_committee_views",)),
+    # Spécification des contrats de données (§42) : la date limite des
+    # données d'une décision, pour prouver qu'elle n'a pas regardé le futur.
+    Migration(3, "date limite des données de chaque décision", up=(
+        "ALTER TABLE fin_decisions ADD COLUMN data_cutoff_at TEXT "
+        "CHECK (data_cutoff_at IS NULL OR data_cutoff_at <= date(day, '+1 day') || 'T00:00:00+00:00')",
+    ), down=("ALTER TABLE fin_decisions DROP COLUMN data_cutoff_at",)),
 )
 
 
@@ -211,8 +217,9 @@ TABLES: Tuple[Table, ...] = (
           "ce module au démarrage", "ce module (migrate, rollback)", "migrations numérotées", "toujours"),
     Table("fin_strategy_versions", "registre des versions de la stratégie (réglages en vigueur, version du code)",
           "lignée, rapport", "bot, à chaque décision (nouvelle version seulement)", "EvolutionChange.v1", "toujours"),
-    Table("fin_decisions", "décision du jour : marché, garde, mode sûr, arrêt d'urgence, qualité et source des données",
-          "lignée, rapport, panneau", "bot, une fois par jour", "NoTradeGate.v1, KillSwitch.v1, MarketData.v1",
+    Table("fin_decisions", "décision du jour : marché, garde, mode sûr, arrêt d'urgence, qualité, source et date "
+          "limite des données", "lignée, rapport, panneau", "bot, une fois par jour",
+          "DecisionRecord.v1, NoTradeGate.v1, KillSwitch.v1, MarketData.v1",
           "toujours (une ligne par jour)"),
     Table("fin_signals", "signaux du jour (achats signalés, ventes) et ce qu'il en est advenu",
           "lignée", "bot, à la décision", "Signal.v1", "toujours", "par décision : lignée d'un trade"),
@@ -327,15 +334,25 @@ class Journal:
 
     def record_decision(self, day: str, mode: str, params: Dict[str, Any], bull: bool, regime: Optional[str],
                         equity: float, halted: bool, safe_mode: bool, garde_blocked: Sequence[str],
-                        data_quality: Optional[float]) -> str:
-        """La décision du jour (une seule par jour : la première gardée)."""
+                        data_quality: Optional[float], data_cutoff_at: Optional[str] = None) -> str:
+        """La décision du jour (une seule par jour : la première gardée) ;
+        `data_cutoff_at` : fin de la dernière bougie utilisée (UTC), jamais
+        après la fin de la bougie du jour décidé (la base le refuse : pas de
+        regard vers le futur)."""
+        end = (datetime.fromisoformat(day) + timedelta(days=1)).strftime("%Y-%m-%dT00:00:00+00:00")
+        if data_cutoff_at is not None and data_cutoff_at > end:
+            raise ValueError(f"décision du {day} : données jusqu'au {data_cutoff_at}, après la bougie décidée "
+                             "(regard vers le futur refusé)")
         sid = self.strategy_version(params)
         did = f"D-{day}"
         with self._tx():
             self.conn.execute(
-                "INSERT OR IGNORE INTO fin_decisions VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT OR IGNORE INTO fin_decisions (id, day, mode, strategy_version_id, bull, regime, equity, "
+                "halted, safe_mode, garde_blocked, data_quality, data_source, created_at, data_cutoff_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (did, day, mode, sid, int(bool(bull)), regime, max(0.0, float(equity)), int(bool(halted)),
-                 int(bool(safe_mode)), _json(list(garde_blocked)), data_quality, DATA_SOURCE, _now()))
+                 int(bool(safe_mode)), _json(list(garde_blocked)), data_quality, DATA_SOURCE, _now(),
+                 data_cutoff_at))
         return did
 
     def record_signals(self, decision_id: str, rows: Sequence[Dict[str, Any]]) -> int:
@@ -429,7 +446,8 @@ class Journal:
             out["strategy"] = dict(q("SELECT * FROM fin_strategy_versions WHERE id=?", d["strategy_version_id"]))
             s = q("SELECT * FROM fin_signals WHERE decision_id=? AND asset=? AND direction='LONG'", d["id"], t["asset"])
             out["signal"] = dict(s) if s else None
-            out["data"] = {"source": d["data_source"], "quality": d["data_quality"], "day": d["day"]}
+            out["data"] = {"source": d["data_source"], "quality": d["data_quality"], "day": d["day"],
+                           "cutoff": d["data_cutoff_at"] if "data_cutoff_at" in d.keys() else None}
         return out
 
     def record_committee(self, decision_id: str, views: Sequence[Dict[str, Any]], agents_version: str) -> int:
