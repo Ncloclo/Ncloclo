@@ -17,7 +17,7 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import attribution, evolution, learning, libre, postmortem, registre, risque, savoir
+from . import attribution, audit, evolution, learning, libre, postmortem, registre, risque, savoir
 from .systeme import (
     Check,
     Deps,
@@ -551,6 +551,22 @@ def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
                         if nxt else "aucune annonce américaine importante dans les 48 heures")
                        + f" ; {(ev.get('reaction') or {}).get('text', '')}"
                        + (f" ; dernière lecture ratée : {ev['error']}" if ev.get("error") else "")))
+    pt = st.get("porte") or {}
+    if pt.get("day"):
+        out.append(chk("Porte d'exécution", None,
+                       f"décision du {pt['day']} : {pt.get('approved', 0)} achat(s) autorisé(s), "
+                       f"{pt.get('refused', 0)} refusé(s)" + (" ; " + " ; ".join(pt.get("reasons") or [])
+                                                               if pt.get("refused") else "")))
+    ms = st.get("mode_sur") or {}
+    if ms.get("active"):
+        out.append(chk("Mode sûr", None, f"actif depuis le {str(ms.get('since'))[:16].replace('T', ' à ')} "
+                                         f"({ms.get('reason') or 'demandé'}) : aucun achat",
+                       "Pour reprendre les achats : python trendguard_bot.py mode-sur off"))
+    v = audit.verify(audit.path_for(gcfg))
+    if v["events"] or not v["ok"]:
+        out.append(chk("Journal d'audit", v["ok"], audit.describe(v),
+                       "" if v["ok"] else "Le journal d'audit a été modifié à la main ou abîmé : ne le corrigez pas, "
+                                          "gardez-le tel quel et signalez-le (le bot continue d'écrire à la suite)."))
     entries = registre.load(registre.registry_path(gcfg))
     if entries:
         last = entries[-1]

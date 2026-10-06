@@ -208,6 +208,8 @@ class PanelApp(SecurityCenter):
             "regime_bull": st.get("last_regime_bull"), "risk_mult": st.get("risk_mult", 1.0),
             "regime_detail": st.get("regime_detail") or {}, "garde": st.get("garde") or {},
             "risque_jour": st.get("risque_jour") or {},
+            "safe_mode": st.get("mode_sur") or {}, "porte": {k: v for k, v in (st.get("porte") or {}).items()
+                                                            if k != "keys"},
             "last_decision_day": st.get("last_decision_day"),
             "last_buy": self._last_buy(st),
             "selection": {k: v for k, v in self.selection_view(st).items()

@@ -82,6 +82,61 @@ mauvaise journée fait manquer des reprises. Les seuils retenus ne changent
 aucun résultat passé et bloquent seulement l'exceptionnel (krach, donnée
 aberrante).
 
+## Étape 2 du prompt (V0 → V1) : contrats, porte d'exécution, audit, mode sûr
+
+Votre deuxième document demande de passer à la construction technique :
+contrats explicites entre les modules, contrôle déterministe du risque avant
+tout ordre, audit, mode sûr, versions, tests de contrat. TrendGuard n'est pas
+une plateforme à bâtir de zéro : il tourne déjà, en paper, avec plus de 600
+tests. J'ai donc appliqué l'étape 2 là où elle rend le bot plus sûr, sans
+rien réécrire, et sans changer une seule décision de trading (un test rejoue
+le bot avec et sans la porte : mêmes trades).
+
+| Exigence de l'étape 2 | Ce qui a été fait |
+| --- | --- |
+| Contrats explicites, versionnés, registre des contrats, matrice, niveaux de priorité (§3-5, §41, §44, §60-61, §71) | `contrats.py` : 17 contrats (producteur, consommateur, entrée, sortie, erreurs, droits, délai, nouveaux essais, unicité, trace, fichiers, niveau) ; [`CONTRATS.md`](CONTRATS.md) en est tiré et un test vérifie qu'ils restent identiques |
+| Schémas stricts, erreurs standard (§4.3, §36, §64) | intention d'achat, décision de risque, autorisation, mode sûr : vérifiés à la création ; valeur manquante, mauvais type, hors limites ou autre version refusés, jamais corrigés en silence (enveloppe d'erreur : code, catégorie, nouvel essai possible) |
+| Moteur de risque, porte d'exécution, chaîne Signal → Décision → Risque → Autorisation → Ordre sans raccourci (§26, §28, §29, §54) | `porte.py` : 14 contrôles fixes avant CHAQUE achat, en paper comme en réel (mode réel armé, arrêt d'urgence, mode sûr, garde du jour, décision du jour, crypto autorisée, doublon, positions, risque de l'achat, risque cumulé, taille, argent disponible, stop sous le prix, montant minimum) ; APPROVED, REJECTED ou EMERGENCY_BLOCK avec la raison ; autorisation valable 5 minutes |
+| Le LLM n'est jamais l'autorité finale (§62-63, §73) | déjà vrai et désormais écrit dans les contrats : les IA donnent un avis, le noyau de savoir peut seulement reporter un achat, la porte est faite de règles fixes |
+| Unicité des opérations critiques (§38) | une seule intention d'achat par crypto et par décision (clé jour:crypto:BUY) ; en réel, l'intention est écrite avant l'ordre et résolue par l'identifiant client (moteur v29) |
+| Traçabilité de bout en bout (§6, §31) | chaque achat et chaque trade portent l'identifiant de la décision du jour, du contrôle du risque et de l'autorisation |
+| Audit infalsifiable (§35) | `audit.py` : une ligne par opération critique (contrôle de la porte, achat, vente, arrêt d'urgence et reprise, nouvel essai paper, réglages de l'évolution, sélection, mode sûr), chaînée à la précédente par son empreinte : une ligne modifiée ou retirée se voit (rapport quotidien, `python trendguard_bot.py audit`) ; un achat qu'on ne peut pas tracer est refusé |
+| Mode sûr (§53) | `python trendguard_bot.py mode-sur on` : plus aucun achat ; le bot continue de lire, d'analyser, de protéger et de vendre ; alerte dans le tableau de bord, ligne dans le raisonnement et le rapport ; `mode-sur off` pour le lever |
+| Tests de contrat (§43, §66) | `tests/test_contrats.py` : entrée valide, invalide, champ manquant, mauvais type, mauvaise version, demande non autorisée (réel non armé), délai dépassé (autorisation expirée), doublon, réponse incohérente ; porte dans le bot en paper et en réel |
+
+**Déjà en place, sous un autre nom** : santé des services et registre (§45-47)
+= superviseur, centre de sécurité du panneau, rapport quotidien ; données
+périmées → pas d'achat (§39, §52) = garde « NO TRADE » et décision reportée
+quand les bougies manquent ; promotion et retour arrière (§55-57) = paper
+avant réel, essais de 30 jours de l'évolution, retour aux réglages d'origine,
+mises à jour validées par vous ; observabilité (§58-59) = journaux, panneau,
+rapport, registre des expériences.
+
+**Sources de vérité (§48-49)** : une seule par donnée.
+
+| Donnée | Source de vérité | Qui y écrit |
+| --- | --- | --- |
+| Positions, ordres (réel) | Binance, rapprochée au démarrage par le moteur v29 (base du bot) | moteur v29 |
+| Positions (paper), trades, état du bot | base du bot (`trendguard_paper.db`) | le bot seul |
+| Bougies | Binance (lecture publique) | personne |
+| Réglages de la stratégie | `.env` + fichier de l'évolution | vous, l'évolution (réglages permis seulement) |
+| Mode sûr | `<bot>.modesur.json` | vous (commande mode-sur) |
+| Expériences | `<bot>.registre.json` | l'évolution, la commande registre |
+| Audit | `<bot>.audit.jsonl` | le bot seul, en ajoutant |
+| Savoir, bot libre, calendrier | `trendguard_savoir.db` | le noyau de savoir et le bot libre |
+| Contrats | `trendguard/contrats.py` | le code, relu par les tests |
+
+**Pas appliqué ici, et pourquoi** : passerelle d'API, WebSocket, identité
+multi-locataires et double authentification (§8, §33) : un seul utilisateur,
+un panneau limité à ce PC avec mot de passe et contrôle d'origine ; cœur
+cognitif, planificateur, orchestrateur d'agents, routeur de modèles, RAG,
+synthèse (§9-19) : la décision de trading doit rester faite de règles fixes
+(§62-63), mettre un orchestrateur d'IA sur ce chemin irait contre l'étape 2
+elle-même ; Pydantic, OpenAPI (§64) : des classes Python simples suffisent,
+sans dépendance de plus ; base relationnelle complète et migrations (étape 3) :
+la base SQLite et les fichiers ci-dessus sont la source de vérité ; un schéma
+complet ne servirait qu'en passant à un serveur ou à plusieurs bots.
+
 ## Ce qui reste (votre accord d'abord)
 
 1. **Débat des IA** (§43) : rôles haussier, baissier, critique et synthèse

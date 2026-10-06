@@ -14,9 +14,12 @@
 *.selection.json
 *.evolution.json
 *.evolution.json.tmp
-# Registre des expériences (registre.py)
+# Registre des expériences (registre.py), journal d'audit (audit.py), mode sûr (porte.py)
 *.registre.json
 *.registre.json.tmp
+*.audit.jsonl
+*.modesur.json
+*.modesur.json.tmp
 *.rapport.json
 *.rapport.json.tmp
 # Alertes en pause après trois refus du mot de passe (alerts.py)

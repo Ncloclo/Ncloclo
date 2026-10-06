@@ -973,6 +973,7 @@ Points faibles :
 | 39 | Garder le PC branché ; la nuit, capot ouvert et « sur batterie, mettre en veille après : Jamais » | Vous | dès ce soir : K3 |
 | 40 | Clé Binance : décocher les transferts internes et universels | Vous | avant le réel : K5 |
 | 41 | Rapport qui nomme la barrette de mémoire suspecte ; alerte d'arrêt qui donne la vraie cause de la veille ; veille sur batterie réglée par le bot | Code, avec votre accord | proposé (06/10) : K10, K11, K12 |
+| 42 | Étape 2 du prompt : contrats entre les modules, porte d'exécution avant chaque achat, journal d'audit chaîné, mode sûr | Code, à votre demande | **fait** (06/10) : [`CONTRATS.md`](CONTRATS.md), [`PLATEFORME.md`](PLATEFORME.md) |
 
 Fait depuis l'audit du matin : chemins de secours des ordres réels testés (et
 un défaut corrigé), blocage des mots de passe ratés, écriture sûre du choix des

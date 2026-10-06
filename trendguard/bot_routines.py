@@ -90,6 +90,15 @@ class RoutinesMixin:
                              f"{fr(self.g.params.risk_pct * step * 100, 'g')} % par achat")
             self.risk_step = step
         p = evolution.params_for(self.g)
+        # Changement de configuration critique : une trace dans l'audit, une
+        # seule fois par changement (pas à chaque redémarrage).
+        now = {"palier": step, **{k: getattr(p, k) for k in evolution.SPACE if getattr(p, k) != getattr(self.g.params, k)}}
+        before = self.state.get("reglages_audites")
+        if before != now:
+            if before is not None:
+                self._audit("reglages.evolution", "strategie", "appliqué", before=before, after=now,
+                            reason="réglages choisis par l'évolution encadrée (épreuves sur 8 ans)")
+            self.state["reglages_audites"] = now
         if p == self.p:
             return
         changed = {k: getattr(p, k) for k in evolution.SPACE if getattr(p, k) != getattr(self.p, k)}

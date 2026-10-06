@@ -106,6 +106,9 @@ sont jamais envoyés sur GitHub. VS Code les masque dans l'explorateur
 | `attribution.py` | attribution des résultats : par crypto, régime, type de sortie, leçon ; pourquoi le bot a gagné ou perdu |
 | `evenements.py` | calendrier économique : grandes annonces américaines (information), réaction du bitcoin mesurée avec le temps |
 | `registre.py` | registre des expériences (évolution, contrôles) rejouables à l'identique, carte du modèle |
+| `contrats.py` | contrats entre les modules (registre, données vérifiées à la création) ; docs/CONTRATS.md en est tiré |
+| `porte.py` | porte d'exécution : contrôle déterministe du risque et autorisation avant chaque achat ; mode sûr |
+| `audit.py` | journal d'audit chaîné : chaque opération critique, toute modification détectée |
 | `libre.py` | bot libre : second portefeuille fictif qui apprend de chaque source, se fait son avis, agit seul et révise ses propres règles chaque semaine, à côté du bot principal |
 | `savoir.py` | noyau de savoir : presse, moteurs de recherche, forums, réseau social, tendances et avis des IA lus toutes les 15 minutes, chaque source jugée sur les cours réels ; l'avis des sources prouvées peut seulement reporter un achat |
 | `watch_claude.py` | avis de Claude pour la veille |

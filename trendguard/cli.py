@@ -20,7 +20,7 @@ import ccxt
 
 import v29
 
-from . import alerts, autonomy, evolution
+from . import alerts, autonomy, evolution, porte
 from . import bot as _bot
 from . import diagnostics as dg
 from . import trend_strategy as ts
@@ -685,7 +685,8 @@ TOOLS = {"alerts": ("alerts", "alertes : configurer | tester"),
          "evolution": ("evolution", "évolution encadrée : [statut] | examen | quotidien | revenir | regles"),
          "rapport": ("report", "rapport quotidien, sécurité et diagnostic : [dernier] | maintenant | quotidien"),
          "savoir": ("savoir", "noyau de savoir : [bilan] | collecter"),
-         "registre": ("registre", "registre des expériences : [liste] | voir <n°> | rejouer <n°> | controle | carte")}
+         "registre": ("registre", "registre des expériences : [liste] | voir <n°> | rejouer <n°> | controle | carte"),
+         "audit": ("audit", "journal d'audit : [verifier] | dernier")}
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -696,9 +697,9 @@ def _parser() -> argparse.ArgumentParser:
                                     "health", "replay", "set-secret",
                                     "set-keys", "verify", "diagnose", "panel",
                                     "supervise", "stop", "autostart",
-                                    "set-panel-password"])
+                                    "set-panel-password", "mode-sur"])
     ap.add_argument("action", nargs="?", default="status", choices=["on", "off", "status"],
-                    help="(autostart) on = activer, off = désactiver, status = état")
+                    help="(autostart, mode-sur) on = activer, off = désactiver, status = état")
     ap.add_argument("--out", default=None, help="(diagnose) fichier du rapport")
     ap.add_argument("--data", default="data", help="(replay) dossier Coin Metrics")
     ap.add_argument("--start", default="2025-06-01", help="(replay) début")
@@ -876,6 +877,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "health": lambda: health_check(gcfg, v29._env_i("TG_HEALTH_MAX_AGE_SEC", 600)),
         "status": lambda: _status(gcfg, resume=False),
         "resume": lambda: _status(gcfg, resume=True),
+        "mode-sur": lambda: porte.cmd_safe_mode(gcfg, args.action, v29._utcnow()),
     }
     if args.cmd in commands:
         return commands[args.cmd]()

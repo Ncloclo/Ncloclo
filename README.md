@@ -436,7 +436,11 @@ chaque décision, tests de résistance des positions (krachs, crise de
 liquidité, décrochage de l'USDT), attribution des résultats (page Positions),
 calendrier des grandes annonces américaines (page Veille, information), et
 registre des expériences rejouables avec la carte du modèle
-(`python trendguard_bot.py registre carte`).
+(`python trendguard_bot.py registre carte`). Étape 2 : contrats entre les
+modules ([`docs/CONTRATS.md`](docs/CONTRATS.md)), porte d'exécution
+déterministe avant chaque achat, journal d'audit infalsifiable
+(`python trendguard_bot.py audit`), mode sûr
+(`python trendguard_bot.py mode-sur on|off`).
 
 ### Bot libre (`trendguard/libre.py`, [`docs/LIBRE.md`](docs/LIBRE.md))
 

@@ -13,9 +13,10 @@ import ccxt
 
 import v29
 
-from . import learning, postmortem
+from . import learning, porte, postmortem
 from . import trend_strategy as ts
-from .bot_types import Slot
+from .bot_types import Slot, last_closed_day
+from .contrats import ContractError, OrderIntent
 from .texte import fr
 
 
@@ -74,6 +75,8 @@ class ExecutionMixin:
         trade = {"asset": a, "date": self._now.isoformat(), "days": (self._now - opened).days,
                  "entry_date": h["entry_date"], "entry": h["entry"], "exit": px, "pnl": pnl,
                  "r": pnl / h["risk_quote"], "reason": reason}
+        if h.get("trace"):
+            trade["trace"] = h["trace"]
         close = getattr(self, "_last_close", None)
         series = close[a] if close is not None and a in close else None
         self._record_trade(postmortem.enrich(trade, series, h["qty"], h["risk_quote"], h.get("stop"),
@@ -329,6 +332,10 @@ class ExecutionMixin:
                 f"vs clôture) → quantité {fr(plan['qty'], '.6g')} → {fr(adj['qty'], '.6g')} "
                 f"(risque {fr(adj['risk_quote'], '.2f')} {self.g.quote})")
         plan = adj
+        # Porte d'exécution : aucun achat sans contrôle du risque ni autorisation.
+        trace = self._gate(plan, equity, cash, now)
+        if trace is None:
+            return None
         disaster = plan["stop"] - self.g.catastrophe_atr * plan["vol"]
         if disaster <= 0:
             disaster = plan["stop"] * 0.5
@@ -339,13 +346,15 @@ class ExecutionMixin:
                 "qty": plan["qty"], "entry": plan["entry"], "stop": plan["stop"],
                 "high": plan["ref_price"], "entry_date": now.isoformat(),
                 "risk_quote": plan["risk_quote"], "cost": plan["cost"],
-                "disaster": disaster, "regime": (self.state.get("regime_detail") or {}).get("texte")}
+                "disaster": disaster, "regime": (self.state.get("regime_detail") or {}).get("texte"),
+                "trace": trace}
             self.logger.info(
                 f"[ENTRY] {a.upper()} qty={plan['qty']:.6f} @ "
                 f"{plan['entry']:.6f} stop={plan['stop']:.6f} "
                 f"risque={plan['risk_quote']:.2f} {self.g.quote}")
             self._record_buy(a, now, plan["entry"], plan["qty"], plan["cost"],
                              plan["risk_quote"], "différé" if deferred else "")
+            self._bought(a, plan, trace, now)
             if deferred:
                 learning.note_deferral(self._learning(), "bought", ruse_gain)
             return plan
@@ -359,6 +368,8 @@ class ExecutionMixin:
             candle_ts=int(now.timestamp() * 1000))
         if res == v29.EntryResult.OPENED:
             self.state.setdefault("entry_regimes", {})[a] = (self.state.get("regime_detail") or {}).get("texte")
+            self.state.setdefault("entry_traces", {})[a] = trace
+            self._bought(a, plan, trace, now)
             s.ctx.position.highest_close = plan["ref_price"]
             s.ctx.position.soft_stop = plan["stop"]
             p = s.ctx.position
@@ -367,5 +378,74 @@ class ExecutionMixin:
                              plan["risk_quote"], "différé" if deferred else "")
             if deferred:
                 learning.note_deferral(self._learning(), "bought", ruse_gain)
+        else:
+            self._audit("ordre.achat", a, f"non exécuté ({getattr(res, 'name', res)})", now=now,
+                        authorization=trace["authorization_id"], correlation_id=trace["decision_id"])
         self._save_slot(s)
         return plan if res == v29.EntryResult.OPENED else None
+
+    # ---------- Porte d'exécution (porte.py) ----------
+
+    def _gate(self, plan: Dict[str, Any], equity: float, cash: float,
+              now: datetime) -> Optional[Dict[str, str]]:
+        """Contrôle du risque et autorisation d'un achat (porte.py), tracés
+        dans le journal d'audit : identifiants de la décision, du contrôle et
+        de l'autorisation, ou None si l'achat est refusé (raison dans le
+        journal du bot et le raisonnement). Un achat qu'on ne peut pas
+        tracer est refusé."""
+        a = plan["asset"]
+        day = last_closed_day(now, self.g.decision_delay_sec)
+        decision_id = f"D-{plan.get('day') or day}"
+        holdings = self._holdings()
+        g = self.g
+        garde = self.state.get("garde") or {}
+        pf = porte.Portfolio(
+            equity=float(equity), cash=float(cash), invested=sum(h.cost for h in holdings.values()),
+            held_risk=tuple((x, float(h.risk_quote)) for x, h in holdings.items()),
+            risk_mult=float(self.state.get("risk_mult", 1.0) or 1.0), expected_day=day,
+            universe=frozenset(b.lower() for b in g.universe), allowed=frozenset(self.active_now()),
+            vetoed=frozenset(x for x in (self.state.get("vetoes") or {}) if self._vetoed(x)),
+            bought_today=frozenset((self.state.get("porte") or {}).get("keys") or ())
+            if (self.state.get("porte") or {}).get("day") == day else frozenset(),
+            halted=bool(self.state.get("halted")),
+            garde_blocked=tuple(garde.get("blocked") or ()) if garde.get("day") == day else (),
+            safe_mode=porte.safe_mode(g), live=self.live,
+            live_armed=bool(g.enable_live_trading and g.live_confirmation == "I_UNDERSTAND_RISK"))
+        try:
+            intent: Optional[OrderIntent] = OrderIntent.from_plan(plan, day)
+            decision = porte.check(intent, pf, self.p, now)
+        except ContractError as e:
+            intent, decision = None, porte.refusal(e, a, now)
+        auth = porte.authorize(decision, pf, now)
+        log = self.state.setdefault("porte", {})
+        if log.get("day") != day:
+            log.clear()
+            log.update(day=day, approved=0, refused=0, keys=[], reasons=[])
+        text = porte.describe(decision, auth)
+        ok = self._audit("porte.controle", a, decision.status, reason=text, now=now,
+                         after={"risk_check_id": decision.risk_check_id, "qty": decision.approved_size,
+                                "expected_loss": decision.expected_loss, "open_risk_pct": decision.open_risk_pct,
+                                "warnings": list(decision.warnings)},
+                         authorization=auth.authorization_id, correlation_id=decision_id)
+        if auth.valid_at(now) and ok and intent is not None:
+            log["approved"] += 1
+            return {"decision_id": decision_id, "risk_check_id": decision.risk_check_id,
+                    "authorization_id": auth.authorization_id, "key": intent.idempotency_key}
+        if auth.authorized and not ok:
+            text = "achat refusé : journal d'audit impossible à écrire (un achat sans trace n'est pas permis)"
+        log["refused"] += 1
+        log["reasons"] = (log["reasons"] + [f"{a.upper()} : {text}"])[-10:]
+        self.logger.warning(f"[PORTE] {a.upper()} : {text}")
+        self._pending().pop(a, None)
+        self._entry_notes[a] = ("cancelled", f"Achat refusé par la porte d'exécution : {text}")
+        self._note_asset(a, *self._entry_notes[a])
+        return None
+
+    def _bought(self, a: str, plan: Dict[str, Any], trace: Dict[str, str], now: datetime) -> None:
+        """Achat exécuté : clé d'unicité gardée pour la journée, trace dans
+        le journal d'audit."""
+        self.state.setdefault("porte", {}).setdefault("keys", []).append(trace["key"])
+        self._audit("ordre.achat", a, "exécuté", now=now, authorization=trace["authorization_id"],
+                    correlation_id=trace["decision_id"],
+                    after={"qty": plan["qty"], "entry": plan["entry"], "stop": plan["stop"],
+                           "cost": plan["cost"], "risk": plan["risk_quote"], "mode": self.g.run_mode})

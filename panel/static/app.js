@@ -193,6 +193,7 @@ async function renderDash() {
   const alerts = [];
   if (S.halted) alerts.push(["crit", `Arrêt d'urgence : ${S.halt_reason || ""}`]);
   if (S.state === "stopped") alerts.push(["warn", "Le bot est arrêté : cliquez sur AUTO pour reprendre l'automatisation."]);
+  if (S.safe_mode && S.safe_mode.active) alerts.push(["warn", `Mode sûr : aucun achat (${S.safe_mode.reason || "demandé"}) ; les positions restent protégées et peuvent être vendues. Pour le lever : python trendguard_bot.py mode-sur off`]);
   const sup = (S.autonomy && S.autonomy.supervisor) || {};
   if (S.state === "restarting") alerts.push(["warn", "Le bot s'est arrêté sur une erreur : relance automatique en cours."]);
   else if (S.state === "running" && !sup.running && !S.demo) alerts.push(["warn", "Relance automatique inactive (bot lancé hors du panneau) : ARRÊTER puis AUTO pour l'activer."]);
