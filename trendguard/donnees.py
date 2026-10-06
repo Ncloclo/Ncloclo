@@ -412,6 +412,17 @@ class Journal:
             out["data"] = {"source": d["data_source"], "quality": d["data_quality"], "day": d["day"]}
         return out
 
+    def for_checks(self) -> Dict[str, Any]:
+        """Ce que le diagnostic expert compare à d'autres sources : date de
+        création du journal, achats exécutés, positions ouvertes, trades."""
+        q = lambda sql: [dict(r) for r in self.conn.execute(sql)]  # noqa: E731
+        first = q("SELECT applied_at FROM fin_schema_migrations ORDER BY version LIMIT 1")
+        return {"since": first[0]["applied_at"] if first else "",
+                "buys": q("SELECT idempotency_key, asset FROM fin_orders WHERE side='BUY' AND status='FILLED'"),
+                "open": q("SELECT o.idempotency_key, o.asset FROM fin_orders o WHERE o.side='BUY' AND "
+                          "o.status='FILLED' AND NOT EXISTS (SELECT 1 FROM fin_trades t WHERE t.entry_order_id=o.id)"),
+                "trades": q("SELECT id, asset FROM fin_trades")}
+
     def trades(self, limit: int = 20) -> List[Dict[str, Any]]:
         """Les derniers trades du journal (les plus récents d'abord)."""
         return [dict(r) for r in self.conn.execute("SELECT * FROM fin_trades ORDER BY closed_at DESC LIMIT ?",

@@ -180,6 +180,33 @@ concurrente (§49). Pas de file d'événements, d'« outbox » ni de file
 d'erreurs : il n'y a pas de bus d'événements à alimenter, chaque écriture
 est une transaction de la même base.
 
+## Étape 4 du prompt : noyau cognitif
+
+Le quatrième document demande un « système nerveux central » : comprendre
+une demande, planifier, orchestrer des tâches, vérifier, mesurer
+l'incertitude, décider, sans jamais laisser une IA ou un agent agir seul.
+Appliqué à TrendGuard : un noyau cognitif déterministe, dont la première
+tâche est celle que vous demandez le plus souvent, « analyse et diagnostique
+expert ». Le bot la fait désormais lui-même (`python trendguard_bot.py
+expert`, et chaque jour à 00:45 UTC), en lecture seule ; Rachelle en résume
+le résultat. Détail : [`COGNITIF.md`](COGNITIF.md).
+
+| Exigence de l'étape 4 | Ce qui a été fait |
+| --- | --- |
+| Planificateur, graphe de tâches, validation du graphe (§20-23) | `cognitif.py` : plan en graphe ; cycle, dépendance absente, outil inconnu ou interdit : plan refusé ; tâches indépendantes lancées en parallèle |
+| Orchestrateur, machines d'états, délais, nouveaux essais, annulation, résultats partiels (§24-25, §62-65, §70, §87) | états contrôlés (une transition impossible est une erreur) ; délai par tâche et budget total ; nouvel essai seulement pour une panne passagère ; annulation propagée ; résultat PARTIEL dit comme tel |
+| Registre et politique des outils (§34-38) | outils inscrits avec classe, risque, délai, réseau ; en marche autonome, aucun outil d'exécution : le noyau ne peut ni acheter, ni vendre, ni transférer |
+| Vérification, contradictions, incertitude (§45-54) | vérifications croisées entre sources indépendantes (audit contre journal financier, positions contre ordres ouverts, décision et données à l'heure) ; incertitude LOW à CRITICAL, sans confiance chiffrée inventée |
+| Synthèse et décision, séparée de l'autorisation (§55-61) | NO_ACTION, ESCALATE, RESEARCH_MORE ou BLOCK ; une mesure proposée (par exemple le mode sûr) attend toujours votre accord |
+| Trace lisible (§67-68) | plan, tâches, durées, vérifications, décision et propositions gardés dans `<bot>.expert.json` |
+| Sécurité des instructions (§42-44, §97) | Rachelle refuse les tentatives d'injection d'instructions ; les textes d'Internet restent des données |
+
+**Pas appliqué, et pourquoi** : agents multiples, routeur de modèles et débat
+d'IA attendent des clés d'IA (aucune sur ce PC ; Rachelle répond déjà sans IA
+en mode dégradé sûr) ; une mémoire vectorielle n'aurait rien de plus à
+chercher que le noyau de savoir ; pas d'API réseau supplémentaire (le
+panneau n'écoute que ce PC) ; et jamais d'IA sur le chemin des ordres.
+
 ## Ce qui reste (votre accord d'abord)
 
 1. **Débat des IA** (§43) : rôles haussier, baissier, critique et synthèse

@@ -18,6 +18,8 @@
 *.registre.json
 *.registre.json.tmp
 *.audit.jsonl
+*.expert.json
+*.expert.json.tmp
 *.modesur.json
 *.modesur.json.tmp
 *.rapport.json

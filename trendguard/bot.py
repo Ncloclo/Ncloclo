@@ -561,6 +561,7 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         except Exception as e:           # apprendre ne bloque jamais le trading
             self.logger.warning(f"[APPRENTISSAGE] relevé impossible : {e}")
         self._launch_report(now)
+        self._launch_expert(now)
         self._launch_savoir()
         # Horloge réelle (et non `now`, simulé en rejeu) : sert au contrôle
         # de santé du conteneur.

@@ -27,6 +27,7 @@ import re
 import unicodedata
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from trendguard import expert
 from trendguard import market_watch as mw
 from trendguard.texte import fr
 
@@ -98,6 +99,14 @@ REQUEST_RULES = (
                r"(les |mes |mon |ma |the |my |l )(fonds|argent|capital|economies|usdt|cryptos?|"
                r"bitcoins?|btc|solde)\b"),
     re.compile(r"\bretraits?\s+(de\s+)?(mes|mon|des|du)\s+(fonds|argent|capital|usdt|cryptos?)\b"),
+    # Injection d'instructions (étape 4 du prompt maître) : faire oublier ses
+    # règles à l'assistante, lui faire révéler ses consignes, changer son rôle.
+    re.compile(r"\b(ignore|oublie|ignorez|oubliez|disregard|forget)\w*\s+(\S+\s+){0,3}?(instructions?|"
+               r"consignes?|regles?|rules?|prompts?|directives?)\b"),
+    re.compile(r"\b(prompt|instructions?|consignes?)\s+(systeme|system|initiales?|cachees?)\b|"
+               r"\bsystem prompt\b"),
+    re.compile(r"\b(jailbreak|developer mode|mode developpeur|dan mode|sans (aucune )?(regle|limite|filtre)s?)\b"),
+    re.compile(r"\b(tu es|vous etes|you are)\s+(maintenant|desormais|now)\s+(un|une|a|an|le|la)\b"),
     re.compile(r"\b(activ|autoris|enable|allow)\w*\s+(les |le |the )?(retraits?|withdrawals?)\b"),
     re.compile(r"\b(vers|to)\s+(mon|ma|une|un|my|a)\s+(wallet|portefeuille externe|"
                r"compte bancaire|metamask|ledger|iban)\b"),
@@ -545,6 +554,17 @@ def a_report(ctx: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def a_expert(ctx: Dict[str, Any]) -> str:
+    text = expert.summary(ctx.get("expert"))
+    if not text:
+        return ("**Diagnostic expert** : le bot peut faire lui-même l'analyse et le diagnostic "
+                "expert (état, décision, audit, journal financier, PC, Wi-Fi, stratégie), en lecture "
+                "seule : python trendguard_bot.py expert (ou --rapide, sans réseau). Je vous en "
+                "résumerai ensuite le résultat.")
+    return ("**" + text.replace(" : ", "** : ", 1) + "\nLe diagnostic propose ; il n'agit jamais "
+            "seul. Pour le refaire : python trendguard_bot.py expert.")
+
+
 def a_learning(ctx: Dict[str, Any]) -> str:
     lr = (ctx.get("status") or {}).get("learning") or {}
     lines = [
@@ -728,6 +748,9 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("autonomy", ("autonome", "autonomie", "redemarrage", "redemarrer", "demarrer avec",
                   "ordinateur", "veille du pc", "plantage", "superviseur", "eteint"), a_autonomy,
      [{"label": "Réglages ▸ autonomie", "href": "#settings"}]),
+    ("expert", ("diagnostic expert", "diagnostique expert", "analyse et diagnostic",
+                "analyse et diagnostique", "diagnostic", "diagnostique", "expert"), a_expert,
+     [{"label": "Réglages ▸ rapport", "href": "#settings"}]),
     ("report", ("rapport", "rapport quotidien", "rapport de securite", "rapport du jour",
                 "analyse du jour", "diagnostic du jour", "analyse profonde", "sauvegarde",
                 "sauvegardes"),

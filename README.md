@@ -444,7 +444,10 @@ déterministe avant chaque achat, journal d'audit infalsifiable
 en tables reliées dans la base du bot, chaque trade traçable jusqu'à ses
 données ([`docs/DONNEES.md`](docs/DONNEES.md),
 `python trendguard_bot.py donnees lignee`), sauvegarde de la nuit réellement
-relue.
+relue. Étape 4 : noyau cognitif ([`docs/COGNITIF.md`](docs/COGNITIF.md)) ; le
+bot fait lui-même son « analyse et diagnostic expert »
+(`python trendguard_bot.py expert`, et chaque nuit), propose sans jamais agir,
+et Rachelle en résume le résultat.
 
 ### Bot libre (`trendguard/libre.py`, [`docs/LIBRE.md`](docs/LIBRE.md))
 

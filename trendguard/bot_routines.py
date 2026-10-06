@@ -130,6 +130,23 @@ class RoutinesMixin:
         else:
             self.logger.warning("[ÉVOLUTION] épreuves du jour impossibles à lancer")
 
+    EXPERT_MINUTE = 45          # diagnostic expert du jour : 00:45 UTC, après le rapport
+
+    def _launch_expert(self, now: datetime) -> None:
+        """Diagnostic expert du noyau cognitif (expert.py), une fois par
+        jour, sans réseau, dans un processus séparé : lecture seule, il
+        propose et n'agit jamais ; Rachelle en résume le résultat."""
+        if not self.track_uptime:
+            return
+        today = now.date().isoformat()
+        if self.state.get("expert_day") == today or now.hour * 60 + now.minute < self.EXPERT_MINUTE:
+            return
+        self.state["expert_day"] = today
+        if autonomy.launch_tool(self.g, ["expert", "--rapide"], ".expert.log"):
+            self.logger.info("[EXPERT] diagnostic expert du jour lancé (lecture seule)")
+        else:
+            self.logger.warning("[EXPERT] diagnostic expert du jour impossible à lancer")
+
     def _launch_report(self, now: datetime) -> None:
         """Rapport quotidien (report.py) à partir de 00:30 UTC, une fois par
         jour, dans un processus séparé ; rattrapé au retour du PC s'il était
