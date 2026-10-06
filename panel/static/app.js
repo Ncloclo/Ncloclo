@@ -1051,9 +1051,13 @@ async function renderWatch() {
   $("#w-ai-sub").textContent = ai.configured.length ? `${ai.configured.length} configurée${ai.configured.length > 1 ? "s" : ""}` : "aucune configurée";
   const rows = asked.map((p) => [p.ok ? "ok" : "warn", p.ok ? `${p.label} : avis reçu` : `${p.label} : pas d'avis (${p.error || "cause inconnue"})`]);
   ai.configured.filter((name) => !asked.some((p) => p.label === name)).forEach((name) => rows.push(["ok", `${name} : consultée au prochain rapport`]));
-  // Santé mesurée par le socle multi-modèles (trendguard/modeles.py) : jamais de chiffre sans appel.
-  ((w.modeles || {}).rows || []).filter((m) => m.calls).forEach((m) => rows.push([m.breaker === "CLOSED" ? "ok" : "warn",
-    `${m.label} (${m.model}) : ${m.calls} appel${m.calls > 1 ? "s" : ""} mesuré${m.calls > 1 ? "s" : ""}, ${m.failures} échec${m.failures > 1 ? "s" : ""}${m.p50_ms != null ? `, réponse en ${nf(1).format(m.p50_ms / 1000)} s (médiane)` : ""}${m.breaker === "OPEN" ? " · mise de côté 15 min après 3 échecs de suite" : ""}`]));
+  // Socle multi-modèles (trendguard/modeles.py) : cycle de vie, banc, santé mesurée ; jamais de chiffre sans mesure.
+  ((w.modeles || {}).rows || []).forEach((m) => {
+    if (m.lifecycle === "TESTING") { rows.push(["warn", `${m.label} (${m.model}) : pas encore en service, ${m.lifecycle_reason}`]); return; }
+    const bench = m.accuracy != null ? `approuvé au banc (justesse ${nf(0).format(m.accuracy * 100)} %)` : "approuvé";
+    const used = m.calls ? `, ${m.calls} appel${m.calls > 1 ? "s" : ""} mesuré${m.calls > 1 ? "s" : ""}, ${m.failures} échec${m.failures > 1 ? "s" : ""}${m.p50_ms != null ? `, réponse en ${nf(1).format(m.p50_ms / 1000)} s (médiane)` : ""}` : "";
+    rows.push([m.breaker === "CLOSED" ? "ok" : "warn", `${m.label} (${m.model}) : ${bench}${used}${m.breaker === "OPEN" ? " · mis de côté 15 min après 3 échecs de suite" : ""}`]);
+  });
   if (last && last.disagreements && last.disagreements.length) rows.push(["warn", `IA en désaccord sur ${last.disagreements.map((a) => (a === "market" ? "le climat" : up(a))).join(", ")} : avis à prendre avec prudence.`]);
   if (!rows.length) rows.push(["ok", "Sans IA, la veille fait déjà l'essentiel : elle lit les annonces officielles de Binance (les seules à bloquer un achat) et repère les mots sensibles dans les actualités."]);
   $("#w-ai").replaceChildren(...rows.map(([k, t]) => el("li", k, t)));

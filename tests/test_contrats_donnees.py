@@ -236,6 +236,10 @@ def test_committee_views_carry_confidence_and_uncertainty():
 def test_llm_executions_follow_their_contract():
     led = modeles.Ledger("")
     env = {"OPENAI_API_KEY": "k" * 20, "MISTRAL_API_KEY": "k" * 20}
+    for provider, model in (("openai", "gpt-5-mini"), ("mistral", "mistral-medium-latest")):
+        led.bench_record("essai", modeles.bench_version(), {   # banc réussi : modèles approuvés
+            "provider": provider, "model": model, "accuracy": 1.0, "categories": {"faits": 1.0}, "p50_ms": 500,
+            "cases": 8, "errors": 0, "passed": True, "note": ""})
 
     def call(m):
         if m.provider == "openai":
@@ -243,7 +247,7 @@ def test_llm_executions_follow_their_contract():
         return "ok", (3, "beaucoup")                           # jetons illisibles : inconnus, pas inventés
     ex = modeles.execute("x", ("p", "v"), "bonjour", call, env=env, ledger=led)
     rows = led.last(2)
-    assert ex.tokens == (3, None) and contrats.UUID_RE.match(ex.request_id)
+    assert ex.ok and ex.tokens == (3, None) and contrats.UUID_RE.match(ex.request_id)
     assert {r["request_id"] for r in rows} == {ex.request_id} and len({r["execution_id"] for r in rows}) == 2
     with pytest.raises(ContractError):
         led.record("x", "p", "m", ("p", "v"), "PUBLIC", True, 5, tokens=(-1, 0))

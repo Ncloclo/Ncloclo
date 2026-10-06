@@ -593,9 +593,11 @@ def a_modeles(ctx: Dict[str, Any]) -> str:
     lines = ["**Modèles d'IA** : " + (modeles.describe(rows) if rows else "état inconnu pour l'instant") + "."]
     lines += [
         "- Le bot connaît huit fournisseurs (Claude, GPT, Gemini, DeepSeek, Mistral, Kimi, Perplexity, Grok) "
-        "et un modèle local facultatif ; seuls ceux dont vous avez mis la clé sont employés.",
-        "- Pour chaque question, le meilleur modèle disponible répond ; s'il échoue, le suivant prend le "
-        "relais, et sans IA je réponds moi-même à partir de l'état du bot.",
+        "et un modèle local facultatif ; seuls ceux dont vous avez mis la clé, et qui ont réussi leur banc "
+        "d'évaluation (lancé à la saisie de la clé), sont employés.",
+        "- Pour chaque question, le modèle le mieux noté sur ses mesures réelles répond ; s'il échoue, le suivant "
+        "prend le relais, et sans IA je réponds moi-même à partir de l'état du bot.",
+        "- Chaque réponse est vérifiée : un montant absent des données du bot est rejeté.",
         "- Chaque appel est noté (durée, erreur, version de la consigne) ; après trois échecs de suite, un "
         "modèle est mis de côté 15 minutes (disjoncteur).",
         "- Un texte qui ressemble à une clé ou un mot de passe n'est jamais envoyé à une IA extérieure.",
@@ -942,7 +944,7 @@ class AIHelper:
             return
         for p, key, model in mw.configured(env):
             if p.name == "claude":
-                model = (env.get("PANEL_ASSISTANT_MODEL") or "claude-sonnet-5").strip()
+                model = (env.get("PANEL_ASSISTANT_MODEL") or modeles.RACHELLE_CLAUDE_MODEL).strip()
             self._routes[p.name] = (p, key, model)
         lp = modeles.local_provider(env)
         if lp is not None:
@@ -964,17 +966,25 @@ class AIHelper:
             raise RuntimeError("aucune IA configurée")
         models = modeles.with_model(modeles.registry(self.env), {n: r[2] for n, r in self._routes.items()})
         user_text = "\n".join(m["content"] for m in messages if m["role"] == "user")
+        sources = system + "\n" + "\n".join(m["content"] for m in messages)
         led = modeles.Ledger(self.ledger_path)
         try:
             ex = modeles.execute("rachelle", ("rachelle", SYSTEM), user_text,
                                  lambda m: self._chat(m.provider, system, messages), env=self.env, ledger=led,
-                                 base_privacy="INTERNAL", models=models)
+                                 base_privacy="INTERNAL", models=models, verify=lambda t: self.verify(t, sources))
         finally:
             led.close()
-        if ex is None:
-            raise RuntimeError("aucune IA n'a répondu")
+        if not ex.ok:
+            raise RuntimeError(f"{ex.code} : aucune IA permise n'a donné de réponse vérifiée")
         self._local.used = self._routes[ex.provider][0].label
         return ex.text
+
+    @staticmethod
+    def verify(text: str, sources: str) -> str:
+        """Raison de rejeter une réponse, ou "" : un montant (USDT, $, €)
+        absent des données du bot est un chiffre inventé."""
+        found = modeles.invented_amounts(text, sources)
+        return ("montant(s) absent(s) des données du bot : " + ", ".join(found[:3])) if found else ""
 
     def _chat(self, name: str, system: str, messages: List[Dict[str, str]]) -> Any:
         p, key, model = self._routes[name]

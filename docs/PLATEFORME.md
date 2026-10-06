@@ -252,10 +252,23 @@ désaccord, banc d'évaluation, trace de chaque appel. Appliqué à TrendGuard :
 | Confidentialité, modèle local, sécurité (§38-43) | un texte qui ressemble à un secret ne sort jamais du PC ; un « modèle local » vers Internet est refusé ; aucune IA n'a d'outil |
 | Banc, régression, trace (§44-49, §91) | `python trendguard_bot.py modeles banc` ; table `llm_executions` en ajout seulement ; rapport, page Veille, Rachelle |
 
+**Seconde version du document** (gouvernance, invites, vérification,
+coût) : appliquée elle aussi.
+
+| Exigence de la seconde version | Ce qui a été fait |
+| --- | --- |
+| Cycle de vie, gouvernance (§41, §44-45) | aucun modèle en service sans banc d'évaluation réussi (lancé à la saisie d'une clé) ; banc raté, régression ou nouveau modèle : écarté jusqu'au prochain banc réussi |
+| Routage par politique (§7-10) | note pondérée par usage sur mesures réelles (justesse au banc, réussite, rapidité) ; une mesure absente est dite « non mesurée » |
+| Invites versionnées (§17-18) | version et empreinte de chaque invite ; un texte changé sans nouvelle version n'est jamais envoyé |
+| Sorties vérifiées, invention (§16, §57-58) | la veille redemande une fois une réponse hors schéma ; Rachelle rejette une réponse qui cite un montant absent des données du bot |
+| Coût, budget, mode, fiche, mesures (§23, §31, §43, §71) | coût seulement avec un prix que vous déclarez ; plafond par jour ; mode (hybride, extérieur, local, dégradé sûr) ; fiche et mesures de chaque modèle |
+| Désaccord (§27) | chaque désaccord net est un contrat (positions, gravité, sans moyenne) ; alerte d'information pour une crypto détenue |
+
 **Honnêtement** : aucune clé d'IA n'est sur ce PC. Les 8 fournisseurs sont
 donc « non configurés », aucune mesure n'est affichée, et Rachelle comme la
-veille fonctionnent sans IA, comme avant. Tout s'allume dès qu'une clé est
-saisie (`python trendguard_bot.py watch set-key claude`).
+veille fonctionnent sans IA, comme avant (mode dégradé sûr). Tout s'allume
+dès qu'une clé est saisie et que son banc est réussi
+(`python trendguard_bot.py watch set-key claude`).
 
 ## Spécification des contrats de données v1.0
 

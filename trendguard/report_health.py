@@ -620,8 +620,11 @@ def skills_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
     except Exception as e:           # un bilan illisible n'empêche pas le rapport
         out.append(chk("Noyau de savoir", None, f"bilan illisible : {e}"))
     try:
-        out.append(chk("Modèles d'IA", None, modeles.describe(
-            modeles.status(path=modeles.ledger_path(getattr(gcfg, "watch_db", ""))))))
+        rows = modeles.status(path=modeles.ledger_path(getattr(gcfg, "watch_db", "")))
+        bad = [r for r in rows if r["configured"] and (r["status"] == "BLOCKED" or r["breaker"] == "OPEN")]
+        out.append(chk("Modèles d'IA", False if bad else None, modeles.describe(rows),
+                       "" if not bad else "Modèle écarté (banc raté ou pannes répétées) : vérifier sa clé, puis "
+                                          "python trendguard_bot.py modeles banc"))
     except Exception as e:           # trace illisible : le rapport continue
         out.append(chk("Modèles d'IA", None, f"trace illisible ({type(e).__name__})"))
     if lr["brier_raw"] is not None:

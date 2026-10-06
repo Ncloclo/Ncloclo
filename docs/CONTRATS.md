@@ -20,8 +20,11 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `EvolutionChange.v1` | évolution (evolution.py) | bot, à la décision suivante | 1.0.0 | INTERNAL | cœur |
 | `KnowledgeHold.v1` | noyau de savoir (savoir.py) | décision du jour | 1.0.0 | INTERNAL | cœur |
 | `LLMExecution.v1` | exécution des modèles (modeles.py) | trace des IA, rapport, panneau | 1.0.0 | INTERNAL | cœur |
+| `ModelBenchmark.v1` | banc (modeles.py) | routeur (approbation), fiche du modèle, rapport | 1.0.0 | INTERNAL | cœur |
 | `ModelConsensus.v1` | veille (market_watch.py) | rapport de la veille, panneau, Rachelle | 1.0.0 | PUBLIC | cœur |
+| `ModelDisagreement.v1` | veille (market_watch.py) | rapport de la veille, panneau, Rachelle | 1.0.0 | PUBLIC | cœur |
 | `ModelSelection.v1` | routeur (modeles.py) | exécution des modèles | 1.0.0 | INTERNAL | cœur |
+| `PromptVersion.v1` | socle des modèles (modeles.py) | exécution des modèles, veille, Rachelle, banc | 1.0.0 | INTERNAL | cœur |
 | `Signal.v1` | stratégie (trend_strategy.py) | plan d'achat | 1.0.0 | INTERNAL | cœur |
 | `DecisionRecord.v1` | décision du jour | journal financier, lignée des trades | 1.0.0 | CONFIDENTIAL | données |
 | `MarketData.v1` | Binance (klines publiques) | décision du jour, régimes, qualité | 1.0.0 | INTERNAL | données |
@@ -333,6 +336,24 @@ Un appel à un modèle d'IA.
 | Trace (audit) | table llm_executions, en ajout seulement |
 | Fichiers | `trendguard/modeles.py` |
 
+## ModelBenchmark.v1
+
+Banc d'évaluation d'un modèle d'IA, versionné.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | banc (modeles.py) |
+| Consommateur | routeur (approbation), fiche du modèle, rapport |
+| Entrée | questions à réponse connue : faits, finance, calcul, piège à invention |
+| Sortie | justesse par catégorie, durée, erreurs, approuvé ou non et pourquoi |
+| Erreurs | appels en erreur : banc non concluant ; justesse sous 75 % ou régression : modèle écarté |
+| Droits | aucun modèle en service sans banc réussi |
+| Délai | 60 s par question |
+| Nouveaux essais | banc à refaire |
+| Unicité | un résultat par modèle et par banc |
+| Trace (audit) | table llm_benchmarks, en ajout seulement |
+| Fichiers | `trendguard/modeles.py` |
+
 ## ModelConsensus.v1
 
 Consensus des IA de la veille.
@@ -351,6 +372,24 @@ Consensus des IA de la veille.
 | Trace (audit) | rapport de la veille |
 | Fichiers | `trendguard/market_watch.py` |
 
+## ModelDisagreement.v1
+
+Désaccord net entre IA sur un sujet (une crypto, le climat).
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | veille (market_watch.py) |
+| Consommateur | rapport de la veille, panneau, Rachelle |
+| Entrée | positions de chaque IA (−1 à +1) |
+| Sortie | sujet, type, gravité, positions, issue (NO_DECISION : pas de moyenne) |
+| Erreurs | moins de deux positions, type ou gravité inconnus : refusé |
+| Droits | conseil seulement |
+| Délai | à la veille |
+| Nouveaux essais | aucun |
+| Unicité | un désaccord par sujet et par rapport |
+| Trace (audit) | rapport de la veille |
+| Fichiers | `trendguard/contrats.py`, `trendguard/market_watch.py` |
+
 ## ModelSelection.v1
 
 Choix du modèle d'IA pour une demande, avec ses raisons.
@@ -367,6 +406,24 @@ Choix du modèle d'IA pour une demande, avec ses raisons.
 | Nouveaux essais | aucun |
 | Unicité | même état, même choix |
 | Trace (audit) | raison notée avec chaque appel |
+| Fichiers | `trendguard/modeles.py` |
+
+## PromptVersion.v1
+
+Invite enregistrée : version, empreinte exacte, statut.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | socle des modèles (modeles.py) |
+| Consommateur | exécution des modèles, veille, Rachelle, banc |
+| Entrée | texte de l'invite |
+| Sortie | « version#empreinte » notée avec chaque appel |
+| Erreurs | texte changé sans nouvelle version, ou invite non active : IA non appelée |
+| Droits | une invite ne change que par une revue du code (et son test) |
+| Délai | immédiat |
+| Nouveaux essais | aucun |
+| Unicité | une empreinte par version |
+| Trace (audit) | trace des appels |
 | Fichiers | `trendguard/modeles.py` |
 
 ## Signal.v1

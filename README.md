@@ -453,7 +453,8 @@ consultatif sur les cryptos que la règle propose d'acheter
 (`python trendguard_bot.py comite aave`) ; éprouvé sur 8 ans, il ne ferait
 pas mieux que la règle en décidant seul, il reste donc consultatif. Étape 6 :
 socle multi-modèles d'IA ([`docs/MODELES.md`](docs/MODELES.md),
-`python trendguard_bot.py modeles`) : la meilleure IA configurée répond, une
+`python trendguard_bot.py modeles`) : une IA n'entre en service qu'après un
+banc d'évaluation réussi ; la mieux notée répond, sa réponse est vérifiée, une
 IA en panne est remplacée (repli noté), un secret ne sort jamais du PC ;
 aucune clé d'IA aujourd'hui, donc rien n'est présenté comme disponible.
 Spécification des contrats de données ([`docs/CONTRATS.md`](docs/CONTRATS.md)) :

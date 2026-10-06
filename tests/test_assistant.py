@@ -177,9 +177,17 @@ def test_ai_failure_falls_back_to_local_answer():
     assert r["source"] == "local" and "Stop" in r["answer"]
 
 
-def test_ai_helper_prefers_claude_and_can_be_disabled():
+def test_ai_helper_prefers_claude_and_can_be_disabled(tmp_path):
+    from trendguard import modeles
+    path = str(tmp_path / "trendguard_modeles.db")
+    led = modeles.Ledger(path)
+    for provider, model in (("claude", "claude-sonnet-5"), ("mistral", "mistral-medium-latest")):
+        led.bench_record("essai", modeles.bench_version(), {   # banc réussi : modèle approuvé
+            "provider": provider, "model": model, "accuracy": 1.0, "categories": {"faits": 1.0}, "p50_ms": 500,
+            "cases": 8, "errors": 0, "passed": True, "note": ""})
+    led.close()
     env = {"OPENAI_API_KEY": "k1", "ANTHROPIC_API_KEY": "k2"}
-    h = asst.AIHelper(env)
+    h = asst.AIHelper(env, ledger_path=path)
     assert h.label == "Claude" and h.model == "claude-sonnet-5"
 
     class Resp:
@@ -197,7 +205,7 @@ def test_ai_helper_prefers_claude_and_can_be_disabled():
     assert asst.AIHelper(dict(env, PANEL_ASSISTANT_IA="false")).label is None
     assert asst.AIHelper({}).label is None
     other = asst.AIHelper({"MISTRAL_API_KEY": "k"}, post=lambda url, payload, headers, timeout: {
-        "choices": [{"message": {"content": "ok"}}]})
+        "choices": [{"message": {"content": "ok"}}]}, ledger_path=path)
     assert other.label == "Mistral" and other.ask("s", [{"role": "user", "content": "x"}]) == "ok"
 
 

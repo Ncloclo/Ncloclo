@@ -457,6 +457,33 @@ class ModelConsensus:
             raise ContractError("INCONSISTENT", "sans participant, pas de consensus")
 
 
+DISAGREEMENT_TYPES = ("FACTUAL", "NUMERICAL", "LOGICAL", "TEMPORAL", "FINANCIAL", "STRATEGIC", "INTERPRETATIVE",
+                      "POLICY")
+RESOLUTIONS = ("OPEN", "RESOLVED", "ESCALATED", "NO_DECISION")
+
+
+@dataclass(frozen=True)
+class ModelDisagreement:
+    """Désaccord entre modèles (ModelDisagreement.v1 ; §29 de la
+    spécification, §27 de l'étape 6) : sujet, type, gravité, position de
+    chacun, issue. NO_DECISION : pas de moyenne trompeuse, le désaccord est
+    montré tel quel."""
+    subject: str
+    type: str
+    severity: str
+    positions: Tuple[Tuple[str, float], ...]
+    resolution_status: str = "NO_DECISION"
+    disagreement_id: str = field(default_factory=new_id)
+
+    def __post_init__(self) -> None:
+        _enum("type", self.type, DISAGREEMENT_TYPES)
+        _enum("severity", self.severity, LEVELS4)
+        _enum("resolution_status", self.resolution_status, RESOLUTIONS)
+        check_uuid("disagreement_id", self.disagreement_id)
+        if len(self.positions) < 2:
+            raise ContractError("INCONSISTENT", "un désaccord oppose au moins deux positions")
+
+
 def ohlcv_violations(rows: Any) -> int:
     """Bougies incohérentes (§41) : plus haut sous l'ouverture, la clôture
     ou le plus bas ; plus bas au-dessus ; volume négatif. Une bougie
@@ -526,7 +553,7 @@ def validate(schema: str, data: Dict[str, Any]) -> ValidationResult:
 
 SCHEMAS.update({c.__name__: c for c in (OrderIntent, RiskDecision, ExecutionAuthorization, SafeModeState,
                                         Confidence, Uncertainty, Provenance, Money, Envelope, LLMExecution,
-                                        ModelConsensus)})
+                                        ModelConsensus, ModelDisagreement)})
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -701,6 +728,25 @@ REGISTRY: Tuple[Contract, ...] = (
              "désaccord net : pas d'avis moyen", "conseil seulement : aucun effet sur les ordres", "à la veille",
              "aucun", "un consensus par jour", "rapport de la veille", 2, ("trendguard/market_watch.py",),
              classification="PUBLIC"),
+    Contract("ModelDisagreement.v1", "désaccord net entre IA sur un sujet (une crypto, le climat)",
+             "veille (market_watch.py)", "rapport de la veille, panneau, Rachelle",
+             "positions de chaque IA (−1 à +1)", "sujet, type, gravité, positions, issue (NO_DECISION : pas de moyenne)",
+             "moins de deux positions, type ou gravité inconnus : refusé", "conseil seulement", "à la veille",
+             "aucun", "un désaccord par sujet et par rapport", "rapport de la veille", 2,
+             ("trendguard/contrats.py", "trendguard/market_watch.py"), classification="PUBLIC"),
+    Contract("PromptVersion.v1", "invite enregistrée : version, empreinte exacte, statut", "socle des modèles (modeles.py)",
+             "exécution des modèles, veille, Rachelle, banc", "texte de l'invite",
+             "« version#empreinte » notée avec chaque appel",
+             "texte changé sans nouvelle version, ou invite non active : IA non appelée",
+             "une invite ne change que par une revue du code (et son test)", "immédiat", "aucun",
+             "une empreinte par version", "trace des appels", 2, ("trendguard/modeles.py",)),
+    Contract("ModelBenchmark.v1", "banc d'évaluation d'un modèle d'IA, versionné", "banc (modeles.py)",
+             "routeur (approbation), fiche du modèle, rapport", "questions à réponse connue : faits, finance, "
+             "calcul, piège à invention", "justesse par catégorie, durée, erreurs, approuvé ou non et pourquoi",
+             "appels en erreur : banc non concluant ; justesse sous 75 % ou régression : modèle écarté",
+             "aucun modèle en service sans banc réussi", "60 s par question", "banc à refaire",
+             "un résultat par modèle et par banc", "table llm_benchmarks, en ajout seulement", 2,
+             ("trendguard/modeles.py",)),
     Contract("CommitteeView.v1", "avis consultatif du comité d'agents sur une crypto", "comité (comite.py)",
              "journal financier, Rachelle, panneau", "marché, régime, portefeuille, politique",
              "recommandation, consensus, confiance (Confidence.v1), incertitude, raisons, votes",

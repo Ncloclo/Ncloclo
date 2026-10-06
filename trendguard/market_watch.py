@@ -44,14 +44,14 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
 
 import v29
 
-from .contrats import ModelConsensus
+from .contrats import ModelConsensus, ModelDisagreement
 from .texte import fr
 
 DEFAULT_DB = os.path.join(v29.APP_DIR, "trendguard_veille.db")
@@ -559,16 +559,31 @@ def call_provider(p: Provider, key: str, model: str, system: str, prompt: str,
     return text, urls
 
 
+REPAIR = ("\n\nTa réponse précédente n'était pas un objet JSON valide. Réponds uniquement par l'objet JSON "
+          "conforme au schéma, sans aucun texte autour.")
+
+
 def ask_all(providers: List[Tuple[Provider, str, str]], system: str, prompts: Dict[bool, str],
             items: List[Item], universe: List[str], call: Callable[..., Tuple[str, Set[str]]] = call_provider,
             timeout: float = 180.0) -> Dict[str, Dict[str, Any]]:
-    """Toutes les IA en même temps ; une IA en panne n'empêche jamais les autres."""
+    """Toutes les IA en même temps ; une IA en panne n'empêche jamais les
+    autres. Une réponse hors schéma est redemandée une seule fois, puis
+    revalidée comme la première : jamais acceptée telle quelle."""
     def one(p: Provider, key: str, model: str) -> Dict[str, Any]:
         t0 = time.time()
         try:
             text, urls = call(p, key, model, system, prompts[p.web])
-            data = validate(extract_json(text), items, universe, urls)
-            return {"ok": True, "model": model, "data": data, "seconds": round(time.time() - t0, 1)}
+            repaired = False
+            try:
+                raw = extract_json(text)
+            except ValueError:
+                text, more = call(p, key, model, system, prompts[p.web] + REPAIR)
+                urls, raw, repaired = set(urls) | set(more), extract_json(text), True
+            data = validate(raw, items, universe, urls)
+            out = {"ok": True, "model": model, "data": data, "seconds": round(time.time() - t0, 1)}
+            if repaired:
+                out["repaired"] = True
+            return out
         except Exception as e:
             return {"ok": False, "model": model, "error": friendly_error(e),
                     "seconds": round(time.time() - t0, 1)}
@@ -639,6 +654,20 @@ def disagreements(ok: Dict[str, Dict[str, Any]]) -> Dict[str, List[float]]:
             if len(vals) >= 2 and max(vals) - min(vals) >= DISAGREE}
 
 
+def disagreement_details(ok: Dict[str, Dict[str, Any]], split: Dict[str, List[float]]) -> List[Dict[str, Any]]:
+    """Chaque désaccord net au format commun (ModelDisagreement.v1) : la
+    position de chaque IA, la gravité (écart d'au moins 1,5 : forte), l'issue
+    NO_DECISION (aucune moyenne, le désaccord est montré)."""
+    out = []
+    for a in sorted(split):
+        pos = tuple(sorted((n, round(d["sentiment"] if a == "market" else d["views"][a], 2))
+                           for n, d in ok.items() if a == "market" or a in d["views"]))
+        lo, hi = split[a]
+        out.append(asdict(ModelDisagreement(a, "INTERPRETATIVE" if a == "market" else "FINANCIAL",
+                                            "HIGH" if hi - lo >= 1.5 else "MEDIUM", pos)))
+    return out
+
+
 def consensus_contract(ok: Dict[str, Dict[str, Any]], split: Dict[str, List[float]]) -> ModelConsensus:
     """Le consensus au format commun (ModelConsensus.v1) : désaccord = plus
     grand écart d'avis entre IA (sur −1 à +1) ramené à [0, 1] ; une seule IA
@@ -661,7 +690,8 @@ def consensus(results: Dict[str, Dict[str, Any]], weights: Dict[str, Dict[str, f
     ok = {n: r["data"] for n, r in results.items() if r.get("ok")}
     if not ok:
         return {"providers": 0, "sentiment": 0.0, "summary": "", "events": [], "views": {},
-                "disagreements": {}, "status": "NONE", "agreement": 0.0, "disagreement": 0.0}
+                "disagreements": {}, "disagreement_details": [], "status": "NONE", "agreement": 0.0,
+                "disagreement": 0.0}
     w = {n: weights.get(n, {}).get("weight", 1.0) for n in ok}
     tot = sum(w.values())
     sentiment = sum(w[n] * d["sentiment"] for n, d in ok.items()) / tot
@@ -691,7 +721,8 @@ def consensus(results: Dict[str, Dict[str, Any]], weights: Dict[str, Dict[str, f
     summary_by = max(ok, key=lambda n: (w[n], -(order.index(n) if n in order else len(order))))
     return {"providers": len(ok), "sentiment": round(sentiment, 2),
             "summary": ok[summary_by]["summary"], "summary_by": summary_by,
-            "events": events, "views": views, "disagreements": split, "status": mc.status,
+            "events": events, "views": views, "disagreements": split,
+            "disagreement_details": disagreement_details(ok, split), "status": mc.status,
             "agreement": mc.agreement_score, "disagreement": mc.disagreement_score}
 
 
@@ -786,6 +817,11 @@ def daily_report(universe: Iterable[str], held: Iterable[str], now: datetime, me
         alerts.append({"level": 3,
                        "text": f"Parité USDC/USDT à {fr(peg, '.4f')} : un stablecoin décroche",
                        "url": ""})
+    for a, (lo, hi) in sorted((cons.get("disagreements") or {}).items()):
+        if a in held or a == "market":
+            alerts.append({"level": 1, "text": f"IA en désaccord sur {'le climat du marché' if a == 'market' else a.upper()} "
+                                               f"(de {fr(lo, '+.1f')} à {fr(hi, '+.1f')}) : aucun avis moyen, prudence",
+                           "url": ""})
     alerts.sort(key=lambda a: -a["level"])
     report = {
         "day": day, "generated": v29._utcnow_iso()[:16].replace("T", " ") + " UTC",
@@ -874,7 +910,9 @@ def cmd_check(env: Optional[Dict[str, str]] = None, call: Callable[..., Tuple[st
 
 
 def cmd_set_key(name: str, env_path: Optional[str] = None,
-                ask: Optional[Callable[[str], str]] = None, out=None) -> int:
+                ask: Optional[Callable[[str], str]] = None, out=None, evaluate: bool = False) -> int:
+    """Saisie masquée d'une clé d'IA ; `evaluate` : banc d'évaluation
+    aussitôt après (aucun modèle en service sans banc réussi)."""
     import getpass
 
     from . import config as tgc
@@ -894,6 +932,13 @@ def cmd_set_key(name: str, env_path: Optional[str] = None,
         return 1
     tgc.set_env_var(env_path or tgc.ENV_FILE, p.key_env, key)
     print(f"✅ Clé {p.label} enregistrée ({p.key_env}). Test : python trendguard_bot.py watch check", file=out)
+    if not evaluate:
+        return 0
+    from . import modeles
+    g = tgc.load_guard_config_from_env()
+    code = modeles.evaluate_new_key(p.name, dict(os.environ, **{p.key_env: key}), modeles.ledger_path(g.watch_db), out)
+    print(f"✅ {p.label} approuvé : il peut répondre." if code == 0 else
+          f"⚠️ {p.label} pas encore en service : relancer python trendguard_bot.py modeles banc", file=out)
     return 0
 
 
@@ -910,7 +955,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.cmd == "check":
         return cmd_check()
     if args.cmd == "set-key":
-        return cmd_set_key(args.provider or "")
+        return cmd_set_key(args.provider or "", evaluate=True)
     from . import config as tgc
     g = tgc.load_guard_config_from_env()
     held: List[str] = []
@@ -926,11 +971,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         finally:
             con.close()
     v29.sync_exchange_clock(v29.PublicKlines(), samples=2)
+    from . import modeles
     memory = WatchMemory(args.db)
+    trace = modeles.WatchTrace(modeles.ledger_path(args.db))
     try:
         report = daily_report([b.lower() for b in g.universe], held, v29._utcnow(), memory,
-                              use_ai=not args.no_ai)
+                              use_ai=not args.no_ai, trace=trace)
     finally:
+        trace.close()
         memory.close()
     print(render(report))
     return 0

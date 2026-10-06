@@ -225,8 +225,10 @@ class BotData:
         """Modèles d'IA (lecture seule) : santé mesurée des modèles configurés,
         jamais une clé ni une mesure inventée."""
         rows = modeles.status(path=modeles.ledger_path(getattr(self.g, "watch_db", "")))
-        return {"text": modeles.describe(rows),
-                "rows": [{k: r[k] for k in ("label", "model", "kind", "calls", "failures", "p50_ms", "breaker")}
+        return {"text": modeles.describe(rows), "mode": modeles.mode(rows),
+                "rows": [dict({k: r[k] for k in ("label", "model", "kind", "calls", "failures", "p50_ms", "breaker",
+                                                  "lifecycle", "lifecycle_reason", "health_score")},
+                              accuracy=(r["bench"] or {}).get("accuracy"))
                          for r in rows if r["configured"]]}
 
     def evenements(self, state: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
