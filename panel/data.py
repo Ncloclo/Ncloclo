@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import v29
-from trendguard import attribution, evenements, libre, savoir
+from trendguard import attribution, evenements, libre, modeles, savoir
 from trendguard import market_watch as mw
 from trendguard.journal import silent_logger
 
@@ -219,7 +219,15 @@ class BotData:
         vetoes = [dict(v, asset=a) for a, v in sorted((state.get("vetoes") or {}).items())]
         return {"last": state.get("last_watch"), "vetoes": vetoes, "report_text": text,
                 "report": watch_summary(rep), "ai": ai_summary(), "savoir": self.savoir(),
-                "evenements": self.evenements(state)}
+                "evenements": self.evenements(state), "modeles": self.modeles()}
+
+    def modeles(self) -> Dict[str, Any]:
+        """Modèles d'IA (lecture seule) : santé mesurée des modèles configurés,
+        jamais une clé ni une mesure inventée."""
+        rows = modeles.status(path=modeles.ledger_path(getattr(self.g, "watch_db", "")))
+        return {"text": modeles.describe(rows),
+                "rows": [{k: r[k] for k in ("label", "model", "kind", "calls", "failures", "p50_ms", "breaker")}
+                         for r in rows if r["configured"]]}
 
     def evenements(self, state: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
         """Calendrier économique (lecture seule) : annonces américaines

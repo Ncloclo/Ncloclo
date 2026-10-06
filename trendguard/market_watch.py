@@ -619,13 +619,34 @@ def provider_weights(opinions: List[Tuple[str, str, str, float]], close: Any,
     return out
 
 
+DISAGREE = 1.0       # écart d'avis entre IA (sur −1 à +1) jugé fort
+
+
+def disagreements(ok: Dict[str, Dict[str, Any]]) -> Dict[str, List[float]]:
+    """Désaccord entre IA : pour le climat (« market ») et chaque crypto,
+    l'avis le plus bas et le plus haut quand leur écart atteint DISAGREE
+    (l'une voit nettement positif, l'autre nettement négatif)."""
+    out: Dict[str, List[float]] = {}
+    spans = {"market": [d["sentiment"] for d in ok.values()]}
+    for d in ok.values():
+        for a, s in d["views"].items():
+            spans.setdefault(a, []).append(s)
+    for a, vals in spans.items():
+        if len(vals) >= 2 and max(vals) - min(vals) >= DISAGREE:
+            out[a] = [round(min(vals), 2), round(max(vals), 2)]
+    return out
+
+
 def consensus(results: Dict[str, Dict[str, Any]], weights: Dict[str, Dict[str, float]]) -> Dict[str, Any]:
     """Consensus des IA pondéré par leur fiabilité : climat moyen, avis par
-    crypto, événements regroupés par crypto et catégorie (gravité médiane)
-    et résumé de l'IA la plus fiable."""
+    crypto, événements regroupés par crypto et catégorie (gravité médiane),
+    désaccords entre IA et résumé de l'IA la plus fiable. Une crypto sur
+    laquelle les IA divergent nettement n'a pas d'avis moyen (une moyenne
+    cacherait le désaccord) : elle figure dans les désaccords."""
     ok = {n: r["data"] for n, r in results.items() if r.get("ok")}
     if not ok:
-        return {"providers": 0, "sentiment": 0.0, "summary": "", "events": [], "views": {}}
+        return {"providers": 0, "sentiment": 0.0, "summary": "", "events": [], "views": {},
+                "disagreements": {}}
     w = {n: weights.get(n, {}).get("weight", 1.0) for n in ok}
     tot = sum(w.values())
     sentiment = sum(w[n] * d["sentiment"] for n, d in ok.items()) / tot
@@ -633,6 +654,8 @@ def consensus(results: Dict[str, Dict[str, Any]], weights: Dict[str, Dict[str, f
     for a in sorted({a for d in ok.values() for a in d["views"]}):
         num = [(w[n], d["views"][a]) for n, d in ok.items() if a in d["views"]]
         views[a] = round(sum(x * s for x, s in num) / sum(x for x, _ in num), 2)
+    split = disagreements(ok)
+    views = {a: v for a, v in views.items() if a not in split}
     groups: Dict[Tuple[str, str], List[Tuple[str, Dict[str, Any]]]] = {}
     for n, d in ok.items():
         for e in d["events"]:
@@ -652,7 +675,7 @@ def consensus(results: Dict[str, Dict[str, Any]], weights: Dict[str, Dict[str, f
     summary_by = max(ok, key=lambda n: (w[n], -(order.index(n) if n in order else len(order))))
     return {"providers": len(ok), "sentiment": round(sentiment, 2),
             "summary": ok[summary_by]["summary"], "summary_by": summary_by,
-            "events": events, "views": views}
+            "events": events, "views": views, "disagreements": split}
 
 
 KEYWORDS = (("hack", re.compile(r"\b(hack(ed)?|exploit(ed)?|stolen|drain(ed)?)\b", re.I)),
@@ -685,10 +708,12 @@ def daily_report(universe: Iterable[str], held: Iterable[str], now: datetime, me
                  close: Any = None, use_ai: bool = True, env: Optional[Dict[str, str]] = None,
                  fetch_json: Callable[[str], Any] = http_json,
                  fetch_bytes: Callable[[str], bytes] = http_get,
-                 call: Callable[..., Tuple[str, Set[str]]] = call_provider) -> Dict[str, Any]:
+                 call: Callable[..., Tuple[str, Set[str]]] = call_provider,
+                 trace: Any = None) -> Dict[str, Any]:
     """Veille du jour : annonces officielles de Binance (vetos d'achat),
     actualités, indicateurs et avis des IA réunis en consensus ; alertes
-    triées par gravité. Rapport gardé en mémoire, puis renvoyé."""
+    triées par gravité. Rapport gardé en mémoire, puis renvoyé. `trace`
+    (modeles.WatchTrace) : IA au disjoncteur ouvert écartées, appels tracés."""
     universe = [a.lower() for a in universe]
     held = [a.lower() for a in held]
     day = now.date().isoformat()
@@ -709,7 +734,13 @@ def daily_report(universe: Iterable[str], held: Iterable[str], now: datetime, me
         past = memory.recent_reports(day)
         prompts = {web: build_prompt(day, universe, held, items, indicators, past, web)
                    for web in (False, True)}
+        skipped: Dict[str, Dict[str, Any]] = {}
+        if trace is not None:
+            providers, skipped = trace.screen(providers)
         results = ask_all(providers, SYSTEM, prompts, items, universe, call)
+        if trace is not None:
+            trace.record(results)
+        results.update(skipped)
         for n, r in results.items():
             if r.get("ok"):
                 memory.save_opinions(day, n, r["data"]["views"])
@@ -781,6 +812,10 @@ def render(report: Dict[str, Any]) -> str:
         top = sorted(c["views"].items(), key=lambda kv: kv[1])
         lines.append("Avis par crypto : "
                      + ", ".join(f"{a.upper()} {fr(s, '+.1f')}" for a, s in top))
+    if c.get("disagreements"):
+        lines.append("IA en désaccord (avis à prendre avec prudence) : " + ", ".join(
+            f"{'climat' if a == 'market' else a.upper()} de {fr(lo, '+.1f')} à {fr(hi, '+.1f')}"
+            for a, (lo, hi) in sorted(c["disagreements"].items())))
     if report["providers"]:
         parts = []
         for n, r in sorted(report["providers"].items()):

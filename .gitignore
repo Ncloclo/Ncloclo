@@ -19,6 +19,8 @@
 *.registre.json.tmp
 *.audit.jsonl
 *.expert.json
+*.modeles_banc.json
+*.modeles_banc.json.tmp
 *.expert.json.tmp
 *.modesur.json
 *.modesur.json.tmp

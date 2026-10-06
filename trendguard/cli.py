@@ -689,7 +689,8 @@ TOOLS = {"alerts": ("alerts", "alertes : configurer | tester"),
          "audit": ("audit", "journal d'audit : [verifier] | dernier"),
          "donnees": ("donnees", "journal financier : [verifier] | lignee [trade] | catalogue"),
          "expert": ("expert", "diagnostic expert du noyau cognitif (lecture seule) : [--rapide]"),
-         "comite": ("comite", "avis consultatif du comité d'agents : <crypto> | --banc")}
+         "comite": ("comite", "avis consultatif du comité d'agents : <crypto> | --banc"),
+         "modeles": ("modeles", "modèles d'IA : [statut] | banc")}
 
 
 def _parser() -> argparse.ArgumentParser:

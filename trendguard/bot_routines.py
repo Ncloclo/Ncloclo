@@ -25,6 +25,7 @@ from . import (
     evolution,
     learning,
     libre,
+    modeles,
     report,
     savoir,
     systeme,
@@ -417,21 +418,24 @@ class RoutinesMixin:
         self.state["last_watch_day"] = day
         self._save_state()
         memory = None
+        trace = modeles.WatchTrace(modeles.ledger_path(self.g.watch_db))
         try:
             memory = mw.WatchMemory(self.g.watch_db)
             report = mw.daily_report([s.base.lower() for s in self.slots.values()],
                                      list(self._holdings()), now, memory,
-                                     close=self._last_close)
+                                     close=self._last_close, trace=trace)
         except Exception as e:
             self.logger.warning(f"[VEILLE] rapport impossible : {mw.friendly_error(e)}")
             return
         finally:
+            trace.close()
             if memory is not None:
                 memory.close()
         c = report["consensus"]
         self.state["last_watch"] = {
             "day": report["day"], "sentiment": c["sentiment"], "providers": c["providers"],
             "providers_total": len(report["providers"]),
+            "disagreements": sorted(c.get("disagreements") or {}),
             "alerts": [a["text"] for a in report["alerts"][:6]]}
         self._save_state()
         self.logger.info("[VEILLE]\n" + mw.render(report))

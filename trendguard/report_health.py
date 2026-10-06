@@ -24,6 +24,7 @@ from . import (
     evolution,
     learning,
     libre,
+    modeles,
     postmortem,
     registre,
     risque,
@@ -609,8 +610,8 @@ def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
 
 
 def skills_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
-    """Compétences acquises : apprentissage libre, noyau de savoir et
-    évolution encadrée."""
+    """Compétences acquises : apprentissage libre, noyau de savoir, modèles
+    d'IA et évolution encadrée."""
     lr = learning.summary(st.get("learning"))
     out = [chk("Apprentissage libre", None, lr["text"]),
            chk("Journal des trades", None, postmortem.summary(st.get("trades") or [])["text"])]
@@ -618,6 +619,11 @@ def skills_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
         out += knowledge_check(gcfg)
     except Exception as e:           # un bilan illisible n'empêche pas le rapport
         out.append(chk("Noyau de savoir", None, f"bilan illisible : {e}"))
+    try:
+        out.append(chk("Modèles d'IA", None, modeles.describe(
+            modeles.status(path=modeles.ledger_path(getattr(gcfg, "watch_db", ""))))))
+    except Exception as e:           # trace illisible : le rapport continue
+        out.append(chk("Modèles d'IA", None, f"trace illisible ({type(e).__name__})"))
     if lr["brier_raw"] is not None:
         # Une information, jamais un point à corriger : l'apprentissage se
         # juge sur la durée (au moins 100 prévisions comparées à la clôture).

@@ -24,10 +24,11 @@ from __future__ import annotations
 
 import os
 import re
+import threading
 import unicodedata
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from trendguard import expert
+from trendguard import expert, modeles
 from trendguard import market_watch as mw
 from trendguard.texte import fr
 
@@ -587,6 +588,21 @@ def a_comite(ctx: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def a_modeles(ctx: Dict[str, Any]) -> str:
+    rows = ctx.get("modeles") or []
+    lines = ["**Modèles d'IA** : " + (modeles.describe(rows) if rows else "état inconnu pour l'instant") + "."]
+    lines += [
+        "- Le bot connaît huit fournisseurs (Claude, GPT, Gemini, DeepSeek, Mistral, Kimi, Perplexity, Grok) "
+        "et un modèle local facultatif ; seuls ceux dont vous avez mis la clé sont employés.",
+        "- Pour chaque question, le meilleur modèle disponible répond ; s'il échoue, le suivant prend le "
+        "relais, et sans IA je réponds moi-même à partir de l'état du bot.",
+        "- Chaque appel est noté (durée, erreur, version de la consigne) ; après trois échecs de suite, un "
+        "modèle est mis de côté 15 minutes (disjoncteur).",
+        "- Un texte qui ressemble à une clé ou un mot de passe n'est jamais envoyé à une IA extérieure.",
+        "- Une IA conseille ou explique ; elle ne passe jamais d'ordre. État : python trendguard_bot.py modeles."]
+    return "\n".join(lines)
+
+
 def a_learning(ctx: Dict[str, Any]) -> str:
     lr = (ctx.get("status") or {}).get("learning") or {}
     lines = [
@@ -789,6 +805,9 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
                    "ses propres reglages", "modifier ses reglages", "change ses reglages",
                    "changer les regles", "change ses regles"),
      a_evolution, [{"label": "Réglages ▸ autonomie", "href": "#settings"}]),
+    ("modeles", ("modeles d ia", "modele d ia", "quelles ia", "quelle ia", "llm", "fournisseurs d ia",
+                 "multi modeles", "plusieurs ia", "routage", "disjoncteur", "modele local", "ollama",
+                 "sante des ia"), a_modeles, [{"label": "Veille", "href": "#watch"}]),
     ("watch", ("veille", "ia", "intelligence", "claude", "gpt", "annonce", "annonces",
                "retrait de la cote", "delisting", "bloquee", "bloquees"), a_watch,
      [{"label": "Veille", "href": "#watch"}]),
@@ -903,48 +922,64 @@ def knowledge(ctx: Dict[str, Any]) -> str:
 
 
 class AIHelper:
-    """Première IA configurée pour la veille (Claude de préférence)."""
+    """IA de Rachelle par le socle multi-modèles (trendguard/modeles.py) :
+    la meilleure d'abord (Claude de préférence), repli tracé sur la suivante
+    si elle échoue, sinon réponse intégrée. Chaque appel est tracé dans
+    `ledger_path` (vide : trace en mémoire, pour les essais)."""
 
     def __init__(self, env: Optional[Dict[str, str]] = None,
                  post: Callable[..., Any] = mw.http_post_json,
-                 claude_factory: Optional[Callable[[str], Any]] = None):
+                 claude_factory: Optional[Callable[[str], Any]] = None, ledger_path: str = ""):
         env = os.environ if env is None else env
+        self.env = env
         self.post = post
         self.claude_factory = claude_factory
+        self.ledger_path = ledger_path
         self.provider = None
+        self._routes: Dict[str, Tuple[Any, str, str]] = {}
+        self._local = threading.local()          # qui a répondu, par requête du panneau
         if (env.get("PANEL_ASSISTANT_IA") or "true").strip().lower() in ("0", "false", "non", "no"):
             return
-        found = mw.configured(env)
-        found.sort(key=lambda x: x[0].name != "claude")
-        if found:
-            p, key, model = found[0]
+        for p, key, model in mw.configured(env):
             if p.name == "claude":
                 model = (env.get("PANEL_ASSISTANT_MODEL") or "claude-sonnet-5").strip()
-            self.provider, self._key, self.model = p, key, model
+            self._routes[p.name] = (p, key, model)
+        lp = modeles.local_provider(env)
+        if lp is not None:
+            self._routes[lp.name] = (lp, "", lp.model)
+        if self._routes:
+            first = self._routes.get("claude") or next(iter(self._routes.values()))
+            self.provider, self.model = first[0], first[2]
 
     @property
     def label(self) -> Optional[str]:
         return self.provider.label if self.provider else None
 
+    def answered_by(self) -> Optional[str]:
+        """L'IA qui a donné la dernière réponse de cette requête (repli compris)."""
+        return getattr(self._local, "used", None)
+
     def ask(self, system: str, messages: List[Dict[str, str]]) -> str:
-        p = self.provider
-        if p is None:
+        if self.provider is None:
             raise RuntimeError("aucune IA configurée")
-        if p.name == "claude":
-            if self.claude_factory is not None:
-                client = self.claude_factory(self._key)
-            else:
-                import anthropic
-                client = anthropic.Anthropic(api_key=self._key, timeout=60.0, max_retries=1)
-            r = client.messages.create(model=self.model, max_tokens=1024, system=system,
-                                       messages=messages)
-            if r.stop_reason == "refusal":
-                return REFUSED
-            return next((b.text for b in r.content if b.type == "text"), "")
-        resp = self.post(p.url, {"model": self.model,
-                                 "messages": [{"role": "system", "content": system}] + messages},
-                         {"Authorization": f"Bearer {self._key}"}, timeout=60.0)
-        return resp["choices"][0]["message"]["content"] or ""
+        models = modeles.with_model(modeles.registry(self.env), {n: r[2] for n, r in self._routes.items()})
+        user_text = "\n".join(m["content"] for m in messages if m["role"] == "user")
+        led = modeles.Ledger(self.ledger_path)
+        try:
+            ex = modeles.execute("rachelle", ("rachelle", SYSTEM), user_text,
+                                 lambda m: self._chat(m.provider, system, messages), env=self.env, ledger=led,
+                                 base_privacy="INTERNAL", models=models)
+        finally:
+            led.close()
+        if ex is None:
+            raise RuntimeError("aucune IA n'a répondu")
+        self._local.used = self._routes[ex.provider][0].label
+        return ex.text
+
+    def _chat(self, name: str, system: str, messages: List[Dict[str, str]]) -> Any:
+        p, key, model = self._routes[name]
+        return modeles.chat_call(p, key, model, system, messages, post=self.post,
+                                 claude_factory=self.claude_factory, refusal=REFUSED)
 
 
 class Assistant:
@@ -998,5 +1033,6 @@ class Assistant:
             return local                               # IA injoignable : réponse intégrée
         if not text:
             return local
+        by = getattr(self.ai, "answered_by", None)
         return {"answer": text, "actions": local["actions"], "suggestions": local["suggestions"],
-                "source": self.ai.label}
+                "source": (by() if by else None) or self.ai.label}

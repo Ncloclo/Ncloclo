@@ -234,6 +234,29 @@ son avis aurait fait nettement moins bien (Calmar 0,83 au lieu de 1,54 sur
 avis sont mesurés sur les trades réels, et une règle ne sera proposée que
 s'ils font mieux de façon nette.
 
+## Étape 6 du prompt : socle multi-modèles d'IA
+
+Le sixième document demande de ne jamais dépendre aveuglément d'une seule
+IA : registre des fournisseurs et des modèles, routeur, santé, disjoncteur,
+repli tracé, budget, confidentialité, versions des invites, consensus et
+désaccord, banc d'évaluation, trace de chaque appel. Appliqué à TrendGuard :
+`modeles.py`, par lequel passent Rachelle et la veille. Détail :
+[`MODELES.md`](MODELES.md).
+
+| Exigence de l'étape 6 | Ce qui a été fait |
+| --- | --- |
+| Registres, manifestes, capacités (§4-7) | 8 fournisseurs du code et un modèle local facultatif ; configuré seulement si sa clé est dans `.env` ; jamais la clé dans le registre |
+| Routeur, santé, disjoncteur, repli (§8-15) | modèle choisi par réussite mesurée et préférence, raison notée ; 3 échecs de suite : mis de côté 15 minutes ; repli tracé, puis réponse intégrée sans IA |
+| Plusieurs modèles, consensus, désaccord (§16-19, §65) | la veille interroge toutes les IA ; un désaccord net n'est plus moyenné, il est montré |
+| Invites, jetons, budget (§27-33) | version de chaque invite notée et tenue par un test ; jetons notés quand ils sont donnés ; plafond par jour |
+| Confidentialité, modèle local, sécurité (§38-43) | un texte qui ressemble à un secret ne sort jamais du PC ; un « modèle local » vers Internet est refusé ; aucune IA n'a d'outil |
+| Banc, régression, trace (§44-49, §91) | `python trendguard_bot.py modeles banc` ; table `llm_executions` en ajout seulement ; rapport, page Veille, Rachelle |
+
+**Honnêtement** : aucune clé d'IA n'est sur ce PC. Les 8 fournisseurs sont
+donc « non configurés », aucune mesure n'est affichée, et Rachelle comme la
+veille fonctionnent sans IA, comme avant. Tout s'allume dès qu'une clé est
+saisie (`python trendguard_bot.py watch set-key claude`).
+
 ## Ce qui reste (votre accord d'abord)
 
 1. **Débat des IA** (§43) : rôles haussier, baissier, critique et synthèse
