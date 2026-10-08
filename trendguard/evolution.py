@@ -42,7 +42,6 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import itertools
-import json
 import math
 import os
 import sys
@@ -149,14 +148,7 @@ def state_path(gcfg: Any) -> str:
 
 
 def load_state(path: str) -> Dict[str, Any]:
-    st: Dict[str, Any] = {}
-    if path:
-        try:
-            with open(path, encoding="utf-8") as fh:
-                raw = json.load(fh)
-            st = raw if isinstance(raw, dict) else {}
-        except (OSError, ValueError):
-            st = {}
+    st: Dict[str, Any] = autonomy.read_json(path) if path else {}
     try:
         st["level"] = min(max(int(st.get("level", 1)), 1), len(LEVELS))
         st["xp"] = max(int(st.get("xp", 0)), 0)
