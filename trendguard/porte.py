@@ -12,7 +12,15 @@ fois, nombre de positions, risque de l'achat, risque cumulé, taille de la
 position, argent disponible, stop sous le prix, montant minimum, qualité des
 données du jour (au moins 50 sur 100 : en dessous, les données sont trop
 abîmées pour décider ; étape 3, §76), évaluation du jour du moteur de risque
-(moteur_risque.py, étape 11 : absente, périmée ou bloquée, aucun achat).
+(moteur_risque.py, étape 11 : absente, périmée ou bloquée, aucun achat), et
+en réel les règles de Binance pour cet achat (paire cotée et active, pas du
+lot, bornes de quantité, montant minimum ; étape 16, §11).
+
+Validation finale (étape 16, §21) : juste avant l'ordre, l'autorisation
+est-elle encore valable, liée à son contrôle et non consommée ? L'arrêt
+d'urgence et le mode sûr (relu sur le disque) sont-ils toujours levés ?
+L'état critique a-t-il changé depuis le contrôle (empreinte) ? S'il a
+changé, nouveau contrôle complet. Un doute bloque l'achat.
 
 Le plan du jour respecte déjà ces limites : la porte ne change rien aux
 décisions normales (10 % de marge pour les écarts de prix et de capital entre
@@ -27,6 +35,7 @@ de lire, d'analyser, de protéger et de vendre.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import uuid
 from dataclasses import dataclass
@@ -37,13 +46,14 @@ from . import autonomy
 from .contrats import (
     ContractError,
     ExecutionAuthorization,
+    FinalValidationResult,
     OrderIntent,
     RiskDecision,
     SafeModeState,
 )
 from .texte import fr
 
-POLICY_VERSION = "porte.v1"
+POLICY_VERSION = "porte.v2"              # v2 (étape 16) : règles de Binance en réel, validation finale
 MARGIN = 0.10               # écart toléré entre le plan (clôture) et l'achat (prix, capital du moment)
 MIN_NOTIONAL = 10.0         # même minimum que la taille des positions (trend_strategy.size_position)
 AUTH_SECONDS = 300          # une autorisation vaut 5 minutes
@@ -73,6 +83,7 @@ class Portfolio:
     live_armed: bool = False
     production: Optional[Tuple[bool, str]] = None  # porte du réel (ouverte, détail) ; None : non mesurée (essais)
     risk_engine: Optional[Tuple[bool, str]] = None  # moteur de risque (évaluation valide, détail) ; None : essais
+    instrument: Optional[Tuple[bool, str]] = None   # règles de Binance pour cet achat (réel) ; None : paper, essais
 
 
 def _limits(intent: OrderIntent, pf: Portfolio, p: Any) -> List[Tuple[str, bool, str]]:
@@ -118,6 +129,8 @@ def _limits(intent: OrderIntent, pf: Portfolio, p: Any) -> List[Tuple[str, bool,
          f"{fr(pf.data_quality, '.0f')}/100 ({fr(QUALITY_MIN, '.0f')} au moins)"),
         ("Moteur de risque", pf.risk_engine is None or pf.risk_engine[0],
          "non mesuré (essais)" if pf.risk_engine is None else pf.risk_engine[1]),
+        ("Instrument négociable", pf.instrument is None or pf.instrument[0],
+         ("paper" if not pf.live else "non vérifié (essais)") if pf.instrument is None else pf.instrument[1]),
     ]
     return checks
 
@@ -154,6 +167,67 @@ def authorize(decision: RiskDecision, pf: Portfolio, now: datetime) -> Execution
         policy_version=POLICY_VERSION, risk_check_id=decision.risk_check_id,
         expiration=(now + timedelta(seconds=AUTH_SECONDS)).isoformat(timespec="seconds"),
         restrictions=RESTRICTIONS if ok else ())
+
+
+def instrument_check(rules: Any, qty: float, price: float, listed: bool) -> Tuple[bool, str]:
+    """Règles de Binance pour un achat réel (§11, §14-15), les mêmes que
+    l'exécution (v29) : paire cotée et active, quantité arrondie au pas du
+    lot non nulle et dans ses bornes, montant d'au moins le minimum de
+    Binance + 5 %. Une règle illisible refuse."""
+    min_cost = float(getattr(rules, "min_cost", 0.0) or 10.0)
+    min_qty = float(getattr(rules, "min_amount", 0.0) or 0.0)
+    max_qty = getattr(rules, "max_amount", None)
+    if not listed:
+        return False, "paire absente ou inactive chez Binance"
+    if not qty > 0 or not price > 0:
+        return False, "quantité nulle une fois arrondie au pas du lot"
+    if qty < min_qty:
+        return False, f"quantité {fr(qty, '.8g')} sous le minimum de Binance {fr(min_qty, '.8g')}"
+    if max_qty and qty > float(max_qty):
+        return False, f"quantité {fr(qty, '.8g')} au-dessus du maximum de Binance {fr(float(max_qty), '.8g')}"
+    if qty * price < min_cost * 1.05:
+        return False, f"montant {fr(qty * price, '.2f')} sous le minimum de Binance {fr(min_cost, '.2f')} (+ 5 %)"
+    return True, f"quantité {fr(qty, '.8g')} au pas du lot, montant {fr(qty * price, '.2f')} pour {fr(min_cost, '.2f')} au moins"
+
+
+def fingerprint(pf: Portfolio) -> str:
+    """Empreinte de l'état critique au moment du contrôle (§21, T1) : ce qui,
+    s'il change avant l'ordre, impose un nouveau contrôle."""
+    items = (round(pf.equity, 8), round(pf.cash, 8), tuple(sorted(pf.held_risk)), pf.risk_mult, pf.expected_day,
+             tuple(sorted(pf.universe)), tuple(sorted(pf.allowed)), tuple(sorted(pf.vetoed)),
+             tuple(sorted(pf.bought_today)), pf.halted, pf.garde_blocked, pf.safe_mode.active, pf.data_quality,
+             pf.live, pf.live_armed, pf.production, pf.risk_engine, pf.instrument)
+    return hashlib.sha256(repr(items).encode("utf-8")).hexdigest()[:16]
+
+
+def final_validation(intent: OrderIntent, decision: RiskDecision, auth: ExecutionAuthorization, before: str,
+                     pf_now: Portfolio, p: Any, now: datetime) -> FinalValidationResult:
+    """Validation finale juste avant l'ordre (§21, T2) : l'autorisation est
+    encore valable, liée à ce contrôle et non consommée ; l'arrêt d'urgence
+    et le mode sûr sont toujours levés ; si l'état critique a changé depuis
+    le contrôle, nouveau contrôle complet (il doit être approuvé)."""
+    after = fingerprint(pf_now)
+    checks = [
+        ("Autorisation valable", auth.valid_at(now),
+         f"jusqu'à {auth.expiration}" if auth.authorized else "aucune autorisation"),
+        ("Autorisation de ce contrôle", decision.approved and auth.risk_check_id == decision.risk_check_id,
+         auth.risk_check_id or "—"),
+        ("Autorisation non consommée", intent.idempotency_key not in pf_now.bought_today,
+         "déjà utilisée pour un achat" if intent.idempotency_key in pf_now.bought_today else "première utilisation"),
+        ("Arrêt d'urgence", not pf_now.halted, "déclenché depuis le contrôle" if pf_now.halted else "prêt"),
+        ("Mode sûr", not pf_now.safe_mode.active,
+         "activé depuis le contrôle" if pf_now.safe_mode.active else "inactif"),
+    ]
+    if after != before:
+        again = check(intent, pf_now, p, now)
+        checks.append(("Nouveau contrôle (état changé)", again.approved,
+                       "approuvé" if again.approved else " ; ".join(again.blocking_reasons)))
+    failed = [f"{name.lower()} : {detail}" for name, ok, detail in checks if not ok]
+    return FinalValidationResult(
+        validation_id=str(uuid.uuid4()), risk_check_id=decision.risk_check_id,
+        authorization_id=auth.authorization_id, status="BLOCK" if failed else "PASS", checks=tuple(checks),
+        snapshot_before=before, snapshot_after=after, revalidated=after != before, reasons=tuple(failed),
+        created_at=now.isoformat(timespec="seconds"))
 
 
 def refusal(e: ContractError, asset: str, now: datetime) -> RiskDecision:
@@ -209,6 +283,14 @@ def cmd_safe_mode(gcfg: Any, action: str, now: datetime, say: Any = print) -> in
         st = safe_mode(gcfg)
         say(f"Mode sûr : {'ACTIF depuis ' + st.activated_at + ' (' + st.reason + ')' if st.active else 'inactif'}")
     return 0
+
+
+def describe_final(r: FinalValidationResult) -> str:
+    """Une phrase pour le journal : la validation finale."""
+    if r.passed:
+        return ("validation finale : " + (f"{len(r.checks)} vérifications conformes"
+                                          + (" (état changé, nouveau contrôle approuvé)" if r.revalidated else "")))
+    return "achat arrêté à la validation finale : " + " ; ".join(r.reasons)
 
 
 def describe(decision: RiskDecision, auth: Optional[ExecutionAuthorization] = None) -> str:

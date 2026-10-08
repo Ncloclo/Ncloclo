@@ -37,6 +37,7 @@ from trendguard import (
     moteur_portefeuille,
     moteur_risque,
     politique,
+    porte_examen,
 )
 from trendguard import market_watch as mw
 from trendguard.texte import fr
@@ -722,6 +723,22 @@ def doc_points(name: str, heading: str = "## Conclusions", limit: int = 6) -> Li
     return points[:limit]
 
 
+def a_porte(ctx: Dict[str, Any]) -> str:
+    """La porte d'exécution : le dernier contrôle avant un ordre."""
+    view = ctx.get("porte") or {}
+    lines = ["**Porte d'exécution** : aucun achat sans elle, en paper comme en réel. Elle contrôle le risque, "
+             "l'arrêt d'urgence, le mode sûr, les limites et, en réel, les règles de Binance ; elle autorise pour 5 "
+             "minutes ; puis, juste avant l'ordre, une validation finale vérifie que rien n'a changé (autorisation "
+             "encore valable et non utilisée, mode sûr toujours levé, risque inchangé, sinon nouveau contrôle). "
+             "Une panne ou un doute : pas d'achat. Les ventes n'y passent pas : réduire le risque reste toujours "
+             "possible.",
+             "Aujourd'hui : " + porte_examen.describe(view) + "."]
+    lines += [f"- {x}" for x in (view.get("reasons") or [])[-3:]]
+    lines.append("Examen complet (50 critères, essai de 10 000 demandes) : python trendguard_bot.py porte. "
+                 "Je lis et j'explique, je n'agis pas : je n'ai aucune route vers Binance.")
+    return "\n".join(lines)
+
+
 def a_autorisation(ctx: Dict[str, Any]) -> str:
     """Le moteur d'autorisation : qui peut faire quoi."""
     return "\n".join([
@@ -1024,6 +1041,8 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("validation", ("validation du backtest", "backtest valide", "moteur de backtest", "sur ajustement",
                     "surapprentissage", "overfitting", "sharpe degonfle", "probabilite de sur ajustement"),
      a_validation, []),
+    ("porte", ("porte d execution", "validation finale", "execution gate", "juste avant l ordre",
+               "derniere verification", "chaos"), a_porte, []),
     ("autorisation", ("moteur d autorisation", "autorisation", "qui peut", "droits", "permissions",
                       "separation des taches", "quatre yeux", "armer le reel", "qui decide"), a_autorisation, []),
     ("politique", ("moteur de politiques", "politiques", "politique", "regles de securite", "registre des regles",

@@ -227,11 +227,14 @@ COMPONENTS: Tuple[Component, ...] = (
               "mesurés"),
     Component(_c(16), "Politique, autorisation et porte d'exécution", "P0", "MONITORED", "RISQUE",
               deps=((_c(13), "HARD"), (_c(4), "SECURITY"), (_c(3), "SECURITY")),
-              files=("trendguard/porte.py", "trendguard/politique.py", "trendguard/autorisation.py"),
-              tests=("tests/test_contrats.py", "tests/test_politique.py", "tests/test_autorisation.py"),
+              files=("trendguard/porte.py", "trendguard/politique.py", "trendguard/autorisation.py",
+                     "trendguard/porte_examen.py"),
+              tests=("tests/test_contrats.py", "tests/test_politique.py", "tests/test_autorisation.py",
+                     "tests/test_porte_examen.py"),
               contracts=("ExecutionAuthorization.v1", "SafeModeState.v1", "OrderIntent.v1", "PolicyDecision.v1",
-                         "AuthorizationDecision.v1"),
-              docs=("docs/CONTRATS.md", "docs/MOTEUR_POLITIQUE.md", "docs/MOTEUR_AUTORISATION.md"), security="autorisation de 5 minutes liée à un contrôle ; mode sûr ; "
+                         "AuthorizationDecision.v1", "FinalValidationResult.v1", "GateReadinessReport.v1"),
+              docs=("docs/CONTRATS.md", "docs/MOTEUR_POLITIQUE.md", "docs/MOTEUR_AUTORISATION.md",
+                    "docs/PORTE_EXECUTION.md"), security="autorisation de 5 minutes liée à un contrôle ; mode sûr ; "
               "réel armé ; porte du réel", observability="autorisation gardée avec l'achat", risk="CRITICAL",
               acceptance="aucun ordre sans autorisation ; aucune IA ni agent sur ce chemin"),
     Component(_c(17), "Connecteur Binance (ordres réels)", "P0", "TESTING", "EXÉCUTION",

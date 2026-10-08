@@ -509,6 +509,12 @@ porte d'exécution, vérifiée à chaque achat.
 `python trendguard_bot.py autorisation`) : qui peut faire quoi, refus par
 défaut, séparation des tâches ; armer le réel, le risque, les secrets et le
 code restent à vous seul ; chaque action du panneau est vérifiée.
+Étape 16 : porte d'exécution
+([`docs/PORTE_EXECUTION.md`](docs/PORTE_EXECUTION.md),
+`python trendguard_bot.py porte`) : validation finale juste avant l'ordre
+(rien n'a changé depuis le contrôle), règles de Binance en réel, une seule
+route d'achat, chaos de 10 000 demandes sans ordre non autorisé ; examen
+AC-001 à AC-050.
 Cadre de priorités et de dépendances
 ([`docs/FEUILLE_DE_ROUTE.md`](docs/FEUILLE_DE_ROUTE.md),
 `python trendguard_bot.py chantiers portes`) : chaque composant prouvé, et

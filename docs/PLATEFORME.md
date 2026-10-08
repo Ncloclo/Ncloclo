@@ -96,7 +96,7 @@ le bot avec et sans la porte : mêmes trades).
 | --- | --- |
 | Contrats explicites, versionnés, registre des contrats, matrice, niveaux de priorité (§3-5, §41, §44, §60-61, §71) | `contrats.py` : 17 contrats (producteur, consommateur, entrée, sortie, erreurs, droits, délai, nouveaux essais, unicité, trace, fichiers, niveau) ; [`CONTRATS.md`](CONTRATS.md) en est tiré et un test vérifie qu'ils restent identiques |
 | Schémas stricts, erreurs standard (§4.3, §36, §64) | intention d'achat, décision de risque, autorisation, mode sûr : vérifiés à la création ; valeur manquante, mauvais type, hors limites ou autre version refusés, jamais corrigés en silence (enveloppe d'erreur : code, catégorie, nouvel essai possible) |
-| Moteur de risque, porte d'exécution, chaîne Signal → Décision → Risque → Autorisation → Ordre sans raccourci (§26, §28, §29, §54) | `porte.py` : 17 contrôles fixes avant CHAQUE achat, en paper comme en réel (mode réel armé, porte du réel, arrêt d'urgence, mode sûr, garde du jour, décision du jour, crypto autorisée, doublon, positions, risque de l'achat, risque cumulé, taille, argent disponible, stop sous le prix, montant minimum, qualité des données au moins 50/100, évaluation du jour du moteur de risque, étape 11) ; APPROVED, REJECTED ou EMERGENCY_BLOCK avec la raison ; autorisation valable 5 minutes |
+| Moteur de risque, porte d'exécution, chaîne Signal → Décision → Risque → Autorisation → Ordre sans raccourci (§26, §28, §29, §54) | `porte.py` : 18 contrôles fixes avant CHAQUE achat, en paper comme en réel (mode réel armé, porte du réel, arrêt d'urgence, mode sûr, garde du jour, décision du jour, crypto autorisée, doublon, positions, risque de l'achat, risque cumulé, taille, argent disponible, stop sous le prix, montant minimum, qualité des données au moins 50/100, évaluation du jour du moteur de risque, étape 11 ; règles de Binance en réel, étape 16) ; APPROVED, REJECTED ou EMERGENCY_BLOCK avec la raison ; autorisation valable 5 minutes |
 | Le LLM n'est jamais l'autorité finale (§62-63, §73) | déjà vrai et désormais écrit dans les contrats : les IA donnent un avis, le noyau de savoir peut seulement reporter un achat, la porte est faite de règles fixes |
 | Unicité des opérations critiques (§38) | une seule intention d'achat par crypto et par décision (clé jour:crypto:BUY) ; en réel, l'intention est écrite avant l'ordre et résolue par l'identifiant client (moteur v29) |
 | Traçabilité de bout en bout (§6, §31) | chaque achat et chaque trade portent l'identifiant de la décision du jour, du contrôle du risque et de l'autorisation |
@@ -503,7 +503,7 @@ déclaratif, versionné, expliqué et sûr par défaut. Appliqué à TrendGuard 
 
 | Exigence de l'étape 14 | Ce qui a été fait |
 | --- | --- |
-| Registre, langage, versions (§8-10, §47-48) | 19 politiques versionnées (type, gravité, catégorie, condition, action, raison) en langage fermé, sans code exécuté |
+| Registre, langage, versions (§8-10, §47-48) | 20 politiques versionnées (19 à l'étape 14) (type, gravité, catégorie, condition, action, raison) en langage fermé, sans code exécuté |
 | Actions, conflits, décision (§11, §34-37) | huit actions, de « permis » à « compte gelé » ; la plus grave l'emporte ; décision expliquée et valable 5 minutes |
 | Sécurité par défaut (§4) | une politique illisible bloque, jamais ne permet ; un registre incohérent est signalé |
 | Même décision que la porte | 3 000 cas tirés au hasard, 0 écart ; vérifiée à chaque achat du bot, un écart est signalé ; la porte reste le seul point d'application |
@@ -532,6 +532,27 @@ Détail : [`MOTEUR_AUTORISATION.md`](MOTEUR_AUTORISATION.md).
 **Ce qui ne s'applique pas** : organisations et comptes multiples (un seul
 propriétaire), jetons signés par une clé matérielle (l'autorisation ne quitte
 pas le bot), dérogations (une règle change dans le code).
+
+## Étape 16 du prompt : porte d'exécution
+
+Le seizième document demande une barrière ultime avant tout ordre : vérifier
+une dernière fois, transmettre de façon contrôlée, réconcilier. TrendGuard
+avait sa porte depuis l'étape 2 ; elle a été examinée point par point et
+complétée. Détail : [`PORTE_EXECUTION.md`](PORTE_EXECUTION.md) ; dernier examen
+: [`PORTE_EXAMEN.md`](PORTE_EXAMEN.md) (`python trendguard_bot.py porte`).
+
+| Exigence de l'étape 16 | Ce qui a été fait |
+| --- | --- |
+| Validation finale juste avant l'ordre (§21, P0-004) | autorisation encore valable, liée à son contrôle et non utilisée ; arrêt d'urgence et mode sûr relus ; état critique comparé à son empreinte, sinon nouveau contrôle ; un doute : pas d'achat, tracé |
+| Instrument, quantité, notionnel (§11, §14-15) | règles de Binance vérifiées par la porte en réel (pas du lot, bornes, minimum) ; rien ne change en paper |
+| Aucune autre route, fail-closed (§2, P0-002, §48) | une seule route d'achat dans le code, après la porte et la validation finale (vérifié) ; une porte en panne n'achète jamais et laisse finir la décision |
+| Chaos et tests critiques (§51-57) | 10 000 demandes, arrêt d'urgence au milieu, doublons, révocations, risque et politique changés avant l'ordre : aucun ordre non autorisé selon un oracle indépendant |
+| Critères, note, verdict (§68-69, §73) | AC-001 à AC-050 prouvés ou mesurés ; note 100/100, READY_FOR_CONTROLLED_LIVE_EXECUTION, qui n'autorise rien (la porte du réel décide) |
+
+**Ce qui ne s'applique pas** : plusieurs courtiers et le routage (Binance
+seul), signature par clé matérielle, API de la porte (une fonction du bot,
+aucune API n'achète), marge et levier (Spot au comptant), bande de prix (achat
+recalculé au prix du moment).
 
 ## Ce qui reste (votre accord d'abord)
 

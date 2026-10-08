@@ -334,8 +334,18 @@ class ExecutionMixin:
                 f"(risque {fr(adj['risk_quote'], '.2f')} {self.g.quote})")
         plan = adj
         # Porte d'exécution : aucun achat sans contrôle du risque ni autorisation.
-        trace = self._gate(plan, equity, cash, now)
+        try:
+            trace = self._gate(plan, equity, cash, now)
+        except Exception as e:           # porte en panne : aucun achat, la décision continue (fail-closed)
+            self.logger.error(f"[PORTE] {a.upper()} : contrôle impossible ({type(e).__name__} : {e}) : achat refusé")
+            self._pending().pop(a, None)
+            self._entry_notes[a] = ("cancelled", f"Achat refusé : porte d'exécution en panne ({type(e).__name__})")
+            self._note_asset(a, *self._entry_notes[a])
+            trace = None
         if trace is None:
+            return None
+        # Validation finale, juste avant l'ordre : rien n'a changé depuis le contrôle ?
+        if not self._final_validation(plan, now):
             return None
         disaster = plan["stop"] - self.g.catastrophe_atr * plan["vol"]
         if disaster <= 0:
@@ -456,20 +466,27 @@ class ExecutionMixin:
             self.logger.warning(f"[AUTORISATION] vérification impossible : {e}")
         self.state["autorisation"] = view
 
-    def _gate(self, plan: Dict[str, Any], equity: float, cash: float,
-              now: datetime) -> Optional[Dict[str, str]]:
-        """Contrôle du risque et autorisation d'un achat (porte.py), tracés
-        dans le journal d'audit : identifiants de la décision, du contrôle et
-        de l'autorisation, ou None si l'achat est refusé (raison dans le
-        journal du bot et le raisonnement). Un achat qu'on ne peut pas
-        tracer est refusé."""
-        a = plan["asset"]
-        day = last_closed_day(now, self.g.decision_delay_sec)
-        decision_id = f"D-{plan.get('day') or day}"
+    def _instrument(self, plan: Dict[str, Any]) -> Tuple[bool, str]:
+        """Règles de Binance pour cet achat réel (porte.instrument_check) :
+        paire cotée et active, pas du lot, bornes, montant minimum. Règles
+        illisibles : refus."""
+        s = self.slots.get(plan["asset"].upper())
+        if s is None:
+            return False, "paire inconnue du bot"
+        try:
+            market = (getattr(s.ex.exchange, "markets", None) or {}).get(s.symbol) or {}
+            return porte.instrument_check(s.ex.rules, s.ex.round_amount(plan["qty"]),
+                                          float(plan.get("exec_price") or plan["entry"]),
+                                          bool(market) and market.get("active") is not False)
+        except Exception as e:
+            return False, f"règles de Binance illisibles ({type(e).__name__})"
+
+    def _portfolio(self, plan: Dict[str, Any], equity: float, cash: float, day: str, now: datetime) -> Any:
+        """Le portefeuille et les politiques du moment, vus par la porte."""
         holdings = self._holdings()
         g = self.g
         garde = self.state.get("garde") or {}
-        pf = porte.Portfolio(
+        return porte.Portfolio(
             equity=float(equity), cash=float(cash), invested=sum(h.cost for h in holdings.values()),
             held_risk=tuple((x, float(h.risk_quote)) for x, h in holdings.items()),
             risk_mult=float(self.state.get("risk_mult", 1.0) or 1.0), expected_day=day,
@@ -485,7 +502,53 @@ class ExecutionMixin:
             live_armed=bool(g.enable_live_trading and g.live_confirmation == "I_UNDERSTAND_RISK"),
             production=self._production(day) if self.live and g.release_gate else None,
             risk_engine=moteur_risque.gate((self.state.get("moteur_risque") or {}).get("pre"), day, now)
-            if g.risk_engine else None)
+            if g.risk_engine else None,
+            instrument=self._instrument(plan) if self.live else None)
+
+    def _final_validation(self, plan: Dict[str, Any], now: datetime) -> bool:
+        """Validation finale juste avant l'ordre (porte.final_validation) :
+        autorisation encore valable et non consommée, arrêt d'urgence et mode
+        sûr toujours levés (mode sûr relu sur le disque), état critique
+        inchangé depuis le contrôle, sinon nouveau contrôle. Une validation
+        impossible bloque l'achat ; un blocage est tracé au journal d'audit."""
+        a = plan["asset"]
+        last, self._last_gate = getattr(self, "_last_gate", None), None
+        log = self.state.setdefault("porte", {})
+        try:
+            if not last or last["asset"] != a:
+                raise ValueError("contrôle de la porte introuvable")
+            pf = self._portfolio(plan, last["equity"], last["cash"], last["day"], now)
+            r = porte.final_validation(last["intent"], last["decision"], last["auth"], last["snapshot"], pf,
+                                       self.p, now)
+            ok, text = r.passed, porte.describe_final(r)
+            log["final_checked"] = int(log.get("final_checked", 0)) + 1
+            log["revalidated"] = int(log.get("revalidated", 0)) + int(r.revalidated)
+        except Exception as e:           # validation impossible : pas d'achat (fail-closed)
+            ok, text = False, f"achat arrêté : validation finale impossible ({type(e).__name__} : {e})"
+        if ok:
+            return True
+        log["final_blocked"] = int(log.get("final_blocked", 0)) + 1
+        log["reasons"] = (list(log.get("reasons") or []) + [f"{a.upper()} : {text}"])[-10:]
+        ids = {"authorization": last["auth"].authorization_id, "correlation_id": last["decision_id"]} if last else {}
+        self._audit("porte.validation_finale", a, "BLOCK", reason=text, now=now, **ids)
+        self.logger.warning(f"[PORTE] {a.upper()} : {text}")
+        self._pending().pop(a, None)
+        self._entry_notes[a] = ("cancelled", f"Achat arrêté juste avant l'ordre : {text}")
+        self._note_asset(a, *self._entry_notes[a])
+        return False
+
+    def _gate(self, plan: Dict[str, Any], equity: float, cash: float,
+              now: datetime) -> Optional[Dict[str, str]]:
+        """Contrôle du risque et autorisation d'un achat (porte.py), tracés
+        dans le journal d'audit : identifiants de la décision, du contrôle et
+        de l'autorisation, ou None si l'achat est refusé (raison dans le
+        journal du bot et le raisonnement). Un achat qu'on ne peut pas
+        tracer est refusé."""
+        a = plan["asset"]
+        day = last_closed_day(now, self.g.decision_delay_sec)
+        decision_id = f"D-{plan.get('day') or day}"
+        self._last_gate = None
+        pf = self._portfolio(plan, equity, cash, day, now)
         try:
             intent: Optional[OrderIntent] = OrderIntent.from_plan(plan, day)
             decision = porte.check(intent, pf, self.p, now)
@@ -508,6 +571,9 @@ class ExecutionMixin:
                          causation_id=decision_id)
         if auth.valid_at(now) and ok and intent is not None:
             log["approved"] += 1
+            self._last_gate = {"asset": a, "intent": intent, "decision": decision, "auth": auth, "day": day,
+                               "equity": float(equity), "cash": float(cash), "snapshot": porte.fingerprint(pf),
+                               "decision_id": decision_id}
             return {"decision_id": decision_id, "risk_check_id": decision.risk_check_id,
                     "authorization_id": auth.authorization_id, "key": intent.idempotency_key}
         if auth.authorized and not ok:

@@ -7,6 +7,7 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `AuditEvent.v2` | bot (un seul écrivain) | rapport quotidien, commande audit, diagnostic expert | 2.0.0 | CONFIDENTIAL | critique |
 | `AuthorizationDecision.v1` | moteur d'autorisation (autorisation.py) | panneau (chaque action), bot (chaque achat), vous | 1.0.0 | INTERNAL | critique |
 | `ExecutionAuthorization.v1` | porte d'exécution | exécution (paper) ou moteur d'ordres v29 (réel) | 1.0.0 | INTERNAL | critique |
+| `FinalValidationResult.v1` | porte d'exécution (porte.py) | bot (chaque achat), journal d'audit en cas de blocage | 1.0.0 | INTERNAL | critique |
 | `KillSwitch.v1` | décision du jour | porte d'exécution, panneau, rapport | 1.0.0 | INTERNAL | critique |
 | `NoTradeGate.v1` | décision du jour | porte d'exécution, raisonnement | 1.0.0 | INTERNAL | critique |
 | `Order.v1` | moteur v29 (réel) | Binance Spot | 1.0.0 | INTERNAL | critique |
@@ -27,6 +28,7 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `FinancialAnalysis.v1` | cœur financier (finance.py) | journal financier, Rachelle, rapport, commande finance | 1.0.0 | INTERNAL | cœur |
 | `FinancialSignal.v1` | cœur financier (finance.py) | analyses, journal | 1.0.0 | PUBLIC | cœur |
 | `Forecast.v1` | cœur financier (finance.py) | analyses, journal financier, calibration | 1.0.0 | PUBLIC | cœur |
+| `GateReadinessReport.v1` | examen de la porte (porte_examen.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | cœur |
 | `KnowledgeHold.v1` | noyau de savoir (savoir.py) | décision du jour | 1.0.0 | INTERNAL | cœur |
 | `LLMExecution.v1` | exécution des modèles (modeles.py) | trace des IA, rapport, panneau | 1.0.0 | INTERNAL | cœur |
 | `ModelBenchmark.v1` | banc (modeles.py) | routeur (approbation), fiche du modèle, rapport | 1.0.0 | INTERNAL | cœur |
@@ -120,6 +122,24 @@ Autorisation d'envoyer l'ordre, liée au contrôle du risque.
 | Nouveaux essais | aucun |
 | Unicité | liée à un seul contrôle |
 | Trace (audit) | identifiant gardé avec l'achat |
+| Fichiers | `trendguard/porte.py` |
+
+## FinalValidationResult.v1
+
+Validation finale d'un achat juste avant l'ordre : autorisation encore valable et non consommée, arrêt d'urgence et mode sûr levés, état inchangé depuis le contrôle (sinon nouveau contrôle).
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | porte d'exécution (porte.py) |
+| Consommateur | bot (chaque achat), journal d'audit en cas de blocage |
+| Entrée | intention, contrôle et autorisation de la porte, état critique au contrôle et juste avant l'ordre |
+| Sortie | vérifications, empreintes avant/après, nouveau contrôle, raisons |
+| Erreurs | vérification impossible ou état changé hors des limites : blocage ; « PASS » avec une vérification fausse : refusé |
+| Droits | bloque seulement : ne rend jamais possible un achat refusé par la porte |
+| Délai | à chaque achat |
+| Nouveaux essais | aucun : la décision suivante recommence |
+| Unicité | une validation par achat |
+| Trace (audit) | blocages comptés dans l'état du bot et au journal d'audit |
 | Fichiers | `trendguard/porte.py` |
 
 ## KillSwitch.v1
@@ -481,6 +501,24 @@ Prévision de fréquence à 30 jours.
 | Unicité | une prévision par crypto et par jour |
 | Trace (audit) | journal financier (évaluation comprise) |
 | Fichiers | `trendguard/finance.py` |
+
+## GateReadinessReport.v1
+
+Examen de la porte d'exécution : critères AC-001 à AC-050, note pondérée, essai de chaos.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | examen de la porte (porte_examen.py) |
+| Consommateur | rapport, Rachelle, vous |
+| Entrée | état du bot, code (routes vers Binance), tests du dépôt, essai de chaos |
+| Sortie | état de chaque critère et sa preuve, note par famille et pondérée, chaos (ordres, ordres non autorisés, latences), verdict |
+| Erreurs | P0 raté ou non mesurable, ordre non autorisé au chaos : NOT_READY ; un « prêt » incohérent est refusé |
+| Droits | lecture seule : jamais une autorisation du réel |
+| Délai | à la demande |
+| Nouveaux essais | aucun |
+| Unicité | un examen par appel |
+| Trace (audit) | dans docs/PORTE_EXAMEN.md |
+| Fichiers | `trendguard/porte_examen.py` |
 
 ## KnowledgeHold.v1
 

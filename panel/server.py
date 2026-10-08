@@ -348,7 +348,8 @@ class PanelApp(SecurityCenter):
                 "portefeuille": self.data.state().get("portefeuille") or {},
                 "acceptation": acceptation.evaluate(self.g, self.data.state()),
                 "politique": self.data.state().get("politique") or {},
-                "autorisation": self.data.state().get("autorisation") or {}}
+                "autorisation": self.data.state().get("autorisation") or {},
+                "porte": {k: v for k, v in (self.data.state().get("porte") or {}).items() if k != "keys"}}
 
     def anticipation_view(self) -> Dict[str, Any]:
         """Ce que le bot fera probablement à la prochaine clôture, avec les

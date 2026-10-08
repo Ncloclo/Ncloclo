@@ -584,8 +584,10 @@ def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
     if pt.get("day"):
         out.append(chk("Porte d'exécution", None,
                        f"décision du {pt['day']} : {pt.get('approved', 0)} achat(s) autorisé(s), "
-                       f"{pt.get('refused', 0)} refusé(s)" + (" ; " + " ; ".join(pt.get("reasons") or [])
-                                                               if pt.get("refused") else "")))
+                       f"{pt.get('refused', 0)} refusé(s)"
+                       + (f", {pt['final_blocked']} arrêté(s) juste avant l'ordre" if pt.get("final_blocked") else "")
+                       + (" ; " + " ; ".join(pt.get("reasons") or [])
+                          if pt.get("refused") or pt.get("final_blocked") else "")))
     ms = st.get("mode_sur") or {}
     if ms.get("active"):
         out.append(chk("Mode sûr", None, f"actif depuis le {str(ms.get('since'))[:16].replace('T', ' à ')} "

@@ -511,6 +511,10 @@ ACCEPTANCE_STATUSES = ("ACCEPTED", "BLOCKED")
 POLICY_ACTIONS = ("ALLOW", "ALLOW_WITH_LIMITS", "REDUCE_SIZE", "NO_TRADE", "REQUIRE_HUMAN_APPROVAL", "BLOCK",
                   "SAFE_MODE", "FREEZE_ACCOUNT")
 ACCEPTANCE_BANDS = ("PAPER_READY", "PAPER_READY_CANDIDATE", "VALIDATING", "DEVELOPMENT", "REJECTED")
+# Étape 16 (porte d'exécution) : validation finale, examen de la porte.
+FINAL_VALIDATION_STATUSES = ("PASS", "BLOCK")
+GATE_READINESS_STATUSES = ("READY_FOR_CONTROLLED_LIVE_EXECUTION", "NOT_READY")
+GATE_BANDS = ("READY", "CANDIDATE", "VALIDATION", "DEVELOPMENT", "NOT_READY")
 # Étape 11 (moteur de risque) : états, décisions pour les achats, phases, niveaux d'alerte.
 RISK_STATES = ("RISK_NORMAL", "RISK_WARNING", "RISK_HIGH", "RISK_CRITICAL", "RISK_BLOCKED")
 RISK_APPROVALS = ("RISK_APPROVED", "RISK_APPROVED_WITH_LIMIT", "RISK_RESTRICTED", "RISK_BLOCKED")
@@ -1150,6 +1154,103 @@ class AuthorizationDecision:
         return _plain(self)
 
 
+@dataclass(frozen=True)
+class FinalValidationResult:
+    """Validation finale d'un achat, juste avant l'ordre (FinalValidationResult.v1,
+    étape 16 §21, §42) : autorisation encore valable, liée à son contrôle et
+    non consommée ; arrêt d'urgence et mode sûr toujours levés ; état
+    critique inchangé depuis le contrôle, sinon nouveau contrôle. PASS
+    seulement si chaque vérification tient."""
+    VERSION: ClassVar[int] = 1
+    validation_id: str
+    risk_check_id: str
+    authorization_id: str
+    status: str
+    checks: Tuple[Tuple[str, bool, str], ...]
+    snapshot_before: str
+    snapshot_after: str
+    revalidated: bool
+    reasons: Tuple[str, ...]
+    created_at: str
+    version: int = 1
+
+    def __post_init__(self) -> None:
+        _version(self, self.VERSION)
+        _enum("status", self.status, FINAL_VALIDATION_STATUSES)
+        check_uuid("validation_id", self.validation_id)
+        check_timestamp("created_at", self.created_at)
+        if not self.checks:
+            raise ContractError("INCONSISTENT", "une validation finale vérifie toujours quelque chose")
+        if (self.status == "PASS") != all(bool(ok) for _n, ok, _d in self.checks):
+            raise ContractError("INCONSISTENT", "PASS seulement si chaque vérification tient")
+        if self.status == "PASS" and not self.authorization_id:
+            raise ContractError("POLICY", "aucun ordre sans autorisation", category="POLICY")
+        if self.status == "BLOCK" and not self.reasons:
+            raise ContractError("INCONSISTENT", "un blocage dit toujours pourquoi")
+        if self.revalidated != (self.snapshot_before != self.snapshot_after):
+            raise ContractError("INCONSISTENT", "un état changé depuis le contrôle est toujours contrôlé de nouveau")
+
+    @property
+    def passed(self) -> bool:
+        return self.status == "PASS"
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
+@dataclass(frozen=True)
+class GateReadinessReport:
+    """Examen de la porte d'exécution (GateReadinessReport.v1, étape 16
+    §68-69, §73) : critères AC-001 à AC-050, note pondérée, essai de chaos.
+    READY_FOR_CONTROLLED_LIVE_EXECUTION seulement sans P0 raté, avec une
+    note d'au moins 95 et aucun ordre non autorisé au chaos. Jamais une
+    autorisation de trader en réel (la porte du réel en décide)."""
+    VERSION: ClassVar[int] = 1
+    report_id: str
+    created_at: str
+    mode: str
+    status: str
+    readiness_score: float
+    band: str
+    p0_failures: Tuple[str, ...]
+    passed: int
+    failed: int
+    unknown: int
+    not_applicable: int
+    chaos_orders: int
+    chaos_unauthorized: int
+    engine_version: str
+    authorized: bool = False
+    version: int = 1
+
+    def __post_init__(self) -> None:
+        _version(self, self.VERSION)
+        _enum("status", self.status, GATE_READINESS_STATUSES)
+        _enum("band", self.band, GATE_BANDS)
+        _enum("mode", self.mode, ("paper", "testnet", "live"))
+        check_uuid("report_id", self.report_id)
+        check_timestamp("created_at", self.created_at)
+        score = _number("readiness_score", self.readiness_score, positive=False)
+        if not 0 <= score <= 100:
+            raise ContractError("OUT_OF_RANGE", "readiness_score : de 0 à 100")
+        if self.passed + self.failed + self.unknown + self.not_applicable != 50:
+            raise ContractError("INCONSISTENT", "les 50 critères AC-001 à AC-050 sont tous comptés")
+        if self.chaos_orders < 0 or not 0 <= self.chaos_unauthorized <= self.chaos_orders:
+            raise ContractError("OUT_OF_RANGE", "chaos : des nombres d'ordres cohérents")
+        floor = {"READY": 95, "CANDIDATE": 90, "VALIDATION": 80, "DEVELOPMENT": 70, "NOT_READY": 0}
+        upper = {"READY": 100.01, "CANDIDATE": 95, "VALIDATION": 90, "DEVELOPMENT": 80, "NOT_READY": 70}
+        if not floor[self.band] <= score < upper[self.band]:
+            raise ContractError("INCONSISTENT", "la bande suit la note")
+        if self.status == "READY_FOR_CONTROLLED_LIVE_EXECUTION" and (
+                self.p0_failures or score < 95 or self.chaos_orders <= 0 or self.chaos_unauthorized):
+            raise ContractError("INCONSISTENT", "prête : aucun P0 raté, note ≥ 95, chaos passé sans ordre non autorisé")
+        if self.authorized:
+            raise ContractError("POLICY", "l'examen de la porte n'autorise jamais le réel", category="POLICY")
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
 def ohlcv_violations(rows: Any) -> int:
     """Bougies incohérentes (§41) : plus haut sous l'ouverture, la clôture
     ou le plus bas ; plus bas au-dessus ; volume négatif. Une bougie
@@ -1222,7 +1323,8 @@ SCHEMAS.update({c.__name__: c for c in (OrderIntent, RiskDecision, ExecutionAuth
                                         ModelConsensus, ModelDisagreement, Instrument, Feature, Forecast,
                                         Scenario, FinancialSignal, StrategyDecision, BacktestResult,
                                         RiskAssessment, QuantResult, PortfolioDecision,
-                                        PaperAcceptanceReport, PolicyDecision, AuthorizationDecision)})
+                                        PaperAcceptanceReport, PolicyDecision, AuthorizationDecision,
+                                        FinalValidationResult, GateReadinessReport)})
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -1562,6 +1664,22 @@ REGISTRY: Tuple[Contract, ...] = (
              "à chaque action du panneau et à chaque achat", "aucun", "une décision par demande",
              "refus du panneau renvoyés avec leur raison ; écart avec la porte au journal du bot", 1,
              ("trendguard/autorisation.py",)),
+    Contract("FinalValidationResult.v1", "validation finale d'un achat juste avant l'ordre : autorisation encore "
+             "valable et non consommée, arrêt d'urgence et mode sûr levés, état inchangé depuis le contrôle (sinon "
+             "nouveau contrôle)", "porte d'exécution (porte.py)", "bot (chaque achat), journal d'audit en cas de "
+             "blocage", "intention, contrôle et autorisation de la porte, état critique au contrôle et juste avant "
+             "l'ordre", "vérifications, empreintes avant/après, nouveau contrôle, raisons", "vérification impossible "
+             "ou état changé hors des limites : blocage ; « PASS » avec une vérification fausse : refusé",
+             "bloque seulement : ne rend jamais possible un achat refusé par la porte", "à chaque achat",
+             "aucun : la décision suivante recommence", "une validation par achat",
+             "blocages comptés dans l'état du bot et au journal d'audit", 1, ("trendguard/porte.py",)),
+    Contract("GateReadinessReport.v1", "examen de la porte d'exécution : critères AC-001 à AC-050, note pondérée, "
+             "essai de chaos", "examen de la porte (porte_examen.py)", "rapport, Rachelle, vous",
+             "état du bot, code (routes vers Binance), tests du dépôt, essai de chaos", "état de chaque critère et "
+             "sa preuve, note par famille et pondérée, chaos (ordres, ordres non autorisés, latences), verdict",
+             "P0 raté ou non mesurable, ordre non autorisé au chaos : NOT_READY ; un « prêt » incohérent est refusé",
+             "lecture seule : jamais une autorisation du réel", "à la demande", "aucun", "un examen par appel",
+             "dans docs/PORTE_EXAMEN.md", 2, ("trendguard/porte_examen.py",)),
     Contract("HealthReport.v1", "rapport quotidien et centre de sécurité", "rapport (report.py)",
              "vous (e-mail, panneau)", "état du bot, PC, journal, GitHub", "constats conformes, à corriger, informations",
              "source illisible : information", "lecture seule", "00:30 UTC", "rattrapé au retour du PC",

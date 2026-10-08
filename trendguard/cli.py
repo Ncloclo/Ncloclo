@@ -698,6 +698,8 @@ TOOLS = {"alerts": ("alerts", "alertes : configurer | tester"),
          "regle": ("moteur_strategie", "la règle en fiche déclarative : [fiche] | valider | etats"),
          "risque": ("moteur_risque", "moteur de risque : [etat] | calibrage"),
          "autorisation": ("autorisation", "moteur d'autorisation : [matrice] | verifier <identité> <action>"),
+         "porte": ("porte_examen", "examen de la porte d'exécution : critères AC-001 à AC-050, chaos "
+                   "[--chaos 10000] [--out docs/PORTE_EXAMEN.md]"),
          "politique": ("politique", "moteur de politiques : [registre] | simulation"),
          "acceptation": ("acceptation", "critères d'acceptation du paper AC-001 à AC-044 : [--out docs/ACCEPTATION.md]"),
          "portefeuille": ("moteur_portefeuille", "moteur de portefeuille (consultatif) : [etat] | etude "
