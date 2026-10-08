@@ -28,7 +28,15 @@ import threading
 import unicodedata
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from trendguard import acceptation, chantiers, expert, modeles, moteur_portefeuille, moteur_risque
+from trendguard import (
+    acceptation,
+    chantiers,
+    expert,
+    modeles,
+    moteur_portefeuille,
+    moteur_risque,
+    politique,
+)
 from trendguard import market_watch as mw
 from trendguard.texte import fr
 
@@ -713,6 +721,19 @@ def doc_points(name: str, heading: str = "## Conclusions", limit: int = 6) -> Li
     return points[:limit]
 
 
+def a_politique(ctx: Dict[str, Any]) -> str:
+    """Le moteur de politiques : le registre et le jour."""
+    return "\n".join([
+        "**Moteur de politiques** : les règles qui disent quand un achat est permis, limité, soumis à votre accord, "
+        f"reporté ou interdit, écrites en registre versionné ({len(politique.REGISTRY)} politiques, "
+        f"{politique.REGISTRY_VERSION}), chacune avec sa raison et son seuil ; une politique illisible bloque ; "
+        "la plus grave l'emporte.",
+        "Aujourd'hui : " + politique.describe(ctx.get("politique")) + ".",
+        "La porte d'exécution reste la seule à appliquer ; le registre en est la description, vérifiée à chaque "
+        "achat. Aucune dérogation silencieuse : une règle change dans le code, versionnée et testée. Registre : "
+        "python trendguard_bot.py politique."])
+
+
 def a_acceptation(ctx: Dict[str, Any]) -> str:
     """Les critères d'acceptation du paper : verdict, note, ce qui manque."""
     ac = ctx.get("acceptation") or {}
@@ -990,6 +1011,8 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("validation", ("validation du backtest", "backtest valide", "moteur de backtest", "sur ajustement",
                     "surapprentissage", "overfitting", "sharpe degonfle", "probabilite de sur ajustement"),
      a_validation, []),
+    ("politique", ("moteur de politiques", "politiques", "politique", "regles de securite", "registre des regles",
+                   "qu est ce qui bloque un achat", "est ce autorise", "derogation"), a_politique, []),
     ("acceptation", ("acceptation", "criteres d acceptation", "paper accepte", "paper valide",
                      "pret pour la politique", "periode d observation"), a_acceptation, []),
     ("portefeuille", ("moteur de portefeuille", "portefeuille", "allocation", "repartition", "reequilibrage",

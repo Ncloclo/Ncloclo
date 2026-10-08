@@ -499,6 +499,11 @@ règle (même risque jusqu'au stop) éprouvée sur deux époques
 `python trendguard_bot.py acceptation`) : 44 critères mesurés sur le bot ou
 prouvés par des tests, note pondérée, observation et paper comparé au
 backtest de la même période ; un seul critère bloquant raté suffit à bloquer.
+Étape 14 : moteur de politiques
+([`docs/MOTEUR_POLITIQUE.md`](docs/MOTEUR_POLITIQUE.md),
+`python trendguard_bot.py politique`) : les règles d'achat en registre
+versionné et expliqué ; une politique illisible bloque ; même décision que la
+porte d'exécution, vérifiée à chaque achat.
 Cadre de priorités et de dépendances
 ([`docs/FEUILLE_DE_ROUTE.md`](docs/FEUILLE_DE_ROUTE.md),
 `python trendguard_bot.py chantiers portes`) : chaque composant prouvé, et

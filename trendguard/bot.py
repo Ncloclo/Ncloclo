@@ -29,6 +29,7 @@ from . import (
     learning,
     moteur_portefeuille,
     moteur_risque,
+    politique,
     porte,
     postmortem,
     qualite,
@@ -1025,6 +1026,9 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         mr = self.state.get("moteur_risque") or {}
         if mr.get("day") == day:
             extra.append(moteur_risque.describe(mr.get("post") or mr.get("pre")))
+        pol = self.state.get("politique") or {}
+        if pol.get("day") == day and pol.get("checked"):
+            extra.append("Politiques : " + politique.describe(pol) + ".")
         pf = self.state.get("portefeuille") or {}
         if pf.get("day") == day:
             extra.append("Portefeuille : " + moteur_portefeuille.describe(pf) + ".")

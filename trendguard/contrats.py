@@ -508,6 +508,8 @@ PAST_NOT_PROMISE = "Une mesure du passé n'est ni une certitude ni une promesse.
 PORTFOLIO_DECISIONS = ("HOLD", "REVIEW", "NO_ALLOCATE")
 REBALANCE_DECISIONS = ("NO_REBALANCE", "REBALANCE_PROPOSED")
 ACCEPTANCE_STATUSES = ("ACCEPTED", "BLOCKED")
+POLICY_ACTIONS = ("ALLOW", "ALLOW_WITH_LIMITS", "REDUCE_SIZE", "NO_TRADE", "REQUIRE_HUMAN_APPROVAL", "BLOCK",
+                  "SAFE_MODE", "FREEZE_ACCOUNT")
 ACCEPTANCE_BANDS = ("PAPER_READY", "PAPER_READY_CANDIDATE", "VALIDATING", "DEVELOPMENT", "REJECTED")
 # Étape 11 (moteur de risque) : états, décisions pour les achats, phases, niveaux d'alerte.
 RISK_STATES = ("RISK_NORMAL", "RISK_WARNING", "RISK_HIGH", "RISK_CRITICAL", "RISK_BLOCKED")
@@ -1063,6 +1065,50 @@ class PaperAcceptanceReport:
         return _plain(self)
 
 
+@dataclass(frozen=True)
+class PolicyDecision:
+    """Décision du moteur de politiques pour une intention d'achat
+    (PolicyDecision.v1, étape 14 §35-37) : l'action la plus grave des
+    politiques qui ne tiennent pas, les politiques évaluées (avec leur
+    version), les violations et avertissements expliqués, une durée de
+    validité. Jamais une autorisation : la porte d'exécution décide."""
+    VERSION: ClassVar[int] = 1
+    decision_id: str
+    asset: str
+    decision: str
+    registry_version: str
+    evaluated: Tuple[str, ...]
+    violations: Tuple[str, ...]
+    warnings: Tuple[str, ...]
+    created_at: str
+    expires_at: str
+    authorized: bool = False
+    version: int = 1
+
+    def __post_init__(self) -> None:
+        _version(self, self.VERSION)
+        _enum("decision", self.decision, POLICY_ACTIONS)
+        check_uuid("decision_id", self.decision_id)
+        check_timestamp("created_at", self.created_at)
+        check_timestamp("expires_at", self.expires_at)
+        if datetime.fromisoformat(self.expires_at) <= datetime.fromisoformat(self.created_at):
+            raise ContractError("INCONSISTENT", "une décision de politique expire")
+        if not self.evaluated:
+            raise ContractError("INCONSISTENT", "une décision dit quelles politiques ont été évaluées")
+        blocking = POLICY_ACTIONS.index(self.decision) >= POLICY_ACTIONS.index("NO_TRADE")
+        if blocking and not self.violations:
+            raise ContractError("INCONSISTENT", "un refus dit toujours quelle politique ne tient pas")
+        if self.decision == "ALLOW" and (self.violations or self.warnings):
+            raise ContractError("INCONSISTENT", "« permis » sans réserve : ni violation ni avertissement")
+        if self.decision in ("ALLOW_WITH_LIMITS", "REDUCE_SIZE") and not self.warnings:
+            raise ContractError("INCONSISTENT", "une limite dit laquelle")
+        if self.authorized:
+            raise ContractError("POLICY", "une décision de politique n'est jamais une autorisation", category="POLICY")
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
 def ohlcv_violations(rows: Any) -> int:
     """Bougies incohérentes (§41) : plus haut sous l'ouverture, la clôture
     ou le plus bas ; plus bas au-dessus ; volume négatif. Une bougie
@@ -1135,7 +1181,7 @@ SCHEMAS.update({c.__name__: c for c in (OrderIntent, RiskDecision, ExecutionAuth
                                         ModelConsensus, ModelDisagreement, Instrument, Feature, Forecast,
                                         Scenario, FinancialSignal, StrategyDecision, BacktestResult,
                                         RiskAssessment, QuantResult, PortfolioDecision,
-                                        PaperAcceptanceReport)})
+                                        PaperAcceptanceReport, PolicyDecision)})
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -1457,6 +1503,15 @@ REGISTRY: Tuple[Contract, ...] = (
              "observation trop courte, écart inexpliqué : BLOCKED ; un accepté incohérent est refusé",
              "lecture seule : jamais une autorisation du réel", "à la demande et chaque nuit", "aucun",
              "un verdict par évaluation", "dans le rapport et docs/ACCEPTATION.md", 2, ("trendguard/acceptation.py",)),
+    Contract("PolicyDecision.v1", "décision des politiques pour une intention d'achat : permis, limité, taille "
+             "réduite, pas d'achat aujourd'hui, votre accord d'abord, interdit, mode sûr, compte gelé",
+             "moteur de politiques (politique.py)", "journal du bot, état du bot, rapport, Rachelle",
+             "intention d'achat, portefeuille et politiques du moment (vue de la porte), réglages",
+             "politiques évaluées et leur version, violations et avertissements (observé, seuil), action la plus "
+             "grave, fin de validité", "politique illisible : blocage ; refus sans raison, « permis » avec réserve : "
+             "refusés", "lecture seule : la porte d'exécution applique, jamais une autorisation",
+             "à chaque contrôle de la porte", "aucun", "une décision par contrôle",
+             "écart avec la porte signalé au journal du bot", 1, ("trendguard/politique.py",)),
     Contract("HealthReport.v1", "rapport quotidien et centre de sécurité", "rapport (report.py)",
              "vous (e-mail, panneau)", "état du bot, PC, journal, GitHub", "constats conformes, à corriger, informations",
              "source illisible : information", "lecture seule", "00:30 UTC", "rattrapé au retour du PC",

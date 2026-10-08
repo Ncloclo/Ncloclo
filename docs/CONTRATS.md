@@ -10,6 +10,7 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `NoTradeGate.v1` | décision du jour | porte d'exécution, raisonnement | 1.0.0 | INTERNAL | critique |
 | `Order.v1` | moteur v29 (réel) | Binance Spot | 1.0.0 | INTERNAL | critique |
 | `OrderIntent.v1` | exécution (bot_execution.py) | porte d'exécution (porte.py) | 1.0.0 | INTERNAL | critique |
+| `PolicyDecision.v1` | moteur de politiques (politique.py) | journal du bot, état du bot, rapport, Rachelle | 1.0.0 | INTERNAL | critique |
 | `ReleaseGate.v1` | feuille de route (chantiers.py) | porte d'exécution (achats réels), rapport, Rachelle | 1.0.0 | INTERNAL | critique |
 | `RiskAssessment.v1` | moteur de risque (moteur_risque.py) | porte d'exécution, journal financier, raisonnement, rapport, Rachelle | 1.0.0 | INTERNAL | critique |
 | `RiskCheck.v1` | exécution | porte d'exécution | 1.0.0 | INTERNAL | critique |
@@ -173,6 +174,24 @@ Intention d'achat tirée du plan du jour.
 | Unicité | un achat par crypto et par décision |
 | Trace (audit) | contrôle de la porte |
 | Fichiers | `trendguard/contrats.py`, `trendguard/bot_execution.py` |
+
+## PolicyDecision.v1
+
+Décision des politiques pour une intention d'achat : permis, limité, taille réduite, pas d'achat aujourd'hui, votre accord d'abord, interdit, mode sûr, compte gelé.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | moteur de politiques (politique.py) |
+| Consommateur | journal du bot, état du bot, rapport, Rachelle |
+| Entrée | intention d'achat, portefeuille et politiques du moment (vue de la porte), réglages |
+| Sortie | politiques évaluées et leur version, violations et avertissements (observé, seuil), action la plus grave, fin de validité |
+| Erreurs | politique illisible : blocage ; refus sans raison, « permis » avec réserve : refusés |
+| Droits | lecture seule : la porte d'exécution applique, jamais une autorisation |
+| Délai | à chaque contrôle de la porte |
+| Nouveaux essais | aucun |
+| Unicité | une décision par contrôle |
+| Trace (audit) | écart avec la porte signalé au journal du bot |
+| Fichiers | `trendguard/politique.py` |
 
 ## ReleaseGate.v1
 

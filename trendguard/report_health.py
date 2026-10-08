@@ -29,6 +29,7 @@ from . import (
     modeles,
     moteur_portefeuille,
     moteur_risque,
+    politique,
     postmortem,
     registre,
     risque,
@@ -632,6 +633,12 @@ def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
         out.append(chk("Acceptation du paper", None, acceptation.describe(ac)))
     except Exception as e:               # une évaluation impossible n'empêche pas le rapport
         out.append(chk("Acceptation du paper", None, f"évaluation impossible ({type(e).__name__})"))
+    pol = st.get("politique") or {}
+    if pol.get("day"):
+        out.append(chk("Moteur de politiques", False if pol.get("mismatch") else None,
+                       f"décision du {pol['day']} : " + politique.describe(pol),
+                       "Écart entre le registre des politiques et la porte : à signaler (la porte reste "
+                       "l'autorité)." if pol.get("mismatch") else ""))
     pf = st.get("portefeuille") or {}
     if pf.get("day"):
         out.append(chk("Moteur de portefeuille", False if pf.get("error") else None,

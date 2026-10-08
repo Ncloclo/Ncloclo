@@ -226,10 +226,11 @@ COMPONENTS: Tuple[Component, ...] = (
               acceptance="le bot tourne seul, en paper, avec les mêmes contrôles qu'en réel ; AC-001 à AC-044 "
               "mesurés"),
     Component(_c(16), "Politique, autorisation et porte d'exécution", "P0", "MONITORED", "RISQUE",
-              deps=((_c(13), "HARD"), (_c(4), "SECURITY"), (_c(3), "SECURITY")), files=("trendguard/porte.py",),
-              tests=("tests/test_contrats.py",), contracts=("ExecutionAuthorization.v1", "SafeModeState.v1",
-                                                            "OrderIntent.v1"),
-              docs=("docs/CONTRATS.md",), security="autorisation de 5 minutes liée à un contrôle ; mode sûr ; "
+              deps=((_c(13), "HARD"), (_c(4), "SECURITY"), (_c(3), "SECURITY")),
+              files=("trendguard/porte.py", "trendguard/politique.py"),
+              tests=("tests/test_contrats.py", "tests/test_politique.py"),
+              contracts=("ExecutionAuthorization.v1", "SafeModeState.v1", "OrderIntent.v1", "PolicyDecision.v1"),
+              docs=("docs/CONTRATS.md", "docs/MOTEUR_POLITIQUE.md"), security="autorisation de 5 minutes liée à un contrôle ; mode sûr ; "
               "réel armé ; porte du réel", observability="autorisation gardée avec l'achat", risk="CRITICAL",
               acceptance="aucun ordre sans autorisation ; aucune IA ni agent sur ce chemin"),
     Component(_c(17), "Connecteur Binance (ordres réels)", "P0", "TESTING", "EXÉCUTION",

@@ -13,7 +13,7 @@ import ccxt
 
 import v29
 
-from . import chantiers, learning, moteur_risque, porte, postmortem
+from . import chantiers, learning, moteur_risque, politique, porte, postmortem
 from . import trend_strategy as ts
 from .bot_types import Slot, last_closed_day
 from .contrats import ContractError, Money, OrderIntent
@@ -413,6 +413,29 @@ class ExecutionMixin:
         return bool(cached["open"]), ("ouverte" if cached["open"] else
                                       "fermée : " + " ; ".join(cached["missing"][:3]))
 
+    def _policy(self, intent: Optional[OrderIntent], pf: Any, decision: Any, day: str, now: datetime) -> None:
+        """Moteur de politiques (politique.py) : la décision du registre des
+        politiques comparée à celle de la porte d'exécution, qui seule
+        applique. Un écart est signalé, jamais appliqué ; une panne ne bloque
+        rien."""
+        view = self.state.get("politique") or {}
+        if view.get("day") != day:
+            view = {"day": day, "checked": 0, "mismatch": [], "last": None}
+        try:
+            if intent is not None:
+                ev = self.state.get("evenements") or {}
+                soon = len(ev.get("upcoming") or []) if ev.get("day") == day else 0
+                c = politique.compact(politique.evaluate(intent, pf, self.p, now, soon), decision.status)
+                view["checked"] += 1
+                view["last"] = c
+                if not c["agree"]:
+                    view["mismatch"].append(intent.asset)
+                    self.logger.warning(f"[POLITIQUE] {intent.asset.upper()} : la porte dit {decision.status}, "
+                                        f"les politiques {c['decision']} : registre à corriger")
+        except Exception as e:           # consultatif : jamais bloquant
+            self.logger.warning(f"[POLITIQUE] évaluation impossible : {e}")
+        self.state["politique"] = view
+
     def _gate(self, plan: Dict[str, Any], equity: float, cash: float,
               now: datetime) -> Optional[Dict[str, str]]:
         """Contrôle du risque et autorisation d'un achat (porte.py), tracés
@@ -448,6 +471,7 @@ class ExecutionMixin:
             decision = porte.check(intent, pf, self.p, now)
         except ContractError as e:
             intent, decision = None, porte.refusal(e, a, now)
+        self._policy(intent, pf, decision, day, now)
         auth = porte.authorize(decision, pf, now)
         self._journal("record_risk_check", decision_id, a, decision, auth)
         log = self.state.setdefault("porte", {})

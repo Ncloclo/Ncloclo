@@ -492,6 +492,27 @@ nuit dans le rapport, et Rachelle. Détail :
 (3 jours sur 30, 4 événements sur 30) ; note 96,7/100, aucun P0 raté ; les 3
 achats du paper sont exactement ceux du backtest de la même période.
 
+## Étape 14 du prompt : moteur de politiques
+
+Le quatorzième document demande un moteur qui dit dans quelles conditions une
+décision est permise, limitée, soumise à votre accord, bloquée ou interdite,
+déclaratif, versionné, expliqué et sûr par défaut. Appliqué à TrendGuard :
+`politique.py`, le registre des politiques évalué à chaque achat, et
+`python trendguard_bot.py politique`. Détail :
+[`MOTEUR_POLITIQUE.md`](MOTEUR_POLITIQUE.md).
+
+| Exigence de l'étape 14 | Ce qui a été fait |
+| --- | --- |
+| Registre, langage, versions (§8-10, §47-48) | 19 politiques versionnées (type, gravité, catégorie, condition, action, raison) en langage fermé, sans code exécuté |
+| Actions, conflits, décision (§11, §34-37) | huit actions, de « permis » à « compte gelé » ; la plus grave l'emporte ; décision expliquée et valable 5 minutes |
+| Sécurité par défaut (§4) | une politique illisible bloque, jamais ne permet ; un registre incohérent est signalé |
+| Même décision que la porte | 3 000 cas tirés au hasard, 0 écart ; vérifiée à chaque achat du bot, un écart est signalé ; la porte reste le seul point d'application |
+| Simulation des politiques (§38-40) | politiques de risque rejouées sur les deux époques : le profil prudent protège nettement depuis 2023 |
+
+**Ce qui ne s'applique pas** : dérogations (une règle change dans le code,
+versionnée et testée), comité de politiques avec IA (aucune clé),
+juridictions et horaires de marché (cryptos cotées sans interruption).
+
 ## Ce qui reste (votre accord d'abord)
 
 1. **Débat des IA** (§43) : rôles haussier, baissier, critique et synthèse
