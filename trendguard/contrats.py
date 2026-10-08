@@ -1109,6 +1109,47 @@ class PolicyDecision:
         return _plain(self)
 
 
+@dataclass(frozen=True)
+class AuthorizationDecision:
+    """Décision du moteur d'autorisation (AuthorizationDecision.v1, étape 15
+    §10, §37) : qui, quoi, sur quelle ressource, permis ou refusé, raisons et
+    conditions vérifiées, version de la matrice, fin de validité. Une IA, un
+    agent ou une identité extérieure n'obtient jamais un droit critique."""
+    VERSION: ClassVar[int] = 1
+    decision_id: str
+    principal: str
+    principal_type: str
+    action: str
+    resource: str
+    allowed: bool
+    reasons: Tuple[str, ...]
+    conditions: Tuple[Tuple[str, bool], ...]
+    policy_version: str
+    created_at: str
+    expires_at: str
+    version: int = 1
+
+    def __post_init__(self) -> None:
+        _version(self, self.VERSION)
+        check_uuid("decision_id", self.decision_id)
+        check_timestamp("created_at", self.created_at)
+        check_timestamp("expires_at", self.expires_at)
+        if datetime.fromisoformat(self.expires_at) <= datetime.fromisoformat(self.created_at):
+            raise ContractError("INCONSISTENT", "une décision d'autorisation expire")
+        if not self.reasons:
+            raise ContractError("INCONSISTENT", "une décision dit toujours pourquoi")
+        if self.allowed and not all(bool(ok) for _c, ok in self.conditions):
+            raise ContractError("INCONSISTENT", "permis seulement si chaque condition est remplie")
+        critical = ("AUTHORIZE_BUY", "TRADE_LIVE", "CHANGE_RISK", "ARM_LIVE", "SAFE_MODE_OFF", "KILL_RESET",
+                    "SET_SECRETS", "MERGE_CODE")
+        if self.allowed and self.action in critical and self.principal_type in ("AGENT", "AI_MODEL", "EXTERNAL"):
+            raise ContractError("POLICY", "une IA, un agent ou une identité extérieure n'a jamais de droit critique",
+                                category="POLICY")
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
 def ohlcv_violations(rows: Any) -> int:
     """Bougies incohérentes (§41) : plus haut sous l'ouverture, la clôture
     ou le plus bas ; plus bas au-dessus ; volume négatif. Une bougie
@@ -1181,7 +1222,7 @@ SCHEMAS.update({c.__name__: c for c in (OrderIntent, RiskDecision, ExecutionAuth
                                         ModelConsensus, ModelDisagreement, Instrument, Feature, Forecast,
                                         Scenario, FinancialSignal, StrategyDecision, BacktestResult,
                                         RiskAssessment, QuantResult, PortfolioDecision,
-                                        PaperAcceptanceReport, PolicyDecision)})
+                                        PaperAcceptanceReport, PolicyDecision, AuthorizationDecision)})
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -1512,6 +1553,15 @@ REGISTRY: Tuple[Contract, ...] = (
              "refusés", "lecture seule : la porte d'exécution applique, jamais une autorisation",
              "à chaque contrôle de la porte", "aucun", "une décision par contrôle",
              "écart avec la porte signalé au journal du bot", 1, ("trendguard/politique.py",)),
+    Contract("AuthorizationDecision.v1", "qui peut faire quoi : identité, action, ressource, permis ou refusé, "
+             "avec raisons et conditions", "moteur d'autorisation (autorisation.py)", "panneau (chaque action), "
+             "bot (chaque achat), vous", "identité, action, ressource, conditions du moment (réel armé, porte du "
+             "réel, évaluation du risque, contrôle approuvé…)", "décision, raisons, conditions vérifiées, version "
+             "de la matrice, fin de validité", "identité, action ou condition inconnue : refus ; droit critique "
+             "donné à une IA ou à un agent : refusé par le contrat", "lecture seule : décide, n'exécute rien",
+             "à chaque action du panneau et à chaque achat", "aucun", "une décision par demande",
+             "refus du panneau renvoyés avec leur raison ; écart avec la porte au journal du bot", 1,
+             ("trendguard/autorisation.py",)),
     Contract("HealthReport.v1", "rapport quotidien et centre de sécurité", "rapport (report.py)",
              "vous (e-mail, panneau)", "état du bot, PC, journal, GitHub", "constats conformes, à corriger, informations",
              "source illisible : information", "lecture seule", "00:30 UTC", "rattrapé au retour du PC",

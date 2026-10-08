@@ -13,7 +13,7 @@ import ccxt
 
 import v29
 
-from . import chantiers, learning, moteur_risque, politique, porte, postmortem
+from . import autorisation, chantiers, learning, moteur_risque, politique, porte, postmortem
 from . import trend_strategy as ts
 from .bot_types import Slot, last_closed_day
 from .contrats import ContractError, Money, OrderIntent
@@ -436,6 +436,26 @@ class ExecutionMixin:
             self.logger.warning(f"[POLITIQUE] évaluation impossible : {e}")
         self.state["politique"] = view
 
+    def _authorization(self, a: str, pf: Any, decision: Any, auth: Any, day: str, now: datetime) -> None:
+        """Moteur d'autorisation (autorisation.py) : le droit du bot d'acheter
+        (paper ou réel) vérifié à chaque achat, comparé à la réponse de la
+        porte. Un écart est signalé, jamais appliqué ; une panne ne bloque
+        rien (la porte reste le seul point d'application)."""
+        view = self.state.get("autorisation") or {}
+        if view.get("day") != day:
+            view = {"day": day, "checked": 0, "mismatch": []}
+        try:
+            act = "TRADE_LIVE" if pf.live else "TRADE_PAPER"
+            d = autorisation.decide("bot", act, "ordre", autorisation.trade_context(pf, decision, auth, now), now)
+            view["checked"] += 1
+            if d.allowed != (decision.status == "APPROVED" and auth.valid_at(now)):
+                view["mismatch"].append(a)
+                self.logger.warning(f"[AUTORISATION] {a.upper()} : la porte dit {decision.status}, le moteur "
+                                    f"d'autorisation {'permis' if d.allowed else 'refusé'} : matrice à corriger")
+        except Exception as e:           # consultatif : jamais bloquant
+            self.logger.warning(f"[AUTORISATION] vérification impossible : {e}")
+        self.state["autorisation"] = view
+
     def _gate(self, plan: Dict[str, Any], equity: float, cash: float,
               now: datetime) -> Optional[Dict[str, str]]:
         """Contrôle du risque et autorisation d'un achat (porte.py), tracés
@@ -473,6 +493,7 @@ class ExecutionMixin:
             intent, decision = None, porte.refusal(e, a, now)
         self._policy(intent, pf, decision, day, now)
         auth = porte.authorize(decision, pf, now)
+        self._authorization(a, pf, decision, auth, day, now)
         self._journal("record_risk_check", decision_id, a, decision, auth)
         log = self.state.setdefault("porte", {})
         if log.get("day") != day:

@@ -30,6 +30,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from trendguard import (
     acceptation,
+    autorisation,
     chantiers,
     expert,
     modeles,
@@ -721,6 +722,18 @@ def doc_points(name: str, heading: str = "## Conclusions", limit: int = 6) -> Li
     return points[:limit]
 
 
+def a_autorisation(ctx: Dict[str, Any]) -> str:
+    """Le moteur d'autorisation : qui peut faire quoi."""
+    return "\n".join([
+        "**Moteur d'autorisation** : qui peut faire quoi, à quelles conditions. Refus par défaut. Vous seul pouvez "
+        "armer le réel (deux réglages explicites), changer les plafonds de risque, lever le mode sûr, reprendre "
+        "après l'arrêt d'urgence, saisir des clés et fusionner du code. La règle propose un achat, la porte "
+        "l'autorise, le bot l'exécute ; aucune IA, aucun agent (moi comprise) n'a de droit critique : je lis et "
+        "j'explique, je n'agis pas.",
+        "Aujourd'hui : " + autorisation.describe(ctx.get("autorisation")) + ".",
+        "Chaque action du panneau passe par cette matrice. Détail : python trendguard_bot.py autorisation."])
+
+
 def a_politique(ctx: Dict[str, Any]) -> str:
     """Le moteur de politiques : le registre et le jour."""
     return "\n".join([
@@ -1011,6 +1024,8 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("validation", ("validation du backtest", "backtest valide", "moteur de backtest", "sur ajustement",
                     "surapprentissage", "overfitting", "sharpe degonfle", "probabilite de sur ajustement"),
      a_validation, []),
+    ("autorisation", ("moteur d autorisation", "autorisation", "qui peut", "droits", "permissions",
+                      "separation des taches", "quatre yeux", "armer le reel", "qui decide"), a_autorisation, []),
     ("politique", ("moteur de politiques", "politiques", "politique", "regles de securite", "registre des regles",
                    "qu est ce qui bloque un achat", "est ce autorise", "derogation"), a_politique, []),
     ("acceptation", ("acceptation", "criteres d acceptation", "paper accepte", "paper valide",

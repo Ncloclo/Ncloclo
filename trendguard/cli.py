@@ -697,6 +697,7 @@ TOOLS = {"alerts": ("alerts", "alertes : configurer | tester"),
          "finance": ("finance", "analyse financière d'une crypto (consultative) : <crypto> [--json]"),
          "regle": ("moteur_strategie", "la règle en fiche déclarative : [fiche] | valider | etats"),
          "risque": ("moteur_risque", "moteur de risque : [etat] | calibrage"),
+         "autorisation": ("autorisation", "moteur d'autorisation : [matrice] | verifier <identité> <action>"),
          "politique": ("politique", "moteur de politiques : [registre] | simulation"),
          "acceptation": ("acceptation", "critères d'acceptation du paper AC-001 à AC-044 : [--out docs/ACCEPTATION.md]"),
          "portefeuille": ("moteur_portefeuille", "moteur de portefeuille (consultatif) : [etat] | etude "

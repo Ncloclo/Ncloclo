@@ -311,10 +311,10 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Propriétaire | bot |
 | Dépend de | Moteur de risque, garde « pas de trade », arrêt d'urgence (dure), Observabilité et audit (sécurité), Sécurité de base (sécurité) |
 | Bloque | Connecteur Binance (ordres réels), Trading réel |
-| Code | `trendguard/porte.py`, `trendguard/politique.py` |
-| Tests | `tests/test_contrats.py`, `tests/test_politique.py` |
-| Contrats | `ExecutionAuthorization.v1`, `SafeModeState.v1`, `OrderIntent.v1`, `PolicyDecision.v1` |
-| Documentation | [`CONTRATS.md`](CONTRATS.md), [`MOTEUR_POLITIQUE.md`](MOTEUR_POLITIQUE.md) |
+| Code | `trendguard/porte.py`, `trendguard/politique.py`, `trendguard/autorisation.py` |
+| Tests | `tests/test_contrats.py`, `tests/test_politique.py`, `tests/test_autorisation.py` |
+| Contrats | `ExecutionAuthorization.v1`, `SafeModeState.v1`, `OrderIntent.v1`, `PolicyDecision.v1`, `AuthorizationDecision.v1` |
+| Documentation | [`CONTRATS.md`](CONTRATS.md), [`MOTEUR_POLITIQUE.md`](MOTEUR_POLITIQUE.md), [`MOTEUR_AUTORISATION.md`](MOTEUR_AUTORISATION.md) |
 | Sécurité | autorisation de 5 minutes liée à un contrôle ; mode sûr ; réel armé ; porte du réel |
 | Observabilité | autorisation gardée avec l'achat |
 | Acceptation | aucun ordre sans autorisation ; aucune IA ni agent sur ce chemin |

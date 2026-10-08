@@ -5,6 +5,7 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | Contrat | Producteur (propriétaire) | Consommateurs | Version | Classification | Niveau |
 | --- | --- | --- | --- | --- | --- |
 | `AuditEvent.v2` | bot (un seul écrivain) | rapport quotidien, commande audit, diagnostic expert | 2.0.0 | CONFIDENTIAL | critique |
+| `AuthorizationDecision.v1` | moteur d'autorisation (autorisation.py) | panneau (chaque action), bot (chaque achat), vous | 1.0.0 | INTERNAL | critique |
 | `ExecutionAuthorization.v1` | porte d'exécution | exécution (paper) ou moteur d'ordres v29 (réel) | 1.0.0 | INTERNAL | critique |
 | `KillSwitch.v1` | décision du jour | porte d'exécution, panneau, rapport | 1.0.0 | INTERNAL | critique |
 | `NoTradeGate.v1` | décision du jour | porte d'exécution, raisonnement | 1.0.0 | INTERNAL | critique |
@@ -84,6 +85,24 @@ Trace infalsifiable de chaque opération critique.
 | Unicité | numéro unique et croissant |
 | Trace (audit) | c'est l'audit |
 | Fichiers | `trendguard/audit.py` |
+
+## AuthorizationDecision.v1
+
+Qui peut faire quoi : identité, action, ressource, permis ou refusé, avec raisons et conditions.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | moteur d'autorisation (autorisation.py) |
+| Consommateur | panneau (chaque action), bot (chaque achat), vous |
+| Entrée | identité, action, ressource, conditions du moment (réel armé, porte du réel, évaluation du risque, contrôle approuvé…) |
+| Sortie | décision, raisons, conditions vérifiées, version de la matrice, fin de validité |
+| Erreurs | identité, action ou condition inconnue : refus ; droit critique donné à une IA ou à un agent : refusé par le contrat |
+| Droits | lecture seule : décide, n'exécute rien |
+| Délai | à chaque action du panneau et à chaque achat |
+| Nouveaux essais | aucun |
+| Unicité | une décision par demande |
+| Trace (audit) | refus du panneau renvoyés avec leur raison ; écart avec la porte au journal du bot |
+| Fichiers | `trendguard/autorisation.py` |
 
 ## ExecutionAuthorization.v1
 

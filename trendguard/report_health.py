@@ -21,6 +21,7 @@ from . import (
     acceptation,
     attribution,
     audit,
+    autorisation,
     chantiers,
     donnees,
     evolution,
@@ -633,6 +634,12 @@ def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
         out.append(chk("Acceptation du paper", None, acceptation.describe(ac)))
     except Exception as e:               # une évaluation impossible n'empêche pas le rapport
         out.append(chk("Acceptation du paper", None, f"évaluation impossible ({type(e).__name__})"))
+    au = st.get("autorisation") or {}
+    if au.get("day"):
+        out.append(chk("Moteur d'autorisation", False if au.get("mismatch") else None,
+                       f"décision du {au['day']} : " + autorisation.describe(au),
+                       "Écart entre la matrice des droits et la porte : à signaler (la porte reste l'autorité)."
+                       if au.get("mismatch") else ""))
     pol = st.get("politique") or {}
     if pol.get("day"):
         out.append(chk("Moteur de politiques", False if pol.get("mismatch") else None,

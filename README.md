@@ -504,6 +504,11 @@ backtest de la même période ; un seul critère bloquant raté suffit à bloque
 `python trendguard_bot.py politique`) : les règles d'achat en registre
 versionné et expliqué ; une politique illisible bloque ; même décision que la
 porte d'exécution, vérifiée à chaque achat.
+Étape 15 : moteur d'autorisation
+([`docs/MOTEUR_AUTORISATION.md`](docs/MOTEUR_AUTORISATION.md),
+`python trendguard_bot.py autorisation`) : qui peut faire quoi, refus par
+défaut, séparation des tâches ; armer le réel, le risque, les secrets et le
+code restent à vous seul ; chaque action du panneau est vérifiée.
 Cadre de priorités et de dépendances
 ([`docs/FEUILLE_DE_ROUTE.md`](docs/FEUILLE_DE_ROUTE.md),
 `python trendguard_bot.py chantiers portes`) : chaque composant prouvé, et

@@ -513,6 +513,26 @@ déclaratif, versionné, expliqué et sûr par défaut. Appliqué à TrendGuard 
 versionnée et testée), comité de politiques avec IA (aucune clé),
 juridictions et horaires de marché (cryptos cotées sans interruption).
 
+## Étape 15 du prompt : moteur d'autorisation
+
+Le quinzième document demande un moteur qui décide qui peut faire quoi, sur
+quelle ressource, à quelles conditions, sans jamais laisser une IA ou un agent
+s'autoriser. Appliqué à TrendGuard : `autorisation.py`, vérifié à chaque achat
+et à chaque action du panneau, et `python trendguard_bot.py autorisation`.
+Détail : [`MOTEUR_AUTORISATION.md`](MOTEUR_AUTORISATION.md).
+
+| Exigence de l'étape 15 | Ce qui a été fait |
+| --- | --- |
+| Identités, rôles, permissions, conditions (§5-10) | 13 identités, 12 rôles, 24 actions ; refus par défaut ; une condition doit valoir exactement « vrai » |
+| Séparation des tâches, IA et agents (§26-30) | la règle propose, la porte autorise, le bot exécute ; droits critiques à vous seul ; aucune IA ni agent avec un droit critique, vérifié aussi par le contrat |
+| Accord humain (§14-17) | un seul propriétaire : deux réglages explicites pour armer le réel, puis la porte du réel |
+| Autorisation d'achat (§18-23) | liée à son contrôle, 5 minutes, à usage unique (clé d'unicité en base) |
+| Dans le bot et le panneau | droit du bot vérifié à chaque achat (même réponse que la porte) ; chaque action du panneau vérifiée, refus avec sa raison |
+
+**Ce qui ne s'applique pas** : organisations et comptes multiples (un seul
+propriétaire), jetons signés par une clé matérielle (l'autorisation ne quitte
+pas le bot), dérogations (une règle change dans le code).
+
 ## Ce qui reste (votre accord d'abord)
 
 1. **Débat des IA** (§43) : rôles haussier, baissier, critique et synthèse

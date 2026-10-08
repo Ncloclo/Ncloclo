@@ -35,6 +35,7 @@ from trendguard import (
     acceptation,
     anticipation,
     autonomy,
+    autorisation,
     chantiers,
     evolution,
     expert,
@@ -346,7 +347,8 @@ class PanelApp(SecurityCenter):
                 "moteur_risque": self.data.state().get("moteur_risque") or {},
                 "portefeuille": self.data.state().get("portefeuille") or {},
                 "acceptation": acceptation.evaluate(self.g, self.data.state()),
-                "politique": self.data.state().get("politique") or {}}
+                "politique": self.data.state().get("politique") or {},
+                "autorisation": self.data.state().get("autorisation") or {}}
 
     def anticipation_view(self) -> Dict[str, Any]:
         """Ce que le bot fera probablement à la prochaine clôture, avec les
@@ -560,11 +562,22 @@ class PanelApp(SecurityCenter):
             route = (get if method == "GET" else post if method == "POST" else {}).get(path)
             if route is None:
                 return 404, {"error": "adresse inconnue"}
+            if method == "POST":                         # session déjà vérifiée par PanelHandler
+                d = autorisation.decide("panneau", POST_ACTIONS.get(path, "INCONNUE"), path, {"session_ok": True})
+                if not d.allowed:
+                    return 403, {"error": "action refusée : " + " ; ".join(d.reasons)}
             return 200, route()
         except ValueError as e:
             return 400, {"error": str(e)}
         except Exception as e:
             return 502, {"error": f"{type(e).__name__} : {str(e)[:200]}"}
+
+
+# Chaque action du panneau et son droit (autorisation.py) : une route sans
+# droit déclaré est refusée.
+POST_ACTIONS = {"/api/bot/start": "START_STOP_BOT", "/api/bot/stop": "START_STOP_BOT",
+                "/api/selection": "SELECT_CRYPTOS", "/api/autostart": "START_STOP_BOT",
+                "/api/alerts/test": "TEST_ALERTS", "/api/report/run": "RUN_REPORT", "/api/report/send": "RUN_REPORT"}
 
 
 class PanelHandler(BaseHTTPRequestHandler):
