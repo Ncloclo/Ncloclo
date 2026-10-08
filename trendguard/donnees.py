@@ -523,6 +523,15 @@ class Journal:
 
     # ---- lecture ----
 
+    def trades_opened(self) -> List[Tuple[str, str, str]]:
+        """(identifiant, crypto, ouverture) de chaque trade du journal."""
+        return [(r["id"], r["asset"], r["opened_at"]) for r in
+                self.conn.execute("SELECT id, asset, opened_at FROM fin_trades ORDER BY opened_at").fetchall()]
+
+    def first_decision_at(self) -> Optional[str]:
+        """Date de la première décision journalisée (mise en service du journal)."""
+        return self.conn.execute("SELECT MIN(created_at) FROM fin_decisions").fetchone()[0]
+
     def lineage(self, trade_id: str) -> Dict[str, Any]:
         """La lignée financière d'un trade : vente, achat, contrôle du
         risque, décision, version de la stratégie, signal, données."""

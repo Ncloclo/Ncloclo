@@ -332,21 +332,21 @@ def _lineage(j: Any, state: Dict[str, Any]) -> Dict[str, Any]:
     risque, décision) ? Les achats faits avant la première décision du
     journal financier (sa mise en service) sont signalés à part : ils ne
     pouvaient pas y être tracés."""
-    first = j.conn.execute("SELECT MIN(created_at) FROM fin_decisions").fetchone()[0]
+    first = j.first_decision_at()
     start = _parse(first) if first else None
     traced, untraced, before = 0, [], []
-    for row in j.conn.execute("SELECT id, asset, opened_at FROM fin_trades").fetchall():
+    for trade_id, asset, opened in j.trades_opened():
         try:
-            lin = j.lineage(row["id"])
+            lin = j.lineage(trade_id)
         except Exception:                # lignée illisible : jamais une réussite
-            untraced.append(f"{row['asset'].upper()} (illisible)")
+            untraced.append(f"{asset.upper()} (illisible)")
             continue
         if lin.get("risk_check") and lin.get("decision"):
             traced += 1
-        elif start and _parse(row["opened_at"]) and _parse(row["opened_at"]) < start:
-            before.append(f"{row['asset'].upper()} acheté le {str(row['opened_at'])[:10]}")
+        elif start and _parse(opened) and _parse(opened) < start:
+            before.append(f"{asset.upper()} acheté le {str(opened)[:10]}")
         else:
-            untraced.append(row["asset"].upper())
+            untraced.append(asset.upper())
     for a, h in ((state.get("paper") or {}).get("holdings") or {}).items():
         if start and _parse(h.get("entry_date")) and _parse(h["entry_date"]) < start:
             before.append(f"{a.upper()} (ouverte) achetée le {str(h['entry_date'])[:10]}")
