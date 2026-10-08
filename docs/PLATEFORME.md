@@ -96,7 +96,7 @@ le bot avec et sans la porte : mêmes trades).
 | --- | --- |
 | Contrats explicites, versionnés, registre des contrats, matrice, niveaux de priorité (§3-5, §41, §44, §60-61, §71) | `contrats.py` : 17 contrats (producteur, consommateur, entrée, sortie, erreurs, droits, délai, nouveaux essais, unicité, trace, fichiers, niveau) ; [`CONTRATS.md`](CONTRATS.md) en est tiré et un test vérifie qu'ils restent identiques |
 | Schémas stricts, erreurs standard (§4.3, §36, §64) | intention d'achat, décision de risque, autorisation, mode sûr : vérifiés à la création ; valeur manquante, mauvais type, hors limites ou autre version refusés, jamais corrigés en silence (enveloppe d'erreur : code, catégorie, nouvel essai possible) |
-| Moteur de risque, porte d'exécution, chaîne Signal → Décision → Risque → Autorisation → Ordre sans raccourci (§26, §28, §29, §54) | `porte.py` : 16 contrôles fixes avant CHAQUE achat, en paper comme en réel (mode réel armé, porte du réel, arrêt d'urgence, mode sûr, garde du jour, décision du jour, crypto autorisée, doublon, positions, risque de l'achat, risque cumulé, taille, argent disponible, stop sous le prix, montant minimum, qualité des données au moins 50/100) ; APPROVED, REJECTED ou EMERGENCY_BLOCK avec la raison ; autorisation valable 5 minutes |
+| Moteur de risque, porte d'exécution, chaîne Signal → Décision → Risque → Autorisation → Ordre sans raccourci (§26, §28, §29, §54) | `porte.py` : 17 contrôles fixes avant CHAQUE achat, en paper comme en réel (mode réel armé, porte du réel, arrêt d'urgence, mode sûr, garde du jour, décision du jour, crypto autorisée, doublon, positions, risque de l'achat, risque cumulé, taille, argent disponible, stop sous le prix, montant minimum, qualité des données au moins 50/100, évaluation du jour du moteur de risque, étape 11) ; APPROVED, REJECTED ou EMERGENCY_BLOCK avec la raison ; autorisation valable 5 minutes |
 | Le LLM n'est jamais l'autorité finale (§62-63, §73) | déjà vrai et désormais écrit dans les contrats : les IA donnent un avis, le noyau de savoir peut seulement reporter un achat, la porte est faite de règles fixes |
 | Unicité des opérations critiques (§38) | une seule intention d'achat par crypto et par décision (clé jour:crypto:BUY) ; en réel, l'intention est écrite avant l'ordre et résolue par l'identifiant client (moteur v29) |
 | Traçabilité de bout en bout (§6, §31) | chaque achat et chaque trade portent l'identifiant de la décision du jour, du contrôle du risque et de l'autorisation |
@@ -396,6 +396,28 @@ rapport : [`VALIDATION.md`](VALIDATION.md).
 exécutions partielles (bougies journalières, ordres au marché, moins de
 0,03 % du volume du jour), seconde boucle vectorisée (une seule vérité), marge,
 financement et emprunt (Spot, sans levier).
+
+## Étape 11 du prompt : moteur de risque
+
+Le onzième document demande un moteur de risque qui mesure, comprend,
+agrège, limite, simule, contrôle, alerte et bloque si nécessaire. Appliqué à
+TrendGuard : `moteur_risque.py`, une évaluation avant et après les achats de
+chaque décision, gardée au journal financier, et `python trendguard_bot.py
+risque`. Détail : [`MOTEUR_RISQUE.md`](MOTEUR_RISQUE.md).
+
+| Exigence de l'étape 11 | Ce qui a été fait |
+| --- | --- |
+| Mesures (§9-12, §15-23) | VaR et perte moyenne au-delà (historique, normale, Student, Monte-Carlo ; 1 à 10 jours), volatilité et EWMA, queue (Hill, valeurs extrêmes), corrélations (trois mesures, en crise, chutes simultanées), concentration, liquidité, baisse, levier |
+| Stress, stress inversé (§13-14, §69) | onze chocs, dont krach stops sautés, volatilité × 3, corrélations → 1, liquidité ÷ 2 ; baisse qui coûterait 10 à 50 % du capital ou déclencherait l'arrêt d'urgence |
+| Budget, contributions, risque ajouté (§24-26, §50) | budget contre le plafond de la règle ; contribution de chaque crypto ; risque ajouté par les achats du jour |
+| Limites, note, état, décision, validité (§39, §47-48, §55, §77-78, §83) | note avec ses dix composantes, état de normal à bloqué, machine à états, décision pour les achats, valable 24 heures |
+| Calibrage (§86, §93) | la plus prudente de trois méthodes : bien calibrée sur le backtest de la règle (75 dépassements pour 70 attendus à 95 %, 16 pour 14 à 99 %) ; recalibrée sur le journal du bot |
+| Sécurité par défaut (§46, §99) | sans évaluation valide du jour, la porte refuse tout achat (17e contrôle) ; les ventes restent permises ; « bloqué » seulement quand la règle n'achèterait pas ; aucun trade changé (test) |
+
+**Ce qui ne s'applique pas** : grecques, taux, crédit, change, pays et
+secteurs (cryptos au comptant contre de l'USDT), GARCH (EWMA à la place),
+comité d'agents du risque avec IA (aucune clé), dérogations manuelles aux
+limites (une limite change dans le code, tracée et testée).
 
 ## Ce qui reste (votre accord d'abord)
 

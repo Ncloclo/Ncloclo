@@ -11,6 +11,7 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `Order.v1` | moteur v29 (réel) | Binance Spot | 1.0.0 | INTERNAL | critique |
 | `OrderIntent.v1` | exécution (bot_execution.py) | porte d'exécution (porte.py) | 1.0.0 | INTERNAL | critique |
 | `ReleaseGate.v1` | feuille de route (chantiers.py) | porte d'exécution (achats réels), rapport, Rachelle | 1.0.0 | INTERNAL | critique |
+| `RiskAssessment.v1` | moteur de risque (moteur_risque.py) | porte d'exécution, journal financier, raisonnement, rapport, Rachelle | 1.0.0 | INTERNAL | critique |
 | `RiskCheck.v1` | exécution | porte d'exécution | 1.0.0 | INTERNAL | critique |
 | `SafeModeState.v1` | vous (commande mode-sur) | porte d'exécution, décision du jour | 1.0.0 | INTERNAL | critique |
 | `TradeRecord.v1` | exécution | journal des trades, attribution, apprentissage | 1.0.0 | INTERNAL | critique |
@@ -188,6 +189,24 @@ Porte du réel (porte 8), mesurée sur l'état du bot.
 | Trace (audit) | raisonnement et rapport quotidien |
 | Fichiers | `trendguard/chantiers.py` |
 
+## RiskAssessment.v1
+
+Évaluation du risque du portefeuille avant et après les achats du jour.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | moteur de risque (moteur_risque.py) |
+| Consommateur | porte d'exécution, journal financier, raisonnement, rapport, Rachelle |
+| Entrée | positions, cours et volumes validés, capital, plus haut, réglages de risque, garde, évaluations passées |
+| Sortie | VaR et ES (quatre méthodes, 1 à 10 jours), volatilité, queue, corrélations, concentration, liquidité, baisse, budget, contributions, stress et stress inversé, limites, alertes, note et composantes, état et décision, fin de validité |
+| Erreurs | moteur en panne, données critiques invalides ou évaluation périmée : aucun achat (mode sûr), ventes permises |
+| Droits | lecture seule : jamais une autorisation |
+| Délai | à chaque décision |
+| Nouveaux essais | aucun : la décision suivante réévalue |
+| Unicité | une évaluation par jour, avant et après les achats |
+| Trace (audit) | journal financier, en ajout seulement |
+| Fichiers | `trendguard/moteur_risque.py` |
+
 ## RiskCheck.v1
 
 Contrôle déterministe du risque avant tout achat.
@@ -196,7 +215,7 @@ Contrôle déterministe du risque avant tout achat.
 | --- | --- |
 | Producteur | exécution |
 | Consommateur | porte d'exécution |
-| Entrée | OrderIntent, portefeuille du moment, réglages de risque, garde, mode sûr |
+| Entrée | OrderIntent, portefeuille du moment, réglages de risque, garde, mode sûr, évaluation du jour du moteur de risque |
 | Sortie | RiskDecision : APPROVED, REJECTED ou EMERGENCY_BLOCK, chaque contrôle et sa raison |
 | Erreurs | contrat refusé = achat refusé |
 | Droits | règles fixes, aucune IA |

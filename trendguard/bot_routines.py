@@ -27,6 +27,7 @@ from . import (
     learning,
     libre,
     modeles,
+    moteur_risque,
     moteur_strategie,
     report,
     savoir,
@@ -278,6 +279,49 @@ class RoutinesMixin:
         if views:
             self.logger.info("[COMITÉ] " + " ; ".join(v["text"].split(" — ")[0] for v in views.values()))
             self._journal("record_committee", f"D-{day}", list(views.values()), comite.VERSION)
+
+    def _risk_engine(self, phase: str, day: str, close: Any, peak: float, now: datetime, prices: Dict[str, float],
+                     equity: Optional[float] = None, cash: Optional[float] = None) -> None:
+        """Moteur de risque (moteur_risque.py) avant les achats (PRE : la
+        porte d'exécution s'y réfère) et après (POST : risque ajouté par les
+        achats du jour), gardé au journal financier. Une panne avant les
+        achats laisse une évaluation absente : la porte refuse alors tout
+        achat (mode sûr) ; les ventes ne sont jamais concernées."""
+        if not self.g.risk_engine:
+            return
+        view = self.state.get("moteur_risque") or {}
+        if view.get("day") != day:
+            view = {"day": day}
+        try:
+            if equity is None or cash is None:
+                equity, cash = self._equity_and_cash(prices)         # après les achats (compte réel : Binance)
+            last = close.iloc[-1]
+            positions = {a: {"qty": float(h.qty), "price": float(last[a]), "stop": float(h.stop),
+                             "risk_quote": float(h.risk_quote), "entry": float(h.entry)}
+                         for a, h in self._holdings().items() if a in close.columns}
+            ev = self.state.get("evenements") or {}
+            g_ = self.state.get("garde") or {}
+            ctx = {"halted": bool(self.state.get("halted")), "kill": self.g.kill_drawdown,
+                   "garde_blocked": list(g_.get("blocked") or []) if g_.get("day") == day else [],
+                   "safe_mode": bool((self.state.get("mode_sur") or {}).get("active")),
+                   "data_quality": (self.state.get("qualite") or {}).get("score")
+                   if (self.state.get("qualite") or {}).get("day") == day else None,
+                   "events": [x.get("label") for x in (ev.get("upcoming") or [])] if ev.get("day") == day else []}
+            history = self._journal("risk_history", self.g.run_mode) or []
+            a = moteur_risque.assess(day, close, getattr(self, "_last_volume", None), positions, cash, equity, peak,
+                                     self.p, float(self.state.get("risk_mult", 1.0) or 1.0), ctx, phase,
+                                     self.g.run_mode, history, now,
+                                     (view.get("pre") or {}).get("state") or "RISK_UNKNOWN")
+            self._journal("record_risk_assessment", a)
+            view[phase.lower()] = moteur_risque.compact(a)
+            if phase == "POST":
+                view["added"] = moteur_risque.incremental(view.get("pre"), view["post"])
+            if a.approval == "RISK_BLOCKED":
+                self.logger.warning("[RISQUE] " + moteur_risque.describe(view[phase.lower()]))
+        except Exception as e:           # une évaluation ratée : les achats s'arrêtent (porte), jamais les ventes
+            view[phase.lower()] = {"day": day, "error": f"{type(e).__name__} : {e}"[:200]}
+            self.logger.warning(f"[RISQUE] évaluation impossible ({phase}) : {e} → aucun achat (mode sûr)")
+        self.state["moteur_risque"] = view
 
     def _strategie(self, day: str, snap: Dict[str, Dict[str, float]], bull: bool, held: Set[str],
                    exited: Set[str], entries: List[Dict[str, Any]], equity: float) -> None:

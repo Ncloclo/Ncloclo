@@ -175,7 +175,7 @@ def test_a_decision_cannot_look_into_the_future():
                        "safe_mode, garde_blocked, data_source, created_at, data_cutoff_at) SELECT 'D-x', "
                        "'2026-10-03', 'paper', strategy_version_id, 1, 1, 0, 0, '[]', 's', 't', "
                        "'2026-10-06T00:00:00+00:00' FROM fin_decisions")
-    assert j.verify()["ok"] and j.rollback(2) == [4, 3] and j.migrate() == [3, 4]
+    assert j.verify()["ok"] and j.rollback(2) == [5, 4, 3] and j.migrate() == [3, 4, 5]
 
 
 # ---------- Bougies vérifiées (§41) ----------

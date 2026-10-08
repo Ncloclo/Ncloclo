@@ -260,10 +260,10 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Propriétaire | bot |
 | Dépend de | Stratégie et évolution encadrée (dure), Moteur quantitatif (risque d'un jour, résistance, attribution) (souple), Base de données et journal financier (données) |
 | Bloque | Portefeuille (taille, plafonds, sélection), Paper trading, Politique, autorisation et porte d'exécution, Trading réel |
-| Code | `trendguard/porte.py`, `trendguard/garde.py`, `trendguard/bot.py` |
-| Tests | `tests/test_contrats.py`, `tests/test_trendguard.py` |
-| Contrats | `RiskCheck.v1`, `NoTradeGate.v1`, `KillSwitch.v1` |
-| Documentation | [`CONTRATS.md`](CONTRATS.md) |
+| Code | `trendguard/porte.py`, `trendguard/garde.py`, `trendguard/bot.py`, `trendguard/moteur_risque.py` |
+| Tests | `tests/test_contrats.py`, `tests/test_trendguard.py`, `tests/test_moteur_risque.py` |
+| Contrats | `RiskCheck.v1`, `NoTradeGate.v1`, `KillSwitch.v1`, `RiskAssessment.v1` |
+| Documentation | [`CONTRATS.md`](CONTRATS.md), [`MOTEUR_RISQUE.md`](MOTEUR_RISQUE.md) |
 | Sécurité | 1 % de risque par achat, plafonds, arrêt d'urgence à −40 %, « pas de trade » valide |
 | Observabilité | chaque contrôle dans l'audit et le journal financier |
 | Acceptation | aucun achat sans contrôle déterministe approuvé |

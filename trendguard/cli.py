@@ -696,6 +696,7 @@ TOOLS = {"alerts": ("alerts", "alertes : configurer | tester"),
          "chantiers": ("chantiers", "feuille de route et portes : [statut] | portes | document"),
          "finance": ("finance", "analyse financière d'une crypto (consultative) : <crypto> [--json]"),
          "regle": ("moteur_strategie", "la règle en fiche déclarative : [fiche] | valider | etats"),
+         "risque": ("moteur_risque", "moteur de risque : [etat] | calibrage"),
          "validation": ("moteur_backtest", "validation complète du backtest de la règle : [--rapide] "
                                            "[--cache data_binance] [--out docs/VALIDATION.md]"),
          "modeles": ("modeles", "modèles d'IA : [statut] | banc")}

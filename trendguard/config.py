@@ -163,6 +163,10 @@ class GuardConfig:
     # Porte du réel (chantiers.py) : toujours appliquée hors essais (aucune
     # variable ne la désactive) ; fermée, aucun achat réel.
     release_gate: bool = False
+    # Moteur de risque (moteur_risque.py) : évaluation avant et après les
+    # achats ; sans évaluation valide du jour, aucun achat. Toujours appliqué
+    # hors essais (aucune variable ne le désactive).
+    risk_engine: bool = False
 
     def __post_init__(self):
         if self.run_mode not in ("paper", "live"):
@@ -275,7 +279,7 @@ def load_guard_config_from_env() -> GuardConfig:
         db_file=v29._env_s("TG_DB_FILE", ""),
         log_file=v29._env_s("TG_LOG_FILE", ""),
         lock_file=v29._env_s("TG_LOCK_FILE", ""),
-        release_gate=True)
+        release_gate=True, risk_engine=True)
 
 
 class ExchangeTimeFormatter(logging.Formatter):

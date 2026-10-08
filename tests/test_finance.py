@@ -237,7 +237,7 @@ def test_full_analysis_of_one_crypto(market):
 
 def test_the_journal_keeps_features_forecasts_and_their_evaluation():
     j = donnees.Journal(":memory:")
-    assert max(j.applied()) == 4
+    assert max(j.applied()) >= 4
     fc = {"horizon_days": 30, "p_up": 0.6, "ci_low": 0.45, "ci_high": 0.74, "expected_return": 0.03, "cases": 25,
           "version": finance.FORECAST_VERSION}
     j.record_finance("2026-09-01", "eth", {"rsi_14": 55.0, "momentum_90d": None}, "1.0.0", "2026-09-02T00:00:00+00:00",
@@ -257,7 +257,7 @@ def test_the_journal_keeps_features_forecasts_and_their_evaluation():
     with pytest.raises(sqlite3.IntegrityError):
         j.conn.execute("INSERT INTO fin_features (day, asset, name, value, version, data_cutoff_at, created_at) "
                        "VALUES ('2026-09-01', 'eth', 'x', 1, '1.0.0', '2026-09-03T00:00:00+00:00', 'now')")
-    assert j.verify()["ok"] and j.rollback(3) == [4] and j.migrate() == [4]
+    assert j.verify()["ok"] and j.rollback(3) == [5, 4] and j.migrate() == [4, 5]
 
 
 # ---------- Dans le bot : consultatif ----------

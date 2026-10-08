@@ -348,3 +348,41 @@ Analyse du jour de chaque crypto : signal, à surveiller ou pas de trade, et pou
 | `opportunity` | REAL | non |  |
 | `version` | TEXT | oui |  |
 | `created_at` | TEXT | oui |  |
+
+## `fin_risk_assessments`
+
+Évaluation du risque du portefeuille avant et après les achats du jour : VaR, ES, stress, budget, baisse, note, état, décision, détails, fin de validité (jamais modifiée).
+
+| Rubrique | |
+| --- | --- |
+| Propriétaire | `trendguard/donnees.py` (domaine « fin_ ») |
+| Lue par | moteur de risque (calibrage de la VaR), rapport |
+| Écrite par | bot, à la décision, en ajout seulement |
+| Contrat | RiskAssessment.v1 |
+| Durée de vie | toujours |
+| Index | `fin_risk_assessments_day` (par mode et par jour : VaR annoncée contre résultat du lendemain) |
+
+| Colonne | Type | Obligatoire | Clé |
+| --- | --- | --- | --- |
+| `id` | INTEGER | oui | primaire |
+| `assessment_id` | TEXT | oui |  |
+| `day` | TEXT | oui |  |
+| `phase` | TEXT | oui |  |
+| `mode` | TEXT | oui |  |
+| `state` | TEXT | oui |  |
+| `approval` | TEXT | oui |  |
+| `score` | REAL | oui |  |
+| `confidence` | REAL | oui |  |
+| `equity` | REAL | oui |  |
+| `var95_pct` | REAL | non |  |
+| `es95_pct` | REAL | non |  |
+| `var99_pct` | REAL | non |  |
+| `es99_pct` | REAL | non |  |
+| `stress_worst_pct` | REAL | non |  |
+| `budget_used` | REAL | non |  |
+| `drawdown_pct` | REAL | non |  |
+| `details` | TEXT | oui |  |
+| `model_version` | TEXT | oui |  |
+| `data_hash` | TEXT | oui |  |
+| `expires_at` | TEXT | oui |  |
+| `created_at` | TEXT | oui |  |

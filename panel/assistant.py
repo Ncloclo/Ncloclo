@@ -28,7 +28,7 @@ import threading
 import unicodedata
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from trendguard import chantiers, expert, modeles
+from trendguard import chantiers, expert, modeles, moteur_risque
 from trendguard import market_watch as mw
 from trendguard.texte import fr
 
@@ -663,6 +663,26 @@ def a_regle(ctx: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def a_moteur_risque(ctx: Dict[str, Any]) -> str:
+    """Le moteur de risque : état et décision du jour, VaR, pire stress,
+    budget, premier contributeur ; ce qu'il applique et ce qu'il ne fait que
+    dire."""
+    mr = ctx.get("moteur_risque") or {}
+    view = mr.get("post") or mr.get("pre")
+    head = ("**Moteur de risque** : à chaque décision, avant et après les achats, il mesure la VaR et la perte "
+            "moyenne au-delà (quatre méthodes), la volatilité, la queue des pertes, les corrélations, la "
+            "concentration, la liquidité, la baisse depuis le plus haut, le budget de risque, la part de chaque "
+            "crypto, les tests de résistance et le choc qui déclencherait l'arrêt d'urgence.")
+    if not view:
+        return head + " Pas encore d'évaluation : la prochaine décision en fera une. Commande : python trendguard_bot.py risque."
+    lines = [head, f"Bougie du {mr.get('day')} : " + (view.get("error") and f"évaluation impossible ({view['error']})"
+                                                      or moteur_risque.describe(view))]
+    lines.append("Il n'applique qu'une chose : sans évaluation valide du jour, aucun achat (les ventes restent "
+                 "permises). Le reste informe : les limites de la règle (1 % par achat, plafonds, arrêt d'urgence à "
+                 "−40 %) restent celles de la porte d'exécution. Une confiance n'est pas une probabilité de gain.")
+    return "\n".join(lines)
+
+
 def a_validation(_ctx: Dict[str, Any]) -> str:
     return ("**Validation du backtest** (moteur de backtest) : la règle rejouée sur l'historique Binance avec un "
             "manifeste (refaite, elle donne exactement le même résultat), des données contrôlées avant de simuler, "
@@ -894,6 +914,10 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("regle", ("pourquoi pas d achat", "pourquoi n achete", "pourquoi le bot n achete", "conditions d achat",
                "conditions d entree", "fiche de la regle", "moteur de strategie", "regle du bot", "candidates"),
      a_regle, [{"label": "Ce que pense le bot", "href": "#dash"}]),
+    ("moteur_risque", ("moteur de risque", "var", "valeur a risque", "perte extreme", "expected shortfall",
+                       "stress test", "tests de resistance", "stress inverse", "budget de risque",
+                       "risque du portefeuille", "contribution au risque", "correlation"),
+     a_moteur_risque, [{"label": "Ce que pense le bot", "href": "#dash"}]),
     ("validation", ("validation du backtest", "backtest valide", "moteur de backtest", "sur ajustement",
                     "surapprentissage", "overfitting", "sharpe degonfle", "probabilite de sur ajustement"),
      a_validation, []),

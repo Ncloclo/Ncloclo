@@ -27,6 +27,7 @@ from . import (
     evolution,
     garde,
     learning,
+    moteur_risque,
     porte,
     postmortem,
     qualite,
@@ -932,6 +933,7 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
                       (self.state.get("qualite") or {}).get("score"),
                       (close.index[-1] + pd.Timedelta(days=1)).isoformat() if len(close.index) else None)
         held_before = {a: float(h.risk_quote) for a, h in holdings.items()}
+        self._risk_engine("PRE", day, close, peak, now, prices, equity, cash)
         if not self.state.get("halted") and not blocked and not safe.active:
             eligible = {a: s for a, s in snap.items()
                         if self._can_enter(a) and a in allowed}
@@ -959,6 +961,7 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         self._committee(day, close, snap, held_before, equity, blocked, safe.active, allowed)
         self.state["last_decision_day"] = day
         self._day_risk(day, close, equity)
+        self._risk_engine("POST", day, close, peak, now, prices)
         self._events_day(day, close, now)
         self._finance(day, close, feats)
         self._strategie(day, snap, bull, set(held_before), {a for a, _r in late + exits}, entries, equity)
@@ -1017,6 +1020,9 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         sr = self.state.get("stress") or {}
         if sr.get("day") == day and sr.get("text"):
             extra.append(sr["text"])
+        mr = self.state.get("moteur_risque") or {}
+        if mr.get("day") == day:
+            extra.append(moteur_risque.describe(mr.get("post") or mr.get("pre")))
         q = self.state.get("qualite") or {}
         if q.get("day") == day and q.get("score", 100) < 100:
             extra.append(f"Qualité des données : {q['text']}.")

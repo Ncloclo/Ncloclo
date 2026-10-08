@@ -26,6 +26,7 @@ from . import (
     learning,
     libre,
     modeles,
+    moteur_risque,
     postmortem,
     registre,
     risque,
@@ -601,6 +602,17 @@ def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
                                               "donnees, puis signalez-le (rien n'est corrigé en silence)."))
         except Exception as e:           # un bilan illisible n'empêche pas le rapport
             out.append(chk("Journal financier", None, f"illisible ({type(e).__name__})"))
+    mr = st.get("moteur_risque") or {}
+    view = mr.get("post") or mr.get("pre")
+    if view:
+        text = f"décision du {mr.get('day')} : " + moteur_risque.describe(view)
+        added = mr.get("added") or {}
+        if added.get("var95_pct"):
+            text += f" Achats du jour : VaR à 95 % {fr(added['var95_pct'], '+.1f')} point(s)."
+        if view.get("model"):
+            text += f" Calibrage de la VaR : {view['model']}."
+        out.append(chk("Moteur de risque", False if view.get("error") else None, text,
+                       "Lire le journal du bot ([RISQUE]) : sans évaluation, aucun achat." if view.get("error") else ""))
     sg = st.get("strategie") or {}
     if sg.get("day"):
         text = (f"décision du {sg['day']} : fiche {sg.get('id')} v{sg.get('version')}, "

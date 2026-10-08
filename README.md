@@ -474,6 +474,12 @@ en retard éprouvés, la capacité, les régimes, des achats au hasard pour
 comparer et une statistique qui tient compte des essais ; dernier rapport
 ([`docs/VALIDATION.md`](docs/VALIDATION.md)) : valide, prête pour le moteur de
 risque. Un backtest n'est jamais une garantie de performance future.
+Étape 11 : moteur de risque ([`docs/MOTEUR_RISQUE.md`](docs/MOTEUR_RISQUE.md),
+`python trendguard_bot.py risque`) : avant et après les achats de chaque
+décision, le risque du portefeuille mesuré (VaR calibrée, perte au-delà,
+queue, corrélations, liquidité, budget, contributions, stress et choc qui
+déclencherait l'arrêt d'urgence), gardé au journal ; sans évaluation valide
+du jour, aucun achat (les ventes restent permises).
 Cadre de priorités et de dépendances
 ([`docs/FEUILLE_DE_ROUTE.md`](docs/FEUILLE_DE_ROUTE.md),
 `python trendguard_bot.py chantiers portes`) : chaque composant prouvé, et

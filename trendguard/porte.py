@@ -11,7 +11,8 @@ crypto de la liste, choisie et sans veto, pas déjà détenue ni achetée deux
 fois, nombre de positions, risque de l'achat, risque cumulé, taille de la
 position, argent disponible, stop sous le prix, montant minimum, qualité des
 données du jour (au moins 50 sur 100 : en dessous, les données sont trop
-abîmées pour décider ; étape 3, §76).
+abîmées pour décider ; étape 3, §76), évaluation du jour du moteur de risque
+(moteur_risque.py, étape 11 : absente, périmée ou bloquée, aucun achat).
 
 Le plan du jour respecte déjà ces limites : la porte ne change rien aux
 décisions normales (10 % de marge pour les écarts de prix et de capital entre
@@ -71,6 +72,7 @@ class Portfolio:
     live: bool = False
     live_armed: bool = False
     production: Optional[Tuple[bool, str]] = None  # porte du réel (ouverte, détail) ; None : non mesurée (essais)
+    risk_engine: Optional[Tuple[bool, str]] = None  # moteur de risque (évaluation valide, détail) ; None : essais
 
 
 def _limits(intent: OrderIntent, pf: Portfolio, p: Any) -> List[Tuple[str, bool, str]]:
@@ -114,11 +116,13 @@ def _limits(intent: OrderIntent, pf: Portfolio, p: Any) -> List[Tuple[str, bool,
         ("Qualité des données", pf.data_quality is None or pf.data_quality >= QUALITY_MIN,
          "non mesurée" if pf.data_quality is None else
          f"{fr(pf.data_quality, '.0f')}/100 ({fr(QUALITY_MIN, '.0f')} au moins)"),
+        ("Moteur de risque", pf.risk_engine is None or pf.risk_engine[0],
+         "non mesuré (essais)" if pf.risk_engine is None else pf.risk_engine[1]),
     ]
     return checks
 
 
-EMERGENCY = ("Arrêt d'urgence", "Mode sûr")
+EMERGENCY = ("Arrêt d'urgence", "Mode sûr", "Moteur de risque")
 
 
 def check(intent: OrderIntent, pf: Portfolio, p: Any, now: datetime) -> RiskDecision:

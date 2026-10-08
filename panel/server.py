@@ -341,7 +341,8 @@ class PanelApp(SecurityCenter):
                 "modeles": modeles.status(path=modeles.ledger_path(getattr(self.g, "watch_db", ""))),
                 "chantiers": chantiers.summary(self.g, self.data.state()),
                 "finance": self.data.state().get("finance") or {},
-                "strategie": self.data.state().get("strategie") or {}}
+                "strategie": self.data.state().get("strategie") or {},
+                "moteur_risque": self.data.state().get("moteur_risque") or {}}
 
     def anticipation_view(self) -> Dict[str, Any]:
         """Ce que le bot fera probablement à la prochaine clôture, avec les

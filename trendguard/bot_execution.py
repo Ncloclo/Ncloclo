@@ -13,7 +13,7 @@ import ccxt
 
 import v29
 
-from . import chantiers, learning, porte, postmortem
+from . import chantiers, learning, moteur_risque, porte, postmortem
 from . import trend_strategy as ts
 from .bot_types import Slot, last_closed_day
 from .contrats import ContractError, Money, OrderIntent
@@ -440,7 +440,9 @@ class ExecutionMixin:
             data_quality=(self.state.get("qualite") or {}).get("score")
             if (self.state.get("qualite") or {}).get("day") == day else None,
             live_armed=bool(g.enable_live_trading and g.live_confirmation == "I_UNDERSTAND_RISK"),
-            production=self._production(day) if self.live and g.release_gate else None)
+            production=self._production(day) if self.live and g.release_gate else None,
+            risk_engine=moteur_risque.gate((self.state.get("moteur_risque") or {}).get("pre"), day, now)
+            if g.risk_engine else None)
         try:
             intent: Optional[OrderIntent] = OrderIntent.from_plan(plan, day)
             decision = porte.check(intent, pf, self.p, now)

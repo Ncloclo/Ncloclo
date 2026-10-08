@@ -503,6 +503,11 @@ STRATEGY_STATES = ("STRATEGY_READY", "NO_TRADE", "STRATEGY_BLOCKED", "IN_POSITIO
 BACKTEST_STATUSES = ("VALID", "VALID_WITH_WARNINGS", "INVALID", "REJECTED")
 BACKTEST_READINESS = ("READY_FOR_RISK", "RESEARCH_ONLY", "REJECTED")
 NO_GUARANTEE = "Un backtest n'est pas une garantie de performance future."
+# Étape 11 (moteur de risque) : états, décisions pour les achats, phases, niveaux d'alerte.
+RISK_STATES = ("RISK_NORMAL", "RISK_WARNING", "RISK_HIGH", "RISK_CRITICAL", "RISK_BLOCKED")
+RISK_APPROVALS = ("RISK_APPROVED", "RISK_APPROVED_WITH_LIMIT", "RISK_RESTRICTED", "RISK_BLOCKED")
+RISK_PHASES = ("PRE", "POST")
+ALERT_LEVELS = ("INFO", "NOTICE", "WARNING", "HIGH", "CRITICAL", "EMERGENCY")
 
 
 def _day(name: str, v: Any) -> None:
@@ -837,6 +842,69 @@ class BacktestResult:
         return _plain(self)
 
 
+@dataclass(frozen=True)
+class RiskAssessment:
+    """Évaluation du risque du portefeuille (RiskAssessment.v1, étape 11 §47
+    et §77) : mesures, composantes et leur niveau, limites et leur usage,
+    alertes, note (jamais seule : avec ses composantes), état, décision pour
+    les achats, chemin dans la machine à états, fin de validité. Un blocage
+    dit pourquoi ; jamais une autorisation."""
+    VERSION: ClassVar[int] = 1
+    assessment_id: str
+    day: str
+    phase: str
+    mode: str
+    state: str
+    approval: str
+    path: Tuple[str, ...]
+    score: float
+    confidence: float
+    equity: float
+    metrics: Dict[str, Any]
+    components: Dict[str, str]
+    limits: Tuple[Tuple[str, float, str], ...]
+    warnings: Tuple[str, ...]
+    violations: Tuple[str, ...]
+    alerts: Tuple[Tuple[str, str, str], ...]
+    required_actions: Tuple[str, ...]
+    model_version: str
+    limits_version: str
+    data_hash: str
+    created_at: str
+    expires_at: str
+    authorized: bool = False
+    version: int = 1
+
+    def __post_init__(self) -> None:
+        _version(self, self.VERSION)
+        _enum("state", self.state, RISK_STATES)
+        _enum("approval", self.approval, RISK_APPROVALS)
+        _enum("phase", self.phase, RISK_PHASES)
+        check_uuid("assessment_id", self.assessment_id)
+        _day("day", self.day)
+        check_timestamp("created_at", self.created_at)
+        check_timestamp("expires_at", self.expires_at)
+        if datetime.fromisoformat(self.expires_at) <= datetime.fromisoformat(self.created_at):
+            raise ContractError("INCONSISTENT", "une évaluation a une durée de validité")
+        object.__setattr__(self, "score", _score01("score", self.score))
+        object.__setattr__(self, "confidence", _score01("confidence", self.confidence))
+        for name, level in self.components.items():
+            _enum(f"components.{name}", level, LEVELS4)
+        for level, _code, _text in self.alerts:
+            _enum("alerts", level, ALERT_LEVELS)
+        if (self.state == "RISK_BLOCKED") != (self.approval == "RISK_BLOCKED"):
+            raise ContractError("INCONSISTENT", "état bloqué et décision bloquée vont ensemble")
+        if self.approval == "RISK_BLOCKED" and not self.violations:
+            raise ContractError("INCONSISTENT", "un blocage dit toujours pourquoi")
+        if not self.path or self.path[-1] != self.state:
+            raise ContractError("INCONSISTENT", "le chemin de la machine à états finit par l'état")
+        if self.authorized:
+            raise ContractError("POLICY", "une évaluation du risque n'est jamais une autorisation", category="POLICY")
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
 def ohlcv_violations(rows: Any) -> int:
     """Bougies incohérentes (§41) : plus haut sous l'ouverture, la clôture
     ou le plus bas ; plus bas au-dessus ; volume négatif. Une bougie
@@ -907,7 +975,8 @@ def validate(schema: str, data: Dict[str, Any]) -> ValidationResult:
 SCHEMAS.update({c.__name__: c for c in (OrderIntent, RiskDecision, ExecutionAuthorization, SafeModeState,
                                         Confidence, Uncertainty, Provenance, Money, Envelope, LLMExecution,
                                         ModelConsensus, ModelDisagreement, Instrument, Feature, Forecast,
-                                        Scenario, FinancialSignal, StrategyDecision, BacktestResult)})
+                                        Scenario, FinancialSignal, StrategyDecision, BacktestResult,
+                                        RiskAssessment)})
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -953,7 +1022,8 @@ REGISTRY: Tuple[Contract, ...] = (
              "un achat par crypto et par décision", "contrôle de la porte", 1,
              ("trendguard/contrats.py", "trendguard/bot_execution.py")),
     Contract("RiskCheck.v1", "contrôle déterministe du risque avant tout achat", "exécution",
-             "porte d'exécution", "OrderIntent, portefeuille du moment, réglages de risque, garde, mode sûr",
+             "porte d'exécution", "OrderIntent, portefeuille du moment, réglages de risque, garde, mode sûr, "
+             "évaluation du jour du moteur de risque",
              "RiskDecision : APPROVED, REJECTED ou EMERGENCY_BLOCK, chaque contrôle et sa raison",
              "contrat refusé = achat refusé", "règles fixes, aucune IA", "immédiat", "aucun",
              "même entrée, même décision", "chaque décision, approuvée ou refusée", 1, ("trendguard/porte.py",)),
@@ -1192,6 +1262,16 @@ REGISTRY: Tuple[Contract, ...] = (
              "limites", "rejet sans raison, « prêt » sans validité, limites sans « pas une garantie » : refusés",
              "jamais une autorisation : la règle en service ne change pas", "étude hors ligne", "aucun",
              "un résultat par manifeste", "dans le rapport de validation", 2, ("trendguard/moteur_backtest.py",)),
+    Contract("RiskAssessment.v1", "évaluation du risque du portefeuille avant et après les achats du jour",
+             "moteur de risque (moteur_risque.py)", "porte d'exécution, journal financier, raisonnement, rapport, "
+             "Rachelle", "positions, cours et volumes validés, capital, plus haut, réglages de risque, garde, "
+             "évaluations passées", "VaR et ES (quatre méthodes, 1 à 10 jours), volatilité, queue, corrélations, "
+             "concentration, liquidité, baisse, budget, contributions, stress et stress inversé, limites, alertes, "
+             "note et composantes, état et décision, fin de validité", "moteur en panne, données critiques "
+             "invalides ou évaluation périmée : aucun achat (mode sûr), ventes permises", "lecture seule : jamais "
+             "une autorisation", "à chaque décision", "aucun : la décision suivante réévalue",
+             "une évaluation par jour, avant et après les achats", "journal financier, en ajout seulement", 1,
+             ("trendguard/moteur_risque.py",)),
     Contract("HealthReport.v1", "rapport quotidien et centre de sécurité", "rapport (report.py)",
              "vous (e-mail, panneau)", "état du bot, PC, journal, GitHub", "constats conformes, à corriger, informations",
              "source illisible : information", "lecture seule", "00:30 UTC", "rattrapé au retour du PC",

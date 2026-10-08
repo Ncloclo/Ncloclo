@@ -248,6 +248,38 @@ MIGRATIONS: Tuple[Migration, ...] = (
         *_append_only("fin_analyses"),
     ), down=("DROP TABLE IF EXISTS fin_analyses", "DROP TABLE IF EXISTS fin_forecast_evaluations",
              "DROP TABLE IF EXISTS fin_forecasts", "DROP TABLE IF EXISTS fin_features")),
+    # Étape 11 : chaque évaluation du moteur de risque, avant et après les
+    # achats du jour, en ajout seulement (reconstitution et calibrage).
+    Migration(5, "moteur de risque", up=(
+        """CREATE TABLE fin_risk_assessments (
+            id INTEGER PRIMARY KEY,
+            assessment_id TEXT NOT NULL UNIQUE,
+            day TEXT NOT NULL CHECK (day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+            phase TEXT NOT NULL CHECK (phase IN ('PRE', 'POST')),
+            mode TEXT NOT NULL,
+            state TEXT NOT NULL CHECK (state IN ('RISK_NORMAL', 'RISK_WARNING', 'RISK_HIGH', 'RISK_CRITICAL',
+                                                 'RISK_BLOCKED')),
+            approval TEXT NOT NULL CHECK (approval IN ('RISK_APPROVED', 'RISK_APPROVED_WITH_LIMIT', 'RISK_RESTRICTED',
+                                                       'RISK_BLOCKED')),
+            score REAL NOT NULL CHECK (score BETWEEN 0 AND 1),
+            confidence REAL NOT NULL CHECK (confidence BETWEEN 0 AND 1),
+            equity REAL NOT NULL CHECK (equity >= 0),
+            var95_pct REAL,
+            es95_pct REAL,
+            var99_pct REAL,
+            es99_pct REAL,
+            stress_worst_pct REAL,
+            budget_used REAL,
+            drawdown_pct REAL,
+            details TEXT NOT NULL CHECK (json_valid(details)),
+            model_version TEXT NOT NULL,
+            data_hash TEXT NOT NULL,
+            expires_at TEXT NOT NULL CHECK (expires_at > created_at),
+            created_at TEXT NOT NULL,
+            UNIQUE (day, phase, mode, model_version))""",
+        *_append_only("fin_risk_assessments"),
+        "CREATE INDEX fin_risk_assessments_day ON fin_risk_assessments(mode, day)",
+    ), down=("DROP TABLE IF EXISTS fin_risk_assessments",)),
 )
 
 
@@ -298,6 +330,10 @@ TABLES: Tuple[Table, ...] = (
           "calibration, rapport", "bot, à l'échéance, en ajout seulement", "Forecast.v1", "toujours"),
     Table("fin_analyses", "analyse du jour de chaque crypto : signal, à surveiller ou pas de trade, et pourquoi",
           "rapport, Rachelle", "bot, à la décision, en ajout seulement", "FinancialAnalysis.v1", "toujours"),
+    Table("fin_risk_assessments", "évaluation du risque du portefeuille avant et après les achats du jour : VaR, "
+          "ES, stress, budget, baisse, note, état, décision, détails, fin de validité (jamais modifiée)",
+          "moteur de risque (calibrage de la VaR), rapport", "bot, à la décision, en ajout seulement",
+          "RiskAssessment.v1", "toujours", "par mode et par jour : VaR annoncée contre résultat du lendemain"),
 )
 
 
@@ -558,6 +594,44 @@ class Journal:
                                    forecast["ci_low"], forecast["ci_high"], forecast["expected_return"],
                                    forecast["cases"], float(close), forecast["version"], now))
 
+    def record_risk_assessment(self, a: Any) -> None:
+        """Une évaluation du moteur de risque (RiskAssessment), gardée telle
+        quelle ; la même évaluation n'est jamais remplacée."""
+        m = a.metrics
+        stress = m.get("stress") or []
+        with self._tx():
+            self.conn.execute(
+                "INSERT OR IGNORE INTO fin_risk_assessments (assessment_id, day, phase, mode, state, approval, score, "
+                "confidence, equity, var95_pct, es95_pct, var99_pct, es99_pct, stress_worst_pct, budget_used, "
+                "drawdown_pct, details, model_version, data_hash, expires_at, created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (a.assessment_id, a.day, a.phase, a.mode, a.state, a.approval, a.score, a.confidence, a.equity,
+                 m.get("var95_pct"), m.get("es95_pct"), m.get("var99_pct"), m.get("es99_pct"),
+                 stress[0]["loss_pct"] if stress else None, (m.get("budget") or {}).get("used"),
+                 (m.get("drawdown") or {}).get("drawdown_pct"),
+                 _json({"components": a.components, "limits": a.limits, "warnings": a.warnings,
+                        "violations": a.violations, "alerts": a.alerts, "path": a.path}),
+                 a.model_version, a.data_hash or "inconnue", a.expires_at, a.created_at))
+
+    def risk_history(self, mode: str, limit: int = 400) -> List[Tuple[float, float]]:
+        """(VaR à 95 % annoncée après les achats d'un jour, rendement réalisé
+        jusqu'à l'évaluation suivante) pour le calibrage, du plus ancien au
+        plus récent."""
+        have = {r[0] for r in self.conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        if "fin_risk_assessments" not in have:
+            return []
+        rows = [dict(r) for r in self.conn.execute(
+            "SELECT day, phase, equity, var95_pct FROM fin_risk_assessments WHERE mode = ? ORDER BY day, phase",
+            (mode,))]
+        post = [r for r in rows if r["phase"] == "POST"]
+        pre = {r["day"]: r for r in rows if r["phase"] == "PRE"}
+        out = []
+        for a, b in zip(post, post[1:]):
+            nxt = pre.get(b["day"]) or b
+            if a["var95_pct"] is not None and a["equity"] > 0:
+                out.append((a["var95_pct"] / 100, nxt["equity"] / a["equity"] - 1))
+        return out[-limit:]
+
     def due_forecasts(self, day: str) -> List[Dict[str, Any]]:
         """Prévisions arrivées à échéance et pas encore évaluées."""
         return [dict(r) for r in self.conn.execute(
@@ -622,7 +696,7 @@ class Journal:
             problems.append(f"{bad} achat(s) exécuté(s) sans contrôle approuvé")
         triggers = {r[0] for r in self.conn.execute("SELECT name FROM sqlite_master WHERE type='trigger'")}
         guarded = {"fin_risk_checks": 1, "fin_executions": 1, "fin_committee_views": 2, "fin_features": 4,
-                   "fin_forecasts": 4, "fin_forecast_evaluations": 4, "fin_analyses": 4}
+                   "fin_forecasts": 4, "fin_forecast_evaluations": 4, "fin_analyses": 4, "fin_risk_assessments": 5}
         for t in (name for name, version in guarded.items() if version in applied):
             if not {f"{t}_update_refuse", f"{t}_delete_refuse"} <= triggers:
                 problems.append(f"{t} : protection d'ajout seul absente")
