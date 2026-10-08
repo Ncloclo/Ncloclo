@@ -487,6 +487,13 @@ décision, le risque du portefeuille mesuré (VaR calibrée, perte au-delà,
 queue, corrélations, liquidité, budget, contributions, stress et choc qui
 déclencherait l'arrêt d'urgence), gardé au journal ; sans évaluation valide
 du jour, aucun achat (les ventes restent permises).
+Étape 12 : moteur de portefeuille
+([`docs/MOTEUR_PORTEFEUILLE.md`](docs/MOTEUR_PORTEFEUILLE.md),
+`python trendguard_bot.py portefeuille`) : à chaque décision, poids,
+concentration, risque engagé et part de chaque crypto dans le risque, comparés
+à d'autres répartitions ; jamais de rééquilibrage ; la taille des achats de la
+règle (même risque jusqu'au stop) éprouvée sur deux époques
+([`docs/PORTEFEUILLE.md`](docs/PORTEFEUILLE.md)).
 Cadre de priorités et de dépendances
 ([`docs/FEUILLE_DE_ROUTE.md`](docs/FEUILLE_DE_ROUTE.md),
 `python trendguard_bot.py chantiers portes`) : chaque composant prouvé, et

@@ -27,6 +27,7 @@ from . import (
     evolution,
     garde,
     learning,
+    moteur_portefeuille,
     moteur_risque,
     porte,
     postmortem,
@@ -962,6 +963,7 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         self.state["last_decision_day"] = day
         self._day_risk(day, close, equity)
         self._risk_engine("POST", day, close, peak, now, prices)
+        self._portefeuille(day, close, prices)
         self._events_day(day, close, now)
         self._finance(day, close, feats)
         self._strategie(day, snap, bull, set(held_before), {a for a, _r in late + exits}, entries, equity)
@@ -1023,6 +1025,9 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         mr = self.state.get("moteur_risque") or {}
         if mr.get("day") == day:
             extra.append(moteur_risque.describe(mr.get("post") or mr.get("pre")))
+        pf = self.state.get("portefeuille") or {}
+        if pf.get("day") == day:
+            extra.append("Portefeuille : " + moteur_portefeuille.describe(pf) + ".")
         q = self.state.get("qualite") or {}
         if q.get("day") == day and q.get("score", 100) < 100:
             extra.append(f"Qualité des données : {q['text']}.")

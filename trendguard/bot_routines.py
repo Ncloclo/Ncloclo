@@ -27,6 +27,7 @@ from . import (
     learning,
     libre,
     modeles,
+    moteur_portefeuille,
     moteur_risque,
     moteur_strategie,
     report,
@@ -322,6 +323,25 @@ class RoutinesMixin:
             view[phase.lower()] = {"day": day, "error": f"{type(e).__name__} : {e}"[:200]}
             self.logger.warning(f"[RISQUE] évaluation impossible ({phase}) : {e} → aucun achat (mode sûr)")
         self.state["moteur_risque"] = view
+
+    def _portefeuille(self, day: str, close: Any, prices: Dict[str, float]) -> None:
+        """Moteur de portefeuille (moteur_portefeuille.py) après les achats :
+        poids, exposition, concentration, risque engagé, volatilité,
+        allocations comparées, décision consultative. Une panne ne bloque
+        jamais le bot et ne change aucune décision."""
+        try:
+            equity, cash = self._equity_and_cash(prices)
+            last = close.iloc[-1]
+            positions = {a: {"qty": float(h.qty), "price": float(last[a]), "stop": float(h.stop),
+                             "risk_quote": float(h.risk_quote), "entry": float(h.entry)}
+                         for a, h in self._holdings().items() if a in close.columns}
+            st = moteur_portefeuille.state(day, positions, close, equity, cash, self.p)
+            alt = moteur_portefeuille.alternatives(st, close, self.p)
+            dec = moteur_portefeuille.decide(st, alt)
+            self.state["portefeuille"] = moteur_portefeuille.compact(st, dec, alt)
+        except Exception as e:           # consultatif : jamais bloquant
+            self.state["portefeuille"] = {"day": day, "error": f"{type(e).__name__} : {e}"[:200]}
+            self.logger.warning(f"[PORTEFEUILLE] état impossible : {e}")
 
     def _strategie(self, day: str, snap: Dict[str, Dict[str, float]], bull: bool, held: Set[str],
                    exited: Set[str], entries: List[Dict[str, Any]], equity: float) -> None:

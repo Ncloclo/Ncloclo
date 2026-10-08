@@ -32,6 +32,7 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `ModelDisagreement.v1` | veille (market_watch.py) | rapport de la veille, panneau, Rachelle | 1.0.0 | PUBLIC | cœur |
 | `ModelSelection.v1` | routeur (modeles.py) | exécution des modèles | 1.0.0 | INTERNAL | cœur |
 | `PortfolioAnalysis.v1` | décision du jour (risque.py, stress.py, attribution.py) | panneau, rapport, raisonnement | 1.0.0 | INTERNAL | cœur |
+| `PortfolioDecision.v1` | moteur de portefeuille (moteur_portefeuille.py) | raisonnement du jour, rapport, Rachelle, vous | 1.0.0 | INTERNAL | cœur |
 | `PromptVersion.v1` | socle des modèles (modeles.py) | exécution des modèles, veille, Rachelle, banc | 1.0.0 | INTERNAL | cœur |
 | `Scenario.v1` | cœur financier (finance.py) | analyses, Rachelle | 1.0.0 | PUBLIC | cœur |
 | `Signal.v1` | stratégie (trend_strategy.py) | plan d'achat | 1.0.0 | INTERNAL | cœur |
@@ -567,6 +568,24 @@ Analyse du portefeuille : risque d'un jour, tests de résistance, attribution.
 | Unicité | une analyse par décision |
 | Trace (audit) | dans l'état du bot |
 | Fichiers | `trendguard/risque.py`, `trendguard/stress.py`, `trendguard/attribution.py` |
+
+## PortfolioDecision.v1
+
+État et décision consultative du portefeuille à chaque décision : dans les contraintes, à regarder ou aucune position.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | moteur de portefeuille (moteur_portefeuille.py) |
+| Consommateur | raisonnement du jour, rapport, Rachelle, vous |
+| Entrée | positions, cours, capital, liquidités, réglages de la règle |
+| Sortie | poids, exposition, liquidités, concentration, risque engagé, volatilité, contributions, allocations comparées, rééquilibrage (jamais : la règle laisse courir les gagnants) |
+| Erreurs | « à regarder » sans raison, poids hors bornes, contrainte relâchée : refusés ; panne : aucune conséquence sur le trading |
+| Droits | lecture seule : jamais un ordre ni une autorisation |
+| Délai | à chaque décision |
+| Nouveaux essais | aucun : la décision suivante réévalue |
+| Unicité | une décision par jour |
+| Trace (audit) | dans l'état du bot |
+| Fichiers | `trendguard/moteur_portefeuille.py` |
 
 ## PromptVersion.v1
 

@@ -449,6 +449,29 @@ secteurs (cryptos au comptant contre de l'USDT), GARCH (EWMA à la place),
 comité d'agents du risque avec IA (aucune clé), dérogations manuelles aux
 limites (une limite change dans le code, tracée et testée).
 
+## Étape 12 du prompt : moteur de portefeuille
+
+Le douzième document demande un moteur qui construit, répartit, contraint,
+rééquilibre et explique le portefeuille. Appliqué à TrendGuard :
+`moteur_portefeuille.py`, l'état du portefeuille à chaque décision, et
+`python trendguard_bot.py portefeuille`. Détail :
+[`MOTEUR_PORTEFEUILLE.md`](MOTEUR_PORTEFEUILLE.md) ; étude :
+[`PORTEFEUILLE.md`](PORTEFEUILLE.md).
+
+| Exigence de l'étape 12 | Ce qui a été fait |
+| --- | --- |
+| État, concentration, contributions (§7-9, §27-32) | poids, exposition, liquidités, HHI et nombre effectif, risque engagé contre le plafond, volatilité, part de chaque crypto dans le risque, diversification |
+| Optimiseurs (§13-20) | parts égales, inverse de la volatilité, variance minimale, parité de risque, Sharpe maximal, sur les mêmes cryptos, pour comparer |
+| Contraintes (§22-26) | une contrainte impossible est expliquée, jamais relâchée ; poids validés (somme, bornes) |
+| Rééquilibrage (§37-40) | dérive mesurée ; jamais proposé : il couperait les gagnants, d'où vient le résultat |
+| Décision (§61) | dans les contraintes, à regarder (avec la raison) ou aucune position ; jamais un ordre ; aucun trade changé (test) |
+| Taille des achats éprouvée (§13, §89-90) | même règle, seule la taille change : le montant égal fait nettement moins bien ; la règle reste |
+
+**Ce qui ne s'applique pas** : couverture (Spot, sans vente à découvert),
+plusieurs devises et comptes (un compte en USDT), Black-Litterman et
+moyenne-CVaR (pas de vues ; la règle dimensionne des achats, elle ne choisit
+pas des poids).
+
 ## Ce qui reste (votre accord d'abord)
 
 1. **Débat des IA** (§43) : rôles haussier, baissier, critique et synthèse

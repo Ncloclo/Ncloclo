@@ -26,6 +26,7 @@ from . import (
     learning,
     libre,
     modeles,
+    moteur_portefeuille,
     moteur_risque,
     postmortem,
     registre,
@@ -613,6 +614,10 @@ def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
             text += f" Calibrage de la VaR : {view['model']}."
         out.append(chk("Moteur de risque", False if view.get("error") else None, text,
                        "Lire le journal du bot ([RISQUE]) : sans évaluation, aucun achat." if view.get("error") else ""))
+    pf = st.get("portefeuille") or {}
+    if pf.get("day"):
+        out.append(chk("Moteur de portefeuille", False if pf.get("error") else None,
+                       f"décision du {pf['day']} : " + moteur_portefeuille.describe(pf)))
     sg = st.get("strategie") or {}
     if sg.get("day"):
         text = (f"décision du {sg['day']} : fiche {sg.get('id')} v{sg.get('version')}, "

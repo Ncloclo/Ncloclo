@@ -697,6 +697,8 @@ TOOLS = {"alerts": ("alerts", "alertes : configurer | tester"),
          "finance": ("finance", "analyse financière d'une crypto (consultative) : <crypto> [--json]"),
          "regle": ("moteur_strategie", "la règle en fiche déclarative : [fiche] | valider | etats"),
          "risque": ("moteur_risque", "moteur de risque : [etat] | calibrage"),
+         "portefeuille": ("moteur_portefeuille", "moteur de portefeuille (consultatif) : [etat] | etude "
+                                                 "[--out docs/PORTEFEUILLE.md]"),
          "quant": ("moteur_quant", "laboratoire quantitatif (consultatif) : [--cache data_binance] "
                                    "[--out docs/QUANT.md]"),
          "validation": ("moteur_backtest", "validation complète du backtest de la règle : [--rapide] "

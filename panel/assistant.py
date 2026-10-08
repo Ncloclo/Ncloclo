@@ -28,7 +28,7 @@ import threading
 import unicodedata
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from trendguard import chantiers, expert, modeles, moteur_risque
+from trendguard import chantiers, expert, modeles, moteur_portefeuille, moteur_risque
 from trendguard import market_watch as mw
 from trendguard.texte import fr
 
@@ -713,6 +713,20 @@ def doc_points(name: str, heading: str = "## Conclusions", limit: int = 6) -> Li
     return points[:limit]
 
 
+def a_portefeuille(ctx: Dict[str, Any]) -> str:
+    """Le moteur de portefeuille : l'état du jour et ce que dit l'étude de la
+    taille des achats."""
+    lines = ["**Moteur de portefeuille** : à chaque décision, poids, exposition, liquidités, concentration, risque "
+             "engagé contre le plafond, volatilité et part de chaque crypto dans le risque ; d'autres répartitions "
+             "(parts égales, variance minimale, parité de risque…) sont calculées pour comparer.",
+             "Aujourd'hui : " + moteur_portefeuille.describe(ctx.get("portefeuille")) + "."]
+    lines += [f"- {p}" for p in doc_points("PORTEFEUILLE.md", "## Verdict", 3)]
+    lines.append("La règle donne à chaque achat le même risque jusqu'à son stop (une parité de risque) et ne "
+                 "rééquilibre jamais : vendre une partie des gagnants couperait les meilleurs trades. Étude : "
+                 "python trendguard_bot.py portefeuille etude.")
+    return "\n".join(lines)
+
+
 def a_quant(_ctx: Dict[str, Any]) -> str:
     """Le laboratoire quantitatif : ses conclusions mesurées (docs/QUANT.md)."""
     lines = ["**Laboratoire quantitatif** (moteur quantitatif) : lois des rendements, stationnarité, persistance, "
@@ -962,6 +976,10 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("validation", ("validation du backtest", "backtest valide", "moteur de backtest", "sur ajustement",
                     "surapprentissage", "overfitting", "sharpe degonfle", "probabilite de sur ajustement"),
      a_validation, []),
+    ("portefeuille", ("moteur de portefeuille", "portefeuille", "allocation", "repartition", "reequilibrage",
+                      "reequilibrer", "diversification", "concentration", "taille des achats", "poids des positions",
+                      "parite de risque", "variance minimale"), a_portefeuille, [{"label": "Positions et ventes",
+                                                                                 "href": "#positions"}]),
     ("quant", ("laboratoire quantitatif", "moteur quantitatif", "quant", "loi normale", "lois des rendements",
                "queues epaisses", "stationnarite", "garch", "volatilite prevue", "pouvoir predictif",
                "composantes principales", "cointegration", "regimes caches"), a_quant, []),

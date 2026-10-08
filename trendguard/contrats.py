@@ -505,6 +505,8 @@ BACKTEST_READINESS = ("READY_FOR_RISK", "RESEARCH_ONLY", "REJECTED")
 NO_GUARANTEE = "Un backtest n'est pas une garantie de performance future."
 QUANT_STATUSES = ("VALIDATED", "VALIDATED_WITH_WARNINGS", "INVALID")
 PAST_NOT_PROMISE = "Une mesure du passé n'est ni une certitude ni une promesse."
+PORTFOLIO_DECISIONS = ("HOLD", "REVIEW", "NO_ALLOCATE")
+REBALANCE_DECISIONS = ("NO_REBALANCE", "REBALANCE_PROPOSED")
 # Étape 11 (moteur de risque) : états, décisions pour les achats, phases, niveaux d'alerte.
 RISK_STATES = ("RISK_NORMAL", "RISK_WARNING", "RISK_HIGH", "RISK_CRITICAL", "RISK_BLOCKED")
 RISK_APPROVALS = ("RISK_APPROVED", "RISK_APPROVED_WITH_LIMIT", "RISK_RESTRICTED", "RISK_BLOCKED")
@@ -952,6 +954,54 @@ class QuantResult:
         return _plain(self)
 
 
+@dataclass(frozen=True)
+class PortfolioDecision:
+    """Décision du moteur de portefeuille (PortfolioDecision.v1, étape 12
+    §61) : dans les contraintes (HOLD), à regarder (REVIEW, avec les
+    contraintes dépassées) ou aucune position (NO_ALLOCATE) ; exposition,
+    liquidités, concentration, risque engagé ; rééquilibrage proposé ou non.
+    Consultative : jamais un ordre ni une autorisation."""
+    VERSION: ClassVar[int] = 1
+    decision_id: str
+    day: str
+    decision: str
+    engine_version: str
+    positions: int
+    exposure: float
+    cash_share: float
+    hhi: float
+    risk_used: float
+    violations: Tuple[str, ...]
+    rebalance: str
+    created_at: str
+    authorized: bool = False
+    version: int = 1
+
+    def __post_init__(self) -> None:
+        _version(self, self.VERSION)
+        _enum("decision", self.decision, PORTFOLIO_DECISIONS)
+        _enum("rebalance", self.rebalance, REBALANCE_DECISIONS)
+        check_uuid("decision_id", self.decision_id)
+        _day("day", self.day)
+        check_timestamp("created_at", self.created_at)
+        if not isinstance(self.positions, int) or self.positions < 0:
+            raise ContractError("OUT_OF_RANGE", "positions : entier positif ou nul")
+        for name in ("exposure", "cash_share", "hhi"):
+            object.__setattr__(self, name, _score01(name, getattr(self, name)))
+        if self.risk_used < 0:
+            raise ContractError("OUT_OF_RANGE", "risk_used : jamais négatif")
+        if (self.decision == "REVIEW") != bool(self.violations):
+            raise ContractError("INCONSISTENT", "« à regarder » dit toujours pourquoi, et seulement alors")
+        if (self.decision == "NO_ALLOCATE") != (self.positions == 0):
+            raise ContractError("INCONSISTENT", "« aucune position » va avec zéro position")
+        if self.authorized:
+            raise ContractError("POLICY", "une décision de portefeuille n'est jamais une autorisation",
+                                category="POLICY")
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
 def ohlcv_violations(rows: Any) -> int:
     """Bougies incohérentes (§41) : plus haut sous l'ouverture, la clôture
     ou le plus bas ; plus bas au-dessus ; volume négatif. Une bougie
@@ -1023,7 +1073,7 @@ SCHEMAS.update({c.__name__: c for c in (OrderIntent, RiskDecision, ExecutionAuth
                                         Confidence, Uncertainty, Provenance, Money, Envelope, LLMExecution,
                                         ModelConsensus, ModelDisagreement, Instrument, Feature, Forecast,
                                         Scenario, FinancialSignal, StrategyDecision, BacktestResult,
-                                        RiskAssessment, QuantResult)})
+                                        RiskAssessment, QuantResult, PortfolioDecision)})
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -1328,6 +1378,15 @@ REGISTRY: Tuple[Contract, ...] = (
              "refusé", "lecture seule : jamais un signal d'achat ni une autorisation", "étude hors ligne", "aucun",
              "mêmes données, même graine : même empreinte du résultat", "dans le rapport du laboratoire", 3,
              ("trendguard/moteur_quant.py",), classification="PUBLIC"),
+    Contract("PortfolioDecision.v1", "état et décision consultative du portefeuille à chaque décision : dans les "
+             "contraintes, à regarder ou aucune position", "moteur de portefeuille (moteur_portefeuille.py)",
+             "raisonnement du jour, rapport, Rachelle, vous", "positions, cours, capital, liquidités, réglages de "
+             "la règle", "poids, exposition, liquidités, concentration, risque engagé, volatilité, contributions, "
+             "allocations comparées, rééquilibrage (jamais : la règle laisse courir les gagnants)",
+             "« à regarder » sans raison, poids hors bornes, contrainte relâchée : refusés ; panne : aucune "
+             "conséquence sur le trading", "lecture seule : jamais un ordre ni une autorisation", "à chaque décision",
+             "aucun : la décision suivante réévalue", "une décision par jour", "dans l'état du bot", 2,
+             ("trendguard/moteur_portefeuille.py",)),
     Contract("HealthReport.v1", "rapport quotidien et centre de sécurité", "rapport (report.py)",
              "vous (e-mail, panneau)", "état du bot, PC, journal, GitHub", "constats conformes, à corriger, informations",
              "source illisible : information", "lecture seule", "00:30 UTC", "rattrapé au retour du PC",

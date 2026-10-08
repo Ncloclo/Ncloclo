@@ -342,7 +342,8 @@ class PanelApp(SecurityCenter):
                 "chantiers": chantiers.summary(self.g, self.data.state()),
                 "finance": self.data.state().get("finance") or {},
                 "strategie": self.data.state().get("strategie") or {},
-                "moteur_risque": self.data.state().get("moteur_risque") or {}}
+                "moteur_risque": self.data.state().get("moteur_risque") or {},
+                "portefeuille": self.data.state().get("portefeuille") or {}}
 
     def anticipation_view(self) -> Dict[str, Any]:
         """Ce que le bot fera probablement à la prochaine clôture, avec les
