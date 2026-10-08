@@ -15,6 +15,7 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `SafeModeState.v1` | vous (commande mode-sur) | porte d'exécution, décision du jour | 1.0.0 | INTERNAL | critique |
 | `TradeRecord.v1` | exécution | journal des trades, attribution, apprentissage | 1.0.0 | INTERNAL | critique |
 | `AIOpinion.v1` | IA consultées (market_watch.py) | veille, noyau de savoir | 1.0.0 | INTERNAL | cœur |
+| `BacktestResult.v1` | moteur de backtest (moteur_backtest.py) | moteur de risque, vous | 1.0.0 | INTERNAL | cœur |
 | `CommitteeView.v1` | comité (comite.py) | journal financier, Rachelle, panneau | 1.0.0 | INTERNAL | cœur |
 | `Confidence.v1` | comité d'agents | Rachelle, panneau, journal | 1.0.0 | INTERNAL | cœur |
 | `EntryPlan.v1` | stratégie | exécution | 1.0.0 | INTERNAL | cœur |
@@ -35,6 +36,7 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `Signal.v1` | stratégie (trend_strategy.py) | plan d'achat | 1.0.0 | INTERNAL | cœur |
 | `StrategyDecision.v1` | moteur de stratégie (moteur_strategie.py) | raisonnement, rapport, Rachelle | 1.0.0 | INTERNAL | cœur |
 | `StrategySpec.v1` | moteur de stratégie (moteur_strategie.py) | validation, backtest, décisions, Rachelle, commande regle | 1.0.0 | PUBLIC | cœur |
+| `BacktestManifest.v1` | moteur de backtest (moteur_backtest.py) | rapport de validation, vous | 1.0.0 | PUBLIC | données |
 | `DecisionRecord.v1` | décision du jour | journal financier, lignée des trades | 1.0.0 | CONFIDENTIAL | données |
 | `Experiment.v1` | évolution, études (registre.py) | rejeu, contrôle, rapport | 1.0.0 | INTERNAL | données |
 | `Feature.v1` | cœur financier (finance.py) | analyses, journal financier | 1.0.0 | PUBLIC | données |
@@ -257,6 +259,24 @@ Avis des IA sur le marché (veille).
 | Unicité | un avis par jour |
 | Trace (audit) | rapport de la veille |
 | Fichiers | `trendguard/market_watch.py` |
+
+## BacktestResult.v1
+
+Verdict d'un backtest : valide, avec réserves, invalide ou rejeté ; prêt pour le moteur de risque ou recherche seulement.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | moteur de backtest (moteur_backtest.py) |
+| Consommateur | moteur de risque, vous |
+| Entrée | backtest de la règle, épreuves, statistique |
+| Sortie | mesures par époque, Sharpe probabiliste et dégonflé, note de qualité, réserves, raisons de rejet, limites |
+| Erreurs | rejet sans raison, « prêt » sans validité, limites sans « pas une garantie » : refusés |
+| Droits | jamais une autorisation : la règle en service ne change pas |
+| Délai | étude hors ligne |
+| Nouveaux essais | aucun |
+| Unicité | un résultat par manifeste |
+| Trace (audit) | dans le rapport de validation |
+| Fichiers | `trendguard/moteur_backtest.py` |
 
 ## CommitteeView.v1
 
@@ -617,6 +637,24 @@ Fiche déclarative de la règle : langage sûr, versionnée, verrouillée sur le
 | Unicité | même fiche, même empreinte |
 | Trace (audit) | version et empreinte dans chaque décision |
 | Fichiers | `trendguard/moteur_strategie.py` |
+
+## BacktestManifest.v1
+
+Manifeste d'un backtest : tout ce qu'il faut pour le refaire à l'identique.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | moteur de backtest (moteur_backtest.py) |
+| Consommateur | rapport de validation, vous |
+| Entrée | configuration, données, fiche de la règle, code |
+| Sortie | version du code, empreintes des données, de la configuration, du code, de l'environnement et du résultat, graine |
+| Erreurs | résultat refait différent : INVALID |
+| Droits | lecture seule : aucun ordre |
+| Délai | étude hors ligne |
+| Nouveaux essais | aucun |
+| Unicité | mêmes entrées, même empreinte du résultat |
+| Trace (audit) | dans le rapport de validation |
+| Fichiers | `trendguard/moteur_backtest.py` |
 
 ## DecisionRecord.v1
 

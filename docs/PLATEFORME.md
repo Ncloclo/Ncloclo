@@ -372,6 +372,31 @@ bayésienne ou génétique (réglages gelés, changés seulement par l'évolutio
 encadrée), probabilité et rendement attendus d'un trade (non estimés : laissés
 vides).
 
+## Étape 10 du prompt : moteur de backtest
+
+Le dixième document demande un moteur de backtest qui prouve au lieu de
+promettre : configuration et reproductibilité, données validées, anti-fuite,
+exécution réaliste, comptabilité, hors échantillon, walk-forward, robustesse,
+probabilité de sur-ajustement, Monte-Carlo, stress, capacité, régimes,
+statistique, équipe rouge, verdict et limites. Appliqué à TrendGuard :
+`moteur_backtest.py` autour de la boucle du bot, et `python trendguard_bot.py
+validation`. Détail : [`MOTEUR_BACKTEST.md`](MOTEUR_BACKTEST.md) ; dernier
+rapport : [`VALIDATION.md`](VALIDATION.md).
+
+| Exigence de l'étape 10 | Ce qui a été fait |
+| --- | --- |
+| Reproductibilité (§5-6, §73) | manifeste : version git, empreintes des données, de la configuration, du code, de l'environnement et du résultat ; refait, identique |
+| Données, anti-fuite (§7-9) | dix contrôles avant de simuler, note sur 100 ; un regard vers le futur fait rejeter |
+| Exécution, coûts, retard, capacité (§14-21, §45-48) | glissement contre le bot, frais des deux côtés ; frais × 3, glissement + 200 %, achats 1 ou 2 jours en retard ; capacité de 10 000 à 100 millions d'USDT |
+| Hors échantillon, walk-forward, robustesse, PBO (§31-38) | 2018-2022 puis depuis 2023 ; walk-forward glissant ; 27 réglages voisins ; probabilité de sur-ajustement 12 % |
+| Statistique (§39-40) | Sharpe probabiliste, Sharpe dégonflé (27 et 100 essais), intervalles par blocs, corrections des tests multiples |
+| Verdict, prêt pour le risque (§51-53, §81) | réglages en vigueur (profil prudent, 20 positions, 10 % cumulés) : VALIDE, prête pour le moteur de risque, note 98/100 ; un rapport rapide n'est jamais « prêt » |
+
+**Ce qui ne s'applique pas** : ticks, carnet d'ordres, ordres limites et
+exécutions partielles (bougies journalières, ordres au marché, moins de
+0,03 % du volume du jour), seconde boucle vectorisée (une seule vérité), marge,
+financement et emprunt (Spot, sans levier).
+
 ## Ce qui reste (votre accord d'abord)
 
 1. **Débat des IA** (§43) : rôles haussier, baissier, critique et synthèse

@@ -663,6 +663,16 @@ def a_regle(ctx: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def a_validation(_ctx: Dict[str, Any]) -> str:
+    return ("**Validation du backtest** (moteur de backtest) : la règle rejouée sur l'historique Binance avec un "
+            "manifeste (refaite, elle donne exactement le même résultat), des données contrôlées avant de simuler, "
+            "des coûts, un glissement et des achats en retard éprouvés, la capacité, les régimes, des achats au "
+            "hasard pour comparer, et une statistique qui tient compte des essais (Sharpe dégonflé, probabilité de "
+            "sur-ajustement). Verdict : valide, avec réserves, invalide ou rejeté ; prête pour le moteur de risque "
+            "ou recherche seulement. Rapport : docs/VALIDATION.md ; pour le refaire : "
+            "python trendguard_bot.py validation. Un backtest n'est jamais une garantie de performance future.")
+
+
 def a_chantiers(ctx: Dict[str, Any]) -> str:
     cs = ctx.get("chantiers") or {}
     lines = ["**Feuille de route** : " + (f"{cs.get('components', 0)} composants suivis, chacun avec sa priorité, "
@@ -884,6 +894,9 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("regle", ("pourquoi pas d achat", "pourquoi n achete", "pourquoi le bot n achete", "conditions d achat",
                "conditions d entree", "fiche de la regle", "moteur de strategie", "regle du bot", "candidates"),
      a_regle, [{"label": "Ce que pense le bot", "href": "#dash"}]),
+    ("validation", ("validation du backtest", "backtest valide", "moteur de backtest", "sur ajustement",
+                    "surapprentissage", "overfitting", "sharpe degonfle", "probabilite de sur ajustement"),
+     a_validation, []),
     ("chantiers", ("feuille de route", "chantiers", "priorites", "passer en reel", "porte du reel",
                    "pret pour le reel", "quand passer en reel", "portes"), a_chantiers,
      [{"label": "Réglages ▸ rapport", "href": "#settings"}]),

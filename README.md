@@ -467,6 +467,13 @@ jamais changer une décision.
 versionnée, verrouillée sur le code), validée « prête pour le backtest » et
 vérifiée chaque nuit contre la règle exécutée (0 écart sur 2017-2026) ; pour
 chaque crypto, la condition d'achat qui manque.
+Étape 10 : moteur de backtest ([`docs/MOTEUR_BACKTEST.md`](docs/MOTEUR_BACKTEST.md),
+`python trendguard_bot.py validation`) : la règle rejouée avec un manifeste
+reproductible, des données contrôlées, des coûts, un glissement et des achats
+en retard éprouvés, la capacité, les régimes, des achats au hasard pour
+comparer et une statistique qui tient compte des essais ; dernier rapport
+([`docs/VALIDATION.md`](docs/VALIDATION.md)) : valide, prête pour le moteur de
+risque. Un backtest n'est jamais une garantie de performance future.
 Cadre de priorités et de dépendances
 ([`docs/FEUILLE_DE_ROUTE.md`](docs/FEUILLE_DE_ROUTE.md),
 `python trendguard_bot.py chantiers portes`) : chaque composant prouvé, et

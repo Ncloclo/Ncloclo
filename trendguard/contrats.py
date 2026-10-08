@@ -499,6 +499,10 @@ STRATEGY_REASONS = ("NO_BREAKOUT", "NO_MOMENTUM", "SHORT_HISTORY", "LOW_LIQUIDIT
                     "REGIME_BLOCK", "DATA_INVALID")
 STRATEGY_DECISIONS = ("TRADE_CANDIDATE", "NO_TRADE", "HOLD", "EXIT")
 STRATEGY_STATES = ("STRATEGY_READY", "NO_TRADE", "STRATEGY_BLOCKED", "IN_POSITION")
+# Étape 10 (moteur de backtest) : verdicts, préparation au moteur de risque, limite obligatoire.
+BACKTEST_STATUSES = ("VALID", "VALID_WITH_WARNINGS", "INVALID", "REJECTED")
+BACKTEST_READINESS = ("READY_FOR_RISK", "RESEARCH_ONLY", "REJECTED")
+NO_GUARANTEE = "Un backtest n'est pas une garantie de performance future."
 
 
 def _day(name: str, v: Any) -> None:
@@ -783,6 +787,56 @@ class StrategyDecision:
         return _plain(self)
 
 
+@dataclass(frozen=True)
+class BacktestResult:
+    """Résultat validé d'un backtest (BacktestResult.v1, étape 10 §54 et
+    §77) : verdict, préparation au moteur de risque, empreintes des données,
+    de la configuration et du résultat, mesures, note de qualité, réserves,
+    raisons de rejet et limites, dont toujours « pas une garantie »."""
+    VERSION: ClassVar[int] = 1
+    run_id: str
+    status: str
+    readiness: str
+    strategy_id: str
+    strategy_version: str
+    dataset_hash: str
+    config_hash: str
+    result_hash: str
+    periods: Tuple[Tuple[str, str], ...]
+    metrics: Dict[str, Any]
+    quality_score: float
+    warnings: Tuple[str, ...]
+    rejection_reasons: Tuple[str, ...]
+    limitations: Tuple[str, ...]
+    created_at: str
+    version: int = 1
+
+    def __post_init__(self) -> None:
+        _version(self, self.VERSION)
+        _enum("status", self.status, BACKTEST_STATUSES)
+        _enum("readiness", self.readiness, BACKTEST_READINESS)
+        check_uuid("run_id", self.run_id)
+        check_timestamp("created_at", self.created_at)
+        object.__setattr__(self, "quality_score", _score01("quality_score", self.quality_score))
+        for name in ("dataset_hash", "config_hash", "result_hash"):
+            if not getattr(self, name):
+                raise ContractError("INVALID_FIELD", f"{name} : empreinte requise (reproductibilité)")
+        for a, b in self.periods:
+            _day("periods", a)
+            _day("periods", b)
+        if self.status == "REJECTED" and not self.rejection_reasons:
+            raise ContractError("INCONSISTENT", "un rejet dit toujours pourquoi")
+        if self.readiness == "READY_FOR_RISK" and (self.status not in ("VALID", "VALID_WITH_WARNINGS")
+                                                   or self.rejection_reasons):
+            raise ContractError("INCONSISTENT", "seul un backtest valide est prêt pour le moteur de risque")
+        if NO_GUARANTEE not in self.limitations:
+            raise ContractError("POLICY", "les limites disent toujours qu'un backtest n'est pas une garantie",
+                                category="POLICY")
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
 def ohlcv_violations(rows: Any) -> int:
     """Bougies incohérentes (§41) : plus haut sous l'ouverture, la clôture
     ou le plus bas ; plus bas au-dessus ; volume négatif. Une bougie
@@ -853,7 +907,7 @@ def validate(schema: str, data: Dict[str, Any]) -> ValidationResult:
 SCHEMAS.update({c.__name__: c for c in (OrderIntent, RiskDecision, ExecutionAuthorization, SafeModeState,
                                         Confidence, Uncertainty, Provenance, Money, Envelope, LLMExecution,
                                         ModelConsensus, ModelDisagreement, Instrument, Feature, Forecast,
-                                        Scenario, FinancialSignal, StrategyDecision)})
+                                        Scenario, FinancialSignal, StrategyDecision, BacktestResult)})
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -1125,6 +1179,19 @@ REGISTRY: Tuple[Contract, ...] = (
              "jamais une autorisation : la porte décide", "à la décision", "aucun", "une décision par crypto et par jour",
              "écart avec la règle exécutée signalé au journal du bot et au rapport", 2,
              ("trendguard/moteur_strategie.py",)),
+    Contract("BacktestManifest.v1", "manifeste d'un backtest : tout ce qu'il faut pour le refaire à l'identique",
+             "moteur de backtest (moteur_backtest.py)", "rapport de validation, vous",
+             "configuration, données, fiche de la règle, code", "version du code, empreintes des données, de la "
+             "configuration, du code, de l'environnement et du résultat, graine", "résultat refait différent : INVALID",
+             "lecture seule : aucun ordre", "étude hors ligne", "aucun", "mêmes entrées, même empreinte du résultat",
+             "dans le rapport de validation", 3, ("trendguard/moteur_backtest.py",), classification="PUBLIC"),
+    Contract("BacktestResult.v1", "verdict d'un backtest : valide, avec réserves, invalide ou rejeté ; prêt pour le "
+             "moteur de risque ou recherche seulement", "moteur de backtest (moteur_backtest.py)",
+             "moteur de risque, vous", "backtest de la règle, épreuves, statistique",
+             "mesures par époque, Sharpe probabiliste et dégonflé, note de qualité, réserves, raisons de rejet, "
+             "limites", "rejet sans raison, « prêt » sans validité, limites sans « pas une garantie » : refusés",
+             "jamais une autorisation : la règle en service ne change pas", "étude hors ligne", "aucun",
+             "un résultat par manifeste", "dans le rapport de validation", 2, ("trendguard/moteur_backtest.py",)),
     Contract("HealthReport.v1", "rapport quotidien et centre de sécurité", "rapport (report.py)",
              "vous (e-mail, panneau)", "état du bot, PC, journal, GitHub", "constats conformes, à corriger, informations",
              "source illisible : information", "lecture seule", "00:30 UTC", "rattrapé au retour du PC",
