@@ -18,6 +18,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from . import (
+    acceptation,
     attribution,
     audit,
     chantiers,
@@ -540,6 +541,17 @@ def knowledge_check(gcfg: Any) -> List[Check]:
     return out
 
 
+def _cached_close(gcfg: Any) -> Tuple[Any, Any]:
+    """Cours en cache de l'évolution (jamais retéléchargés ici) ; rien si le
+    cache manque."""
+    import v29
+    try:
+        return evolution.load_history(os.path.join(v29.APP_DIR, "data_evolution"), list(gcfg.universe),
+                                      max_age_days=None)
+    except Exception:                    # cache absent ou illisible : écart au backtest non mesuré
+        return None, None
+
+
 def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
     """Risque et analyse du portefeuille, d'après la dernière décision :
     qualité des données, VaR, tests de résistance, attribution des
@@ -614,6 +626,12 @@ def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
             text += f" Calibrage de la VaR : {view['model']}."
         out.append(chk("Moteur de risque", False if view.get("error") else None, text,
                        "Lire le journal du bot ([RISQUE]) : sans évaluation, aucun achat." if view.get("error") else ""))
+    try:
+        close, volume = _cached_close(gcfg)
+        ac = acceptation.evaluate(gcfg, st, close=close, volume=volume, params=evolution.params_for(gcfg))
+        out.append(chk("Acceptation du paper", None, acceptation.describe(ac)))
+    except Exception as e:               # une évaluation impossible n'empêche pas le rapport
+        out.append(chk("Acceptation du paper", None, f"évaluation impossible ({type(e).__name__})"))
     pf = st.get("portefeuille") or {}
     if pf.get("day"):
         out.append(chk("Moteur de portefeuille", False if pf.get("error") else None,

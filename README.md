@@ -494,6 +494,11 @@ concentration, risque engagé et part de chaque crypto dans le risque, comparés
 à d'autres répartitions ; jamais de rééquilibrage ; la taille des achats de la
 règle (même risque jusqu'au stop) éprouvée sur deux époques
 ([`docs/PORTEFEUILLE.md`](docs/PORTEFEUILLE.md)).
+Étape 13 : critères d'acceptation du paper
+([`docs/ACCEPTATION_PAPER.md`](docs/ACCEPTATION_PAPER.md),
+`python trendguard_bot.py acceptation`) : 44 critères mesurés sur le bot ou
+prouvés par des tests, note pondérée, observation et paper comparé au
+backtest de la même période ; un seul critère bloquant raté suffit à bloquer.
 Cadre de priorités et de dépendances
 ([`docs/FEUILLE_DE_ROUTE.md`](docs/FEUILLE_DE_ROUTE.md),
 `python trendguard_bot.py chantiers portes`) : chaque composant prouvé, et

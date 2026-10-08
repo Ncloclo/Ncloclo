@@ -472,6 +472,26 @@ plusieurs devises et comptes (un compte en USDT), Black-Litterman et
 moyenne-CVaR (pas de vues ; la règle dimensionne des achats, elle ne choisit
 pas des poids).
 
+## Étape 13 du prompt : critères d'acceptation du paper
+
+Le treizième document fixe 44 critères mesurables (AC-001 à AC-044) avant de
+passer du paper au moteur de politique. Appliqué à TrendGuard :
+`acceptation.py`, `python trendguard_bot.py acceptation`, une ligne chaque
+nuit dans le rapport, et Rachelle. Détail :
+[`ACCEPTATION_PAPER.md`](ACCEPTATION_PAPER.md) ; dernier verdict :
+[`ACCEPTATION.md`](ACCEPTATION.md).
+
+| Exigence de l'étape 13 | Ce qui a été fait |
+| --- | --- |
+| AC-001 à AC-044 (§3-46) | chacun mesuré sur le bot (comptabilité recalculée, lignée, audit, limites, latence mesurée…) ou prouvé par des tests du dépôt cités ; sans objet seulement avec sa raison |
+| Note, P0 (§47) | note pondérée par famille ; un P0 raté ou impossible à mesurer bloque, quelle que soit la note |
+| Observation, divergence (§48-50) | 30 jours et 30 événements au moins (justifié : ≈ 50 trades par an) ; paper rejoué par la boucle de backtest, chaque écart classé |
+| Verdict (§52-54) | ACCEPTED et moteur de politique, ou BLOCKED et ce qui manque ; jamais une autorisation du réel |
+
+**Le verdict du 8 octobre** : BLOQUÉ, seulement par la durée d'observation
+(3 jours sur 30, 4 événements sur 30) ; note 96,7/100, aucun P0 raté ; les 3
+achats du paper sont exactement ceux du backtest de la même période.
+
 ## Ce qui reste (votre accord d'abord)
 
 1. **Débat des IA** (§43) : rôles haussier, baissier, critique et synthèse

@@ -18,7 +18,7 @@ Tiré du registre `trendguard/chantiers.py` (`python -m trendguard.chantiers` le
 | TASK-000012 | Rejeu et études (backtest, deux époques, crises) | P1 | en service | décision | 100 % | oui | 11 (dure), 5 (données) |
 | TASK-000013 | Moteur de risque, garde « pas de trade », arrêt d'urgence | P0 | en service et surveillé | risque | 100 % | oui | 11 (dure), 10 (souple), 2 (données) |
 | TASK-000014 | Portefeuille (taille, plafonds, sélection, moteur de portefeuille) | P1 | en service et surveillé | risque | 100 % | oui | 13 (dure), 11 (dure) |
-| TASK-000015 | Paper trading | P1 | en service et surveillé | exécution | 100 % | oui | 14 (dure), 13 (dure), 12 (validation), 4 (à l'exécution) |
+| TASK-000015 | Paper trading et ses critères d'acceptation | P1 | en service et surveillé | exécution | 100 % | oui | 14 (dure), 13 (dure), 12 (validation), 4 (à l'exécution) |
 | TASK-000016 | Politique, autorisation et porte d'exécution | P0 | en service et surveillé | risque | 100 % | oui | 13 (dure), 4 (sécurité), 3 (sécurité) |
 | TASK-000017 | Connecteur Binance (ordres réels) | P0 | en essai | exécution | 100 % | oui | 16 (sécurité), 3 (sécurité) |
 | TASK-000018 | Trading réel | P0 | bloqué | exécution | 95 % | non | 17 (dure), 15 (validation), 16 (sécurité), 13 (sécurité), 12 (validation), 4 (à l'exécution) |
@@ -42,7 +42,7 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 - **Porte 4 (Intelligence financière)** : franchie — Données de marché et qualité ✓ ; Intelligence financière (savoir, veille, régimes, calendrier) ✓ ; Cœur d'intelligence financière ✓ ; Moteur quantitatif (laboratoire, risque d'un jour, résistance, attribution) ✓ ; Analyse fondamentale —
 - **Porte 5 (Stratégie)** : franchie — Stratégie et évolution encadrée ✓ ; Rejeu et études (backtest, deux époques, crises) ✓
 - **Porte 6 (Risque)** : franchie — Moteur de risque, garde « pas de trade », arrêt d'urgence ✓ ; Portefeuille (taille, plafonds, sélection, moteur de portefeuille) ✓ ; Politique, autorisation et porte d'exécution ✓
-- **Porte 7 (Paper)** : franchie — Paper trading ✓ ; Observabilité et audit ✓
+- **Porte 7 (Paper)** : franchie — Paper trading et ses critères d'acceptation ✓ ; Observabilité et audit ✓
 - **Porte 8 (réel)** : mesurée sur l'état du bot (`python trendguard_bot.py chantiers portes`) : portes 1 à 7 ; essai paper d'au moins 60 jours et 10 trades clos ; aucun réglage à l'essai ; ni arrêt d'urgence ni mode sûr ; journaux d'audit et financier intacts ; alertes configurées ; rapport quotidien de moins de 2 jours sans défaut de sécurité ; vérification sans ordre réussie sur Binance réel depuis moins de 7 jours. Fermée, elle bloque tout achat réel à la porte d'exécution ; aucune option ne la contourne.
 
 ## Fiches
@@ -105,7 +105,7 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Priorité, état, risque | P0, en service et surveillé, high |
 | Propriétaire | bot |
 | Dépend de | Contrats de données (contrat), Base de données et journal financier (données) |
-| Bloque | Paper trading, Politique, autorisation et porte d'exécution, Trading réel, Auto-évaluation (diagnostic expert, leçons des trades), Panneau de contrôle et Rachelle, Durcissement de production (PC, sauvegardes, reprise) |
+| Bloque | Paper trading et ses critères d'acceptation, Politique, autorisation et porte d'exécution, Trading réel, Auto-évaluation (diagnostic expert, leçons des trades), Panneau de contrôle et Rachelle, Durcissement de production (PC, sauvegardes, reprise) |
 | Code | `trendguard/audit.py`, `trendguard/report.py`, `trendguard/report_health.py` |
 | Tests | `tests/test_contrats.py`, `tests/test_report.py` |
 | Contrats | `AuditEvent.v2`, `HealthReport.v1` |
@@ -242,7 +242,7 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Priorité, état, risque | P1, en service, medium |
 | Propriétaire | bot |
 | Dépend de | Stratégie et évolution encadrée (dure), Données de marché et qualité (données) |
-| Bloque | Paper trading, Trading réel, Auto-amélioration (évolution encadrée) |
+| Bloque | Paper trading et ses critères d'acceptation, Trading réel, Auto-amélioration (évolution encadrée) |
 | Code | `trendguard/replay.py`, `trendguard/strategy_lab.py`, `trendguard/registre.py`, `research/robustness.py`, `trendguard/moteur_backtest.py` |
 | Tests | `tests/test_backtest_paper.py`, `tests/test_strategy_lab.py`, `tests/test_robustness.py`, `tests/test_moteur_backtest.py` |
 | Contrats | `Experiment.v1`, `BacktestManifest.v1`, `BacktestResult.v1` |
@@ -259,7 +259,7 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Priorité, état, risque | P0, en service et surveillé, critical |
 | Propriétaire | bot |
 | Dépend de | Stratégie et évolution encadrée (dure), Moteur quantitatif (laboratoire, risque d'un jour, résistance, attribution) (souple), Base de données et journal financier (données) |
-| Bloque | Portefeuille (taille, plafonds, sélection, moteur de portefeuille), Paper trading, Politique, autorisation et porte d'exécution, Trading réel |
+| Bloque | Portefeuille (taille, plafonds, sélection, moteur de portefeuille), Paper trading et ses critères d'acceptation, Politique, autorisation et porte d'exécution, Trading réel |
 | Code | `trendguard/porte.py`, `trendguard/garde.py`, `trendguard/bot.py`, `trendguard/moteur_risque.py` |
 | Tests | `tests/test_contrats.py`, `tests/test_trendguard.py`, `tests/test_moteur_risque.py` |
 | Contrats | `RiskCheck.v1`, `NoTradeGate.v1`, `KillSwitch.v1`, `RiskAssessment.v1` |
@@ -276,7 +276,7 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Priorité, état, risque | P1, en service et surveillé, medium |
 | Propriétaire | bot |
 | Dépend de | Moteur de risque, garde « pas de trade », arrêt d'urgence (dure), Stratégie et évolution encadrée (dure) |
-| Bloque | Paper trading |
+| Bloque | Paper trading et ses critères d'acceptation |
 | Code | `trendguard/trend_strategy.py`, `trendguard/selection.py`, `trendguard/moteur_portefeuille.py` |
 | Tests | `tests/test_selection.py`, `tests/test_trendguard.py`, `tests/test_moteur_portefeuille.py` |
 | Contrats | `EntryPlan.v1`, `PortfolioDecision.v1` |
@@ -286,7 +286,7 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Acceptation | la taille de chaque achat respecte les plafonds ; contrainte impossible expliquée, jamais relâchée |
 | Santé | 100 % (seuil 85 %) |
 
-### TASK-000015 — Paper trading
+### TASK-000015 — Paper trading et ses critères d'acceptation
 
 | Rubrique | |
 | --- | --- |
@@ -294,13 +294,13 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Propriétaire | bot |
 | Dépend de | Portefeuille (taille, plafonds, sélection, moteur de portefeuille) (dure), Moteur de risque, garde « pas de trade », arrêt d'urgence (dure), Rejeu et études (backtest, deux époques, crises) (validation), Observabilité et audit (à l'exécution) |
 | Bloque | Trading réel |
-| Code | `trendguard/bot.py`, `trendguard/bot_execution.py` |
-| Tests | `tests/test_trendguard.py`, `tests/test_backtest_paper.py` |
-| Contrats | `TradeRecord.v1`, `OrderIntent.v1` |
-| Documentation | [`TRADING.md`](TRADING.md) |
-| Sécurité | argent fictif ; même porte d'exécution qu'en réel |
-| Observabilité | journal, audit, rapport |
-| Acceptation | le bot tourne seul, en paper, avec les mêmes contrôles qu'en réel |
+| Code | `trendguard/bot.py`, `trendguard/bot_execution.py`, `trendguard/acceptation.py` |
+| Tests | `tests/test_trendguard.py`, `tests/test_backtest_paper.py`, `tests/test_acceptation.py` |
+| Contrats | `TradeRecord.v1`, `OrderIntent.v1`, `PaperAcceptanceReport.v1` |
+| Documentation | [`TRADING.md`](TRADING.md), [`ACCEPTATION_PAPER.md`](ACCEPTATION_PAPER.md) |
+| Sécurité | argent fictif ; même porte d'exécution qu'en réel ; un P0 raté bloque l'acceptation |
+| Observabilité | journal, audit, rapport ; verdict d'acceptation chaque nuit |
+| Acceptation | le bot tourne seul, en paper, avec les mêmes contrôles qu'en réel ; AC-001 à AC-044 mesurés |
 | Santé | 100 % (seuil 85 %) |
 
 ### TASK-000016 — Politique, autorisation et porte d'exécution
@@ -344,7 +344,7 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | --- | --- |
 | Priorité, état, risque | P0, bloqué, critical |
 | Propriétaire | vous |
-| Dépend de | Connecteur Binance (ordres réels) (dure), Paper trading (validation), Politique, autorisation et porte d'exécution (sécurité), Moteur de risque, garde « pas de trade », arrêt d'urgence (sécurité), Rejeu et études (backtest, deux époques, crises) (validation), Observabilité et audit (à l'exécution) |
+| Dépend de | Connecteur Binance (ordres réels) (dure), Paper trading et ses critères d'acceptation (validation), Politique, autorisation et porte d'exécution (sécurité), Moteur de risque, garde « pas de trade », arrêt d'urgence (sécurité), Rejeu et études (backtest, deux époques, crises) (validation), Observabilité et audit (à l'exécution) |
 | Bloque | rien |
 | Code | `trendguard/bot_execution.py` |
 | Tests | `tests/test_live_execution.py` |

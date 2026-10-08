@@ -507,6 +507,8 @@ QUANT_STATUSES = ("VALIDATED", "VALIDATED_WITH_WARNINGS", "INVALID")
 PAST_NOT_PROMISE = "Une mesure du passé n'est ni une certitude ni une promesse."
 PORTFOLIO_DECISIONS = ("HOLD", "REVIEW", "NO_ALLOCATE")
 REBALANCE_DECISIONS = ("NO_REBALANCE", "REBALANCE_PROPOSED")
+ACCEPTANCE_STATUSES = ("ACCEPTED", "BLOCKED")
+ACCEPTANCE_BANDS = ("PAPER_READY", "PAPER_READY_CANDIDATE", "VALIDATING", "DEVELOPMENT", "REJECTED")
 # Étape 11 (moteur de risque) : états, décisions pour les achats, phases, niveaux d'alerte.
 RISK_STATES = ("RISK_NORMAL", "RISK_WARNING", "RISK_HIGH", "RISK_CRITICAL", "RISK_BLOCKED")
 RISK_APPROVALS = ("RISK_APPROVED", "RISK_APPROVED_WITH_LIMIT", "RISK_RESTRICTED", "RISK_BLOCKED")
@@ -1002,6 +1004,65 @@ class PortfolioDecision:
         return _plain(self)
 
 
+@dataclass(frozen=True)
+class PaperAcceptanceReport:
+    """Verdict des critères d'acceptation du paper (PaperAcceptanceReport.v1,
+    étape 13 §52-53) : ACCEPTED (prêt pour le moteur de politique) seulement
+    sans aucun P0 raté, avec une note d'au moins 95, l'observation suffisante
+    et l'écart au backtest compris ; sinon BLOCKED, avec ce qui manque.
+    Jamais une autorisation de trader en réel."""
+    VERSION: ClassVar[int] = 1
+    report_id: str
+    created_at: str
+    mode: str
+    status: str
+    next_step: str
+    readiness_score: float
+    band: str
+    p0_failures: Tuple[str, ...]
+    passed: int
+    failed: int
+    unknown: int
+    not_applicable: int
+    observation_days: float
+    observation_events: int
+    missing: Tuple[str, ...]
+    engine_version: str
+    authorized: bool = False
+    version: int = 1
+
+    def __post_init__(self) -> None:
+        _version(self, self.VERSION)
+        _enum("status", self.status, ACCEPTANCE_STATUSES)
+        _enum("band", self.band, ACCEPTANCE_BANDS)
+        _enum("mode", self.mode, ("paper", "testnet", "live"))
+        check_uuid("report_id", self.report_id)
+        check_timestamp("created_at", self.created_at)
+        score = _number("readiness_score", self.readiness_score, positive=False)
+        if not 0 <= score <= 100:
+            raise ContractError("OUT_OF_RANGE", "readiness_score : de 0 à 100")
+        if self.passed + self.failed + self.unknown + self.not_applicable != 44:
+            raise ContractError("INCONSISTENT", "les 44 critères AC-001 à AC-044 sont tous comptés")
+        if self.observation_days < 0 or self.observation_events < 0:
+            raise ContractError("OUT_OF_RANGE", "observation : jamais négative")
+        floor = {"PAPER_READY": 95, "PAPER_READY_CANDIDATE": 90, "VALIDATING": 80, "DEVELOPMENT": 70, "REJECTED": 0}
+        upper = {"PAPER_READY": 100.01, "PAPER_READY_CANDIDATE": 95, "VALIDATING": 90, "DEVELOPMENT": 80,
+                 "REJECTED": 70}
+        if not floor[self.band] <= score < upper[self.band]:
+            raise ContractError("INCONSISTENT", "la bande suit la note")
+        if self.status == "ACCEPTED":
+            if self.p0_failures or self.missing or score < 95 or self.next_step != "POLICY_ENGINE":
+                raise ContractError("INCONSISTENT", "accepté : aucun P0 raté, note ≥ 95, rien ne manque, étape "
+                                                    "suivante la politique")
+        elif not self.missing or self.next_step != "CORRECTION":
+            raise ContractError("INCONSISTENT", "bloqué : dit toujours ce qui manque ; étape suivante la correction")
+        if self.authorized:
+            raise ContractError("POLICY", "le paper valide la préparation, jamais le réel", category="POLICY")
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
 def ohlcv_violations(rows: Any) -> int:
     """Bougies incohérentes (§41) : plus haut sous l'ouverture, la clôture
     ou le plus bas ; plus bas au-dessus ; volume négatif. Une bougie
@@ -1073,7 +1134,8 @@ SCHEMAS.update({c.__name__: c for c in (OrderIntent, RiskDecision, ExecutionAuth
                                         Confidence, Uncertainty, Provenance, Money, Envelope, LLMExecution,
                                         ModelConsensus, ModelDisagreement, Instrument, Feature, Forecast,
                                         Scenario, FinancialSignal, StrategyDecision, BacktestResult,
-                                        RiskAssessment, QuantResult, PortfolioDecision)})
+                                        RiskAssessment, QuantResult, PortfolioDecision,
+                                        PaperAcceptanceReport)})
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -1387,6 +1449,14 @@ REGISTRY: Tuple[Contract, ...] = (
              "conséquence sur le trading", "lecture seule : jamais un ordre ni une autorisation", "à chaque décision",
              "aucun : la décision suivante réévalue", "une décision par jour", "dans l'état du bot", 2,
              ("trendguard/moteur_portefeuille.py",)),
+    Contract("PaperAcceptanceReport.v1", "verdict des critères d'acceptation du paper (AC-001 à AC-044) : accepté "
+             "(prêt pour le moteur de politique) ou bloqué, avec ce qui manque", "acceptation du paper (acceptation.py)",
+             "rapport quotidien, Rachelle, vous", "état du bot, journal financier, audit, tests du dépôt, cours en "
+             "cache (écart au backtest)", "état de chaque critère et sa preuve, note par famille et pondérée, "
+             "observation, écart paper/backtest, gouvernance, verdict", "P0 raté, mesure impossible d'un P0, "
+             "observation trop courte, écart inexpliqué : BLOCKED ; un accepté incohérent est refusé",
+             "lecture seule : jamais une autorisation du réel", "à la demande et chaque nuit", "aucun",
+             "un verdict par évaluation", "dans le rapport et docs/ACCEPTATION.md", 2, ("trendguard/acceptation.py",)),
     Contract("HealthReport.v1", "rapport quotidien et centre de sécurité", "rapport (report.py)",
              "vous (e-mail, panneau)", "état du bot, PC, journal, GitHub", "constats conformes, à corriger, informations",
              "source illisible : information", "lecture seule", "00:30 UTC", "rattrapé au retour du PC",

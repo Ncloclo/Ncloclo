@@ -31,6 +31,7 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `ModelConsensus.v1` | veille (market_watch.py) | rapport de la veille, panneau, Rachelle | 1.0.0 | PUBLIC | cœur |
 | `ModelDisagreement.v1` | veille (market_watch.py) | rapport de la veille, panneau, Rachelle | 1.0.0 | PUBLIC | cœur |
 | `ModelSelection.v1` | routeur (modeles.py) | exécution des modèles | 1.0.0 | INTERNAL | cœur |
+| `PaperAcceptanceReport.v1` | acceptation du paper (acceptation.py) | rapport quotidien, Rachelle, vous | 1.0.0 | INTERNAL | cœur |
 | `PortfolioAnalysis.v1` | décision du jour (risque.py, stress.py, attribution.py) | panneau, rapport, raisonnement | 1.0.0 | INTERNAL | cœur |
 | `PortfolioDecision.v1` | moteur de portefeuille (moteur_portefeuille.py) | raisonnement du jour, rapport, Rachelle, vous | 1.0.0 | INTERNAL | cœur |
 | `PromptVersion.v1` | socle des modèles (modeles.py) | exécution des modèles, veille, Rachelle, banc | 1.0.0 | INTERNAL | cœur |
@@ -550,6 +551,24 @@ Choix du modèle d'IA pour une demande, avec ses raisons.
 | Unicité | même état, même choix |
 | Trace (audit) | raison notée avec chaque appel |
 | Fichiers | `trendguard/modeles.py` |
+
+## PaperAcceptanceReport.v1
+
+Verdict des critères d'acceptation du paper (AC-001 à AC-044) : accepté (prêt pour le moteur de politique) ou bloqué, avec ce qui manque.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | acceptation du paper (acceptation.py) |
+| Consommateur | rapport quotidien, Rachelle, vous |
+| Entrée | état du bot, journal financier, audit, tests du dépôt, cours en cache (écart au backtest) |
+| Sortie | état de chaque critère et sa preuve, note par famille et pondérée, observation, écart paper/backtest, gouvernance, verdict |
+| Erreurs | P0 raté, mesure impossible d'un P0, observation trop courte, écart inexpliqué : BLOCKED ; un accepté incohérent est refusé |
+| Droits | lecture seule : jamais une autorisation du réel |
+| Délai | à la demande et chaque nuit |
+| Nouveaux essais | aucun |
+| Unicité | un verdict par évaluation |
+| Trace (audit) | dans le rapport et docs/ACCEPTATION.md |
+| Fichiers | `trendguard/acceptation.py` |
 
 ## PortfolioAnalysis.v1
 

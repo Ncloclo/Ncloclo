@@ -32,6 +32,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
 from trendguard import (
+    acceptation,
     anticipation,
     autonomy,
     chantiers,
@@ -343,7 +344,8 @@ class PanelApp(SecurityCenter):
                 "finance": self.data.state().get("finance") or {},
                 "strategie": self.data.state().get("strategie") or {},
                 "moteur_risque": self.data.state().get("moteur_risque") or {},
-                "portefeuille": self.data.state().get("portefeuille") or {}}
+                "portefeuille": self.data.state().get("portefeuille") or {},
+                "acceptation": acceptation.evaluate(self.g, self.data.state())}
 
     def anticipation_view(self) -> Dict[str, Any]:
         """Ce que le bot fera probablement à la prochaine clôture, avec les

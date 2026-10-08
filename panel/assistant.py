@@ -28,7 +28,7 @@ import threading
 import unicodedata
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from trendguard import chantiers, expert, modeles, moteur_portefeuille, moteur_risque
+from trendguard import acceptation, chantiers, expert, modeles, moteur_portefeuille, moteur_risque
 from trendguard import market_watch as mw
 from trendguard.texte import fr
 
@@ -713,6 +713,20 @@ def doc_points(name: str, heading: str = "## Conclusions", limit: int = 6) -> Li
     return points[:limit]
 
 
+def a_acceptation(ctx: Dict[str, Any]) -> str:
+    """Les critères d'acceptation du paper : verdict, note, ce qui manque."""
+    ac = ctx.get("acceptation") or {}
+    lines = ["**Acceptation du paper** (critères AC-001 à AC-044) : chaque critère mesuré sur le bot ou prouvé par "
+             "un test du dépôt ; un seul critère P0 raté suffit à bloquer ; il faut aussi au moins 30 jours et 30 "
+             "événements d'observation, et un paper identique au backtest de la même période."]
+    if ac.get("rows"):
+        lines.append("Aujourd'hui : " + acceptation.describe(ac) + ".")
+        lines += [f"- {m}" for m in ac.get("missing", [])[1:3]]
+    lines.append("Le paper valide la préparation ; il n'autorise jamais le réel (politique, autorisation et porte "
+                 "d'exécution restent à franchir). Détail : python trendguard_bot.py acceptation.")
+    return "\n".join(lines)
+
+
 def a_portefeuille(ctx: Dict[str, Any]) -> str:
     """Le moteur de portefeuille : l'état du jour et ce que dit l'étude de la
     taille des achats."""
@@ -976,6 +990,8 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("validation", ("validation du backtest", "backtest valide", "moteur de backtest", "sur ajustement",
                     "surapprentissage", "overfitting", "sharpe degonfle", "probabilite de sur ajustement"),
      a_validation, []),
+    ("acceptation", ("acceptation", "criteres d acceptation", "paper accepte", "paper valide",
+                     "pret pour la politique", "periode d observation"), a_acceptation, []),
     ("portefeuille", ("moteur de portefeuille", "portefeuille", "allocation", "repartition", "reequilibrage",
                       "reequilibrer", "diversification", "concentration", "taille des achats", "poids des positions",
                       "parite de risque", "variance minimale"), a_portefeuille, [{"label": "Positions et ventes",
