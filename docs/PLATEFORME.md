@@ -348,6 +348,36 @@ cryptos n'ont ni bilan ni bénéfice), actions, obligations, devises, séries
 macroéconomiques (non collectées), modèles ARIMA ou d'apprentissage profond
 (aucun gain prouvé). L'analyse le dit à chaque fois, sans rien simuler.
 
+## Étape 8 du prompt : moteur quantitatif
+
+Le huitième document demande un laboratoire mathématique et statistique :
+rendements, statistiques, lois, tests, séries temporelles, stationnarité,
+volatilité, corrélations, facteurs, régression, cointégration, prévisions,
+anomalies, régimes, Monte-Carlo, validation, reproductibilité, sans jamais
+passer un ordre. Appliqué à TrendGuard : `moteur_quant.py`, et `python
+trendguard_bot.py quant`. Détail : [`MOTEUR_QUANT.md`](MOTEUR_QUANT.md) ;
+dernier rapport : [`QUANT.md`](QUANT.md).
+
+| Exigence de l'étape 8 | Ce qui a été fait |
+| --- | --- |
+| Rendements, statistiques, lois, normalité (§7-10) | annualisation explicite sur 365 jours ; descriptives ; normale, Laplace, Student par maximum de vraisemblance, AIC, BIC, Kolmogorov-Smirnov ; Jarque-Bera, Anderson-Darling |
+| Tests, tests multiples (§11-12) | Student, Welch, Mann-Whitney avec effet et taille ; Bonferroni, Holm, Benjamini-Hochberg |
+| Séries, stationnarité, persistance (§13-15) | autocorrélations, Ljung-Box, ADF et KPSS (conclusion seulement s'ils s'accordent), ratio de variance |
+| Volatilité, liens, facteurs (§16-24) | EWMA et GARCH comparés hors échantillon ; Pearson, Spearman, Kendall, jours de chute ; covariance rétrécie ; composantes principales ; bêta à BTC ; régression et ses diagnostics |
+| Pouvoir prédictif de la règle (§28, §43, §52) | signaux étudiés contre un jour ordinaire (intervalles par mois, correction de Holm), momentum, trades en R |
+| Anomalies, ruptures, régimes, reproductibilité (§39-41, §63-67) | anomalies classées, jamais corrigées ; ruptures de volatilité ; régimes cachés ; manifeste et empreinte du résultat |
+
+**Ce que disent les chiffres** : les rendements ne sont pas normaux (queues
+épaisses), la volatilité se regroupe, et le signal d'achat seul prédit peu ;
+l'avantage de la règle vient de la gestion des trades : 41 % de gagnants, un
+gain moyen de +4,37 R contre une perte moyenne de −0,97 R. Les 21 cryptos
+forment environ 2,6 paris indépendants.
+
+**Ce qui ne s'applique pas** : facteurs d'actions et macroéconomie (des
+cryptos), arbitrage statistique comme stratégie (pas de vente à découvert),
+ARIMA, apprentissage profond et Black-Litterman (aucun gain prouvé, pas de
+vues).
+
 ## Étape 9 du prompt : moteur de stratégie
 
 Le neuvième document demande un moteur de stratégies : registre, langage

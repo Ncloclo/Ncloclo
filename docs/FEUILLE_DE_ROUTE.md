@@ -13,7 +13,7 @@ Tiré du registre `trendguard/chantiers.py` (`python -m trendguard.chantiers` le
 | TASK-000007 | Socle multi-agents et comité | P1 | en service et surveillé | intelligence | 100 % | oui | 6 (dure), 1 (contrat) |
 | TASK-000008 | Socle multi-modèles d'IA | P1 | en service | intelligence | 100 % | oui | 6 (dure), 7 (souple), 3 (sécurité) |
 | TASK-000009 | Intelligence financière (savoir, veille, régimes, calendrier) | P1 | en service et surveillé | intelligence | 100 % | oui | 5 (données), 8 (souple) |
-| TASK-000010 | Moteur quantitatif (risque d'un jour, résistance, attribution) | P1 | en service | décision | 100 % | oui | 5 (données), 9 (souple) |
+| TASK-000010 | Moteur quantitatif (laboratoire, risque d'un jour, résistance, attribution) | P1 | en service | décision | 100 % | oui | 5 (données), 9 (souple) |
 | TASK-000011 | Stratégie et évolution encadrée | P1 | en service et surveillé | décision | 100 % | oui | 10 (souple), 9 (souple), 5 (données) |
 | TASK-000012 | Rejeu et études (backtest, deux époques, crises) | P1 | en service | décision | 100 % | oui | 11 (dure), 5 (données) |
 | TASK-000013 | Moteur de risque, garde « pas de trade », arrêt d'urgence | P0 | en service et surveillé | risque | 100 % | oui | 11 (dure), 10 (souple), 2 (données) |
@@ -32,14 +32,14 @@ Tiré du registre `trendguard/chantiers.py` (`python -m trendguard.chantiers` le
 
 ## Chemin critique jusqu'au réel
 
-Contrats de données → Base de données et journal financier → Noyau cognitif → Socle multi-agents et comité → Socle multi-modèles d'IA → Intelligence financière (savoir, veille, régimes, calendrier) → Moteur quantitatif (risque d'un jour, résistance, attribution) → Stratégie et évolution encadrée → Moteur de risque, garde « pas de trade », arrêt d'urgence → Politique, autorisation et porte d'exécution → Connecteur Binance (ordres réels) → Trading réel.
+Contrats de données → Base de données et journal financier → Noyau cognitif → Socle multi-agents et comité → Socle multi-modèles d'IA → Intelligence financière (savoir, veille, régimes, calendrier) → Moteur quantitatif (laboratoire, risque d'un jour, résistance, attribution) → Stratégie et évolution encadrée → Moteur de risque, garde « pas de trade », arrêt d'urgence → Politique, autorisation et porte d'exécution → Connecteur Binance (ordres réels) → Trading réel.
 
 ## Portes
 
 - **Porte 1 (Fondations)** : franchie — Contrats de données ✓ ; Base de données et journal financier ✓ ; Sécurité de base ✓ ; Observabilité et audit ✓
 - **Porte 2 (Cognition)** : franchie — Noyau cognitif ✓ ; Intelligence financière (savoir, veille, régimes, calendrier) ✓ ; Auto-évaluation (diagnostic expert, leçons des trades) ✓
 - **Porte 3 (Multi-agents et multi-modèles)** : franchie — Socle multi-agents et comité ✓ ; Socle multi-modèles d'IA ✓
-- **Porte 4 (Intelligence financière)** : franchie — Données de marché et qualité ✓ ; Intelligence financière (savoir, veille, régimes, calendrier) ✓ ; Cœur d'intelligence financière ✓ ; Moteur quantitatif (risque d'un jour, résistance, attribution) ✓ ; Analyse fondamentale —
+- **Porte 4 (Intelligence financière)** : franchie — Données de marché et qualité ✓ ; Intelligence financière (savoir, veille, régimes, calendrier) ✓ ; Cœur d'intelligence financière ✓ ; Moteur quantitatif (laboratoire, risque d'un jour, résistance, attribution) ✓ ; Analyse fondamentale —
 - **Porte 5 (Stratégie)** : franchie — Stratégie et évolution encadrée ✓ ; Rejeu et études (backtest, deux époques, crises) ✓
 - **Porte 6 (Risque)** : franchie — Moteur de risque, garde « pas de trade », arrêt d'urgence ✓ ; Portefeuille (taille, plafonds, sélection) ✓ ; Politique, autorisation et porte d'exécution ✓
 - **Porte 7 (Paper)** : franchie — Paper trading ✓ ; Observabilité et audit ✓
@@ -122,7 +122,7 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Priorité, état, risque | P0, en service et surveillé, high |
 | Propriétaire | bot |
 | Dépend de | Contrats de données (contrat) |
-| Bloque | Intelligence financière (savoir, veille, régimes, calendrier), Moteur quantitatif (risque d'un jour, résistance, attribution), Stratégie et évolution encadrée, Rejeu et études (backtest, deux époques, crises), Cœur d'intelligence financière |
+| Bloque | Intelligence financière (savoir, veille, régimes, calendrier), Moteur quantitatif (laboratoire, risque d'un jour, résistance, attribution), Stratégie et évolution encadrée, Rejeu et études (backtest, deux époques, crises), Cœur d'intelligence financière |
 | Code | `trendguard/qualite.py`, `trendguard/bot.py` |
 | Tests | `tests/test_analyse.py`, `tests/test_contrats_donnees.py` |
 | Contrats | `MarketData.v1`, `OHLCV.v1` |
@@ -191,7 +191,7 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Priorité, état, risque | P1, en service et surveillé, medium |
 | Propriétaire | bot |
 | Dépend de | Données de marché et qualité (données), Socle multi-modèles d'IA (souple) |
-| Bloque | Moteur quantitatif (risque d'un jour, résistance, attribution), Stratégie et évolution encadrée, Recherche autonome, Cœur d'intelligence financière |
+| Bloque | Moteur quantitatif (laboratoire, risque d'un jour, résistance, attribution), Stratégie et évolution encadrée, Recherche autonome, Cœur d'intelligence financière |
 | Code | `trendguard/savoir.py`, `trendguard/market_watch.py`, `trendguard/regimes.py`, `trendguard/evenements.py` |
 | Tests | `tests/test_savoir.py`, `tests/test_market_watch.py`, `tests/test_analyse.py` |
 | Contrats | `KnowledgeHold.v1`, `AIOpinion.v1`, `ModelDisagreement.v1` |
@@ -201,7 +201,7 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Acceptation | ne peut que reporter un achat, jamais acheter ni vendre |
 | Santé | 100 % (seuil 85 %) |
 
-### TASK-000010 — Moteur quantitatif (risque d'un jour, résistance, attribution)
+### TASK-000010 — Moteur quantitatif (laboratoire, risque d'un jour, résistance, attribution)
 
 | Rubrique | |
 | --- | --- |
@@ -209,13 +209,13 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Propriétaire | bot |
 | Dépend de | Données de marché et qualité (données), Intelligence financière (savoir, veille, régimes, calendrier) (souple) |
 | Bloque | Stratégie et évolution encadrée, Moteur de risque, garde « pas de trade », arrêt d'urgence |
-| Code | `trendguard/risque.py`, `trendguard/stress.py`, `trendguard/attribution.py` |
-| Tests | `tests/test_analyse.py` |
-| Contrats | `PortfolioAnalysis.v1` |
-| Documentation | [`PLATEFORME.md`](PLATEFORME.md) |
-| Sécurité | mesures seulement : aucune décision |
-| Observabilité | analyse du portefeuille sur le panneau |
-| Acceptation | chiffres recalculés par le bot, jamais par une IA |
+| Code | `trendguard/risque.py`, `trendguard/stress.py`, `trendguard/attribution.py`, `trendguard/moteur_quant.py` |
+| Tests | `tests/test_analyse.py`, `tests/test_moteur_quant.py` |
+| Contrats | `PortfolioAnalysis.v1`, `QuantResult.v1` |
+| Documentation | [`PLATEFORME.md`](PLATEFORME.md), [`MOTEUR_QUANT.md`](MOTEUR_QUANT.md), [`QUANT.md`](QUANT.md) |
+| Sécurité | mesures seulement : aucune décision, aucun ordre |
+| Observabilité | analyse du portefeuille sur le panneau ; rapport du laboratoire reproductible |
+| Acceptation | chiffres recalculés par le bot, jamais par une IA ; lois éprouvées contre des valeurs connues ; même graine, même résultat |
 | Santé | 100 % (seuil 85 %) |
 
 ### TASK-000011 — Stratégie et évolution encadrée
@@ -224,7 +224,7 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | --- | --- |
 | Priorité, état, risque | P1, en service et surveillé, high |
 | Propriétaire | bot |
-| Dépend de | Moteur quantitatif (risque d'un jour, résistance, attribution) (souple), Intelligence financière (savoir, veille, régimes, calendrier) (souple), Données de marché et qualité (données) |
+| Dépend de | Moteur quantitatif (laboratoire, risque d'un jour, résistance, attribution) (souple), Intelligence financière (savoir, veille, régimes, calendrier) (souple), Données de marché et qualité (données) |
 | Bloque | Rejeu et études (backtest, deux époques, crises), Moteur de risque, garde « pas de trade », arrêt d'urgence, Portefeuille (taille, plafonds, sélection) |
 | Code | `trendguard/trend_strategy.py`, `trendguard/evolution.py`, `trendguard/garde.py`, `trendguard/moteur_strategie.py` |
 | Tests | `tests/test_trendguard.py`, `tests/test_evolution.py`, `tests/test_moteur_strategie.py` |
@@ -258,7 +258,7 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | --- | --- |
 | Priorité, état, risque | P0, en service et surveillé, critical |
 | Propriétaire | bot |
-| Dépend de | Stratégie et évolution encadrée (dure), Moteur quantitatif (risque d'un jour, résistance, attribution) (souple), Base de données et journal financier (données) |
+| Dépend de | Stratégie et évolution encadrée (dure), Moteur quantitatif (laboratoire, risque d'un jour, résistance, attribution) (souple), Base de données et journal financier (données) |
 | Bloque | Portefeuille (taille, plafonds, sélection), Paper trading, Politique, autorisation et porte d'exécution, Trading réel |
 | Code | `trendguard/porte.py`, `trendguard/garde.py`, `trendguard/bot.py`, `trendguard/moteur_risque.py` |
 | Tests | `tests/test_contrats.py`, `tests/test_trendguard.py`, `tests/test_moteur_risque.py` |

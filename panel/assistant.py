@@ -683,6 +683,47 @@ def a_moteur_risque(ctx: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+DOCS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs")
+
+
+def doc_points(name: str, heading: str = "## Conclusions", limit: int = 6) -> List[str]:
+    """Les points d'une section d'un rapport tiré du code (docs/<name>),
+    pour répondre avec les chiffres mesurés ; vide si le rapport manque."""
+    try:
+        with open(os.path.join(DOCS, name), encoding="utf-8") as fh:
+            text = fh.read()
+    except OSError:
+        return []
+    if heading not in text:
+        return []
+    body = text.split(heading, 1)[1].split("\n## ", 1)[0]
+    points, cur = [], ""
+    for line in body.splitlines():
+        if line.startswith("- "):
+            if cur:
+                points.append(cur)
+            cur = line[2:].strip()
+        elif cur and line.strip():
+            cur += " " + line.strip()
+        elif cur:
+            points.append(cur)
+            cur = ""
+    if cur:
+        points.append(cur)
+    return points[:limit]
+
+
+def a_quant(_ctx: Dict[str, Any]) -> str:
+    """Le laboratoire quantitatif : ses conclusions mesurées (docs/QUANT.md)."""
+    lines = ["**Laboratoire quantitatif** (moteur quantitatif) : lois des rendements, stationnarité, persistance, "
+             "volatilité (EWMA, GARCH), liens entre cryptos, pouvoir prédictif de la règle, anomalies, ruptures et "
+             "régimes cachés, mesurés sur les cours de Binance. Consultatif : rien ne change la règle."]
+    lines += [f"- {p}" for p in doc_points("QUANT.md")]
+    lines.append("Rapport : docs/QUANT.md ; pour le refaire : python trendguard_bot.py quant. Une mesure du passé "
+                 "n'est ni une certitude ni une promesse.")
+    return "\n".join(lines)
+
+
 def a_validation(_ctx: Dict[str, Any]) -> str:
     return ("**Validation du backtest** (moteur de backtest) : la règle rejouée sur l'historique Binance avec un "
             "manifeste (refaite, elle donne exactement le même résultat), des données contrôlées avant de simuler, "
@@ -921,6 +962,9 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("validation", ("validation du backtest", "backtest valide", "moteur de backtest", "sur ajustement",
                     "surapprentissage", "overfitting", "sharpe degonfle", "probabilite de sur ajustement"),
      a_validation, []),
+    ("quant", ("laboratoire quantitatif", "moteur quantitatif", "quant", "loi normale", "lois des rendements",
+               "queues epaisses", "stationnarite", "garch", "volatilite prevue", "pouvoir predictif",
+               "composantes principales", "cointegration", "regimes caches"), a_quant, []),
     ("chantiers", ("feuille de route", "chantiers", "priorites", "passer en reel", "porte du reel",
                    "pret pour le reel", "quand passer en reel", "portes"), a_chantiers,
      [{"label": "Réglages ▸ rapport", "href": "#settings"}]),

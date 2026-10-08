@@ -44,6 +44,7 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `Instrument.v1` | cœur financier (finance.py) | analyses, panneau | 1.0.0 | PUBLIC | données |
 | `MarketData.v1` | Binance (klines publiques) | décision du jour, régimes, qualité | 1.0.0 | INTERNAL | données |
 | `OHLCV.v1` | Binance (klines publiques) | décision du jour, qualité des données | 1.0.0 | PUBLIC | données |
+| `QuantResult.v1` | moteur quantitatif (moteur_quant.py) | vous, rapport docs/QUANT.md, moteurs de stratégie et de risque (lecture) | 1.0.0 | PUBLIC | données |
 | `Envelope.v1` | tout module (contrats.py) | tout module | 1.0.0 | INTERNAL | support |
 | `ErrorEnvelope.v2` | tout module | journal d'audit, rapport | 2.0.0 | INTERNAL | support |
 | `HealthReport.v1` | rapport (report.py) | vous (e-mail, panneau) | 1.0.0 | INTERNAL | support |
@@ -782,6 +783,24 @@ Règles d'une bougie : plus haut ≥ ouverture, clôture et plus bas ; plus bas 
 | Unicité | mêmes bougies, même verdict |
 | Trace (audit) | journal du bot, qualité |
 | Fichiers | `trendguard/contrats.py`, `trendguard/bot.py`, `trendguard/qualite.py` |
+
+## QuantResult.v1
+
+Résultat du laboratoire quantitatif : lois, stationnarité, persistance, volatilité, liens entre cryptos, pouvoir prédictif de la règle, anomalies, ruptures, régimes cachés.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | moteur quantitatif (moteur_quant.py) |
+| Consommateur | vous, rapport docs/QUANT.md, moteurs de stratégie et de risque (lecture) |
+| Entrée | cours et volumes journaliers en cache, réglages de la règle |
+| Sortie | statistiques, tests avec statistique, p, effet et taille d'échantillon, corrections des tests multiples, conclusions, manifeste |
+| Erreurs | section aux données insuffisantes : INSUFFICIENT_DATA, jamais un chiffre inventé ; empreinte absente : refusé |
+| Droits | lecture seule : jamais un signal d'achat ni une autorisation |
+| Délai | étude hors ligne |
+| Nouveaux essais | aucun |
+| Unicité | mêmes données, même graine : même empreinte du résultat |
+| Trace (audit) | dans le rapport du laboratoire |
+| Fichiers | `trendguard/moteur_quant.py` |
 
 ## Envelope.v1
 

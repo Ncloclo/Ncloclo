@@ -503,6 +503,8 @@ STRATEGY_STATES = ("STRATEGY_READY", "NO_TRADE", "STRATEGY_BLOCKED", "IN_POSITIO
 BACKTEST_STATUSES = ("VALID", "VALID_WITH_WARNINGS", "INVALID", "REJECTED")
 BACKTEST_READINESS = ("READY_FOR_RISK", "RESEARCH_ONLY", "REJECTED")
 NO_GUARANTEE = "Un backtest n'est pas une garantie de performance future."
+QUANT_STATUSES = ("VALIDATED", "VALIDATED_WITH_WARNINGS", "INVALID")
+PAST_NOT_PROMISE = "Une mesure du passé n'est ni une certitude ni une promesse."
 # Étape 11 (moteur de risque) : états, décisions pour les achats, phases, niveaux d'alerte.
 RISK_STATES = ("RISK_NORMAL", "RISK_WARNING", "RISK_HIGH", "RISK_CRITICAL", "RISK_BLOCKED")
 RISK_APPROVALS = ("RISK_APPROVED", "RISK_APPROVED_WITH_LIMIT", "RISK_RESTRICTED", "RISK_BLOCKED")
@@ -905,6 +907,51 @@ class RiskAssessment:
         return _plain(self)
 
 
+@dataclass(frozen=True)
+class QuantResult:
+    """Résultat du laboratoire quantitatif (QuantResult.v1, étape 8 §89) :
+    état, empreintes des données, du code et du résultat, graine, cryptos
+    étudiées, conclusions tirées des chiffres, réserves et limites (dont
+    toujours « une mesure du passé n'est pas une promesse »). Jamais un
+    signal d'achat ni une autorisation."""
+    VERSION: ClassVar[int] = 1
+    run_id: str
+    status: str
+    engine_version: str
+    dataset_hash: str
+    code_hash: str
+    result_hash: str
+    seed: int
+    assets: Tuple[str, ...]
+    findings: Tuple[str, ...]
+    warnings: Tuple[str, ...]
+    limitations: Tuple[str, ...]
+    created_at: str
+    authorized: bool = False
+    version: int = 1
+
+    def __post_init__(self) -> None:
+        _version(self, self.VERSION)
+        _enum("status", self.status, QUANT_STATUSES)
+        check_uuid("run_id", self.run_id)
+        check_timestamp("created_at", self.created_at)
+        for name in ("dataset_hash", "code_hash", "result_hash"):
+            if not getattr(self, name):
+                raise ContractError("INVALID_FIELD", f"{name} : empreinte requise (reproductibilité)")
+        if "btc" not in self.assets:
+            raise ContractError("INVALID_FIELD", "BTC est requis (facteur de marché, régime)")
+        if self.status == "VALIDATED" and self.warnings:
+            raise ContractError("INCONSISTENT", "un résultat avec réserves n'est pas « validé » sans réserve")
+        if PAST_NOT_PROMISE not in self.limitations:
+            raise ContractError("POLICY", "les limites disent toujours qu'une mesure du passé n'est pas une promesse",
+                                category="POLICY")
+        if self.authorized:
+            raise ContractError("POLICY", "une mesure quantitative n'est jamais une autorisation", category="POLICY")
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
 def ohlcv_violations(rows: Any) -> int:
     """Bougies incohérentes (§41) : plus haut sous l'ouverture, la clôture
     ou le plus bas ; plus bas au-dessus ; volume négatif. Une bougie
@@ -976,7 +1023,7 @@ SCHEMAS.update({c.__name__: c for c in (OrderIntent, RiskDecision, ExecutionAuth
                                         Confidence, Uncertainty, Provenance, Money, Envelope, LLMExecution,
                                         ModelConsensus, ModelDisagreement, Instrument, Feature, Forecast,
                                         Scenario, FinancialSignal, StrategyDecision, BacktestResult,
-                                        RiskAssessment)})
+                                        RiskAssessment, QuantResult)})
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -1272,6 +1319,15 @@ REGISTRY: Tuple[Contract, ...] = (
              "une autorisation", "à chaque décision", "aucun : la décision suivante réévalue",
              "une évaluation par jour, avant et après les achats", "journal financier, en ajout seulement", 1,
              ("trendguard/moteur_risque.py",)),
+    Contract("QuantResult.v1", "résultat du laboratoire quantitatif : lois, stationnarité, persistance, volatilité, "
+             "liens entre cryptos, pouvoir prédictif de la règle, anomalies, ruptures, régimes cachés",
+             "moteur quantitatif (moteur_quant.py)", "vous, rapport docs/QUANT.md, moteurs de stratégie et de risque "
+             "(lecture)", "cours et volumes journaliers en cache, réglages de la règle", "statistiques, tests avec "
+             "statistique, p, effet et taille d'échantillon, corrections des tests multiples, conclusions, manifeste",
+             "section aux données insuffisantes : INSUFFICIENT_DATA, jamais un chiffre inventé ; empreinte absente : "
+             "refusé", "lecture seule : jamais un signal d'achat ni une autorisation", "étude hors ligne", "aucun",
+             "mêmes données, même graine : même empreinte du résultat", "dans le rapport du laboratoire", 3,
+             ("trendguard/moteur_quant.py",), classification="PUBLIC"),
     Contract("HealthReport.v1", "rapport quotidien et centre de sécurité", "rapport (report.py)",
              "vous (e-mail, panneau)", "état du bot, PC, journal, GitHub", "constats conformes, à corriger, informations",
              "source illisible : information", "lecture seule", "00:30 UTC", "rattrapé au retour du PC",

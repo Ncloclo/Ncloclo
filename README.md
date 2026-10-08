@@ -462,6 +462,11 @@ aucune clé d'IA aujourd'hui, donc rien n'est présenté comme disponible.
 (qualité, indicateurs, régime, scénarios, prévisions de fréquence évaluées à
 30 jours) et dite « signal », « à surveiller » ou « pas de trade », sans
 jamais changer une décision.
+Étape 8 : moteur quantitatif ([`docs/MOTEUR_QUANT.md`](docs/MOTEUR_QUANT.md),
+`python trendguard_bot.py quant`) : le laboratoire statistique, consultatif ;
+dernier rapport ([`docs/QUANT.md`](docs/QUANT.md)) : rendements non normaux,
+volatilité qui se regroupe, signal seul peu prédictif, avantage tiré de la
+gestion des trades (gain moyen +4,37 R contre une perte moyenne de −0,97 R).
 Étape 9 : moteur de stratégie
 ([`docs/MOTEUR_STRATEGIE.md`](docs/MOTEUR_STRATEGIE.md),
 `python trendguard_bot.py regle`) : la règle écrite en fiche (langage sûr,
