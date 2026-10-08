@@ -494,6 +494,11 @@ SIGNAL_STATUSES = ("CANDIDATE", "VALIDATED", "REJECTED", "EXPIRED")
 ANALYSIS_RECOMMENDATIONS = ("BUY_SIGNAL", "WATCH", "NO_TRADE")
 SCENARIO_NAMES = ("EXTREME", "STRESS", "BEAR", "BASE", "BULL")
 INSTRUMENT_RE = re.compile(r"^[a-z]+:[a-z]+:[A-Z0-9]+-[A-Z0-9]+$")
+# Étape 9 (moteur de stratégie) : raisons précises de la règle, décisions et états.
+STRATEGY_REASONS = ("NO_BREAKOUT", "NO_MOMENTUM", "SHORT_HISTORY", "LOW_LIQUIDITY", "NO_VOLATILITY",
+                    "REGIME_BLOCK", "DATA_INVALID")
+STRATEGY_DECISIONS = ("TRADE_CANDIDATE", "NO_TRADE", "HOLD", "EXIT")
+STRATEGY_STATES = ("STRATEGY_READY", "NO_TRADE", "STRATEGY_BLOCKED", "IN_POSITION")
 
 
 def _day(name: str, v: Any) -> None:
@@ -719,6 +724,65 @@ class FinancialAnalysis:
         return _plain(self)
 
 
+@dataclass(frozen=True)
+class StrategyDecision:
+    """Décision de la règle pour une crypto (StrategyDecision.v1, étape 9
+    §39) : candidate, « pas de trade » avec ses raisons, position tenue ou
+    sortie due ; chaque condition avec son résultat et ses valeurs.
+    Probabilité et rendement attendu absents : la règle n'en estime pas.
+    Jamais une autorisation : la porte d'exécution décide."""
+    VERSION: ClassVar[int] = 1
+    strategy_id: str
+    strategy_version: str
+    instrument_id: str
+    day: str
+    regime: str
+    direction: str
+    entry_condition: bool
+    exit_condition: bool
+    conditions: Tuple[Tuple[str, bool, str], ...]
+    signal: Optional[float]
+    expected_cost: float
+    position_size: Optional[float]
+    stop_loss: Optional[float]
+    status: str
+    decision: str
+    reasons: Tuple[str, ...] = ()
+    reason_texts: Tuple[str, ...] = ()
+    authorized: bool = False
+    version: int = 1
+
+    def __post_init__(self) -> None:
+        _version(self, self.VERSION)
+        _enum("regime", self.regime, ("BULL", "BEAR"))
+        _enum("direction", self.direction, SIGNAL_DIRECTIONS)
+        _enum("status", self.status, STRATEGY_STATES)
+        _enum("decision", self.decision, STRATEGY_DECISIONS)
+        for r in self.reasons:
+            _enum("reasons", r, STRATEGY_REASONS)
+        _day("day", self.day)
+        if not INSTRUMENT_RE.match(self.instrument_id):
+            raise ContractError("INVALID_FIELD", f"instrument_id : {self.instrument_id!r}")
+        if self.authorized:
+            raise ContractError("POLICY", "une décision de stratégie n'est jamais une autorisation",
+                                category="POLICY")
+        if len(self.reasons) != len(self.reason_texts):
+            raise ContractError("INCONSISTENT", "chaque raison a son explication")
+        if self.decision == "TRADE_CANDIDATE" and (self.reasons or not self.entry_condition):
+            raise ContractError("INCONSISTENT", "une candidate remplit toutes les conditions")
+        if self.decision == "NO_TRADE" and not self.reasons:
+            raise ContractError("INCONSISTENT", "« pas de trade » dit toujours pourquoi")
+        if (self.decision in ("HOLD", "EXIT")) != (self.status == "IN_POSITION"):
+            raise ContractError("INCONSISTENT", "tenir ou vendre concerne une position détenue")
+        _number("expected_cost", self.expected_cost, positive=False)
+        if self.expected_cost < 0:
+            raise ContractError("OUT_OF_RANGE", "expected_cost : un coût n'est jamais négatif")
+        object.__setattr__(self, "position_size", _opt01("position_size", self.position_size))
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
 def ohlcv_violations(rows: Any) -> int:
     """Bougies incohérentes (§41) : plus haut sous l'ouverture, la clôture
     ou le plus bas ; plus bas au-dessus ; volume négatif. Une bougie
@@ -789,7 +853,7 @@ def validate(schema: str, data: Dict[str, Any]) -> ValidationResult:
 SCHEMAS.update({c.__name__: c for c in (OrderIntent, RiskDecision, ExecutionAuthorization, SafeModeState,
                                         Confidence, Uncertainty, Provenance, Money, Envelope, LLMExecution,
                                         ModelConsensus, ModelDisagreement, Instrument, Feature, Forecast,
-                                        Scenario, FinancialSignal)})
+                                        Scenario, FinancialSignal, StrategyDecision)})
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -1046,6 +1110,21 @@ REGISTRY: Tuple[Contract, ...] = (
              "risques, contradictions, conditions d'invalidation", "« pas de trade » sans raison : refusé",
              "jamais une autorisation", "à la décision", "aucun", "une analyse par crypto et par jour",
              "journal financier", 2, ("trendguard/finance.py",)),
+    Contract("StrategySpec.v1", "fiche déclarative de la règle : langage sûr, versionnée, verrouillée sur le code",
+             "moteur de stratégie (moteur_strategie.py)", "validation, backtest, décisions, Rachelle, commande regle",
+             "réglages en vigueur", "conditions d'achat et de vente, stops, taille, contraintes, coûts, liquidité, "
+             "réglages et plages validées, verrous du code", "fiche hors du langage permis : refusée, raison dite",
+             "lecture seule : une fiche ne passe aucun ordre", "immédiat", "aucun", "même fiche, même empreinte",
+             "version et empreinte dans chaque décision", 2, ("trendguard/moteur_strategie.py",),
+             classification="PUBLIC"),
+    Contract("StrategyDecision.v1", "décision de la règle pour une crypto : candidate, pas de trade, tenue ou vendue",
+             "moteur de stratégie (moteur_strategie.py)", "raisonnement, rapport, Rachelle",
+             "fiche compilée, indicateurs du jour, régime de BTC, positions",
+             "chaque condition avec ses valeurs, raisons au format commun, taille et stop d'un achat, coût "
+             "aller-retour", "« pas de trade » sans raison, candidate incomplète : refusées",
+             "jamais une autorisation : la porte décide", "à la décision", "aucun", "une décision par crypto et par jour",
+             "écart avec la règle exécutée signalé au journal du bot et au rapport", 2,
+             ("trendguard/moteur_strategie.py",)),
     Contract("HealthReport.v1", "rapport quotidien et centre de sécurité", "rapport (report.py)",
              "vous (e-mail, panneau)", "état du bot, PC, journal, GitHub", "constats conformes, à corriger, informations",
              "source illisible : information", "lecture seule", "00:30 UTC", "rattrapé au retour du PC",

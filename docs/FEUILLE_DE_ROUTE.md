@@ -226,10 +226,10 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Propriétaire | bot |
 | Dépend de | Moteur quantitatif (risque d'un jour, résistance, attribution) (souple), Intelligence financière (savoir, veille, régimes, calendrier) (souple), Données de marché et qualité (données) |
 | Bloque | Rejeu et études (backtest, deux époques, crises), Moteur de risque, garde « pas de trade », arrêt d'urgence, Portefeuille (taille, plafonds, sélection) |
-| Code | `trendguard/trend_strategy.py`, `trendguard/evolution.py`, `trendguard/garde.py` |
-| Tests | `tests/test_trendguard.py`, `tests/test_evolution.py` |
-| Contrats | `Signal.v1`, `EntryPlan.v1`, `EvolutionChange.v1` |
-| Documentation | [`STRATEGIES.md`](STRATEGIES.md), [`EVOLUTION.md`](EVOLUTION.md) |
+| Code | `trendguard/trend_strategy.py`, `trendguard/evolution.py`, `trendguard/garde.py`, `trendguard/moteur_strategie.py` |
+| Tests | `tests/test_trendguard.py`, `tests/test_evolution.py`, `tests/test_moteur_strategie.py` |
+| Contrats | `Signal.v1`, `EntryPlan.v1`, `EvolutionChange.v1`, `StrategySpec.v1`, `StrategyDecision.v1` |
+| Documentation | [`STRATEGIES.md`](STRATEGIES.md), [`EVOLUTION.md`](EVOLUTION.md), [`MOTEUR_STRATEGIE.md`](MOTEUR_STRATEGIE.md) |
 | Sécurité | réglages changés seulement après épreuves et essai de 30 jours |
 | Observabilité | raisonnement du jour ; registre des expériences |
 | Acceptation | cassure de 30 jours, momentum, régime de BTC ; validée sur deux époques |

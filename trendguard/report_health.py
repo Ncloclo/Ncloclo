@@ -601,6 +601,13 @@ def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
                                               "donnees, puis signalez-le (rien n'est corrigé en silence)."))
         except Exception as e:           # un bilan illisible n'empêche pas le rapport
             out.append(chk("Journal financier", None, f"illisible ({type(e).__name__})"))
+    sg = st.get("strategie") or {}
+    if sg.get("day"):
+        text = (f"décision du {sg['day']} : fiche {sg.get('id')} v{sg.get('version')}, "
+                f"{len(sg.get('candidates') or [])} candidate(s), {sg.get('no_trade', 0)} « pas de trade »")
+        text += (" ; ÉCART avec la règle exécutée : " + ", ".join(a.upper() for a in sg["mismatch"])
+                 if sg.get("mismatch") else " ; fiche fidèle à la règle exécutée")
+        out.append(chk("Moteur de stratégie", None, text))
     fi = st.get("finance") or {}
     if fi.get("day"):
         cal, fis = fi.get("calibration") or {}, fi.get("fis") or {}

@@ -628,6 +628,41 @@ def a_analyse(ctx: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def a_regle(ctx: Dict[str, Any]) -> str:
+    """La règle du bot vue par sa fiche (moteur de stratégie) : candidates du
+    jour et, pour une crypto nommée, la condition d'achat qui manque."""
+    sg = ctx.get("strategie") or {}
+    assets = sg.get("assets") or {}
+    if not assets:
+        return ("**La règle du bot** est décrite dans une fiche (moteur de stratégie) : régime de BTC, cassure du "
+                "plus haut de 30 jours, momentum de 90 jours, historique, volume. Chaque nuit, chaque crypto est "
+                "dite « candidate » ou « pas de trade » avec la condition qui manque. Pour la voir : "
+                "python trendguard_bot.py regle.")
+    words = set(norm(ctx.get("message", "")).split())
+    named = [a for a in assets if a in words]
+    lines = [f"**La règle du bot** (bougie du {sg.get('day')}, fiche {sg.get('id')} v{sg.get('version')}) : "
+             + (f"candidates : {', '.join(a.upper() for a in sg.get('candidates') or [])}"
+                if sg.get("candidates") else "aucune crypto ne remplit toutes les conditions d'achat") + "."]
+    for a in named or []:
+        x = assets[a]
+        if x["d"] == "NO_TRADE":
+            lines.append(f"- {a.upper()} : pas de trade — " + " ; ".join(x.get("why") or []) + ".")
+        else:
+            lines.append(f"- {a.upper()} : " + {"TRADE_CANDIDATE": "toutes les conditions d'achat remplies",
+                                                 "HOLD": "détenue, gardée tant que la clôture reste au-dessus du stop",
+                                                 "EXIT": "vendue, clôture sous le stop"}.get(x["d"], x["d"]) + ".")
+    if not named:
+        top = sorted((sg.get("reasons") or {}).items(), key=lambda kv: -kv[1])[:2]
+        names = {"NO_BREAKOUT": "pas de cassure", "LOW_LIQUIDITY": "volume trop faible", "REGIME_BLOCK":
+                 "BTC sous sa moyenne", "NO_MOMENTUM": "momentum négatif", "SHORT_HISTORY": "historique trop court"}
+        if top:
+            lines.append("Raisons les plus fréquentes de ne pas acheter : "
+                         + ", ".join(f"{names.get(k, k)} ({v})" for k, v in top) + ".")
+    lines.append("La fiche décrit la règle exécutée, vérifiée chaque nuit" + (
+        "" if not sg.get("mismatch") else " : ÉCART signalé, fiche à corriger") + " ; la porte d'exécution décide.")
+    return "\n".join(lines)
+
+
 def a_chantiers(ctx: Dict[str, Any]) -> str:
     cs = ctx.get("chantiers") or {}
     lines = ["**Feuille de route** : " + (f"{cs.get('components', 0)} composants suivis, chacun avec sa priorité, "
@@ -846,6 +881,9 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("analyse", ("analyse financiere", "analyse de", "analyser", "opportunite", "opportunites", "scenario",
                  "scenarios", "probabilite de hausse", "prevision a 30 jours", "pas de trade"), a_analyse,
      [{"label": "Ce que pense le bot", "href": "#dash"}]),
+    ("regle", ("pourquoi pas d achat", "pourquoi n achete", "pourquoi le bot n achete", "conditions d achat",
+               "conditions d entree", "fiche de la regle", "moteur de strategie", "regle du bot", "candidates"),
+     a_regle, [{"label": "Ce que pense le bot", "href": "#dash"}]),
     ("chantiers", ("feuille de route", "chantiers", "priorites", "passer en reel", "porte du reel",
                    "pret pour le reel", "quand passer en reel", "portes"), a_chantiers,
      [{"label": "Réglages ▸ rapport", "href": "#settings"}]),

@@ -33,6 +33,8 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `PromptVersion.v1` | socle des modèles (modeles.py) | exécution des modèles, veille, Rachelle, banc | 1.0.0 | INTERNAL | cœur |
 | `Scenario.v1` | cœur financier (finance.py) | analyses, Rachelle | 1.0.0 | PUBLIC | cœur |
 | `Signal.v1` | stratégie (trend_strategy.py) | plan d'achat | 1.0.0 | INTERNAL | cœur |
+| `StrategyDecision.v1` | moteur de stratégie (moteur_strategie.py) | raisonnement, rapport, Rachelle | 1.0.0 | INTERNAL | cœur |
+| `StrategySpec.v1` | moteur de stratégie (moteur_strategie.py) | validation, backtest, décisions, Rachelle, commande regle | 1.0.0 | PUBLIC | cœur |
 | `DecisionRecord.v1` | décision du jour | journal financier, lignée des trades | 1.0.0 | CONFIDENTIAL | données |
 | `Experiment.v1` | évolution, études (registre.py) | rejeu, contrôle, rapport | 1.0.0 | INTERNAL | données |
 | `Feature.v1` | cœur financier (finance.py) | analyses, journal financier | 1.0.0 | PUBLIC | données |
@@ -579,6 +581,42 @@ Cassure du plus haut de 30 jours, momentum 90 jours.
 | Unicité | même bougie, même signal |
 | Trace (audit) | raisonnement du jour |
 | Fichiers | `trendguard/trend_strategy.py` |
+
+## StrategyDecision.v1
+
+Décision de la règle pour une crypto : candidate, pas de trade, tenue ou vendue.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | moteur de stratégie (moteur_strategie.py) |
+| Consommateur | raisonnement, rapport, Rachelle |
+| Entrée | fiche compilée, indicateurs du jour, régime de BTC, positions |
+| Sortie | chaque condition avec ses valeurs, raisons au format commun, taille et stop d'un achat, coût aller-retour |
+| Erreurs | « pas de trade » sans raison, candidate incomplète : refusées |
+| Droits | jamais une autorisation : la porte décide |
+| Délai | à la décision |
+| Nouveaux essais | aucun |
+| Unicité | une décision par crypto et par jour |
+| Trace (audit) | écart avec la règle exécutée signalé au journal du bot et au rapport |
+| Fichiers | `trendguard/moteur_strategie.py` |
+
+## StrategySpec.v1
+
+Fiche déclarative de la règle : langage sûr, versionnée, verrouillée sur le code.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | moteur de stratégie (moteur_strategie.py) |
+| Consommateur | validation, backtest, décisions, Rachelle, commande regle |
+| Entrée | réglages en vigueur |
+| Sortie | conditions d'achat et de vente, stops, taille, contraintes, coûts, liquidité, réglages et plages validées, verrous du code |
+| Erreurs | fiche hors du langage permis : refusée, raison dite |
+| Droits | lecture seule : une fiche ne passe aucun ordre |
+| Délai | immédiat |
+| Nouveaux essais | aucun |
+| Unicité | même fiche, même empreinte |
+| Trace (audit) | version et empreinte dans chaque décision |
+| Fichiers | `trendguard/moteur_strategie.py` |
 
 ## DecisionRecord.v1
 

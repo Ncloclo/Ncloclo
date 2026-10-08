@@ -961,6 +961,7 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         self._day_risk(day, close, equity)
         self._events_day(day, close, now)
         self._finance(day, close, feats)
+        self._strategie(day, snap, bull, set(held_before), {a for a, _r in late + exits}, entries, equity)
         self._libre_step(day, close, snap)
         self._explain(day, bull, close, snap, late + exits, entries, mult, now, allowed)
         self._journal_signals(day, snap, exits)

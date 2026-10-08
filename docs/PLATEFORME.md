@@ -348,6 +348,30 @@ cryptos n'ont ni bilan ni bénéfice), actions, obligations, devises, séries
 macroéconomiques (non collectées), modèles ARIMA ou d'apprentissage profond
 (aucun gain prouvé). L'analyse le dit à chaque fois, sans rien simuler.
 
+## Étape 9 du prompt : moteur de stratégie
+
+Le neuvième document demande un moteur de stratégies : registre, langage
+déclaratif, compilation, validation, entrées et sorties, stops, taille,
+Kelly, coûts, liquidité, sur-ajustement, fuite, « pas de trade »,
+explication, cycle de vie. Appliqué à TrendGuard : `moteur_strategie.py`, la
+règle écrite en fiche et vérifiée chaque nuit, et `python trendguard_bot.py
+regle`. Détail : [`MOTEUR_STRATEGIE.md`](MOTEUR_STRATEGIE.md).
+
+| Exigence de l'étape 9 | Ce qui a été fait |
+| --- | --- |
+| Registre, statuts, cycle de vie (§4-5, §40) | deux fiches (la règle, son profil prudent), « en essai » ; 18 statuts et les passages permis : jamais de brouillon vers le réel |
+| Langage déclaratif, compilation (§6) | conditions sur une liste blanche d'indicateurs et d'opérateurs, aucun code exécuté ; valeur inconnue = condition fausse |
+| Validation, « prête pour le backtest » (§41, §66) | 12 étapes : schéma, langage, dépendances, réglages dans leurs plages, coûts, liquidité, contraintes, verrous du code, déterminisme, fuite, équivalence, données verrouillées |
+| Fidélité à la règle exécutée | 69 909 cas, 2 717 signaux, 0 écart sur 2017-2026 ; vérifiée à chaque décision, un écart est signalé |
+| Kelly, sur-ajustement (§15, §27) | Kelly mesuré (≈ 33 % complet), jamais appliqué ; fractions plafonnées à 2 % ; grille de sur-ajustement |
+| Décision expliquée, « pas de trade » (§37-39) | chaque crypto : candidate, ou la condition qui manque avec ses valeurs ; jamais une autorisation |
+
+**Ce qui ne s'applique pas** : autres familles et ensembles (le laboratoire
+en a essayé douze, aucune ne bat la règle sur les deux époques), optimisation
+bayésienne ou génétique (réglages gelés, changés seulement par l'évolution
+encadrée), probabilité et rendement attendus d'un trade (non estimés : laissés
+vides).
+
 ## Ce qui reste (votre accord d'abord)
 
 1. **Débat des IA** (§43) : rôles haussier, baissier, critique et synthèse

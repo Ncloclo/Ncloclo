@@ -113,6 +113,7 @@ sont jamais envoyés sur GitHub. VS Code les masque dans l'explorateur
 | `expert.py` | diagnostic expert par le noyau cognitif (lecture seule), chaque jour à 00:45 UTC et à la demande |
 | `agents.py` | socle multi-agents : manifestes, registre (quarantaine, disjoncteur, mesures), bus de messages, tableau noir cloisonné, superviseur, débat, désaccord, consensus |
 | `finance.py` | cœur d'intelligence financière : instruments, qualité, indicateurs versionnés sans fuite, régime, liens, scénarios, prévisions de fréquence et calibration, signal, classement, « pas de trade » ; consultatif |
+| `moteur_strategie.py` | moteur de stratégie : la règle en fiche déclarative (langage sûr, sans code exécuté), versionnée et verrouillée sur le code, validée jusqu'à « prête pour le backtest », vérifiée chaque nuit contre la règle exécutée ; chaque crypto candidate ou « pas de trade » avec la condition qui manque ; consultatif |
 | `chantiers.py` | feuille de route : composants, priorités, dépendances typées, preuves, santé, portes 1 à 8 ; la porte du réel ferme les achats réels |
 | `modeles.py` | socle multi-modèles d'IA : registre des fournisseurs et des modèles, cycle de vie (banc obligatoire), invites versionnées, routeur par politique, santé, disjoncteur, repli tracé, réponses vérifiées, budgets de jetons et de coût, confidentialité, fiches et mesures ; Rachelle et la veille passent par lui |
 | `comite.py` | comité de onze agents financiers, consultatif : avis motivé sur chaque crypto que la règle propose d'acheter, banc d'essai |

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import time
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import pandas as pd
 
@@ -27,6 +27,7 @@ from . import (
     learning,
     libre,
     modeles,
+    moteur_strategie,
     report,
     savoir,
     systeme,
@@ -277,6 +278,23 @@ class RoutinesMixin:
         if views:
             self.logger.info("[COMITÉ] " + " ; ".join(v["text"].split(" — ")[0] for v in views.values()))
             self._journal("record_committee", f"D-{day}", list(views.values()), comite.VERSION)
+
+    def _strategie(self, day: str, snap: Dict[str, Dict[str, float]], bull: bool, held: Set[str],
+                   exited: Set[str], entries: List[Dict[str, Any]], equity: float) -> None:
+        """Moteur de stratégie (moteur_strategie.py) à chaque décision : la
+        fiche de la règle évaluée sur chaque crypto (candidate, « pas de
+        trade » et pourquoi, tenue, vendue), comparée à la règle exécutée ;
+        un écart est signalé, jamais corrigé. Consultatif : aucune décision
+        ne change ; une panne ne bloque jamais le bot."""
+        try:
+            view = moteur_strategie.day_view(day, snap, bull, held | exited, exited,
+                                             {e["asset"]: e for e in entries}, equity, self.p)
+            self.state["strategie"] = view
+            if view["mismatch"]:
+                self.logger.warning("[STRATÉGIE] la fiche ne donne plus les signaux de la règle exécutée pour "
+                                    + ", ".join(a.upper() for a in view["mismatch"]) + " : fiche à corriger")
+        except Exception as e:           # consultatif : jamais bloquant
+            self.logger.warning(f"[STRATÉGIE] évaluation impossible : {e}")
 
     def _finance(self, day: str, close: Any, feats: Dict[str, Any]) -> None:
         """Cœur d'intelligence financière (finance.py) à chaque décision :

@@ -695,6 +695,7 @@ TOOLS = {"alerts": ("alerts", "alertes : configurer | tester"),
          "comite": ("comite", "avis consultatif du comité d'agents : <crypto> | --banc"),
          "chantiers": ("chantiers", "feuille de route et portes : [statut] | portes | document"),
          "finance": ("finance", "analyse financière d'une crypto (consultative) : <crypto> [--json]"),
+         "regle": ("moteur_strategie", "la règle en fiche déclarative : [fiche] | valider | etats"),
          "modeles": ("modeles", "modèles d'IA : [statut] | banc")}
 
 

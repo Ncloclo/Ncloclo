@@ -462,6 +462,11 @@ aucune clé d'IA aujourd'hui, donc rien n'est présenté comme disponible.
 (qualité, indicateurs, régime, scénarios, prévisions de fréquence évaluées à
 30 jours) et dite « signal », « à surveiller » ou « pas de trade », sans
 jamais changer une décision.
+Étape 9 : moteur de stratégie ([`docs/MOTEUR_STRATEGIE.md`](docs/MOTEUR_STRATEGIE.md),
+`python trendguard_bot.py regle`) : la règle écrite en fiche (langage sûr,
+versionnée, verrouillée sur le code), validée « prête pour le backtest » et
+vérifiée chaque nuit contre la règle exécutée (0 écart sur 2017-2026) ; pour
+chaque crypto, la condition d'achat qui manque.
 Cadre de priorités et de dépendances
 ([`docs/FEUILLE_DE_ROUTE.md`](docs/FEUILLE_DE_ROUTE.md),
 `python trendguard_bot.py chantiers portes`) : chaque composant prouvé, et
