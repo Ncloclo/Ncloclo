@@ -27,6 +27,8 @@
 *.modesur.json
 *.modesur.json.tmp
 *.incidents.json
+*.monde.json
+*.monde.json.tmp
 *.incidents.json.tmp
 *.rapport.json
 *.rapport.json.tmp

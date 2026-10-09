@@ -712,6 +712,26 @@ un graphe reconstruit à la demande depuis les sources de vérité, jamais stock
 graphe en mémoire, reconstruit en moins d'une seconde), extraction par des IA
 (aucune IA n'écrit dans la mémoire), mémoire personnelle de l'utilisateur.
 
+## Étape 25 du prompt : raisonnement et modèle du monde
+
+Le vingt-cinquième document demande un modèle du monde versionné et un
+raisonnement vérifiable, en distinguant observation, interprétation,
+hypothèse, déduction, prévision, scénario et décision. Appliqué à TrendGuard :
+`monde.py`. Détail : [`MONDE.md`](MONDE.md) ; dernier état :
+[`MONDE_ETAT.md`](MONDE_ETAT.md) (`python trendguard_bot.py monde`).
+
+| Exigence de l'étape 25 | Ce qui a été fait |
+| --- | --- |
+| Distinctions fondamentales (§2) | chaque élément du monde classé (observé, interprété, déduit, scénario, décision), daté, sourcé |
+| État et histoire du monde (§4-6) | instantané du marché, des données, du portefeuille, de la stratégie, de la sûreté ; 90 instantanés gardés ; histoire jour par jour lue dans le journal financier ; ce qui a changé |
+| Raisonnement en plusieurs étapes, trace (§17-20) | la décision du jour expliquée : marché, cryptos, règle, signaux retenus, décision ; seulement ce qui est vérifiable |
+| Scénarios, contrefactuels (§26-28) | chocs de −30 à +10 % : stops touchés, capital, arrêt d'urgence ; aucune probabilité inventée |
+| Qualité, verdict (§61, §100) | 10 familles mesurées ; READY_FOR_ADVANCED_REASONING_AND_WORLD_MODEL |
+
+**Ce qui ne s'applique pas** : mondes de l'énergie et de l'ingénierie, comité
+de raisonnement par IA, prévisions probabilistes du marché (la règle suit, elle
+ne prévoit pas) ; les relations de cause à effet sont l'étape 26.
+
 ## Ce qui reste (votre accord d'abord)
 
 1. **Débat des IA** (§43) : rôles haussier, baissier, critique et synthèse

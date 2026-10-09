@@ -700,6 +700,8 @@ TOOLS = {"alerts": ("alerts", "alertes : configurer | tester"),
          "autorisation": ("autorisation", "moteur d'autorisation : [matrice] | verifier <identité> <action>"),
          "apprentissage": ("apprentissage", "apprentissage continu et gouvernance des modèles : registre, dérive, "
                            "frontières, critères AC-001 à AC-070 [--out docs/APPRENTISSAGE.md]"),
+         "monde": ("monde", "modèle du monde et raisonnement : état, changements, raisonnement du jour, scénarios "
+                   "[--out docs/MONDE_ETAT.md]"),
          "memoire": ("memoire", "mémoire et graphe de connaissances : santé et contenu | <entité> (tout sur elle)"),
          "recherche": ("recherche", "recherche et connaissances : sources, affirmations et leur verdict, "
                        "contradictions, critères AC-001 à AC-080 [--out docs/CONNAISSANCES.md]"),

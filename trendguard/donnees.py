@@ -528,6 +528,23 @@ class Journal:
         return [(r["id"], r["asset"], r["opened_at"]) for r in
                 self.conn.execute("SELECT id, asset, opened_at FROM fin_trades ORDER BY opened_at").fetchall()]
 
+    def decisions(self, limit: int = 365) -> List[Dict[str, Any]]:
+        """Les dernières décisions, de la plus ancienne à la plus récente :
+        lecture du marché, capital, arrêt d'urgence, mode sûr, garde,
+        qualité des données (histoire du monde, étape 25)."""
+        rows = self.conn.execute("SELECT day, bull, regime, equity, halted, safe_mode, garde_blocked, data_quality "
+                                 "FROM fin_decisions ORDER BY day DESC LIMIT ?", (int(limit),)).fetchall()
+        out = []
+        for r in reversed(rows):
+            try:
+                garde = bool(json.loads(r["garde_blocked"] or "[]"))
+            except ValueError:
+                garde = None
+            out.append({"day": r["day"], "bull": bool(r["bull"]), "regime": r["regime"], "equity": r["equity"],
+                        "halted": bool(r["halted"]), "safe_mode": bool(r["safe_mode"]), "garde": garde,
+                        "data_quality": r["data_quality"]})
+        return out
+
     def first_decision_at(self) -> Optional[str]:
         """Date de la première décision journalisée (mise en service du journal)."""
         return self.conn.execute("SELECT MIN(created_at) FROM fin_decisions").fetchone()[0]

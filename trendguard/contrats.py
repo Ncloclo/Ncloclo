@@ -532,6 +532,8 @@ SECURITY_STATUSES = ("READY_FOR_PRODUCTION_SECURITY", "NOT_READY")
 INTERFACE_STATUSES = ("READY", "REJECTED")
 # Étape 22 (recherche) : verdicts des affirmations.
 MEMORY_STATUSES = ("READY_FOR_GOVERNED_LONG_TERM_MEMORY", "NOT_READY")
+WORLD_STATUSES = ("READY_FOR_ADVANCED_REASONING_AND_WORLD_MODEL", "NOT_READY")
+WORLD_KINDS = ("OBSERVATION", "INTERPRETATION", "HYPOTHESIS", "INFERENCE", "PREDICTION", "SCENARIO", "DECISION")
 CLAIM_VERDICTS = ("CONFIRMED", "PROBABLY_TRUE", "UNCERTAIN", "CONTESTED", "PROBABLY_FALSE", "FALSE", "OUTDATED",
                   "INSUFFICIENT_EVIDENCE")
 # Étape 11 (moteur de risque) : états, décisions pour les achats, phases, niveaux d'alerte.
@@ -1691,6 +1693,49 @@ class MemoryHealthReport:
         return _plain(self)
 
 
+@dataclass(frozen=True)
+class WorldModelReport:
+    """Modèle du monde et raisonnement (WorldModelReport.v1, étape 25 §2,
+    §61, §100) : éléments du monde et leur nature, scénarios, histoire,
+    qualité du raisonnement. Prêt seulement avec une qualité d'au moins 95 et
+    aucun P0 ; une hypothèse n'est jamais présentée comme un fait."""
+    VERSION: ClassVar[int] = 1
+    report_id: str
+    created_at: str
+    mode: str
+    status: str
+    quality_score: float
+    p0_failures: Tuple[str, ...]
+    facts: Tuple[Tuple[str, str], ...]
+    scenarios: int
+    history_days: int
+    engine_version: str
+    hypothesis_as_fact: bool = False
+    version: int = 1
+
+    def __post_init__(self) -> None:
+        _version(self, self.VERSION)
+        _enum("status", self.status, WORLD_STATUSES)
+        _enum("mode", self.mode, ("paper", "live"))
+        check_uuid("report_id", self.report_id)
+        check_timestamp("created_at", self.created_at)
+        for _n, kind in self.facts:
+            _enum("kind", kind, WORLD_KINDS)
+        score = _number("quality_score", self.quality_score, positive=False)
+        if not 0 <= score <= 100:
+            raise ContractError("OUT_OF_RANGE", "quality_score : de 0 à 100")
+        if self.scenarios < 0 or self.history_days < 0:
+            raise ContractError("OUT_OF_RANGE", "scénarios et histoire : jamais négatifs")
+        if self.status != "NOT_READY" and (self.p0_failures or score < 95):
+            raise ContractError("INCONSISTENT", "prêt : aucun P0 et une qualité d'au moins 95")
+        if self.hypothesis_as_fact:
+            raise ContractError("POLICY", "une hypothèse, une prévision ou un scénario n'est jamais un fait",
+                                category="POLICY")
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
 def ohlcv_violations(rows: Any) -> int:
     """Bougies incohérentes (§41) : plus haut sous l'ouverture, la clôture
     ou le plus bas ; plus bas au-dessus ; volume négatif. Une bougie
@@ -1767,7 +1812,7 @@ SCHEMAS.update({c.__name__: c for c in (OrderIntent, RiskDecision, ExecutionAuth
                                         FinalValidationResult, GateReadinessReport, LiveDeploymentReport,
                                         ControlPlaneReport, ModelCard, LearningGovernanceReport,
                                         SecurityPostureReport, InterfaceReadinessReport, ResearchReport,
-                                        MemoryHealthReport)})
+                                        MemoryHealthReport, WorldModelReport)})
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -2183,6 +2228,14 @@ REGISTRY: Tuple[Contract, ...] = (
              "inversées : P0 ; réécriture silencieuse : refusée", "lecture seule : la mémoire se reconstruit, "
              "les sources gardent leur historique", "à la demande ; chaque nuit dans le rapport", "aucun",
              "une reconstruction par appel", "santé dans le rapport", 3, ("trendguard/memoire.py",)),
+    Contract("WorldModelReport.v1", "modèle du monde et raisonnement : état du monde daté, sourcé et classé "
+             "(observation, interprétation, déduction, scénario, décision), histoire et changements, raisonnement du "
+             "jour, scénarios de choc sans probabilité", "modèle du monde (monde.py)", "rapport, Rachelle, vous",
+             "état du bot, journal financier (décisions), fichier du mode sûr", "éléments du monde, changements, "
+             "étapes du raisonnement, scénarios, qualité", "hypothèse présentée comme un fait : refusée ; P0 : "
+             "NOT_READY", "lecture seule : il raisonne, il ne décide rien", "à la demande ; chaque nuit dans le "
+             "rapport", "aucun", "un état par appel ; 90 instantanés gardés", "dans docs/MONDE_ETAT.md", 3,
+             ("trendguard/monde.py",)),
     Contract("HealthReport.v1", "rapport quotidien et centre de sécurité", "rapport (report.py)",
              "vous (e-mail, panneau)", "état du bot, PC, journal, GitHub", "constats conformes, à corriger, informations",
              "source illisible : information", "lecture seule", "00:30 UTC", "rattrapé au retour du PC",

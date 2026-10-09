@@ -723,6 +723,19 @@ def doc_points(name: str, heading: str = "## Conclusions", limit: int = 6) -> Li
     return points[:limit]
 
 
+def a_monde(ctx: Dict[str, Any]) -> str:
+    """Le modèle du monde : ce que le bot voit, et les « et si »."""
+    view = ctx.get("monde") or {}
+    return "\n".join([
+        "**Modèle du monde** : ce que le bot voit à cet instant (marché, données, portefeuille, stratégie, sûreté), "
+        "chaque élément daté, sourcé et classé — observé, interprété, déduit — et jamais une hypothèse présentée "
+        "comme un fait ; ce qui a changé jour après jour ; le raisonnement de la décision du jour, étape par étape.",
+        "Et si le marché perdait 10, 20 ou 30 % ? Les stops touchés, le capital, l'arrêt d'urgence — des scénarios "
+        "sans probabilité inventée, pas des prévisions.",
+        "Aujourd'hui : " + (view.get("text") or "non mesuré") + ".",
+        "Détail : python trendguard_bot.py monde. Je lis et j'explique, je n'agis pas."])
+
+
 def a_memoire(ctx: Dict[str, Any]) -> str:
     """La mémoire du bot : ce qu'il sait, relié et daté."""
     view = ctx.get("memoire") or {}
@@ -1083,6 +1096,8 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("keys", ("cle api", "cles api", "api", "binance", "2fa", "double authentification",
               "droit de retrait", "securiser ma cle", "securiser la cle"),
      a_keys, []),
+    ("monde", ("modele du monde", "etat du monde", "et si le marche", "scenarios", "ce qui a change",
+               "et si tout baissait"), a_monde, []),
     ("memoire", ("memoire du bot", "graphe de connaissances", "que sait", "memoire", "souvenirs"), a_memoire, []),
     ("recherche", ("recherche et connaissances", "quelles sources", "verification des faits", "contradictions",
                    "confiance des sources", "le bot croit"), a_recherche, []),

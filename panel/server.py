@@ -45,6 +45,7 @@ from trendguard import (
     learning,
     memoire,
     modeles,
+    monde,
     report,
     uptime,
 )
@@ -359,6 +360,7 @@ class PanelApp(SecurityCenter):
                 "controle": self.controle_view(),
                 "cyber": self.cyber_view(),
                 "memoire": self.memoire_view(),
+                "monde": self.monde_view(),
                 "deploiement": {"text": deploiement.describe(self.g), "stage": deploiement.current(self.g),
                                 "quality": deploiement.describe_quality(self.data.state().get("qualite_execution"))}}
 
@@ -371,6 +373,13 @@ class PanelApp(SecurityCenter):
                              for (m, p), (c, w) in sorted(interface.COMMANDS.items())],
                 "status": interface.global_status(self.g, st, now),
                 "freshness": interface.freshness_view(st, now, self.g.decision_delay_sec)}
+
+    def monde_view(self) -> Dict[str, Any]:
+        """Modèle du monde (monde.py) : une phrase."""
+        try:
+            return {"text": monde.describe(monde.evaluate(self.g, self.data.state()))}
+        except Exception as e:
+            return {"text": f"non mesuré ({type(e).__name__})"}
 
     def memoire_view(self) -> Dict[str, Any]:
         """Mémoire (memoire.py) : une phrase."""

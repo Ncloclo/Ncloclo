@@ -58,6 +58,7 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `OHLCV.v1` | Binance (klines publiques) | décision du jour, qualité des données | 1.0.0 | PUBLIC | données |
 | `QuantResult.v1` | moteur quantitatif (moteur_quant.py) | vous, rapport docs/QUANT.md, moteurs de stratégie et de risque (lecture) | 1.0.0 | PUBLIC | données |
 | `ResearchReport.v1` | recherche (recherche.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | données |
+| `WorldModelReport.v1` | modèle du monde (monde.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | données |
 | `Envelope.v1` | tout module (contrats.py) | tout module | 1.0.0 | INTERNAL | support |
 | `ErrorEnvelope.v2` | tout module | journal d'audit, rapport | 2.0.0 | INTERNAL | support |
 | `HealthReport.v1` | rapport (report.py) | vous (e-mail, panneau) | 1.0.0 | INTERNAL | support |
@@ -1049,6 +1050,24 @@ Recherche et connaissances : sources (rang, confiance, validité, dépendances),
 | Unicité | un examen par appel |
 | Trace (audit) | dans docs/CONNAISSANCES.md |
 | Fichiers | `trendguard/recherche.py` |
+
+## WorldModelReport.v1
+
+Modèle du monde et raisonnement : état du monde daté, sourcé et classé (observation, interprétation, déduction, scénario, décision), histoire et changements, raisonnement du jour, scénarios de choc sans probabilité.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | modèle du monde (monde.py) |
+| Consommateur | rapport, Rachelle, vous |
+| Entrée | état du bot, journal financier (décisions), fichier du mode sûr |
+| Sortie | éléments du monde, changements, étapes du raisonnement, scénarios, qualité |
+| Erreurs | hypothèse présentée comme un fait : refusée ; P0 : NOT_READY |
+| Droits | lecture seule : il raisonne, il ne décide rien |
+| Délai | à la demande ; chaque nuit dans le rapport |
+| Nouveaux essais | aucun |
+| Unicité | un état par appel ; 90 instantanés gardés |
+| Trace (audit) | dans docs/MONDE_ETAT.md |
+| Fichiers | `trendguard/monde.py` |
 
 ## Envelope.v1
 

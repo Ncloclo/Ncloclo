@@ -546,6 +546,10 @@ Binance peut bloquer un achat.
 `python trendguard_bot.py memoire ETH`) : un graphe de connaissances
 reconstruit depuis les sources de vérité, chaque fait avec sa source et ses
 dates.
+Étape 25 : modèle du monde ([`docs/MONDE.md`](docs/MONDE.md),
+`python trendguard_bot.py monde`) : ce que le bot voit, ce qui a changé, le
+raisonnement du jour, et « et si le marché perdait 20 % ? » sans probabilité
+inventée.
 Cadre de priorités et de dépendances
 ([`docs/FEUILLE_DE_ROUTE.md`](docs/FEUILLE_DE_ROUTE.md),
 `python trendguard_bot.py chantiers portes`) : chaque composant prouvé, et

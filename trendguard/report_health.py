@@ -33,6 +33,7 @@ from . import (
     libre,
     memoire,
     modeles,
+    monde,
     moteur_portefeuille,
     moteur_risque,
     politique,
@@ -674,6 +675,11 @@ def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
         out.append(chk("Mémoire", False if mm["health"]["p0"] else None, memoire.describe(mm)))
     except Exception as e:               # jamais bloquant
         out.append(chk("Mémoire", None, f"état non mesuré ({type(e).__name__})"))
+    try:
+        mo = monde.evaluate(gcfg, st)
+        out.append(chk("Modèle du monde", None, monde.describe(mo)))
+    except Exception as e:               # jamais bloquant
+        out.append(chk("Modèle du monde", None, f"état non mesuré ({type(e).__name__})"))
     out.append(chk("Paliers du réel", None, deploiement.describe(gcfg) + " ; exécutions : "
                    + deploiement.describe_quality(st.get("qualite_execution"))))
     au = st.get("autorisation") or {}
