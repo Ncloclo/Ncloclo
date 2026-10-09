@@ -48,6 +48,7 @@ from . import (
     registre,
     risque,
     savoir,
+    sre,
 )
 from .systeme import (
     Check,
@@ -694,6 +695,11 @@ def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
         out.append(chk("Intelligence causale", None, causal.describe(ca)))
     except Exception as e:               # jamais bloquant
         out.append(chk("Intelligence causale", None, f"état non mesuré ({type(e).__name__})"))
+    try:
+        sr = sre.evaluate(gcfg, st, record=True)
+        out.append(chk("Fiabilité (SRE)", None, sre.describe(sr)))
+    except Exception as e:               # jamais bloquant
+        out.append(chk("Fiabilité (SRE)", None, f"état non mesuré ({type(e).__name__})"))
     try:
         ig = ingenierie.evaluate(gcfg)
         out.append(chk("Ingénierie et exploitation", None, ingenierie.describe(ig)))

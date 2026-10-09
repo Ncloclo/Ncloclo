@@ -572,6 +572,10 @@ peut quoi, les frontières vérifiées dans le code et dix portes de qualité.
 ingenierie`) :
 chaque changement du code tracé et testé, les versions figées comparées à
 celles du PC ; le bot n'écrit jamais son propre code.
+Étape 32 : fiabilité ([`docs/SRE.md`](docs/SRE.md), `python trendguard_bot.py
+sre`) :
+anomalies, prévisions de panne, capacité et remédiations proposées ; seule
+la relance du bot est automatique.
 Cadre de priorités et de dépendances
 ([`docs/FEUILLE_DE_ROUTE.md`](docs/FEUILLE_DE_ROUTE.md),
 `python trendguard_bot.py chantiers portes`) : chaque composant prouvé, et

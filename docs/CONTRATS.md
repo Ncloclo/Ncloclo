@@ -64,6 +64,7 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `PlanReport.v1` | objectifs (objectifs.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | données |
 | `QuantResult.v1` | moteur quantitatif (moteur_quant.py) | vous, rapport docs/QUANT.md, moteurs de stratégie et de risque (lecture) | 1.0.0 | PUBLIC | données |
 | `ResearchReport.v1` | recherche (recherche.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | données |
+| `SREReport.v1` | SRE (sre.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | données |
 | `TwinReport.v1` | jumeau (jumeau.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | données |
 | `WorldModelReport.v1` | modèle du monde (monde.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | données |
 | `Envelope.v1` | tout module (contrats.py) | tout module | 1.0.0 | INTERNAL | support |
@@ -1165,6 +1166,24 @@ Recherche et connaissances : sources (rang, confiance, validité, dépendances),
 | Unicité | un examen par appel |
 | Trace (audit) | dans docs/CONNAISSANCES.md |
 | Fichiers | `trendguard/recherche.py` |
+
+## SREReport.v1
+
+Fiabilité et autoréparation encadrée : anomalies mesurées, prévisions de panne, capacité, rayon d'impact, remédiations proposées par niveau.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | SRE (sre.py) |
+| Consommateur | rapport, Rachelle, vous |
+| Entrée | plan de contrôle, état du bot, place sur le disque, historique des mesures |
+| Sortie | anomalies, prévisions, capacité, remédiations, note |
+| Erreurs | prévision présentée comme certitude : refusée ; remédiation non LOW automatique : refusée ; P0 : NOT_READY |
+| Droits | lecture seule : propose, n'exécute rien (le superviseur relance déjà le bot) |
+| Délai | à la demande ; chaque nuit dans le rapport (mesure du jour gardée) |
+| Nouveaux essais | aucun |
+| Unicité | une mesure par jour |
+| Trace (audit) | dans docs/SRE_ETAT.md |
+| Fichiers | `trendguard/sre.py` |
 
 ## TwinReport.v1
 

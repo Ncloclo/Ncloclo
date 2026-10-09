@@ -2091,6 +2091,45 @@ class EngineeringReport:
         return _plain(self)
 
 
+REMEDIATION_LEVELS = ("LOW", "MEDIUM", "HIGH", "CRITICAL")
+
+
+@dataclass(frozen=True)
+class SREReport:
+    """Fiabilité et autoréparation encadrée (SREReport.v1, étape 32) :
+    anomalies, prévisions (toujours des prévisions), remédiations proposées
+    (service, niveau, automatique ou non). Seule une remédiation LOW peut être
+    automatique ; une CRITICAL ne s'autorise jamais elle-même."""
+    VERSION: ClassVar[int] = 1
+    report_id: str
+    created_at: str
+    mode: str
+    status: str
+    readiness_score: float
+    p0_failures: Tuple[str, ...]
+    anomalies: int
+    predictions: Tuple[Tuple[str, str], ...]
+    remediations: Tuple[Tuple[str, str, bool], ...]
+    engine_version: str
+    version: int = 1
+
+    def __post_init__(self) -> None:
+        _version(self, self.VERSION)
+        _readiness(self)
+        if isinstance(self.anomalies, bool) or not isinstance(self.anomalies, int) or self.anomalies < 0:
+            raise ContractError("OUT_OF_RANGE", "anomalies : entier, jamais négatif")
+        for _what, kind in self.predictions:
+            if kind != "PREDICTION":
+                raise ContractError("POLICY", "une prévision n'est jamais une certitude", category="POLICY")
+        for _sid, level, auto in self.remediations:
+            _enum("level", level, REMEDIATION_LEVELS)
+            if auto and level != "LOW":
+                raise ContractError("POLICY", "seule une remédiation LOW peut être automatique", category="POLICY")
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
 def ohlcv_violations(rows: Any) -> int:
     """Bougies incohérentes (§41) : plus haut sous l'ouverture, la clôture
     ou le plus bas ; plus bas au-dessus ; volume négatif. Une bougie
@@ -2169,7 +2208,7 @@ SCHEMAS.update({c.__name__: c for c in (OrderIntent, RiskDecision, ExecutionAuth
                                         SecurityPostureReport, InterfaceReadinessReport, ResearchReport,
                                         MemoryHealthReport, WorldModelReport, CausalReport, PlanReport,
                                         TwinReport, Observation, PerceptionReport, GovernanceReport,
-                                        EngineeringReport)})
+                                        EngineeringReport, SREReport)})
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -2601,6 +2640,14 @@ REGISTRY: Tuple[Contract, ...] = (
              ": refusé ; P0 : REJECTED", "lecture seule : les interventions restent dans le simulateur",
              "à la demande ; chaque nuit dans le rapport (sans interventions)", "aucun", "un examen par appel",
              "dans docs/CAUSES.md", 3, ("trendguard/causal.py",)),
+    Contract("SREReport.v1", "fiabilité et autoréparation encadrée : anomalies mesurées, prévisions de panne, "
+             "capacité, rayon d'impact, remédiations proposées par niveau", "SRE (sre.py)", "rapport, Rachelle, vous",
+             "plan de contrôle, état du bot, place sur le disque, historique des mesures",
+             "anomalies, prévisions, capacité, remédiations, note",
+             "prévision présentée comme certitude : refusée ; remédiation non LOW automatique : refusée ; P0 : "
+             "NOT_READY", "lecture seule : propose, n'exécute rien (le superviseur relance déjà le bot)",
+             "à la demande ; chaque nuit dans le rapport (mesure du jour gardée)", "aucun", "une mesure par jour",
+             "dans docs/SRE_ETAT.md", 3, ("trendguard/sre.py",)),
     Contract("EngineeringReport.v1", "ingénierie et exploitation : changements du code tracés, tests et "
              "couverture par module, chaîne de contrôle GitHub, versions figées contre installées, retour arrière, "
              "auto-modification", "ingénierie (ingenierie.py)", "rapport, Rachelle, vous",

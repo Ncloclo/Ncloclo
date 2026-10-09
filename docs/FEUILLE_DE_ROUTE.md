@@ -450,10 +450,10 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Propriétaire | vous et le bot |
 | Dépend de | Sécurité de base (sécurité), Observabilité et audit (à l'exécution) |
 | Bloque | rien |
-| Code | `trendguard/autonomy.py`, `trendguard/maintenance.py`, `trendguard/report_security.py`, `trendguard/controle.py`, `trendguard/ingenierie.py` |
-| Tests | `tests/test_autonomy.py`, `tests/test_maintenance.py`, `tests/test_controle.py`, `tests/test_ingenierie.py` |
-| Contrats | `HealthReport.v1`, `ControlPlaneReport.v1`, `EngineeringReport.v1` |
-| Documentation | [`RAPPORT.md`](RAPPORT.md), [`PLAN_DE_CONTROLE.md`](PLAN_DE_CONTROLE.md), [`INGENIERIE.md`](INGENIERIE.md) |
+| Code | `trendguard/autonomy.py`, `trendguard/maintenance.py`, `trendguard/report_security.py`, `trendguard/controle.py`, `trendguard/ingenierie.py`, `trendguard/sre.py` |
+| Tests | `tests/test_autonomy.py`, `tests/test_maintenance.py`, `tests/test_controle.py`, `tests/test_ingenierie.py`, `tests/test_sre.py` |
+| Contrats | `HealthReport.v1`, `ControlPlaneReport.v1`, `EngineeringReport.v1`, `SREReport.v1` |
+| Documentation | [`RAPPORT.md`](RAPPORT.md), [`PLAN_DE_CONTROLE.md`](PLAN_DE_CONTROLE.md), [`INGENIERIE.md`](INGENIERIE.md), [`SRE.md`](SRE.md) |
 | Sécurité | relance automatique, sauvegarde relue chaque nuit, superviseur borné, plan de contrôle |
 | Observabilité | rapport quotidien |
 | Acceptation | rapport quotidien sans point de sécurité à corriger |

@@ -723,6 +723,21 @@ def doc_points(name: str, heading: str = "## Conclusions", limit: int = 6) -> Li
     return points[:limit]
 
 
+def a_sre(ctx: Dict[str, Any]) -> str:
+    """La fiabilité du PC et du bot : anomalies, prévisions, remédiations."""
+    view = ctx.get("sre") or {}
+    return "\n".join([
+        "**Fiabilité (SRE)** : au-dessus du plan de contrôle, je cherche les anomalies (arrêts imprévus du PC, "
+        "écart d'horloge, place sur le disque, âge de la sauvegarde, note des données), chacune comparée à sa "
+        "référence ; je fais des prévisions (disque plein, arrêts aux mêmes heures) — une prévision n'est jamais "
+        "une certitude.",
+        "Pour chaque service en panne, une remédiation classée LOW à CRITICAL avec son rayon d'impact : seule la "
+        "relance du bot par son superviseur se fait seule ; le reste attend vous, et une remédiation critique ne "
+        "s'autorise jamais elle-même.",
+        "Aujourd'hui : " + (view.get("text") or "non mesuré") + ".",
+        "Détail : python trendguard_bot.py sre. Je lis et j'explique, je n'agis pas."])
+
+
 def a_ingenierie(ctx: Dict[str, Any]) -> str:
     """Comment le code du bot change et arrive sur ce PC."""
     view = ctx.get("ingenierie") or {}
@@ -1183,6 +1198,8 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("keys", ("cle api", "cles api", "api", "binance", "2fa", "double authentification",
               "droit de retrait", "securiser ma cle", "securiser la cle"),
      a_keys, []),
+    ("sre", ("fiabilite", "sre", "le pc s arrete", "arrets imprevus", "prevision de panne", "autoreparation",
+             "capacite du disque"), a_sre, []),
     ("ingenierie", ("ingenierie", "devops", "code du bot change", "comment le code", "versions des bibliotheques",
                     "tests du bot", "auto modification"), a_ingenierie, []),
     ("gouvernance", ("gouvernance de l architecture", "gouvernance", "raci", "qui est responsable",

@@ -29,6 +29,8 @@
 *.incidents.json
 *.monde.json
 *.monde.json.tmp
+*.sre.json
+*.sre.json.tmp
 *.incidents.json.tmp
 *.rapport.json
 *.rapport.json.tmp

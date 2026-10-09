@@ -861,6 +861,24 @@ dernier état : [`INGENIERIE_ETAT.md`](INGENIERIE_ETAT.md)
 **Ce qui ne s'applique pas** : Kubernetes, nuage, Terraform, plusieurs régions
 (un seul PC) ; agents qui modifient le code (le bot ne s'écrit jamais).
 
+## Étape 32 du prompt : fiabilité et autoréparation encadrée
+
+Le trente-deuxième document demande un SRE autonome sous contrôle :
+anomalies, causes racines, prévisions de panne, capacité, rayon d'impact,
+remédiation classée, sans jamais s'autoriser. Appliqué à TrendGuard :
+`sre.py`, au-dessus du plan de contrôle. Détail : [`SRE.md`](SRE.md) ; dernier
+état : [`SRE_ETAT.md`](SRE_ETAT.md) (`python trendguard_bot.py sre`).
+
+| Exigence | Ce qui a été fait |
+| --- | --- |
+| Anomalies, incidents (§11-12) | arrêts imprévus contre leur habitude, horloge, disque, sauvegarde, données ; chacune avec sa référence et sa preuve |
+| Prévisions, capacité (§16-17) | disque plein et arrêts aux mêmes heures, toujours des prévisions ; une mesure par jour gardée sur ce PC |
+| Rayon d'impact, causes (§13-14) | services touchés par une panne ; causes soupçonnées tant qu'elles ne sont pas prouvées |
+| Remédiations (§19-21) | LOW à CRITICAL ; seule la relance du bot par son superviseur se fait seule ; CRITICAL jamais auto-autorisée (`SREReport.v1`) |
+
+**Ce qui ne s'applique pas** : Kubernetes, régions, chaos en production (un
+seul PC).
+
 ## Ce qui reste (votre accord d'abord)
 
 1. **Débat des IA** (§43) : rôles haussier, baissier, critique et synthèse
