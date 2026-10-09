@@ -557,6 +557,10 @@ par intervention dans le simulateur, avec son niveau de preuve.
 `python trendguard_bot.py objectifs`) : le chemin jusqu'au réel, objectif
 par objectif, qui doit agir, et une estimation en fourchette (jamais une
 promesse).
+Étape 28 : jumeau numérique ([`docs/JUMEAU.md`](docs/JUMEAU.md),
+`python trendguard_bot.py jumeau`) : l'essai paper rejoué par le
+simulateur, un Monte-Carlo dont la convergence est vérifiée, les crises
+rejouées, une panne injectée, la sensibilité aux réglages.
 Cadre de priorités et de dépendances
 ([`docs/FEUILLE_DE_ROUTE.md`](docs/FEUILLE_DE_ROUTE.md),
 `python trendguard_bot.py chantiers portes`) : chaque composant prouvé, et

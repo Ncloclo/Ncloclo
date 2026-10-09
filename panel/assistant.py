@@ -723,6 +723,20 @@ def doc_points(name: str, heading: str = "## Conclusions", limit: int = 6) -> Li
     return points[:limit]
 
 
+def a_jumeau(ctx: Dict[str, Any]) -> str:
+    """Le jumeau numérique : le paper rejoué, le Monte-Carlo, les crises."""
+    view = ctx.get("jumeau") or {}
+    return "\n".join([
+        "**Jumeau numérique** : une copie du bot qui tourne dans le simulateur. Elle rejoue l'essai paper avec la "
+        "même boucle que le backtest et vérifie que les achats sont les mêmes ; un Monte-Carlo (trois ans tirés au "
+        "hasard par blocs de 30 jours) donne la pire baisse atteinte une fois sur vingt, et il n'est cru que s'il a "
+        "convergé (moins de 1 % d'écart en doublant les tirages) ; les crises passées sont rejouées, une panne de "
+        "données est injectée, chaque réglage est bougé de 10 %.",
+        "Aujourd'hui : " + (view.get("text") or "non mesuré") + ".",
+        "Une simulation n'est jamais une observation : le jumeau n'écrit rien dans le bot et ne parle pas à Binance.",
+        "Détail : python trendguard_bot.py jumeau. Je lis et j'explique, je n'agis pas."])
+
+
 def a_objectifs(ctx: Dict[str, Any]) -> str:
     """La mission et le chemin jusqu'au réel."""
     view = ctx.get("objectifs") or {}
@@ -1123,6 +1137,8 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("keys", ("cle api", "cles api", "api", "binance", "2fa", "double authentification",
               "droit de retrait", "securiser ma cle", "securiser la cle"),
      a_keys, []),
+    ("jumeau", ("jumeau numerique", "jumeau", "monte carlo", "monte-carlo", "simulateur", "copie du bot"),
+     a_jumeau, []),
     ("objectifs", ("mission et objectifs", "quand le bot pourra", "passer au reel", "chemin critique", "objectifs",
                    "date du reel", "combien de temps avant le reel"), a_objectifs, []),
     ("causal", ("intelligence causale", "qu est ce qui cause", "cause racine", "pourquoi le bot perd"), a_causal, []),

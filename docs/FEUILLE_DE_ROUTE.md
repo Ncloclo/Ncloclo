@@ -243,10 +243,10 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Propriétaire | bot |
 | Dépend de | Stratégie et évolution encadrée (dure), Données de marché et qualité (données) |
 | Bloque | Paper trading et ses critères d'acceptation, Trading réel, Auto-amélioration (évolution encadrée) |
-| Code | `trendguard/replay.py`, `trendguard/strategy_lab.py`, `trendguard/registre.py`, `research/robustness.py`, `trendguard/moteur_backtest.py` |
-| Tests | `tests/test_backtest_paper.py`, `tests/test_strategy_lab.py`, `tests/test_robustness.py`, `tests/test_moteur_backtest.py` |
-| Contrats | `Experiment.v1`, `BacktestManifest.v1`, `BacktestResult.v1` |
-| Documentation | [`ROBUSTESSE.md`](ROBUSTESSE.md), [`EXAMEN.md`](EXAMEN.md), [`MOTEUR_BACKTEST.md`](MOTEUR_BACKTEST.md) |
+| Code | `trendguard/replay.py`, `trendguard/strategy_lab.py`, `trendguard/registre.py`, `research/robustness.py`, `trendguard/moteur_backtest.py`, `trendguard/jumeau.py` |
+| Tests | `tests/test_backtest_paper.py`, `tests/test_strategy_lab.py`, `tests/test_robustness.py`, `tests/test_moteur_backtest.py`, `tests/test_jumeau.py` |
+| Contrats | `Experiment.v1`, `BacktestManifest.v1`, `BacktestResult.v1`, `TwinReport.v1` |
+| Documentation | [`ROBUSTESSE.md`](ROBUSTESSE.md), [`EXAMEN.md`](EXAMEN.md), [`MOTEUR_BACKTEST.md`](MOTEUR_BACKTEST.md), [`JUMEAU.md`](JUMEAU.md) |
 | Sécurité | études hors ligne, sans aucun ordre |
 | Observabilité | études reproductibles, registre |
 | Acceptation | chaque règle prouvée sur deux époques avant d'entrer dans le bot |

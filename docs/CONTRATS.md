@@ -60,6 +60,7 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `PlanReport.v1` | objectifs (objectifs.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | données |
 | `QuantResult.v1` | moteur quantitatif (moteur_quant.py) | vous, rapport docs/QUANT.md, moteurs de stratégie et de risque (lecture) | 1.0.0 | PUBLIC | données |
 | `ResearchReport.v1` | recherche (recherche.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | données |
+| `TwinReport.v1` | jumeau (jumeau.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | données |
 | `WorldModelReport.v1` | modèle du monde (monde.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | données |
 | `Envelope.v1` | tout module (contrats.py) | tout module | 1.0.0 | INTERNAL | support |
 | `ErrorEnvelope.v2` | tout module | journal d'audit, rapport | 2.0.0 | INTERNAL | support |
@@ -1088,6 +1089,24 @@ Recherche et connaissances : sources (rang, confiance, validité, dépendances),
 | Unicité | un examen par appel |
 | Trace (audit) | dans docs/CONNAISSANCES.md |
 | Fichiers | `trendguard/recherche.py` |
+
+## TwinReport.v1
+
+Jumeau numérique et simulation : le paper rejoué par la boucle de backtest, Monte-Carlo dont la convergence est vérifiée, crises rejouées, panne injectée, sensibilité aux réglages.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | jumeau (jumeau.py) |
+| Consommateur | rapport, Rachelle, vous |
+| Entrée | état du paper, cours en cache, réglages |
+| Sortie | synchronisation, Monte-Carlo, crises, sensibilité, note |
+| Erreurs | Monte-Carlo non convergé : REJECTED ; écriture dans la production : refusée ; P0 : REJECTED |
+| Droits | lecture seule : une simulation n'est jamais une observation |
+| Délai | à la demande ; chaque nuit dans le rapport |
+| Nouveaux essais | aucun |
+| Unicité | même graine, mêmes données : même résultat |
+| Trace (audit) | dans docs/JUMEAU_ETAT.md |
+| Fichiers | `trendguard/jumeau.py` |
 
 ## WorldModelReport.v1
 

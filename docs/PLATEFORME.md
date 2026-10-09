@@ -772,6 +772,27 @@ plan : [`PLAN.md`](PLAN.md) (`python trendguard_bot.py objectifs`).
 (peu d'objectifs, aucun agent ne reçoit de tâche), domaines hors du métier du
 bot, exécution du plan (jamais).
 
+## Étape 28 du prompt : jumeau numérique et simulation
+
+Le vingt-huitième document demande un jumeau numérique : un modèle
+synchronisé avec le système réel, un Monte-Carlo dont la convergence est
+prouvée, des scénarios, des pannes injectées, une analyse de sensibilité,
+isolé de la production. Appliqué à TrendGuard : `jumeau.py`. Détail :
+[`JUMEAU.md`](JUMEAU.md) ; dernier résultat : [`JUMEAU_ETAT.md`](JUMEAU_ETAT.md)
+(`python trendguard_bot.py jumeau`).
+
+| Exigence de l'étape 28 | Ce qui a été fait |
+| --- | --- |
+| Synchronisation (§9-10) | l'essai paper rejoué par la boucle de backtest : achats identiques, écarts expliqués ou non ; chaque nuit dans le rapport |
+| Monte-Carlo (§14) | blocs de 30 jours, de 250 à 4 000 tirages, convergence à moins de 1 % vérifiée, graine notée ; sinon MONTE_CARLO_NOT_CONVERGED |
+| Scénarios, pannes, sensibilité (§15, §17, §23) | crises passées rejouées, trois jours de cours effacés, quatre réglages à ±10 % |
+| Isolation, reproductibilité (§27, §37, §42) | aucune bibliothèque réseau, aucune écriture dans le bot ; même graine, même résultat |
+| Note, contrat (§44, §46) | neuf familles pondérées ; `TwinReport.v1` refuse un jumeau qui écrirait dans la production |
+
+**Ce qui ne s'applique pas** : jumeaux d'énergie et d'équipements, matériel
+dans la boucle, co-simulation (le bot n'a ni capteur ni machine, un seul
+simulateur).
+
 ## Ce qui reste (votre accord d'abord)
 
 1. **Débat des IA** (§43) : rôles haussier, baissier, critique et synthèse

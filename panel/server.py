@@ -363,6 +363,7 @@ class PanelApp(SecurityCenter):
                 "memoire": self.memoire_view(),
                 "monde": self.monde_view(),
                 "objectifs": self.objectifs_view(),
+                "jumeau": self.jumeau_view(),
                 "deploiement": {"text": deploiement.describe(self.g), "stage": deploiement.current(self.g),
                                 "quality": deploiement.describe_quality(self.data.state().get("qualite_execution"))}}
 
@@ -375,6 +376,16 @@ class PanelApp(SecurityCenter):
                              for (m, p), (c, w) in sorted(interface.COMMANDS.items())],
                 "status": interface.global_status(self.g, st, now),
                 "freshness": interface.freshness_view(st, now, self.g.decision_delay_sec)}
+
+    def jumeau_view(self) -> Dict[str, Any]:
+        """Jumeau numérique : la ligne du dernier rapport (le panneau ne
+        relance pas de simulation)."""
+        rep = self.report_view()
+        for s in rep.get("sections") or []:
+            for c in s.get("checks") or []:
+                if c.get("label") == "Jumeau numérique":
+                    return {"text": c.get("detail") or "non mesuré"}
+        return {"text": "pas encore dans le rapport ; python trendguard_bot.py jumeau"}
 
     def objectifs_view(self) -> Dict[str, Any]:
         """Mission et objectifs (objectifs.py) : une phrase."""

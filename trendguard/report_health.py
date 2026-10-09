@@ -30,6 +30,7 @@ from . import (
     deploiement,
     donnees,
     evolution,
+    jumeau,
     learning,
     libre,
     memoire,
@@ -687,6 +688,12 @@ def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
         out.append(chk("Intelligence causale", None, causal.describe(ca)))
     except Exception as e:               # jamais bloquant
         out.append(chk("Intelligence causale", None, f"état non mesuré ({type(e).__name__})"))
+    try:
+        close, volume = _cached_close(gcfg)
+        jm = jumeau.evaluate(gcfg, st, close, volume, params=evolution.params_for(gcfg), light=True)
+        out.append(chk("Jumeau numérique", None, jumeau.describe(jm)))
+    except Exception as e:               # jamais bloquant
+        out.append(chk("Jumeau numérique", None, f"état non mesuré ({type(e).__name__})"))
     try:
         ob = objectifs.evaluate(gcfg, st)
         out.append(chk("Mission et objectifs", None, objectifs.describe(ob)))

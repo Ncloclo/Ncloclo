@@ -534,6 +534,8 @@ INTERFACE_STATUSES = ("READY", "REJECTED")
 MEMORY_STATUSES = ("READY_FOR_GOVERNED_LONG_TERM_MEMORY", "NOT_READY")
 WORLD_STATUSES = ("READY_FOR_ADVANCED_REASONING_AND_WORLD_MODEL", "NOT_READY")
 PLAN_STATUSES = ("READY_FOR_AUTONOMOUS_PLANNING", "NOT_READY")
+TWIN_STATUSES = ("READY", "REJECTED")
+MONTE_CARLO_STATUSES = ("CONVERGED", "MONTE_CARLO_NOT_CONVERGED", "NOT_RUN")
 GOAL_STATES = ("CREATED", "VALIDATED", "PLANNING", "PLAN_READY", "APPROVAL_PENDING", "APPROVED", "EXECUTING",
                "MONITORING", "COMPLETED", "FAILED", "PAUSED", "CANCELLED", "BLOCKED", "EXPIRED", "REJECTED", "SAFE_MODE")
 WORLD_KINDS = ("OBSERVATION", "INTERPRETATION", "HYPOTHESIS", "INFERENCE", "PREDICTION", "SCENARIO", "DECISION")
@@ -1831,6 +1833,51 @@ class PlanReport:
         return _plain(self)
 
 
+@dataclass(frozen=True)
+class TwinReport:
+    """Jumeau numérique et simulation (TwinReport.v1, étape 28 §44, §46-47) :
+    synchronisation du jumeau du paper, convergence du Monte-Carlo, données
+    réelles ou synthétiques. Une simulation n'est jamais une observation :
+    jamais d'écriture dans la production ; prêt seulement sans P0, avec une
+    note d'au moins 95 et un Monte-Carlo convergé."""
+    VERSION: ClassVar[int] = 1
+    report_id: str
+    created_at: str
+    mode: str
+    status: str
+    readiness_score: float
+    p0_failures: Tuple[str, ...]
+    monte_carlo: str
+    sync_ratio: Optional[float]
+    synthetic_data: bool
+    data: str
+    engine_version: str
+    production_write: bool = False
+    version: int = 1
+
+    def __post_init__(self) -> None:
+        _version(self, self.VERSION)
+        _enum("status", self.status, TWIN_STATUSES)
+        _enum("mode", self.mode, ("paper", "live"))
+        _enum("monte_carlo", self.monte_carlo, MONTE_CARLO_STATUSES)
+        check_uuid("report_id", self.report_id)
+        check_timestamp("created_at", self.created_at)
+        if not self.data.strip():
+            raise ContractError("MISSING_FIELD", "les données dites : réelles, synthétiques ou aucune")
+        if self.sync_ratio is not None and not 0 <= _number("sync_ratio", self.sync_ratio, positive=False) <= 1:
+            raise ContractError("OUT_OF_RANGE", "sync_ratio : de 0 à 1")
+        score = _number("readiness_score", self.readiness_score, positive=False)
+        if not 0 <= score <= 100:
+            raise ContractError("OUT_OF_RANGE", "readiness_score : de 0 à 100")
+        if self.status == "READY" and (self.p0_failures or score < 95 or self.monte_carlo != "CONVERGED"):
+            raise ContractError("INCONSISTENT", "prêt : aucun P0, une note d'au moins 95 et un Monte-Carlo convergé")
+        if self.production_write:
+            raise ContractError("POLICY", "le jumeau n'écrit jamais dans la production", category="POLICY")
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
 def ohlcv_violations(rows: Any) -> int:
     """Bougies incohérentes (§41) : plus haut sous l'ouverture, la clôture
     ou le plus bas ; plus bas au-dessus ; volume négatif. Une bougie
@@ -1907,7 +1954,8 @@ SCHEMAS.update({c.__name__: c for c in (OrderIntent, RiskDecision, ExecutionAuth
                                         FinalValidationResult, GateReadinessReport, LiveDeploymentReport,
                                         ControlPlaneReport, ModelCard, LearningGovernanceReport,
                                         SecurityPostureReport, InterfaceReadinessReport, ResearchReport,
-                                        MemoryHealthReport, WorldModelReport, CausalReport, PlanReport)})
+                                        MemoryHealthReport, WorldModelReport, CausalReport, PlanReport,
+                                        TwinReport)})
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -2339,6 +2387,14 @@ REGISTRY: Tuple[Contract, ...] = (
              ": refusé ; P0 : REJECTED", "lecture seule : les interventions restent dans le simulateur",
              "à la demande ; chaque nuit dans le rapport (sans interventions)", "aucun", "un examen par appel",
              "dans docs/CAUSES.md", 3, ("trendguard/causal.py",)),
+    Contract("TwinReport.v1", "jumeau numérique et simulation : le paper rejoué par la boucle de backtest, "
+             "Monte-Carlo dont la convergence est vérifiée, crises rejouées, panne injectée, sensibilité aux réglages",
+             "jumeau (jumeau.py)", "rapport, Rachelle, vous", "état du paper, cours en cache, réglages",
+             "synchronisation, Monte-Carlo, crises, sensibilité, note",
+             "Monte-Carlo non convergé : REJECTED ; écriture dans la production : refusée ; P0 : REJECTED",
+             "lecture seule : une simulation n'est jamais une observation", "à la demande ; chaque nuit dans le rapport",
+             "aucun", "même graine, mêmes données : même résultat", "dans docs/JUMEAU_ETAT.md", 3,
+             ("trendguard/jumeau.py",)),
     Contract("PlanReport.v1", "mission, objectifs et plan : objectifs mesurables (critère, état, qui agit, "
              "dépendances), chemin critique, estimation de l'ouverture de la porte du réel en fourchette, vos "
              "actions", "objectifs (objectifs.py)", "rapport, Rachelle, vous", "porte du réel, acceptation du paper, "
