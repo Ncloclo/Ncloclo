@@ -723,6 +723,22 @@ def doc_points(name: str, heading: str = "## Conclusions", limit: int = 6) -> Li
     return points[:limit]
 
 
+def a_perception(ctx: Dict[str, Any]) -> str:
+    """La perception : ce que le bot voit du marché, source par source."""
+    view = ctx.get("perception") or {}
+    return "\n".join([
+        "**Perception** : ce que le bot voit du marché, source par source — ses bougies de Binance, les deux caches "
+        "de bougies, la note des données, les carnets d'ordres, l'horloge, le calendrier. Chaque observation a sa "
+        "source, sa date et sa provenance ; une bougie pas encore close est refusée ; une donnée sans date n'est "
+        "jamais comparée.",
+        "Quand deux sources parlent du même jour, elles sont recoupées : d'accord à 0,5 % près (confirmé), ou en "
+        "conflit — la source de plus haut rang l'emporte, jamais une moyenne. Ce qui manque est dit INCONNU, jamais "
+        "deviné.",
+        "Aujourd'hui : " + (view.get("text") or "non mesuré") + ".",
+        "La perception observe, elle ne décide pas : aucun lien direct vers la politique, l'autorisation, la porte "
+        "ou les ordres. Détail : python trendguard_bot.py perception. Je lis et j'explique, je n'agis pas."])
+
+
 def a_jumeau(ctx: Dict[str, Any]) -> str:
     """Le jumeau numérique : le paper rejoué, le Monte-Carlo, les crises."""
     view = ctx.get("jumeau") or {}
@@ -1137,6 +1153,8 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("keys", ("cle api", "cles api", "api", "binance", "2fa", "double authentification",
               "droit de retrait", "securiser ma cle", "securiser la cle"),
      a_keys, []),
+    ("perception", ("perception", "percoit", "multimodal", "multi-sources", "recoupement des sources",
+                    "sources de donnees"), a_perception, []),
     ("jumeau", ("jumeau numerique", "jumeau", "monte carlo", "monte-carlo", "simulateur", "copie du bot"),
      a_jumeau, []),
     ("objectifs", ("mission et objectifs", "quand le bot pourra", "passer au reel", "chemin critique", "objectifs",

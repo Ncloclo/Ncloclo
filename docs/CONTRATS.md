@@ -39,6 +39,7 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `ModelConsensus.v1` | veille (market_watch.py) | rapport de la veille, panneau, Rachelle | 1.0.0 | PUBLIC | cœur |
 | `ModelDisagreement.v1` | veille (market_watch.py) | rapport de la veille, panneau, Rachelle | 1.0.0 | PUBLIC | cœur |
 | `ModelSelection.v1` | routeur (modeles.py) | exécution des modèles | 1.0.0 | INTERNAL | cœur |
+| `Observation.v1` | perception (perception.py) | perception (fusion), rapport | 1.0.0 | INTERNAL | cœur |
 | `PaperAcceptanceReport.v1` | acceptation du paper (acceptation.py) | rapport quotidien, Rachelle, vous | 1.0.0 | INTERNAL | cœur |
 | `PortfolioAnalysis.v1` | décision du jour (risque.py, stress.py, attribution.py) | panneau, rapport, raisonnement | 1.0.0 | INTERNAL | cœur |
 | `PortfolioDecision.v1` | moteur de portefeuille (moteur_portefeuille.py) | raisonnement du jour, rapport, Rachelle, vous | 1.0.0 | INTERNAL | cœur |
@@ -57,6 +58,7 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `MarketData.v1` | Binance (klines publiques) | décision du jour, régimes, qualité | 1.0.0 | INTERNAL | données |
 | `MemoryHealthReport.v1` | mémoire (memoire.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | données |
 | `OHLCV.v1` | Binance (klines publiques) | décision du jour, qualité des données | 1.0.0 | PUBLIC | données |
+| `PerceptionReport.v1` | perception (perception.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | données |
 | `PlanReport.v1` | objectifs (objectifs.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | données |
 | `QuantResult.v1` | moteur quantitatif (moteur_quant.py) | vous, rapport docs/QUANT.md, moteurs de stratégie et de risque (lecture) | 1.0.0 | PUBLIC | données |
 | `ResearchReport.v1` | recherche (recherche.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | données |
@@ -712,6 +714,24 @@ Choix du modèle d'IA pour une demande, avec ses raisons.
 | Trace (audit) | raison notée avec chaque appel |
 | Fichiers | `trendguard/modeles.py` |
 
+## Observation.v1
+
+Une observation de la perception : source, modalité, rang, date du fait, provenance.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | perception (perception.py) |
+| Consommateur | perception (fusion), rapport |
+| Entrée | état du bot, caches de bougies |
+| Sortie | l'observation |
+| Erreurs | sans source ou sans provenance : refusée ; date illisible : refusée ; rang hors de 1 à 4 : refusé |
+| Droits | lecture seule |
+| Délai | à chaque perception |
+| Nouveaux essais | aucun |
+| Unicité | identifiant tiré du contenu |
+| Trace (audit) | dans docs/PERCEPTION_ETAT.md |
+| Fichiers | `trendguard/perception.py` |
+
 ## PaperAcceptanceReport.v1
 
 Verdict des critères d'acceptation du paper (AC-001 à AC-044) : accepté (prêt pour le moteur de politique) ou bloqué, avec ce qui manque.
@@ -1035,6 +1055,24 @@ Règles d'une bougie : plus haut ≥ ouverture, clôture et plus bas ; plus bas 
 | Unicité | mêmes bougies, même verdict |
 | Trace (audit) | journal du bot, qualité |
 | Fichiers | `trendguard/contrats.py`, `trendguard/bot.py`, `trendguard/qualite.py` |
+
+## PerceptionReport.v1
+
+Perception et observations multi-sources : observations alignées dans le temps, faits confirmés ou en conflit (la source de plus haut rang l'emporte), inconnus dits, manifeste des dépendances.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | perception (perception.py) |
+| Consommateur | rapport, Rachelle, vous |
+| Entrée | état du bot, caches de bougies |
+| Sortie | faits, conflits, inconnus, dépendances, note |
+| Erreurs | fait sans source : refusé (hallucination) ; dépendance interdite : refusée ; P0 : NOT_READY |
+| Droits | lecture seule : la perception observe, elle ne décide pas |
+| Délai | à la demande ; chaque nuit dans le rapport |
+| Nouveaux essais | aucun |
+| Unicité | un rapport par appel |
+| Trace (audit) | dans docs/PERCEPTION_ETAT.md |
+| Fichiers | `trendguard/perception.py` |
 
 ## PlanReport.v1
 

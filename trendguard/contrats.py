@@ -536,6 +536,8 @@ WORLD_STATUSES = ("READY_FOR_ADVANCED_REASONING_AND_WORLD_MODEL", "NOT_READY")
 PLAN_STATUSES = ("READY_FOR_AUTONOMOUS_PLANNING", "NOT_READY")
 TWIN_STATUSES = ("READY", "REJECTED")
 MONTE_CARLO_STATUSES = ("CONVERGED", "MONTE_CARLO_NOT_CONVERGED", "NOT_RUN")
+OBSERVATION_MODALITIES = ("SERIE", "JUGEMENT", "CARNET", "HORLOGE", "EVENEMENT")
+PERCEPTION_STATUSES = ("READY", "CANDIDATE", "VALIDATING", "DEVELOPMENT", "REJECTED", "NOT_READY")
 GOAL_STATES = ("CREATED", "VALIDATED", "PLANNING", "PLAN_READY", "APPROVAL_PENDING", "APPROVED", "EXECUTING",
                "MONITORING", "COMPLETED", "FAILED", "PAUSED", "CANCELLED", "BLOCKED", "EXPIRED", "REJECTED", "SAFE_MODE")
 WORLD_KINDS = ("OBSERVATION", "INTERPRETATION", "HYPOTHESIS", "INFERENCE", "PREDICTION", "SCENARIO", "DECISION")
@@ -1878,6 +1880,98 @@ class TwinReport:
         return _plain(self)
 
 
+@dataclass(frozen=True)
+class Observation:
+    """Une observation de la perception (Observation.v1, étape 29 §8, §23,
+    §37) : un fait vu par une source, avec sa modalité, son rang, la date
+    du fait et sa provenance. Pas de source, pas d'observation ; une valeur
+    absente reste absente (jamais devinée)."""
+    VERSION: ClassVar[int] = 1
+    observation_id: str
+    source: str
+    modality: str
+    entity: str
+    attribute: str
+    value: Optional[float]
+    unit: str
+    day: Optional[str]
+    observed_at: Optional[str]
+    rank: int
+    provenance: str
+    version: int = 1
+
+    def __post_init__(self) -> None:
+        _version(self, self.VERSION)
+        _enum("modality", self.modality, OBSERVATION_MODALITIES)
+        if not self.source.strip() or not self.provenance.strip() or not self.observation_id:
+            raise ContractError("MISSING_FIELD", "une observation a toujours sa source et sa provenance")
+        if not self.entity or not self.attribute or not self.unit:
+            raise ContractError("MISSING_FIELD", "entity, attribute, unit")
+        if self.value is not None:
+            _number("value", self.value, positive=False)
+        if self.day is not None:
+            _day("day", self.day)
+        if self.observed_at is not None:
+            check_timestamp("observed_at", self.observed_at)
+        if self.rank not in (1, 2, 3, 4):
+            raise ContractError("OUT_OF_RANGE", "rank : de 1 (fait foi) à 4")
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
+@dataclass(frozen=True)
+class PerceptionReport:
+    """Perception et observations multi-sources (PerceptionReport.v1, étape
+    29 §52-53) : observations, faits, conflits, inconnus. Un fait avec une
+    valeur et sans source est une hallucination : refusée. Une dépendance
+    directe vers la politique, l'autorisation, la porte ou les ordres :
+    refusée. Un P0 : NOT_READY quelle que soit la note."""
+    VERSION: ClassVar[int] = 1
+    report_id: str
+    created_at: str
+    mode: str
+    status: str
+    readiness_score: float
+    p0_failures: Tuple[str, ...]
+    observations: int
+    facts: int
+    confirmed: int
+    conflicts: int
+    unknown: int
+    unsourced: int
+    forbidden_dependencies: Tuple[str, ...]
+    engine_version: str
+    version: int = 1
+
+    def __post_init__(self) -> None:
+        _version(self, self.VERSION)
+        _enum("status", self.status, PERCEPTION_STATUSES)
+        _enum("mode", self.mode, ("paper", "live"))
+        check_uuid("report_id", self.report_id)
+        check_timestamp("created_at", self.created_at)
+        counts = (self.observations, self.facts, self.confirmed, self.conflicts, self.unknown, self.unsourced)
+        if any(isinstance(n, bool) or not isinstance(n, int) or n < 0 for n in counts):
+            raise ContractError("OUT_OF_RANGE", "des nombres entiers, jamais négatifs")
+        if self.confirmed + self.conflicts > self.facts:
+            raise ContractError("INCONSISTENT", "plus de faits confirmés ou en conflit que de faits")
+        score = _number("readiness_score", self.readiness_score, positive=False)
+        if not 0 <= score <= 100:
+            raise ContractError("OUT_OF_RANGE", "readiness_score : de 0 à 100")
+        if self.p0_failures and self.status != "NOT_READY":
+            raise ContractError("INCONSISTENT", "un P0 : NOT_READY quelle que soit la note")
+        if self.status == "READY" and score < 95:
+            raise ContractError("INCONSISTENT", "prêt : une note d'au moins 95")
+        if self.unsourced:
+            raise ContractError("POLICY", "un fait sans source est une hallucination", category="POLICY")
+        if self.forbidden_dependencies:
+            raise ContractError("POLICY", "la perception observe : aucune dépendance vers la politique, "
+                                          "l'autorisation, la porte ou les ordres", category="POLICY")
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
 def ohlcv_violations(rows: Any) -> int:
     """Bougies incohérentes (§41) : plus haut sous l'ouverture, la clôture
     ou le plus bas ; plus bas au-dessus ; volume négatif. Une bougie
@@ -1955,7 +2049,7 @@ SCHEMAS.update({c.__name__: c for c in (OrderIntent, RiskDecision, ExecutionAuth
                                         ControlPlaneReport, ModelCard, LearningGovernanceReport,
                                         SecurityPostureReport, InterfaceReadinessReport, ResearchReport,
                                         MemoryHealthReport, WorldModelReport, CausalReport, PlanReport,
-                                        TwinReport)})
+                                        TwinReport, Observation, PerceptionReport)})
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -2387,6 +2481,18 @@ REGISTRY: Tuple[Contract, ...] = (
              ": refusé ; P0 : REJECTED", "lecture seule : les interventions restent dans le simulateur",
              "à la demande ; chaque nuit dans le rapport (sans interventions)", "aucun", "un examen par appel",
              "dans docs/CAUSES.md", 3, ("trendguard/causal.py",)),
+    Contract("Observation.v1", "une observation de la perception : source, modalité, rang, date du fait, "
+             "provenance", "perception (perception.py)", "perception (fusion), rapport", "état du bot, caches de bougies",
+             "l'observation", "sans source ou sans provenance : refusée ; date illisible : refusée ; rang hors de 1 à 4 : "
+             "refusé", "lecture seule", "à chaque perception", "aucun", "identifiant tiré du contenu",
+             "dans docs/PERCEPTION_ETAT.md", 2, ("trendguard/perception.py",)),
+    Contract("PerceptionReport.v1", "perception et observations multi-sources : observations alignées dans le temps, "
+             "faits confirmés ou en conflit (la source de plus haut rang l'emporte), inconnus dits, manifeste des "
+             "dépendances", "perception (perception.py)", "rapport, Rachelle, vous", "état du bot, caches de bougies",
+             "faits, conflits, inconnus, dépendances, note",
+             "fait sans source : refusé (hallucination) ; dépendance interdite : refusée ; P0 : NOT_READY",
+             "lecture seule : la perception observe, elle ne décide pas", "à la demande ; chaque nuit dans le rapport",
+             "aucun", "un rapport par appel", "dans docs/PERCEPTION_ETAT.md", 3, ("trendguard/perception.py",)),
     Contract("TwinReport.v1", "jumeau numérique et simulation : le paper rejoué par la boucle de backtest, "
              "Monte-Carlo dont la convergence est vérifiée, crises rejouées, panne injectée, sensibilité aux réglages",
              "jumeau (jumeau.py)", "rapport, Rachelle, vous", "état du paper, cours en cache, réglages",

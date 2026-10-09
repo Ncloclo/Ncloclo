@@ -39,6 +39,7 @@ from . import (
     moteur_portefeuille,
     moteur_risque,
     objectifs,
+    perception,
     politique,
     postmortem,
     recherche,
@@ -688,6 +689,11 @@ def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
         out.append(chk("Intelligence causale", None, causal.describe(ca)))
     except Exception as e:               # jamais bloquant
         out.append(chk("Intelligence causale", None, f"état non mesuré ({type(e).__name__})"))
+    try:
+        pc = perception.evaluate(gcfg, st, perception.load_caches(gcfg.universe))
+        out.append(chk("Perception", None, perception.describe(pc)))
+    except Exception as e:               # jamais bloquant
+        out.append(chk("Perception", None, f"état non mesuré ({type(e).__name__})"))
     try:
         close, volume = _cached_close(gcfg)
         jm = jumeau.evaluate(gcfg, st, close, volume, params=evolution.params_for(gcfg), light=True)

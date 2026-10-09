@@ -793,6 +793,30 @@ isolé de la production. Appliqué à TrendGuard : `jumeau.py`. Détail :
 dans la boucle, co-simulation (le bot n'a ni capteur ni machine, un seul
 simulateur).
 
+## Étape 29 du prompt : perception multi-sources
+
+Le vingt-neuvième document (trois versions et trois corrections) demande une
+couche de perception : observations structurées, tracées, alignées dans le
+temps, fusionnées, avec leur incertitude ; et, dans ses corrections, un
+manifeste des dépendances où le statut (obligatoire, conditionnelle,
+optionnelle, activation, interdite) ne se confond jamais avec le type (DATA,
+CONTRACT, SECURITY, GOVERNANCE…). Appliqué à TrendGuard : `perception.py`.
+Détail : [`PERCEPTION.md`](PERCEPTION.md) ; dernier état :
+[`PERCEPTION_ETAT.md`](PERCEPTION_ETAT.md) (`python trendguard_bot.py perception`).
+
+| Exigence de l'étape 29 | Ce qui a été fait |
+| --- | --- |
+| Observations, provenance (§8, §23) | sept sources (bougies du bot, deux caches, note des données, carnets d'ordres, horloge, calendrier) ; chaque observation passe par `Observation.v1` : sans source ni provenance, refusée |
+| Alignement dans le temps (§16) | bougie non close refusée, donnée sans date jamais comparée, bougie trop vieille marquée ; horloge alignée sur Binance |
+| Fusion, contradictions (§18-19) | même fait, même jour : confirmé à 0,5 % près, sinon conflit gardé et montré, la source de plus haut rang l'emporte ; jamais une moyenne |
+| Incertitude, hallucinations (§21, §37) | confiance de chaque fait ; INCONNU dit ; un fait sans source refusé par `PerceptionReport.v1` |
+| Dépendances STATUT × TYPE (corrections) | manifeste : 03, 06, 20, 21 obligatoires ; 07 conditionnelle ; 19 activation ; 22-28 optionnelles ; 15-18 interdites ; vérifié par lecture du code (aucun import interdit, aucun cycle) |
+| Note (§52-53) | neuf familles pondérées, bandes READY à REJECTED, P0 : NOT_READY |
+
+**Ce qui ne s'applique pas** : images, vidéo, son, documents scannés,
+capteurs (le bot ne reçoit que des chiffres et des textes ; les textes sont
+jugés par la recherche).
+
 ## Ce qui reste (votre accord d'abord)
 
 1. **Débat des IA** (§43) : rôles haussier, baissier, critique et synthèse

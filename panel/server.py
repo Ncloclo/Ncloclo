@@ -364,6 +364,7 @@ class PanelApp(SecurityCenter):
                 "monde": self.monde_view(),
                 "objectifs": self.objectifs_view(),
                 "jumeau": self.jumeau_view(),
+                "perception": self.report_line("Perception"),
                 "deploiement": {"text": deploiement.describe(self.g), "stage": deploiement.current(self.g),
                                 "quality": deploiement.describe_quality(self.data.state().get("qualite_execution"))}}
 
@@ -377,15 +378,18 @@ class PanelApp(SecurityCenter):
                 "status": interface.global_status(self.g, st, now),
                 "freshness": interface.freshness_view(st, now, self.g.decision_delay_sec)}
 
-    def jumeau_view(self) -> Dict[str, Any]:
-        """Jumeau numérique : la ligne du dernier rapport (le panneau ne
-        relance pas de simulation)."""
-        rep = self.report_view()
-        for s in rep.get("sections") or []:
+    def report_line(self, label: str) -> Dict[str, Any]:
+        """Une ligne du dernier rapport, telle quelle (le panneau ne relance
+        ni simulation ni lecture des caches)."""
+        for s in self.report_view().get("sections") or []:
             for c in s.get("checks") or []:
-                if c.get("label") == "Jumeau numérique":
+                if c.get("label") == label:
                     return {"text": c.get("detail") or "non mesuré"}
-        return {"text": "pas encore dans le rapport ; python trendguard_bot.py jumeau"}
+        return {"text": "pas encore dans le rapport"}
+
+    def jumeau_view(self) -> Dict[str, Any]:
+        """Jumeau numérique : la ligne du dernier rapport."""
+        return self.report_line("Jumeau numérique")
 
     def objectifs_view(self) -> Dict[str, Any]:
         """Mission et objectifs (objectifs.py) : une phrase."""

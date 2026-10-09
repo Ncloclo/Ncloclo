@@ -561,6 +561,9 @@ promesse).
 `python trendguard_bot.py jumeau`) : l'essai paper rejoué par le
 simulateur, un Monte-Carlo dont la convergence est vérifiée, les crises
 rejouées, une panne injectée, la sensibilité aux réglages.
+Étape 29 : perception ([`docs/PERCEPTION.md`](docs/PERCEPTION.md),
+`python trendguard_bot.py perception`) : ce que le bot voit du marché,
+source par source, daté, recoupé ; ce qui manque est dit inconnu.
 Cadre de priorités et de dépendances
 ([`docs/FEUILLE_DE_ROUTE.md`](docs/FEUILLE_DE_ROUTE.md),
 `python trendguard_bot.py chantiers portes`) : chaque composant prouvé, et

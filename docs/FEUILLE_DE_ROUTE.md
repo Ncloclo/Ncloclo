@@ -123,10 +123,10 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Propriétaire | bot |
 | Dépend de | Contrats de données (contrat) |
 | Bloque | Intelligence financière (savoir, veille, régimes, calendrier), Moteur quantitatif (laboratoire, risque d'un jour, résistance, attribution), Stratégie et évolution encadrée, Rejeu et études (backtest, deux époques, crises), Cœur d'intelligence financière |
-| Code | `trendguard/qualite.py`, `trendguard/bot.py` |
-| Tests | `tests/test_analyse.py`, `tests/test_contrats_donnees.py` |
-| Contrats | `MarketData.v1`, `OHLCV.v1` |
-| Documentation | [`DONNEES.md`](DONNEES.md) |
+| Code | `trendguard/qualite.py`, `trendguard/bot.py`, `trendguard/perception.py` |
+| Tests | `tests/test_analyse.py`, `tests/test_contrats_donnees.py`, `tests/test_perception.py` |
+| Contrats | `MarketData.v1`, `OHLCV.v1`, `Observation.v1`, `PerceptionReport.v1` |
+| Documentation | [`DONNEES.md`](DONNEES.md), [`PERCEPTION.md`](PERCEPTION.md) |
 | Sécurité | bougies incohérentes écartées ; données absentes : décision reportée |
 | Observabilité | note de qualité sur 100 à chaque décision |
 | Acceptation | bougies clôturées seulement ; aucune décision sur des données abîmées ou futures |

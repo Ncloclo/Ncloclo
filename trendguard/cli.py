@@ -700,6 +700,9 @@ TOOLS = {"alerts": ("alerts", "alertes : configurer | tester"),
          "autorisation": ("autorisation", "moteur d'autorisation : [matrice] | verifier <identité> <action>"),
          "apprentissage": ("apprentissage", "apprentissage continu et gouvernance des modèles : registre, dérive, "
                            "frontières, critères AC-001 à AC-070 [--out docs/APPRENTISSAGE.md]"),
+         "perception": ("perception", "perception : observations datées de chaque source, alignées dans le temps, "
+                        "recoupées (confirmées ou en conflit), inconnus dits, manifeste des dépendances "
+                        "[--out docs/PERCEPTION_ETAT.md]"),
          "jumeau": ("jumeau", "jumeau numérique : le paper rejoué par le backtest, Monte-Carlo convergé, crises, "
                     "panne injectée, sensibilité aux réglages [--out docs/JUMEAU_ETAT.md]"),
          "objectifs": ("objectifs", "mission et objectifs : objectifs mesurables, chemin critique, estimation de "
