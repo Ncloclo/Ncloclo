@@ -164,6 +164,15 @@ async function renderDash() {
   $("#d-dd-sub").textContent = `arrêt d'urgence à −${nf(0).format(S.kill_drawdown_pct)} %`;
   $("#d-cycle").textContent = S.last_cycle_age_s == null ? "—" : "il y a " + fage(S.last_cycle_age_s);
   $("#d-cycle-sub").textContent = S.last_decision_day ? `décision : bougie du ${fdate(S.last_decision_day)}` : "";
+  // Fraîcheur (étape 21) : une donnée ancienne n'est jamais montrée comme en direct.
+  const fresh = (S.freshness || {}).cycle, badge = $("#d-fresh");
+  if (badge) {
+    badge.hidden = !fresh;
+    if (fresh) {
+      badge.textContent = fresh.label;
+      badge.className = "badge fresh " + String(fresh.state).toLowerCase();
+    }
+  }
   const w = S.watch, wd = $("#d-watch");
   wd.textContent = !w ? "—" : w.sentiment > 0.2 ? "Positive" : w.sentiment < -0.2 ? "Négative" : "Neutre";
   wd.className = !w ? "" : w.sentiment > 0.2 ? "up" : w.sentiment < -0.2 ? "down" : "";

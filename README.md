@@ -535,6 +535,9 @@ gelée en réel contrôlé.
 `python trendguard_bot.py cyber`) : inventaire sans secret, adresses Internet
 du code sur une liste blanche, intégrité du code et des bibliothèques,
 réponse prévue à chaque risque ; jamais offensif.
+Étape 21 : interface ([`docs/INTERFACE.md`](docs/INTERFACE.md)) : chaque
+commande du panneau classée (aucune n'exécute un ordre), fraîcheur des
+données, « Pourquoi ? » sous chaque réponse de Rachelle, lecture à voix haute.
 Cadre de priorités et de dépendances
 ([`docs/FEUILLE_DE_ROUTE.md`](docs/FEUILLE_DE_ROUTE.md),
 `python trendguard_bot.py chantiers portes`) : chaque composant prouvé, et

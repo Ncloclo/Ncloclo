@@ -54,6 +54,21 @@ function chatScroll() {
   const log = $("#chat-log");
   log.scrollTo({ top: log.scrollHeight, behavior: reduceMotion.matches ? "auto" : "smooth" });
 }
+// Voix (étape 21) : la réponse lue à voix haute par le navigateur, sur ce PC ;
+// un second clic arrête la lecture.
+function speak(text, btn) {
+  if (!("speechSynthesis" in window)) return;
+  if (window.speechSynthesis.speaking) {
+    window.speechSynthesis.cancel();
+    btn.setAttribute("aria-pressed", "false");
+    return;
+  }
+  const u = new SpeechSynthesisUtterance(text.replace(/[*_`#›]/g, ""));
+  u.lang = "fr-FR";
+  u.onend = () => btn.setAttribute("aria-pressed", "false");
+  btn.setAttribute("aria-pressed", "true");
+  window.speechSynthesis.speak(u);
+}
 function chatMessage(role, text, extra = {}) {
   const li = el("li", `msg ${role}${extra.refused ? " refused" : ""}`);
   const bubble = el("div", "bubble");
@@ -72,6 +87,22 @@ function chatMessage(role, text, extra = {}) {
       acts.append(b);
     });
     li.append(acts);
+  }
+  if (role === "bot" && extra.why && extra.why.length) {          // « Pourquoi ? » : d'où vient la réponse
+    const why = el("details", "msg-why");
+    why.append(el("summary", "", "Pourquoi ?"));
+    const ul = el("ul");
+    extra.why.forEach((w) => ul.append(el("li", "", w)));
+    why.append(ul);
+    li.append(why);
+  }
+  if (role === "bot" && !extra.refused && "speechSynthesis" in window) {
+    const b = el("button", "chip speak", "🔊");
+    b.type = "button";
+    b.setAttribute("aria-label", "Lire la réponse à voix haute");
+    b.setAttribute("aria-pressed", "false");
+    b.addEventListener("click", () => speak(text, b));
+    li.append(b);
   }
   $("#chat-log").append(li);
   chatScroll();
@@ -143,7 +174,7 @@ async function sendChat(text) {
       userLi.classList.add("refused");
       userLi.querySelector(".bubble").replaceChildren(el("p", "", "🔒 •••••• (message masqué)"));
     }
-    chatMessage("bot", r.answer, { refused: r.refused, actions: r.actions, source: r.source });
+    chatMessage("bot", r.answer, { refused: r.refused, actions: r.actions, source: r.source, why: r.why });
     if (!r.refused) {
       CHAT.history.push({ role: "user", text }, { role: "assistant", text: r.answer });
       CHAT.history = CHAT.history.slice(-12);

@@ -651,6 +651,26 @@ box), comptes d'utilisateurs et double authentification (Binance et GitHub
 l'exigent pour vous), riposte (interdite), signature d'artefacts (du code
 fusionné par vous).
 
+## Étape 21 du prompt : interface humain-IA
+
+Le vingt et unième document demande un centre de commande multimodal, en 3D,
+avec voix, provenance et fraîcheur de chaque donnée, sans que l'interface
+devienne jamais une autorité de sécurité. Appliqué au panneau (2D) :
+`panel/interface.py`. Détail : [`INTERFACE.md`](INTERFACE.md).
+
+| Exigence de l'étape 21 | Ce qui a été fait |
+| --- | --- |
+| Classement des commandes, aucun contournement (§2, §20-21) | chaque commande du serveur classée (lire, analyser, simuler, recommander, modifier) ; aucune n'exécute un ordre ; une commande inconnue est refusée ; aucun droit critique au panneau |
+| Fraîcheur des données (§50-51) | en direct, à jour, ancienne, inconnue, bot arrêté : badge sur le tableau de bord, fraîcheur de la décision et des données |
+| Provenance, explication (§23-24) | « Pourquoi ? » sous chaque réponse de Rachelle : qui a répondu, fraîcheur de l'état lu, module source |
+| Voix (§16, §41-42) | lecture à voix haute des réponses par le navigateur, arrêt d'un clic |
+| État global, attribution (§57, §59) | dix domaines mesurés ; chaque action attribuée (vous, système, automatisme, IA) |
+| Critères, note, verdict (§65-66) | AC-001 à AC-070 ; READY ou REJECTED |
+
+**Ce qui ne s'applique pas** : centre de commande et jumeau numérique en 3D
+(non construits, le panneau 2D montre tout), mot de réveil, reconnaissance du
+locuteur, dictée et vision, profils et plusieurs écrans (un seul utilisateur).
+
 ## Ce qui reste (votre accord d'abord)
 
 1. **Débat des IA** (§43) : rôles haussier, baissier, critique et synthèse

@@ -50,6 +50,7 @@ from trendguard import (
 from trendguard import market_watch as mw
 from trendguard.texte import fr
 
+from . import interface
 from .assistant import AIHelper, Assistant
 from .control import BotControl
 from .data import BotData, _ts
@@ -226,6 +227,7 @@ class PanelApp(SecurityCenter):
             "safe_mode": st.get("mode_sur") or {}, "porte": {k: v for k, v in (st.get("porte") or {}).items()
                                                             if k != "keys"},
             "last_decision_day": st.get("last_decision_day"),
+            "freshness": interface.freshness_view(st, now, self.g.decision_delay_sec),
             "last_buy": self._last_buy(st),
             "selection": {k: v for k, v in self.selection_view(st).items()
                           if k in ("mode", "active", "universe")},
@@ -358,6 +360,16 @@ class PanelApp(SecurityCenter):
                 "deploiement": {"text": deploiement.describe(self.g), "stage": deploiement.current(self.g),
                                 "quality": deploiement.describe_quality(self.data.state().get("qualite_execution"))}}
 
+    def interface_view(self) -> Dict[str, Any]:
+        """Commandes du panneau et leur classe, état global (dix domaines),
+        fraîcheur des données (étape 21)."""
+        st = self.data.state()
+        now = datetime.now(timezone.utc)
+        return {"commands": [{"method": m, "path": p, "class": c, "what": w}
+                             for (m, p), (c, w) in sorted(interface.COMMANDS.items())],
+                "status": interface.global_status(self.g, st, now),
+                "freshness": interface.freshness_view(st, now, self.g.decision_delay_sec)}
+
     def cyber_view(self) -> Dict[str, Any]:
         """Cybersécurité (cyber.py), lecture légère : une phrase."""
         try:
@@ -435,8 +447,10 @@ class PanelApp(SecurityCenter):
             if len(self._chat_times) >= CHAT_PER_MINUTE:
                 return 429, {"error": "Trop de questions d'un coup : réessayez dans une minute."}
             self._chat_times.append(now)
-        return 200, self.assistant.reply(body.get("message"), body.get("history"),
-                                         self.assistant_context)
+        r = self.assistant.reply(body.get("message"), body.get("history"), self.assistant_context)
+        if isinstance(r, dict) and r.get("answer") and not r.get("refused"):
+            r["why"] = interface.why(r, self.data.state())     # « Pourquoi ? » : d'où vient la réponse
+        return 200, r
 
     def candles(self, asset: str, interval: str, limit: int) -> Dict[str, Any]:
         """Bougies d'une crypto de l'univers pour les graphiques, avec la position
@@ -570,6 +584,7 @@ class PanelApp(SecurityCenter):
             "/api/security": self.security_view,
             "/api/report": self.report_view,
             "/api/log": lambda: {"lines": self.data.log_tail(int(q("lines", "300")))},
+            "/api/interface": self.interface_view,
         }
         post = {
             "/api/bot/start": lambda: reply(self.control.start()),
@@ -586,6 +601,8 @@ class PanelApp(SecurityCenter):
             route = (get if method == "GET" else post if method == "POST" else {}).get(path)
             if route is None:
                 return 404, {"error": "adresse inconnue"}
+            if interface.command_class(method, path) == "EXECUTE":
+                return 403, {"error": "le panneau n'exécute jamais un ordre (porte d'exécution seulement)"}
             if method == "POST":                         # session déjà vérifiée par PanelHandler
                 d = autorisation.decide("panneau", POST_ACTIONS.get(path, "INCONNUE"), path, {"session_ok": True})
                 if not d.allowed:

@@ -415,11 +415,11 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Propriétaire | vous |
 | Dépend de | Sécurité de base (sécurité), Observabilité et audit (données), Socle multi-modèles d'IA (souple) |
 | Bloque | Centre de commande 3D |
-| Code | `panel/server.py`, `panel/assistant.py`, `panel/static/app.js` |
-| Tests | `tests/test_panel.py`, `tests/test_assistant.py` |
-| Contrats | `PanelCommand.v1` |
-| Documentation | [`README.md`](README.md) |
-| Sécurité | mot de passe, ce PC seulement, Rachelle refuse les secrets |
+| Code | `panel/server.py`, `panel/assistant.py`, `panel/static/app.js`, `panel/interface.py` |
+| Tests | `tests/test_panel.py`, `tests/test_assistant.py`, `tests/test_interface.py` |
+| Contrats | `PanelCommand.v1`, `InterfaceReadinessReport.v1` |
+| Documentation | [`README.md`](README.md), [`INTERFACE.md`](INTERFACE.md) |
+| Sécurité | mot de passe, ce PC seulement, Rachelle refuse les secrets ; chaque commande classée, aucune n'exécute un ordre |
 | Observabilité | toutes les pages en lecture |
 | Acceptation | tout se voit et se règle sans ligne de commande |
 | Santé | 100 % (seuil 75 %) |

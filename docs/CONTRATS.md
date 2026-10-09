@@ -59,6 +59,7 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `Envelope.v1` | tout module (contrats.py) | tout module | 1.0.0 | INTERNAL | support |
 | `ErrorEnvelope.v2` | tout module | journal d'audit, rapport | 2.0.0 | INTERNAL | support |
 | `HealthReport.v1` | rapport (report.py) | vous (e-mail, panneau) | 1.0.0 | INTERNAL | support |
+| `InterfaceReadinessReport.v1` | panneau (panel/interface.py) | vous, l'examen | 1.0.0 | INTERNAL | support |
 | `PanelCommand.v1` | vous (panneau) | contrôle du bot | 1.0.0 | INTERNAL | support |
 
 ## Conventions communes
@@ -1064,6 +1065,24 @@ Rapport quotidien et centre de sécurité.
 | Unicité | un rapport par jour |
 | Trace (audit) | rapports gardés 14 jours |
 | Fichiers | `trendguard/report.py` |
+
+## InterfaceReadinessReport.v1
+
+Interface humain-IA du panneau : commandes classées (lire, analyser, simuler, recommander, modifier ; aucune n'exécute), fraîcheur des données, « Pourquoi ? », examen AC-001 à AC-070.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | panneau (panel/interface.py) |
+| Consommateur | vous, l'examen |
+| Entrée | code du panneau (routes, pages), état du bot, tests du dépôt |
+| Sortie | état de chaque critère, note, verdict |
+| Erreurs | P0 non résolu : REJECTED ; interface déclarée autorité de sécurité : refusée |
+| Droits | lecture seule : le panneau transmet, il ne décide pas |
+| Délai | à la demande |
+| Nouveaux essais | aucun |
+| Unicité | un examen par appel |
+| Trace (audit) | dans docs/INTERFACE.md |
+| Fichiers | `panel/interface.py` |
 
 ## PanelCommand.v1
 

@@ -528,6 +528,8 @@ MODEL_RISKS = ("LOW", "MEDIUM", "HIGH", "CRITICAL")
 LEARNING_STATUSES = ("READY_FOR_CONTROLLED_CONTINUOUS_LEARNING", "NOT_READY")
 # Étape 20 (cybersécurité) : verdict.
 SECURITY_STATUSES = ("READY_FOR_PRODUCTION_SECURITY", "NOT_READY")
+# Étape 21 (interface) : verdict.
+INTERFACE_STATUSES = ("READY", "REJECTED")
 # Étape 11 (moteur de risque) : états, décisions pour les achats, phases, niveaux d'alerte.
 RISK_STATES = ("RISK_NORMAL", "RISK_WARNING", "RISK_HIGH", "RISK_CRITICAL", "RISK_BLOCKED")
 RISK_APPROVALS = ("RISK_APPROVED", "RISK_APPROVED_WITH_LIMIT", "RISK_RESTRICTED", "RISK_BLOCKED")
@@ -1539,6 +1541,56 @@ class SecurityPostureReport:
         return _plain(self)
 
 
+@dataclass(frozen=True)
+class InterfaceReadinessReport:
+    """Interface humain-IA du panneau (InterfaceReadinessReport.v1, étape 21
+    §65-66) : commandes classées, examen AC-001 à AC-070. READY seulement sans
+    P0 non résolu et avec une note d'au moins 95. L'interface n'est jamais une
+    autorité de sécurité."""
+    VERSION: ClassVar[int] = 1
+    report_id: str
+    created_at: str
+    mode: str
+    status: str
+    readiness_score: float
+    band: str
+    p0_failures: Tuple[str, ...]
+    passed: int
+    failed: int
+    unknown: int
+    not_applicable: int
+    commands: int
+    engine_version: str
+    ui_authority: bool = False
+    version: int = 1
+
+    def __post_init__(self) -> None:
+        _version(self, self.VERSION)
+        _enum("status", self.status, INTERFACE_STATUSES)
+        _enum("band", self.band, GATE_BANDS)
+        _enum("mode", self.mode, ("paper", "live"))
+        check_uuid("report_id", self.report_id)
+        check_timestamp("created_at", self.created_at)
+        if self.commands <= 0:
+            raise ContractError("OUT_OF_RANGE", "un panneau a au moins une commande")
+        score = _number("readiness_score", self.readiness_score, positive=False)
+        if not 0 <= score <= 100:
+            raise ContractError("OUT_OF_RANGE", "readiness_score : de 0 à 100")
+        if self.passed + self.failed + self.unknown + self.not_applicable != 70:
+            raise ContractError("INCONSISTENT", "les 70 critères AC-001 à AC-070 sont tous comptés")
+        floor = {"READY": 95, "CANDIDATE": 90, "VALIDATION": 80, "DEVELOPMENT": 70, "NOT_READY": 0}
+        upper = {"READY": 100.01, "CANDIDATE": 95, "VALIDATION": 90, "DEVELOPMENT": 80, "NOT_READY": 70}
+        if not floor[self.band] <= score < upper[self.band]:
+            raise ContractError("INCONSISTENT", "la bande suit la note")
+        if self.status == "READY" and (self.p0_failures or score < 95):
+            raise ContractError("INCONSISTENT", "prête : aucun P0 non résolu et une note d'au moins 95")
+        if self.ui_authority:
+            raise ContractError("POLICY", "l'interface n'est jamais une autorité de sécurité", category="POLICY")
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
 def ohlcv_violations(rows: Any) -> int:
     """Bougies incohérentes (§41) : plus haut sous l'ouverture, la clôture
     ou le plus bas ; plus bas au-dessus ; volume négatif. Une bougie
@@ -1614,7 +1666,7 @@ SCHEMAS.update({c.__name__: c for c in (OrderIntent, RiskDecision, ExecutionAuth
                                         PaperAcceptanceReport, PolicyDecision, AuthorizationDecision,
                                         FinalValidationResult, GateReadinessReport, LiveDeploymentReport,
                                         ControlPlaneReport, ModelCard, LearningGovernanceReport,
-                                        SecurityPostureReport)})
+                                        SecurityPostureReport, InterfaceReadinessReport)})
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -2007,6 +2059,13 @@ REGISTRY: Tuple[Contract, ...] = (
              "événement P0 : NOT_READY ; « offensif » : refusé", "lecture seule : jamais offensif, jamais un secret "
              "lu", "à la demande ; chaque nuit dans le rapport", "aucun", "un état par appel",
              "dans docs/CYBER.md (sans adresse ni nom de réseau)", 2, ("trendguard/cyber.py",)),
+    Contract("InterfaceReadinessReport.v1", "interface humain-IA du panneau : commandes classées (lire, analyser, "
+             "simuler, recommander, modifier ; aucune n'exécute), fraîcheur des données, « Pourquoi ? », examen "
+             "AC-001 à AC-070", "panneau (panel/interface.py)", "vous, l'examen", "code du panneau (routes, pages), "
+             "état du bot, tests du dépôt", "état de chaque critère, note, verdict", "P0 non résolu : REJECTED ; "
+             "interface déclarée autorité de sécurité : refusée", "lecture seule : le panneau transmet, il ne décide "
+             "pas", "à la demande", "aucun", "un examen par appel", "dans docs/INTERFACE.md", 4,
+             ("panel/interface.py",)),
     Contract("HealthReport.v1", "rapport quotidien et centre de sécurité", "rapport (report.py)",
              "vous (e-mail, panneau)", "état du bot, PC, journal, GitHub", "constats conformes, à corriger, informations",
              "source illisible : information", "lecture seule", "00:30 UTC", "rattrapé au retour du PC",
