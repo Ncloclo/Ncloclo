@@ -723,6 +723,19 @@ def doc_points(name: str, heading: str = "## Conclusions", limit: int = 6) -> Li
     return points[:limit]
 
 
+def a_memoire(ctx: Dict[str, Any]) -> str:
+    """La mémoire du bot : ce qu'il sait, relié et daté."""
+    view = ctx.get("memoire") or {}
+    return "\n".join([
+        "**Mémoire et graphe de connaissances** : ce que le bot sait — cryptos, positions, trades, ordres, "
+        "décisions, retraits annoncés, modèles, services, contrats, procédures — relié et daté, reconstruit à la "
+        "demande depuis ses sources de vérité (état du bot, journal financier, registres), jamais stocké à part.",
+        "Chaque fait a sa source et ses dates ; une déduction est marquée comme telle ; ce qu'une source "
+        "extérieure dit reste « rapporté », jamais un fait.",
+        "Aujourd'hui : " + (view.get("text") or "non mesurée") + ".",
+        "Tout sur une crypto : python trendguard_bot.py memoire ETH. Je lis et j'explique, je n'agis pas."])
+
+
 def a_recherche(ctx: Dict[str, Any]) -> str:
     """Ce que le bot lit et ce qu'il en croit."""
     return "\n".join([
@@ -1070,6 +1083,7 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("keys", ("cle api", "cles api", "api", "binance", "2fa", "double authentification",
               "droit de retrait", "securiser ma cle", "securiser la cle"),
      a_keys, []),
+    ("memoire", ("memoire du bot", "graphe de connaissances", "que sait", "memoire", "souvenirs"), a_memoire, []),
     ("recherche", ("recherche et connaissances", "quelles sources", "verification des faits", "contradictions",
                    "confiance des sources", "le bot croit"), a_recherche, []),
     ("cyber", ("cybersecurite", "cyber", "liste blanche", "integrite du code", "sorties internet", "autodefense",

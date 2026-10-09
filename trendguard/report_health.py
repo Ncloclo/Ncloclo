@@ -31,6 +31,7 @@ from . import (
     evolution,
     learning,
     libre,
+    memoire,
     modeles,
     moteur_portefeuille,
     moteur_risque,
@@ -668,6 +669,11 @@ def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
         out.append(chk("Recherche et connaissances", None, recherche.describe(rc)))
     except Exception as e:               # jamais bloquant
         out.append(chk("Recherche et connaissances", None, f"état non mesuré ({type(e).__name__})"))
+    try:
+        mm = memoire.evaluate(gcfg, st)
+        out.append(chk("Mémoire", False if mm["health"]["p0"] else None, memoire.describe(mm)))
+    except Exception as e:               # jamais bloquant
+        out.append(chk("Mémoire", None, f"état non mesuré ({type(e).__name__})"))
     out.append(chk("Paliers du réel", None, deploiement.describe(gcfg) + " ; exécutions : "
                    + deploiement.describe_quality(st.get("qualite_execution"))))
     au = st.get("autorisation") or {}

@@ -54,6 +54,7 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `Feature.v1` | cœur financier (finance.py) | analyses, journal financier | 1.0.0 | PUBLIC | données |
 | `Instrument.v1` | cœur financier (finance.py) | analyses, panneau | 1.0.0 | PUBLIC | données |
 | `MarketData.v1` | Binance (klines publiques) | décision du jour, régimes, qualité | 1.0.0 | INTERNAL | données |
+| `MemoryHealthReport.v1` | mémoire (memoire.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | données |
 | `OHLCV.v1` | Binance (klines publiques) | décision du jour, qualité des données | 1.0.0 | PUBLIC | données |
 | `QuantResult.v1` | moteur quantitatif (moteur_quant.py) | vous, rapport docs/QUANT.md, moteurs de stratégie et de risque (lecture) | 1.0.0 | PUBLIC | données |
 | `ResearchReport.v1` | recherche (recherche.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | données |
@@ -976,6 +977,24 @@ Bougies journalières clôturées de Binance.
 | Unicité | lecture seule |
 | Trace (audit) | note de qualité sur 100 |
 | Fichiers | `trendguard/bot.py`, `trendguard/qualite.py` |
+
+## MemoryHealthReport.v1
+
+Mémoire et graphe de connaissances reconstruits depuis les sources de vérité : entités, relations, déductions marquées, note de santé.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | mémoire (memoire.py) |
+| Consommateur | rapport, Rachelle, vous |
+| Entrée | état du bot, journal financier, registres des modèles, des services, des contrats et des procédures (lecture seule) |
+| Sortie | graphe en mémoire, santé par famille, contradictions, verdict |
+| Erreurs | relation sans extrémité, fait sans source, texte extérieur pris pour un fait, dates inversées : P0 ; réécriture silencieuse : refusée |
+| Droits | lecture seule : la mémoire se reconstruit, les sources gardent leur historique |
+| Délai | à la demande ; chaque nuit dans le rapport |
+| Nouveaux essais | aucun |
+| Unicité | une reconstruction par appel |
+| Trace (audit) | santé dans le rapport |
+| Fichiers | `trendguard/memoire.py` |
 
 ## OHLCV.v1
 

@@ -693,6 +693,25 @@ le jugement de ce qu'il croit : `recherche.py`. Détail :
 et OCR, recherche vectorielle (des sources fixes et des titres publics, pour le
 seul métier du bot) ; le graphe de connaissances est l'étape 24.
 
+## Étape 24 du prompt : mémoire et graphe de connaissances
+
+Le vingt-quatrième document demande une mémoire à long terme gouvernée :
+graphe de connaissances, provenance et dates de chaque fait, déductions
+marquées, aucune réécriture silencieuse. Appliqué à TrendGuard : `memoire.py`,
+un graphe reconstruit à la demande depuis les sources de vérité, jamais stocké
+à part. Détail : [`MEMOIRE.md`](MEMOIRE.md) (`python trendguard_bot.py memoire`).
+
+| Exigence de l'étape 24 | Ce qui a été fait |
+| --- | --- |
+| Mémoires épisodique, sémantique, procédurale (§5-11) | positions, trades, ordres, décisions (état du bot, journal financier) ; cryptos, modèles, services, contrats ; procédures |
+| Provenance, dates, nature (§3) | chaque fait avec sa source, valide du… au…, observé, déduit ou rapporté ; un texte extérieur n'est jamais un fait |
+| Questions (§28-31) | tout sur une entité, ce qui était vrai à une date, chemin entre deux entités, contradictions |
+| Santé, verdict (§59, §100) | 9 familles mesurées ; intégrité, provenance, sécurité, dates : P0 ; READY_FOR_GOVERNED_LONG_TERM_MEMORY |
+
+**Ce qui ne s'applique pas** : base de graphe et recherche vectorielle (un
+graphe en mémoire, reconstruit en moins d'une seconde), extraction par des IA
+(aucune IA n'écrit dans la mémoire), mémoire personnelle de l'utilisateur.
+
 ## Ce qui reste (votre accord d'abord)
 
 1. **Débat des IA** (§43) : rôles haussier, baissier, critique et synthèse

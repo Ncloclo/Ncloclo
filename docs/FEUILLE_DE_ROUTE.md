@@ -140,10 +140,10 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Propriétaire | bot |
 | Dépend de | Contrats de données (contrat), Base de données et journal financier (données) |
 | Bloque | Socle multi-agents et comité, Socle multi-modèles d'IA, Auto-évaluation (diagnostic expert, leçons des trades) |
-| Code | `trendguard/cognitif.py`, `trendguard/expert.py` |
-| Tests | `tests/test_cognitif.py` |
-| Contrats | `ExpertDiagnosis.v1` |
-| Documentation | [`COGNITIF.md`](COGNITIF.md) |
+| Code | `trendguard/cognitif.py`, `trendguard/expert.py`, `trendguard/memoire.py` |
+| Tests | `tests/test_cognitif.py`, `tests/test_memoire.py` |
+| Contrats | `ExpertDiagnosis.v1`, `MemoryHealthReport.v1` |
+| Documentation | [`COGNITIF.md`](COGNITIF.md), [`MEMOIRE.md`](MEMOIRE.md) |
 | Sécurité | outils en lecture seule ; une proposition n'est jamais une autorisation |
 | Observabilité | diagnostic expert gardé et résumé chaque nuit |
 | Acceptation | le bot fait seul son diagnostic expert, propose sans agir |

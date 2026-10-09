@@ -531,6 +531,7 @@ SECURITY_STATUSES = ("READY_FOR_PRODUCTION_SECURITY", "NOT_READY")
 # Étape 21 (interface) : verdict.
 INTERFACE_STATUSES = ("READY", "REJECTED")
 # Étape 22 (recherche) : verdicts des affirmations.
+MEMORY_STATUSES = ("READY_FOR_GOVERNED_LONG_TERM_MEMORY", "NOT_READY")
 CLAIM_VERDICTS = ("CONFIRMED", "PROBABLY_TRUE", "UNCERTAIN", "CONTESTED", "PROBABLY_FALSE", "FALSE", "OUTDATED",
                   "INSUFFICIENT_EVIDENCE")
 # Étape 11 (moteur de risque) : états, décisions pour les achats, phases, niveaux d'alerte.
@@ -1650,6 +1651,46 @@ class ResearchReport:
         return _plain(self)
 
 
+@dataclass(frozen=True)
+class MemoryHealthReport:
+    """Santé de la mémoire (MemoryHealthReport.v1, étape 24 §59, §100) : taille
+    du graphe reconstruit, déductions, note de santé. Prête seulement avec
+    une note d'au moins 95 et aucun défaut P0 (intégrité, provenance,
+    sécurité, dates) ; jamais une réécriture silencieuse."""
+    VERSION: ClassVar[int] = 1
+    report_id: str
+    created_at: str
+    mode: str
+    status: str
+    health_score: float
+    p0_failures: Tuple[str, ...]
+    entities: int
+    relations: int
+    inferred: int
+    engine_version: str
+    silent_rewrite: bool = False
+    version: int = 1
+
+    def __post_init__(self) -> None:
+        _version(self, self.VERSION)
+        _enum("status", self.status, MEMORY_STATUSES)
+        _enum("mode", self.mode, ("paper", "live"))
+        check_uuid("report_id", self.report_id)
+        check_timestamp("created_at", self.created_at)
+        score = _number("health_score", self.health_score, positive=False)
+        if not 0 <= score <= 100:
+            raise ContractError("OUT_OF_RANGE", "health_score : de 0 à 100")
+        if self.entities <= 0 or not 0 <= self.inferred <= self.relations:
+            raise ContractError("OUT_OF_RANGE", "entités, relations, déductions : des nombres cohérents")
+        if self.status != "NOT_READY" and (self.p0_failures or score < 95):
+            raise ContractError("INCONSISTENT", "prête : aucun P0 et une note d'au moins 95")
+        if self.silent_rewrite:
+            raise ContractError("POLICY", "aucune réécriture silencieuse d'une connaissance", category="POLICY")
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
 def ohlcv_violations(rows: Any) -> int:
     """Bougies incohérentes (§41) : plus haut sous l'ouverture, la clôture
     ou le plus bas ; plus bas au-dessus ; volume négatif. Une bougie
@@ -1725,7 +1766,8 @@ SCHEMAS.update({c.__name__: c for c in (OrderIntent, RiskDecision, ExecutionAuth
                                         PaperAcceptanceReport, PolicyDecision, AuthorizationDecision,
                                         FinalValidationResult, GateReadinessReport, LiveDeploymentReport,
                                         ControlPlaneReport, ModelCard, LearningGovernanceReport,
-                                        SecurityPostureReport, InterfaceReadinessReport, ResearchReport)})
+                                        SecurityPostureReport, InterfaceReadinessReport, ResearchReport,
+                                        MemoryHealthReport)})
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -2133,6 +2175,14 @@ REGISTRY: Tuple[Contract, ...] = (
              "lecture seule : il juge ce que le bot croit, il ne change rien", "à la demande ; chaque nuit dans le "
              "rapport", "aucun", "un examen par appel", "dans docs/CONNAISSANCES.md", 3,
              ("trendguard/recherche.py",)),
+    Contract("MemoryHealthReport.v1", "mémoire et graphe de connaissances reconstruits depuis les sources de "
+             "vérité : entités, relations, déductions marquées, note de santé", "mémoire (memoire.py)",
+             "rapport, Rachelle, vous", "état du bot, journal financier, registres des modèles, des services, des "
+             "contrats et des procédures (lecture seule)", "graphe en mémoire, santé par famille, contradictions, "
+             "verdict", "relation sans extrémité, fait sans source, texte extérieur pris pour un fait, dates "
+             "inversées : P0 ; réécriture silencieuse : refusée", "lecture seule : la mémoire se reconstruit, "
+             "les sources gardent leur historique", "à la demande ; chaque nuit dans le rapport", "aucun",
+             "une reconstruction par appel", "santé dans le rapport", 3, ("trendguard/memoire.py",)),
     Contract("HealthReport.v1", "rapport quotidien et centre de sécurité", "rapport (report.py)",
              "vous (e-mail, panneau)", "état du bot, PC, journal, GitHub", "constats conformes, à corriger, informations",
              "source illisible : information", "lecture seule", "00:30 UTC", "rattrapé au retour du PC",

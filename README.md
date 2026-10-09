@@ -542,6 +542,10 @@ données, « Pourquoi ? » sous chaque réponse de Rachelle, lecture à voix hau
 `python trendguard_bot.py recherche`) : rang, confiance et validité de
 chaque source, verdict de chaque affirmation, contradictions ; seule
 Binance peut bloquer un achat.
+Étape 24 : mémoire ([`docs/MEMOIRE.md`](docs/MEMOIRE.md),
+`python trendguard_bot.py memoire ETH`) : un graphe de connaissances
+reconstruit depuis les sources de vérité, chaque fait avec sa source et ses
+dates.
 Cadre de priorités et de dépendances
 ([`docs/FEUILLE_DE_ROUTE.md`](docs/FEUILLE_DE_ROUTE.md),
 `python trendguard_bot.py chantiers portes`) : chaque composant prouvé, et
