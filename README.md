@@ -550,6 +550,9 @@ dates.
 `python trendguard_bot.py monde`) : ce que le bot voit, ce qui a changé, le
 raisonnement du jour, et « et si le marché perdait 20 % ? » sans probabilité
 inventée.
+Étape 26 : intelligence causale ([`docs/CAUSAL.md`](docs/CAUSAL.md),
+`python trendguard_bot.py causal`) : ce qui cause quoi dans la règle, éprouvé
+par intervention dans le simulateur, avec son niveau de preuve.
 Cadre de priorités et de dépendances
 ([`docs/FEUILLE_DE_ROUTE.md`](docs/FEUILLE_DE_ROUTE.md),
 `python trendguard_bot.py chantiers portes`) : chaque composant prouvé, et

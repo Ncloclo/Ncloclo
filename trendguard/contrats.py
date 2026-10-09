@@ -1736,6 +1736,50 @@ class WorldModelReport:
         return _plain(self)
 
 
+@dataclass(frozen=True)
+class CausalReport:
+    """Intelligence causale (CausalReport.v1, étape 26 §49, §73-74) : liens du
+    graphe causal et leur niveau de preuve (0 à 6), interventions faites.
+    Aucun lien au-delà du niveau 4 sans expérience réelle ; prêt seulement
+    sans P0 et avec une note d'au moins 95."""
+    VERSION: ClassVar[int] = 1
+    report_id: str
+    created_at: str
+    mode: str
+    status: str
+    readiness_score: float
+    p0_failures: Tuple[str, ...]
+    graph_version: str
+    links: Tuple[Tuple[str, str, int], ...]
+    interventions: int
+    engine_version: str
+    real_experiment: bool = False
+    version: int = 1
+
+    def __post_init__(self) -> None:
+        _version(self, self.VERSION)
+        _enum("status", self.status, INTERFACE_STATUSES)
+        _enum("mode", self.mode, ("paper", "live"))
+        check_uuid("report_id", self.report_id)
+        check_timestamp("created_at", self.created_at)
+        if not self.graph_version:
+            raise ContractError("MISSING_FIELD", "un graphe causal non versionné n'est pas utilisable")
+        for _c, _e, level in self.links:
+            if level not in range(7):
+                raise ContractError("OUT_OF_RANGE", "niveau de preuve : de 0 à 6")
+            if level > 4 and not self.real_experiment:
+                raise ContractError("POLICY", "une simulation n'est pas une expérience réelle : niveau 4 au plus",
+                                    category="POLICY")
+        score = _number("readiness_score", self.readiness_score, positive=False)
+        if not 0 <= score <= 100 or self.interventions < 0:
+            raise ContractError("OUT_OF_RANGE", "note de 0 à 100, interventions jamais négatives")
+        if self.status == "READY" and (self.p0_failures or score < 95):
+            raise ContractError("INCONSISTENT", "prêt : aucun P0 et une note d'au moins 95")
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
 def ohlcv_violations(rows: Any) -> int:
     """Bougies incohérentes (§41) : plus haut sous l'ouverture, la clôture
     ou le plus bas ; plus bas au-dessus ; volume négatif. Une bougie
@@ -1812,7 +1856,7 @@ SCHEMAS.update({c.__name__: c for c in (OrderIntent, RiskDecision, ExecutionAuth
                                         FinalValidationResult, GateReadinessReport, LiveDeploymentReport,
                                         ControlPlaneReport, ModelCard, LearningGovernanceReport,
                                         SecurityPostureReport, InterfaceReadinessReport, ResearchReport,
-                                        MemoryHealthReport, WorldModelReport)})
+                                        MemoryHealthReport, WorldModelReport, CausalReport)})
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -2236,6 +2280,14 @@ REGISTRY: Tuple[Contract, ...] = (
              "NOT_READY", "lecture seule : il raisonne, il ne décide rien", "à la demande ; chaque nuit dans le "
              "rapport", "aucun", "un état par appel ; 90 instantanés gardés", "dans docs/MONDE_ETAT.md", 3,
              ("trendguard/monde.py",)),
+    Contract("CausalReport.v1", "intelligence causale : graphe causal de la règle versionné, interventions do() "
+             "dans le simulateur époque par époque avec témoin négatif, paradoxe de Simpson, niveau de preuve de "
+             "chaque lien, causes racines des incidents", "intelligence causale (causal.py)", "rapport, Rachelle, "
+             "vous", "cours en cache, réglages, plan de contrôle", "liens et niveaux de preuve, effets mesurés, "
+             "causes racines, note", "lien au-delà du niveau 4 sans expérience réelle : refusé ; graphe non versionné "
+             ": refusé ; P0 : REJECTED", "lecture seule : les interventions restent dans le simulateur",
+             "à la demande ; chaque nuit dans le rapport (sans interventions)", "aucun", "un examen par appel",
+             "dans docs/CAUSES.md", 3, ("trendguard/causal.py",)),
     Contract("HealthReport.v1", "rapport quotidien et centre de sécurité", "rapport (report.py)",
              "vous (e-mail, panneau)", "état du bot, PC, journal, GitHub", "constats conformes, à corriger, informations",
              "source illisible : information", "lecture seule", "00:30 UTC", "rattrapé au retour du PC",

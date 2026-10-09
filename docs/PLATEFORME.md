@@ -732,6 +732,27 @@ hypothèse, déduction, prévision, scénario et décision. Appliqué à TrendGu
 de raisonnement par IA, prévisions probabilistes du marché (la règle suit, elle
 ne prévoit pas) ; les relations de cause à effet sont l'étape 26.
 
+## Étape 26 du prompt : intelligence causale
+
+Le vingt-sixième document demande un moteur causal : graphe, interventions,
+contrefactuels, causes racines, niveaux de preuve, sans jamais confondre
+corrélation et causalité. Appliqué à TrendGuard : `causal.py`. Détail :
+[`CAUSAL.md`](CAUSAL.md) ; dernier état : [`CAUSES.md`](CAUSES.md)
+(`python trendguard_bot.py causal`).
+
+| Exigence de l'étape 26 | Ce qui a été fait |
+| --- | --- |
+| Graphe causal (§4-7) | 9 liens de la règle, chacun avec son mécanisme ; versionné, sans cycle |
+| Interventions, contrefactuels (§13-17) | do(cause) dans le simulateur, une seule cause changée, sur chaque époque séparément ; témoin négatif à effet nul ; reproductible |
+| Paradoxe de Simpson (§12) | cherché année par année pour chaque intervention |
+| Niveaux de preuve (§49) | 3 (hypothèse) ou 4 (identifié par intervention) ; jamais 5 ou 6 sans expérience réelle (le contrat le refuse) |
+| Causes racines (§18) | chaque incident remonte au service en panne le plus en amont |
+| Qualité, verdict (§73-74) | 10 familles mesurées ; READY ou REJECTED |
+
+**Ce qui ne s'applique pas** : découverte causale automatique et méthodes
+économétriques (le graphe est écrit, on l'éprouve par intervention),
+expériences avec de l'argent réel (jamais : le paper en tient lieu).
+
 ## Ce qui reste (votre accord d'abord)
 
 1. **Débat des IA** (§43) : rôles haussier, baissier, critique et synthèse

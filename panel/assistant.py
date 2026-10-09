@@ -723,6 +723,19 @@ def doc_points(name: str, heading: str = "## Conclusions", limit: int = 6) -> Li
     return points[:limit]
 
 
+def a_causal(ctx: Dict[str, Any]) -> str:
+    """Ce qui cause quoi dans la règle, et ce qui est prouvé."""
+    return "\n".join([
+        "**Intelligence causale** : une corrélation n'est pas une cause. Le graphe causal de la règle est écrit "
+        "(la tendance de BTC permet d'acheter, la cassure donne le signal, la volatilité et le risque font la "
+        "taille, le stop suiveur fait le résultat, les frais le réduisent), et chaque lien est éprouvé par une "
+        "intervention dans le simulateur : mêmes données, une seule cause changée, sur chaque époque séparément, "
+        "avec un témoin qui ne change rien.",
+        "Une simulation n'est pas une expérience réelle : aucun lien ne dépasse le niveau 4 sur 6. Les incidents "
+        "remontent à leur cause racine.",
+        "Détail : python trendguard_bot.py causal. Je lis et j'explique, je n'agis pas."])
+
+
 def a_monde(ctx: Dict[str, Any]) -> str:
     """Le modèle du monde : ce que le bot voit, et les « et si »."""
     view = ctx.get("monde") or {}
@@ -1096,6 +1109,7 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("keys", ("cle api", "cles api", "api", "binance", "2fa", "double authentification",
               "droit de retrait", "securiser ma cle", "securiser la cle"),
      a_keys, []),
+    ("causal", ("intelligence causale", "qu est ce qui cause", "cause racine", "pourquoi le bot perd"), a_causal, []),
     ("monde", ("modele du monde", "etat du monde", "et si le marche", "scenarios", "ce qui a change",
                "et si tout baissait"), a_monde, []),
     ("memoire", ("memoire du bot", "graphe de connaissances", "que sait", "memoire", "souvenirs"), a_memoire, []),

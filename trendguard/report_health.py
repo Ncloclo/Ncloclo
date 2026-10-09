@@ -23,6 +23,7 @@ from . import (
     attribution,
     audit,
     autorisation,
+    causal,
     chantiers,
     controle,
     cyber,
@@ -680,6 +681,11 @@ def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
         out.append(chk("Modèle du monde", None, monde.describe(mo)))
     except Exception as e:               # jamais bloquant
         out.append(chk("Modèle du monde", None, f"état non mesuré ({type(e).__name__})"))
+    try:
+        ca = causal.evaluate(gcfg, st)
+        out.append(chk("Intelligence causale", None, causal.describe(ca)))
+    except Exception as e:               # jamais bloquant
+        out.append(chk("Intelligence causale", None, f"état non mesuré ({type(e).__name__})"))
     out.append(chk("Paliers du réel", None, deploiement.describe(gcfg) + " ; exécutions : "
                    + deploiement.describe_quality(st.get("qualite_execution"))))
     au = st.get("autorisation") or {}

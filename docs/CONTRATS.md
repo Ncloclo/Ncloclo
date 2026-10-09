@@ -49,6 +49,7 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `StrategyDecision.v1` | moteur de stratégie (moteur_strategie.py) | raisonnement, rapport, Rachelle | 1.0.0 | INTERNAL | cœur |
 | `StrategySpec.v1` | moteur de stratégie (moteur_strategie.py) | validation, backtest, décisions, Rachelle, commande regle | 1.0.0 | PUBLIC | cœur |
 | `BacktestManifest.v1` | moteur de backtest (moteur_backtest.py) | rapport de validation, vous | 1.0.0 | PUBLIC | données |
+| `CausalReport.v1` | intelligence causale (causal.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | données |
 | `DecisionRecord.v1` | décision du jour | journal financier, lignée des trades | 1.0.0 | CONFIDENTIAL | données |
 | `Experiment.v1` | évolution, études (registre.py) | rejeu, contrôle, rapport | 1.0.0 | INTERNAL | données |
 | `Feature.v1` | cœur financier (finance.py) | analyses, journal financier | 1.0.0 | PUBLIC | données |
@@ -888,6 +889,24 @@ Manifeste d'un backtest : tout ce qu'il faut pour le refaire à l'identique.
 | Unicité | mêmes entrées, même empreinte du résultat |
 | Trace (audit) | dans le rapport de validation |
 | Fichiers | `trendguard/moteur_backtest.py` |
+
+## CausalReport.v1
+
+Intelligence causale : graphe causal de la règle versionné, interventions do() dans le simulateur époque par époque avec témoin négatif, paradoxe de Simpson, niveau de preuve de chaque lien, causes racines des incidents.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | intelligence causale (causal.py) |
+| Consommateur | rapport, Rachelle, vous |
+| Entrée | cours en cache, réglages, plan de contrôle |
+| Sortie | liens et niveaux de preuve, effets mesurés, causes racines, note |
+| Erreurs | lien au-delà du niveau 4 sans expérience réelle : refusé ; graphe non versionné : refusé ; P0 : REJECTED |
+| Droits | lecture seule : les interventions restent dans le simulateur |
+| Délai | à la demande ; chaque nuit dans le rapport (sans interventions) |
+| Nouveaux essais | aucun |
+| Unicité | un examen par appel |
+| Trace (audit) | dans docs/CAUSES.md |
+| Fichiers | `trendguard/causal.py` |
 
 ## DecisionRecord.v1
 
