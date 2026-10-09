@@ -521,6 +521,11 @@ AC-001 à AC-050.
 (2 achats par jour, 40 % du capital par jour, capital plafonné), production
 limitée, production ; seul votre réglage `TG_PALIER_REEL` fait monter d'un
 palier.
+Étape 18 : plan de contrôle
+([`docs/PLAN_DE_CONTROLE.md`](docs/PLAN_DE_CONTROLE.md),
+`python trendguard_bot.py controle`) : santé de 18 services, incidents
+regroupés par cause avec leur procédure, objectifs de service, sauvegardes
+(RPO, RTO), superviseur borné ; il voit, il n'agit pas.
 Cadre de priorités et de dépendances
 ([`docs/FEUILLE_DE_ROUTE.md`](docs/FEUILLE_DE_ROUTE.md),
 `python trendguard_bot.py chantiers portes`) : chaque composant prouvé, et

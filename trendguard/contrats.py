@@ -518,6 +518,9 @@ GATE_BANDS = ("READY", "CANDIDATE", "VALIDATION", "DEVELOPMENT", "NOT_READY")
 # Étape 17 (exécution réelle par paliers) : paliers, verdict.
 DEPLOYMENT_STAGES = ("SHADOW", "PAPER", "SIMULATED_LIVE", "CONTROLLED_LIVE", "LIMITED_PRODUCTION", "PRODUCTION")
 LIVE_READINESS_STATUSES = ("READY_FOR_STAGED_LIVE_EXECUTION", "NOT_READY")
+# Étape 18 (plan de contrôle) : verdict, gravités des incidents.
+CONTROL_STATUSES = ("READY_FOR_PRODUCTION_CONTROLLED_OPERATIONS", "NOT_READY")
+INCIDENT_SEVERITIES = ("P0", "P1", "P2", "P3", "P4")
 # Étape 11 (moteur de risque) : états, décisions pour les achats, phases, niveaux d'alerte.
 RISK_STATES = ("RISK_NORMAL", "RISK_WARNING", "RISK_HIGH", "RISK_CRITICAL", "RISK_BLOCKED")
 RISK_APPROVALS = ("RISK_APPROVED", "RISK_APPROVED_WITH_LIMIT", "RISK_RESTRICTED", "RISK_BLOCKED")
@@ -1316,6 +1319,62 @@ class LiveDeploymentReport:
         return _plain(self)
 
 
+@dataclass(frozen=True)
+class ControlPlaneReport:
+    """Plan de contrôle de la production (ControlPlaneReport.v1, étape 18
+    §38, §45-47, §52) : services, incidents ouverts, examen AC-001 à AC-060.
+    READY_FOR_PRODUCTION_CONTROLLED_OPERATIONS seulement sans P0 raté, avec
+    une note d'au moins 95 et aucun incident P0 ouvert ; jamais une
+    exploitation autonome sans limite."""
+    VERSION: ClassVar[int] = 1
+    report_id: str
+    created_at: str
+    mode: str
+    status: str
+    readiness_score: float
+    band: str
+    p0_failures: Tuple[str, ...]
+    passed: int
+    failed: int
+    unknown: int
+    not_applicable: int
+    services: int
+    services_down: int
+    incidents: Tuple[Tuple[str, str], ...]
+    engine_version: str
+    unrestricted_autonomy: bool = False
+    version: int = 1
+
+    def __post_init__(self) -> None:
+        _version(self, self.VERSION)
+        _enum("status", self.status, CONTROL_STATUSES)
+        _enum("band", self.band, GATE_BANDS)
+        _enum("mode", self.mode, ("paper", "live"))
+        check_uuid("report_id", self.report_id)
+        check_timestamp("created_at", self.created_at)
+        for _iid, sev in self.incidents:
+            _enum("severity", sev, INCIDENT_SEVERITIES)
+        if not 0 <= self.services_down <= self.services or self.services <= 0:
+            raise ContractError("OUT_OF_RANGE", "services : des nombres cohérents")
+        score = _number("readiness_score", self.readiness_score, positive=False)
+        if not 0 <= score <= 100:
+            raise ContractError("OUT_OF_RANGE", "readiness_score : de 0 à 100")
+        if self.passed + self.failed + self.unknown + self.not_applicable != 60:
+            raise ContractError("INCONSISTENT", "les 60 critères AC-001 à AC-060 sont tous comptés")
+        floor = {"READY": 95, "CANDIDATE": 90, "VALIDATION": 80, "DEVELOPMENT": 70, "NOT_READY": 0}
+        upper = {"READY": 100.01, "CANDIDATE": 95, "VALIDATION": 90, "DEVELOPMENT": 80, "NOT_READY": 70}
+        if not floor[self.band] <= score < upper[self.band]:
+            raise ContractError("INCONSISTENT", "la bande suit la note")
+        if self.status != "NOT_READY" and (self.p0_failures or score < 95
+                                           or any(sev == "P0" for _i, sev in self.incidents)):
+            raise ContractError("INCONSISTENT", "prêt : aucun P0 raté, note ≥ 95, aucun incident P0 ouvert")
+        if self.unrestricted_autonomy:
+            raise ContractError("POLICY", "aucune exploitation autonome sans limite", category="POLICY")
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
 def ohlcv_violations(rows: Any) -> int:
     """Bougies incohérentes (§41) : plus haut sous l'ouverture, la clôture
     ou le plus bas ; plus bas au-dessus ; volume négatif. Une bougie
@@ -1389,7 +1448,8 @@ SCHEMAS.update({c.__name__: c for c in (OrderIntent, RiskDecision, ExecutionAuth
                                         Scenario, FinancialSignal, StrategyDecision, BacktestResult,
                                         RiskAssessment, QuantResult, PortfolioDecision,
                                         PaperAcceptanceReport, PolicyDecision, AuthorizationDecision,
-                                        FinalValidationResult, GateReadinessReport, LiveDeploymentReport)})
+                                        FinalValidationResult, GateReadinessReport, LiveDeploymentReport,
+                                        ControlPlaneReport)})
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -1753,6 +1813,14 @@ REGISTRY: Tuple[Contract, ...] = (
              "manque, promotion automatique : refusés", "lecture seule : jamais une promotion ni une autorisation du "
              "réel", "à la demande", "aucun", "un examen par appel", "dans docs/DEPLOIEMENT.md", 2,
              ("trendguard/deploiement.py",)),
+    Contract("ControlPlaneReport.v1", "plan de contrôle de la production : santé des services, dépendances, "
+             "objectifs de service, incidents, reprise, superviseur borné, examen AC-001 à AC-060",
+             "plan de contrôle (controle.py)", "rapport, Rachelle, vous", "état du bot, journaux, sauvegardes, "
+             "ordinateur, réglages, tests du dépôt", "état de chaque service, incidents P0 à P4 et leur procédure, "
+             "objectifs et budgets d'erreur, RPO et RTO mesurés, verdict", "mesure impossible : « non mesuré », jamais "
+             "une réussite ; prêt avec un incident P0 ouvert : refusé", "lecture seule : il voit, il n'agit pas",
+             "à la demande ; chaque nuit dans le rapport", "aucun", "un état par appel ; journal des incidents",
+             "incidents ouverts et clos dans <bot>.incidents.json", 2, ("trendguard/controle.py",)),
     Contract("HealthReport.v1", "rapport quotidien et centre de sécurité", "rapport (report.py)",
              "vous (e-mail, panneau)", "état du bot, PC, journal, GitHub", "constats conformes, à corriger, informations",
              "source illisible : information", "lecture seule", "00:30 UTC", "rattrapé au retour du PC",

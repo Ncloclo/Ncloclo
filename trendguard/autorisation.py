@@ -38,7 +38,7 @@ TTL_SECONDS = 300
 ACTIONS = ("READ", "ANALYZE", "RECOMMEND", "PROPOSE_BUY", "AUTHORIZE_BUY", "TRADE_PAPER", "TRADE_LIVE", "SELL",
            "HALT", "DEFER_BUY", "CHANGE_SETTINGS", "CHANGE_RISK", "SELECT_CRYPTOS", "ARM_LIVE", "SAFE_MODE_ON",
            "SAFE_MODE_OFF", "KILL_RESET", "SET_SECRETS", "START_STOP_BOT", "RUN_REPORT", "TEST_ALERTS",
-           "PROPOSE_CODE", "MERGE_CODE", "INSTALL_UPDATE")
+           "PROPOSE_CODE", "MERGE_CODE", "INSTALL_UPDATE", "RESTART_BOT")
 ACTION_FR = {"READ": "lire", "ANALYZE": "analyser", "RECOMMEND": "recommander", "PROPOSE_BUY": "proposer un achat",
              "AUTHORIZE_BUY": "autoriser un achat", "TRADE_PAPER": "acheter en paper", "TRADE_LIVE": "acheter en réel",
              "SELL": "vendre (réduire le risque)", "HALT": "déclencher l'arrêt d'urgence",
@@ -48,7 +48,8 @@ ACTION_FR = {"READ": "lire", "ANALYZE": "analyser", "RECOMMEND": "recommander", 
              "KILL_RESET": "reprendre après l'arrêt d'urgence", "SET_SECRETS": "saisir des clés ou mots de passe",
              "START_STOP_BOT": "démarrer ou arrêter le bot", "RUN_REPORT": "lancer ou envoyer le rapport",
              "TEST_ALERTS": "tester les alertes", "PROPOSE_CODE": "proposer du code (Pull Request)",
-             "MERGE_CODE": "fusionner du code", "INSTALL_UPDATE": "installer une mise à jour validée"}
+             "MERGE_CODE": "fusionner du code", "INSTALL_UPDATE": "installer une mise à jour validée",
+             "RESTART_BOT": "relancer le bot après un plantage"}
 CRITICAL = ("AUTHORIZE_BUY", "TRADE_LIVE", "CHANGE_RISK", "ARM_LIVE", "SAFE_MODE_OFF", "KILL_RESET", "SET_SECRETS",
             "MERGE_CODE")
 PRINCIPAL_TYPES = ("HUMAN_USER", "SYSTEM", "EXECUTION_SERVICE", "SERVICE_ACCOUNT", "AGENT", "AI_MODEL", "AUTOMATION",
@@ -67,6 +68,7 @@ PRINCIPALS: Dict[str, Dict[str, str]] = {
     "savoir": {"type": "AUTOMATION", "role": "KNOWLEDGE", "name": "le noyau de savoir"},
     "libre": {"type": "AUTOMATION", "role": "FREE_BOT", "name": "le bot libre (son propre argent fictif)"},
     "maintenance": {"type": "AUTOMATION", "role": "MAINTENANCE", "name": "la maintenance autonome"},
+    "superviseur": {"type": "AUTOMATION", "role": "SUPERVISOR", "name": "le superviseur (relance du bot)"},
     "nuage": {"type": "EXTERNAL", "role": "CLOUD_ROUTINE", "name": "les routines Claude dans le nuage"},
 }
 # Rôle → {action : conditions qui doivent toutes valoir vrai dans le contexte}.
@@ -90,6 +92,8 @@ ROLES: Dict[str, Dict[str, Tuple[str, ...]]] = {
     "KNOWLEDGE": {"READ": (), "ANALYZE": (), "DEFER_BUY": ("binance_announcement",)},
     "FREE_BOT": {"READ": (), "ANALYZE": (), "TRADE_PAPER": ("own_portfolio",)},
     "MAINTENANCE": {"READ": (), "INSTALL_UPDATE": ("merged_by_owner", "ci_green", "fast_forward", "not_live")},
+    # Étape 18 : le superviseur voit, recommande, relance le bot et peut poser le mode sûr (réduire) ; rien d'autre.
+    "SUPERVISOR": {"READ": (), "ANALYZE": (), "RECOMMEND": (), "RESTART_BOT": (), "SAFE_MODE_ON": ()},
     "CLOUD_ROUTINE": {"READ": (), "ANALYZE": (), "PROPOSE_CODE": ()},
 }
 CONDITIONS_FR = {"two_settings": "deux réglages explicites (mode réel et confirmation écrite)",

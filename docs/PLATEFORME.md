@@ -577,6 +577,31 @@ deploiement`).
 au marché, moins de 0,03 % du volume), API et flux d'événements dédiés (journal
 financier, audit et contexte de v29), plusieurs comptes.
 
+## Étape 18 du prompt : plan de contrôle de la production
+
+Le dix-huitième document demande un plan de contrôle d'exploitation : registre
+des services, santé, dépendances, objectifs de service, incidents, procédures,
+changements, reprise après sinistre, superviseur borné. Appliqué à TrendGuard,
+en lecture seule : `controle.py`. Détail :
+[`PLAN_DE_CONTROLE.md`](PLAN_DE_CONTROLE.md) ; dernier état :
+[`CONTROLE.md`](CONTROLE.md) (`python trendguard_bot.py controle`).
+
+| Exigence de l'étape 18 | Ce qui a été fait |
+| --- | --- |
+| Services, santé, dépendances (§5-7) | 18 services en 4 paliers ; vivant, prêt, correct pour le métier ; cascade et points uniques de défaillance (l'ordinateur d'abord) |
+| Objectifs de service, budget d'erreur (§8-9) | disponibilité sur 7 jours, décision du jour, données, sauvegarde, rapport ; gel des changements recommandé si le budget est épuisé |
+| Incidents, procédures (§11-14) | un incident par cause, P0 à P4, ouvert puis clos ; 12 procédures versionnées |
+| Reprise après sinistre (§25-26) | RPO (âge de la dernière sauvegarde) et RTO (restauration d'essai chronométrée) mesurés |
+| Superviseur borné, autonomie (§15-17, §44) | identité « superviseur » au moteur d'autorisation : relancer le bot, poser le mode sûr ; tout le reste refusé ; aucun automatisme sans limite |
+| Critères, note, verdict (§45-47, §52) | AC-001 à AC-060 ; READY_FOR_PRODUCTION_CONTROLLED_OPERATIONS, jamais une exploitation autonome sans limite |
+
+**Ce qui ne s'applique pas** : mise à l'échelle, plusieurs régions, bascule de
+site (un seul ordinateur), accès d'urgence (un seul propriétaire), API et
+événements dédiés (la commande, le rapport et Rachelle en tiennent lieu).
+Numérotation : le prompt appelle cette étape 18 ; les documents RACI l'appellent
+19 (contrôle), puis 20 apprentissage, 21 cybersécurité, 22 interface, 23
+recherche. Les titres des prompts sont gardés.
+
 ## Ce qui reste (votre accord d'abord)
 
 1. **Débat des IA** (§43) : rôles haussier, baissier, critique et synthèse

@@ -450,11 +450,11 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Propriétaire | vous et le bot |
 | Dépend de | Sécurité de base (sécurité), Observabilité et audit (à l'exécution) |
 | Bloque | rien |
-| Code | `trendguard/autonomy.py`, `trendguard/maintenance.py`, `trendguard/report_security.py` |
-| Tests | `tests/test_autonomy.py`, `tests/test_maintenance.py` |
-| Contrats | `HealthReport.v1` |
-| Documentation | [`RAPPORT.md`](RAPPORT.md) |
-| Sécurité | relance automatique, sauvegarde relue chaque nuit |
+| Code | `trendguard/autonomy.py`, `trendguard/maintenance.py`, `trendguard/report_security.py`, `trendguard/controle.py` |
+| Tests | `tests/test_autonomy.py`, `tests/test_maintenance.py`, `tests/test_controle.py` |
+| Contrats | `HealthReport.v1`, `ControlPlaneReport.v1` |
+| Documentation | [`RAPPORT.md`](RAPPORT.md), [`PLAN_DE_CONTROLE.md`](PLAN_DE_CONTROLE.md) |
+| Sécurité | relance automatique, sauvegarde relue chaque nuit, superviseur borné, plan de contrôle |
 | Observabilité | rapport quotidien |
 | Acceptation | rapport quotidien sans point de sécurité à corriger |
 | Santé | 100 % (seuil 95 %) |

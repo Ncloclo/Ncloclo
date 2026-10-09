@@ -698,6 +698,8 @@ TOOLS = {"alerts": ("alerts", "alertes : configurer | tester"),
          "regle": ("moteur_strategie", "la règle en fiche déclarative : [fiche] | valider | etats"),
          "risque": ("moteur_risque", "moteur de risque : [etat] | calibrage"),
          "autorisation": ("autorisation", "moteur d'autorisation : [matrice] | verifier <identité> <action>"),
+         "controle": ("controle", "plan de contrôle : santé des services, incidents et procédures, objectifs, "
+                      "reprise, critères AC-001 à AC-060 [--out docs/CONTROLE.md]"),
          "deploiement": ("deploiement", "exécution réelle par paliers : palier, portes, critères AC-001 à "
                          "AC-060 [--out docs/DEPLOIEMENT.md]"),
          "porte": ("porte_examen", "examen de la porte d'exécution : critères AC-001 à AC-050, chaos "

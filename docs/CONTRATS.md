@@ -22,6 +22,7 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `BacktestResult.v1` | moteur de backtest (moteur_backtest.py) | moteur de risque, vous | 1.0.0 | INTERNAL | cœur |
 | `CommitteeView.v1` | comité (comite.py) | journal financier, Rachelle, panneau | 1.0.0 | INTERNAL | cœur |
 | `Confidence.v1` | comité d'agents | Rachelle, panneau, journal | 1.0.0 | INTERNAL | cœur |
+| `ControlPlaneReport.v1` | plan de contrôle (controle.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | cœur |
 | `EntryPlan.v1` | stratégie | exécution | 1.0.0 | INTERNAL | cœur |
 | `EvolutionChange.v1` | évolution (evolution.py) | bot, à la décision suivante | 1.0.0 | INTERNAL | cœur |
 | `ExpertDiagnosis.v1` | diagnostic expert (expert.py) | rapport quotidien, Rachelle, panneau | 1.0.0 | INTERNAL | cœur |
@@ -394,6 +395,24 @@ Confiance et incertitude d'un avis (score de 0 à 1, méthode, calibrée ou non,
 | Unicité | un avis, une confiance |
 | Trace (audit) | avec l'avis |
 | Fichiers | `trendguard/contrats.py`, `trendguard/comite.py` |
+
+## ControlPlaneReport.v1
+
+Plan de contrôle de la production : santé des services, dépendances, objectifs de service, incidents, reprise, superviseur borné, examen AC-001 à AC-060.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | plan de contrôle (controle.py) |
+| Consommateur | rapport, Rachelle, vous |
+| Entrée | état du bot, journaux, sauvegardes, ordinateur, réglages, tests du dépôt |
+| Sortie | état de chaque service, incidents P0 à P4 et leur procédure, objectifs et budgets d'erreur, RPO et RTO mesurés, verdict |
+| Erreurs | mesure impossible : « non mesuré », jamais une réussite ; prêt avec un incident P0 ouvert : refusé |
+| Droits | lecture seule : il voit, il n'agit pas |
+| Délai | à la demande ; chaque nuit dans le rapport |
+| Nouveaux essais | aucun |
+| Unicité | un état par appel ; journal des incidents |
+| Trace (audit) | incidents ouverts et clos dans <bot>.incidents.json |
+| Fichiers | `trendguard/controle.py` |
 
 ## EntryPlan.v1
 

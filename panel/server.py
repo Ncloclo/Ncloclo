@@ -37,6 +37,7 @@ from trendguard import (
     autonomy,
     autorisation,
     chantiers,
+    controle,
     deploiement,
     evolution,
     expert,
@@ -351,8 +352,18 @@ class PanelApp(SecurityCenter):
                 "politique": self.data.state().get("politique") or {},
                 "autorisation": self.data.state().get("autorisation") or {},
                 "porte": {k: v for k, v in (self.data.state().get("porte") or {}).items() if k != "keys"},
+                "controle": self.controle_view(),
                 "deploiement": {"text": deploiement.describe(self.g), "stage": deploiement.current(self.g),
                                 "quality": deploiement.describe_quality(self.data.state().get("qualite_execution"))}}
+
+    def controle_view(self) -> Dict[str, Any]:
+        """Plan de contrôle (controle.py) : une phrase et les incidents ; une
+        mesure impossible ne bloque jamais l'assistante."""
+        try:
+            r = controle.evaluate(self.g, self.data.state(), light=True)
+        except Exception as e:
+            return {"text": f"état non mesuré ({type(e).__name__})", "incidents": []}
+        return {"text": controle.describe(r), "incidents": r["incidents"]}
 
     def anticipation_view(self) -> Dict[str, Any]:
         """Ce que le bot fera probablement à la prochaine clôture, avec les

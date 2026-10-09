@@ -723,6 +723,20 @@ def doc_points(name: str, heading: str = "## Conclusions", limit: int = 6) -> Li
     return points[:limit]
 
 
+def a_controle(ctx: Dict[str, Any]) -> str:
+    """Le plan de contrôle : la santé de tout TrendGuard et les incidents."""
+    view = ctx.get("controle") or {}
+    lines = ["**Plan de contrôle** : la santé de chaque service (le bot, Binance, les données, la porte "
+             "d'exécution, le moteur de risque, les journaux, les sauvegardes, les alertes, le panneau…), les "
+             "incidents du moment regroupés par cause, chacun avec sa procédure, les objectifs de service et les "
+             "sauvegardes (âge, restauration d'essai).",
+             "Aujourd'hui : " + (view.get("text") or "état non mesuré") + "."]
+    lines += [f"- {i['severity']} : {i['what']} ({i['detail']})" for i in (view.get("incidents") or [])[:4]]
+    lines.append("Il voit, il n'agit pas : le superviseur relance le bot après un plantage et peut poser le mode "
+                 "sûr, rien d'autre. Détail : python trendguard_bot.py controle. Je lis et j'explique, je n'agis pas.")
+    return "\n".join(lines)
+
+
 def a_deploiement(ctx: Dict[str, Any]) -> str:
     """Les paliers du réel : où en est le bot, ce qui fait monter d'un palier."""
     view = ctx.get("deploiement") or {}
@@ -1056,6 +1070,8 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("validation", ("validation du backtest", "backtest valide", "moteur de backtest", "sur ajustement",
                     "surapprentissage", "overfitting", "sharpe degonfle", "probabilite de sur ajustement"),
      a_validation, []),
+    ("controle", ("plan de controle", "sante des services", "incident", "incidents", "procedure", "supervision",
+                  "superviseur", "sauvegardes", "budget d erreur"), a_controle, []),
     ("deploiement", ("paliers du reel", "palier", "paliers", "deploiement", "reel controle", "production limitee",
                      "promotion"), a_deploiement, []),
     ("porte", ("porte d execution", "validation finale", "execution gate", "juste avant l ordre",

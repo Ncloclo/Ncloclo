@@ -23,6 +23,7 @@ from . import (
     audit,
     autorisation,
     chantiers,
+    controle,
     deploiement,
     donnees,
     evolution,
@@ -637,6 +638,14 @@ def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
         out.append(chk("Acceptation du paper", None, acceptation.describe(ac)))
     except Exception as e:               # une évaluation impossible n'empêche pas le rapport
         out.append(chk("Acceptation du paper", None, f"évaluation impossible ({type(e).__name__})"))
+    try:
+        cp = controle.evaluate(gcfg, st, light=True)
+        worst = cp["incidents"][0]["severity"] if cp["incidents"] else ""
+        out.append(chk("Plan de contrôle", False if worst in ("P0", "P1") else None, controle.describe(cp),
+                       "Suivez la procédure de l'incident : python trendguard_bot.py controle" if worst in ("P0", "P1")
+                       else ""))
+    except Exception as e:               # jamais bloquant
+        out.append(chk("Plan de contrôle", None, f"état non mesuré ({type(e).__name__})"))
     out.append(chk("Paliers du réel", None, deploiement.describe(gcfg) + " ; exécutions : "
                    + deploiement.describe_quality(st.get("qualite_execution"))))
     au = st.get("autorisation") or {}

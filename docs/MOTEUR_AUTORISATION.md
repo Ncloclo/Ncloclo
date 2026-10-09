@@ -30,6 +30,7 @@ python trendguard_bot.py autorisation verifier rachelle ARM_LIVE
 | le noyau de savoir | automatisme | reporter un achat sur une annonce de Binance |
 | le bot libre | automatisme | acheter dans son propre portefeuille fictif |
 | la maintenance | automatisme | installer une mise à jour fusionnée par vous, contrôles au vert, en avance rapide, jamais en réel |
+| le superviseur | automatisme | relancer le bot après un plantage, poser le mode sûr (étape 18) ; rien d'autre |
 | Rachelle, les IA de la veille, le comité | agents et IA | lire, analyser, recommander |
 | les routines dans le nuage | extérieur | lire, analyser, proposer du code (Pull Request), jamais fusionner |
 
@@ -68,7 +69,7 @@ remplacer l'une de ces étapes.
 
 | Exigence de l'étape 15 | Dans TrendGuard |
 | --- | --- |
-| Identités, RBAC, ABAC, ressources, permissions (§5-9) | 13 identités typées, 12 rôles, 24 actions, conditions du moment, ressource nommée |
+| Identités, RBAC, ABAC, ressources, permissions (§5-9) | 14 identités typées, 13 rôles, 25 actions (superviseur ajouté à l'étape 18), conditions du moment, ressource nommée |
 | Demande et décision (§10, §37) | `decide` : PERMIS ou REFUSÉ, raisons, conditions vérifiées, version, fin de validité |
 | Politique et risque validés (§11-13) | le droit du bot d'acheter exige le contrôle approuvé de la porte (politiques, risque, moteur de risque) |
 | Accord humain, quatre yeux, autonomie (§14-17) | armer le réel : deux réglages explicites et la porte du réel ; jamais d'automatisme ni d'IA |
