@@ -103,7 +103,8 @@ def test_bot_files_are_read_and_written_by_one_pair_of_functions():
     for _pkg, path, _tree in _modules("trendguard"):
         rel = path.relative_to(ROOT).as_posix()
         text = path.read_text(encoding="utf-8")
-        if rel != "trendguard/autonomy.py" and ("json.dump(" in text or "os.replace(" in text):
+        if rel != "trendguard/autonomy.py" and (
+                "json.dump(" in text or "os.replace(" in text or "json.load(" in text):
             own.append(rel)
     assert not own, own
 
