@@ -112,9 +112,11 @@ COMPONENTS: Tuple[Component, ...] = (
               observability="lignée de chaque trade ; vérifié chaque nuit ; sauvegarde relue", risk="HIGH",
               acceptance="migrations versionnées et réversibles ; chaque trade remonte à ses données"),
     Component(_c(3), "Sécurité de base", "P0", "MONITORED", "TRANSVERSE", deps=((_c(1), "CONTRACT"),),
-              files=("trendguard/report_security.py", "panel/security.py", "trendguard/config.py"),
-              tests=("tests/test_report.py", "tests/test_panel.py"), contracts=("PanelCommand.v1",),
-              docs=("docs/RAPPORT.md",), security="clés saisies masquées ; panneau sur ce PC seulement ; droits de "
+              files=("trendguard/report_security.py", "panel/security.py", "trendguard/config.py",
+                     "trendguard/cyber.py"),
+              tests=("tests/test_report.py", "tests/test_panel.py", "tests/test_cyber.py"),
+              contracts=("PanelCommand.v1", "SecurityPostureReport.v1"),
+              docs=("docs/RAPPORT.md", "docs/CYBERSECURITE.md"), security="clés saisies masquées ; panneau sur ce PC seulement ; droits de "
               "la clé Binance vérifiés ; réel désarmé par défaut", observability="rapport de sécurité chaque nuit",
               risk="CRITICAL", acceptance="aucun secret dans le dépôt, les journaux ni les réponses"),
     Component(_c(4), "Observabilité et audit", "P0", "MONITORED", "TRANSVERSE",

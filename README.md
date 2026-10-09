@@ -531,6 +531,10 @@ regroupés par cause avec leur procédure, objectifs de service, sauvegardes
 `python trendguard_bot.py apprentissage`) : registre et fiches des modèles,
 dérive mesurée, frontières de l'apprentissage vérifiées ; l'évolution est
 gelée en réel contrôlé.
+Étape 20 : cybersécurité ([`docs/CYBERSECURITE.md`](docs/CYBERSECURITE.md),
+`python trendguard_bot.py cyber`) : inventaire sans secret, adresses Internet
+du code sur une liste blanche, intégrité du code et des bibliothèques,
+réponse prévue à chaque risque ; jamais offensif.
 Cadre de priorités et de dépendances
 ([`docs/FEUILLE_DE_ROUTE.md`](docs/FEUILLE_DE_ROUTE.md),
 `python trendguard_bot.py chantiers portes`) : chaque composant prouvé, et

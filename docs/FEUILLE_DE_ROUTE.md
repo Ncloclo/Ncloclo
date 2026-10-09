@@ -89,10 +89,10 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Propriétaire | bot |
 | Dépend de | Contrats de données (contrat) |
 | Bloque | Socle multi-modèles d'IA, Politique, autorisation et porte d'exécution, Connecteur Binance (ordres réels), Panneau de contrôle et Rachelle, Durcissement de production (PC, sauvegardes, reprise) |
-| Code | `trendguard/report_security.py`, `panel/security.py`, `trendguard/config.py` |
-| Tests | `tests/test_report.py`, `tests/test_panel.py` |
-| Contrats | `PanelCommand.v1` |
-| Documentation | [`RAPPORT.md`](RAPPORT.md) |
+| Code | `trendguard/report_security.py`, `panel/security.py`, `trendguard/config.py`, `trendguard/cyber.py` |
+| Tests | `tests/test_report.py`, `tests/test_panel.py`, `tests/test_cyber.py` |
+| Contrats | `PanelCommand.v1`, `SecurityPostureReport.v1` |
+| Documentation | [`RAPPORT.md`](RAPPORT.md), [`CYBERSECURITE.md`](CYBERSECURITE.md) |
 | Sécurité | clés saisies masquées ; panneau sur ce PC seulement ; droits de la clé Binance vérifiés ; réel désarmé par défaut |
 | Observabilité | rapport de sécurité chaque nuit |
 | Acceptation | aucun secret dans le dépôt, les journaux ni les réponses |

@@ -912,7 +912,7 @@ def test_tools_share_the_single_entry_point(capsys, monkeypatch):
     assert sys.argv[0] == "trendguard_bot.py"                 # rétabli après l'aide
     assert set(tg.TOOLS) == {"alerts", "watch", "strategy", "lab", "animation", "evolution", "rapport", "savoir", "audit", "donnees", "expert", "comite",
                              "registre", "modeles", "chantiers", "finance", "regle", "validation", "risque",
-                             "quant", "portefeuille", "acceptation", "politique", "autorisation", "porte", "deploiement", "controle", "apprentissage"}
+                             "quant", "portefeuille", "acceptation", "politique", "autorisation", "porte", "deploiement", "controle", "apprentissage", "cyber"}
 
 
 def test_bot_warns_when_the_laptop_runs_on_battery(logger, monkeypatch):

@@ -700,6 +700,8 @@ TOOLS = {"alerts": ("alerts", "alertes : configurer | tester"),
          "autorisation": ("autorisation", "moteur d'autorisation : [matrice] | verifier <identité> <action>"),
          "apprentissage": ("apprentissage", "apprentissage continu et gouvernance des modèles : registre, dérive, "
                            "frontières, critères AC-001 à AC-070 [--out docs/APPRENTISSAGE.md]"),
+         "cyber": ("cyber", "cybersécurité : actifs, sorties vers Internet, intégrité du code, bibliothèques, "
+                   "critères AC-001 à AC-070 [--out docs/CYBER.md]"),
          "controle": ("controle", "plan de contrôle : santé des services, incidents et procédures, objectifs, "
                       "reprise, critères AC-001 à AC-060 [--out docs/CONTROLE.md]"),
          "deploiement": ("deploiement", "exécution réelle par paliers : palier, portes, critères AC-001 à "

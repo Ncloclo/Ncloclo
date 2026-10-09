@@ -44,6 +44,7 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `PortfolioDecision.v1` | moteur de portefeuille (moteur_portefeuille.py) | raisonnement du jour, rapport, Rachelle, vous | 1.0.0 | INTERNAL | cœur |
 | `PromptVersion.v1` | socle des modèles (modeles.py) | exécution des modèles, veille, Rachelle, banc | 1.0.0 | INTERNAL | cœur |
 | `Scenario.v1` | cœur financier (finance.py) | analyses, Rachelle | 1.0.0 | PUBLIC | cœur |
+| `SecurityPostureReport.v1` | cybersécurité (cyber.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | cœur |
 | `Signal.v1` | stratégie (trend_strategy.py) | plan d'achat | 1.0.0 | INTERNAL | cœur |
 | `StrategyDecision.v1` | moteur de stratégie (moteur_strategie.py) | raisonnement, rapport, Rachelle | 1.0.0 | INTERNAL | cœur |
 | `StrategySpec.v1` | moteur de stratégie (moteur_strategie.py) | validation, backtest, décisions, Rachelle, commande regle | 1.0.0 | PUBLIC | cœur |
@@ -793,6 +794,24 @@ Scénarios à 30 jours : fort recul, crise, baisse, central, hausse.
 | Unicité | un jeu par crypto et par jour |
 | Trace (audit) | analyse |
 | Fichiers | `trendguard/finance.py` |
+
+## SecurityPostureReport.v1
+
+Cybersécurité et autodéfense : inventaire des actifs, sorties vers Internet comparées à la liste blanche, intégrité du code, bibliothèques, événements, réponses prévues, examen AC-001 à AC-070.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | cybersécurité (cyber.py) |
+| Consommateur | rapport, Rachelle, vous |
+| Entrée | code (adresses), git, versions installées, état du bot, rapport de la nuit (libellés seulement) |
+| Sortie | état de chaque critère, note, sorties hors liste, événements, verdict |
+| Erreurs | adresse hors liste blanche, événement P0 : NOT_READY ; « offensif » : refusé |
+| Droits | lecture seule : jamais offensif, jamais un secret lu |
+| Délai | à la demande ; chaque nuit dans le rapport |
+| Nouveaux essais | aucun |
+| Unicité | un état par appel |
+| Trace (audit) | dans docs/CYBER.md (sans adresse ni nom de réseau) |
+| Fichiers | `trendguard/cyber.py` |
 
 ## Signal.v1
 

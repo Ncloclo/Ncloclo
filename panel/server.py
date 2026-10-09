@@ -38,6 +38,7 @@ from trendguard import (
     autorisation,
     chantiers,
     controle,
+    cyber,
     deploiement,
     evolution,
     expert,
@@ -353,8 +354,16 @@ class PanelApp(SecurityCenter):
                 "autorisation": self.data.state().get("autorisation") or {},
                 "porte": {k: v for k, v in (self.data.state().get("porte") or {}).items() if k != "keys"},
                 "controle": self.controle_view(),
+                "cyber": self.cyber_view(),
                 "deploiement": {"text": deploiement.describe(self.g), "stage": deploiement.current(self.g),
                                 "quality": deploiement.describe_quality(self.data.state().get("qualite_execution"))}}
+
+    def cyber_view(self) -> Dict[str, Any]:
+        """Cybersécurité (cyber.py), lecture légère : une phrase."""
+        try:
+            return {"text": cyber.describe(cyber.evaluate(self.g, self.data.state(), light=True, report={}))}
+        except Exception as e:
+            return {"text": f"état non mesuré ({type(e).__name__})"}
 
     def controle_view(self) -> Dict[str, Any]:
         """Plan de contrôle (controle.py) : une phrase et les incidents ; une

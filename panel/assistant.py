@@ -723,6 +723,20 @@ def doc_points(name: str, heading: str = "## Conclusions", limit: int = 6) -> Li
     return points[:limit]
 
 
+def a_cyber(ctx: Dict[str, Any]) -> str:
+    """La cybersécurité : ce qui est défendu, où le bot peut se connecter."""
+    view = ctx.get("cyber") or {}
+    return "\n".join([
+        "**Cybersécurité** : l'inventaire de ce qui est à défendre (code, bases, journaux, fichier des secrets, clé "
+        "Binance — présence seulement, jamais la valeur), chaque adresse Internet du code comparée à une liste "
+        "blanche, l'intégrité du code (aucun fichier modifié hors Pull Request), les bibliothèques à la version "
+        "testée, les événements de sécurité et la réponse prévue à chacun.",
+        "Aujourd'hui : " + (view.get("text") or "état non mesuré") + ".",
+        "C'est une défense, jamais offensif : rien n'est scanné ni attaqué ; les seules réactions automatiques "
+        "réduisent (clé exposée refusée, ordre inconnu : arrêt, mode sûr).",
+        "Détail : python trendguard_bot.py cyber. Je lis et j'explique, je n'agis pas."])
+
+
 def a_apprentissage(ctx: Dict[str, Any]) -> str:
     """La gouvernance des modèles : ce qui apprend, ce qui ne peut changer
     que par vous."""
@@ -1043,6 +1057,8 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("keys", ("cle api", "cles api", "api", "binance", "2fa", "double authentification",
               "droit de retrait", "securiser ma cle", "securiser la cle"),
      a_keys, []),
+    ("cyber", ("cybersecurite", "cyber", "liste blanche", "integrite du code", "sorties internet", "autodefense",
+               "piratage"), a_cyber, []),
     ("security", ("securite", "securiser", "securise", "securisee", "protege", "protegee",
                   "proteger", "protection", "protections", "piratage", "pirate", "pirater",
                   "hacker", "hacke", "arnaque", "arnaques", "phishing", "hameconnage",

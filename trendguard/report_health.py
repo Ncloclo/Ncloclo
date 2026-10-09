@@ -25,6 +25,7 @@ from . import (
     autorisation,
     chantiers,
     controle,
+    cyber,
     deploiement,
     donnees,
     evolution,
@@ -654,6 +655,13 @@ def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
                                                          "python trendguard_bot.py apprentissage"))
     except Exception as e:               # jamais bloquant
         out.append(chk("Gouvernance des modèles", None, f"état non mesuré ({type(e).__name__})"))
+    try:
+        cy = cyber.evaluate(gcfg, st, light=True, report={})
+        out.append(chk("Cybersécurité", None if cy["egress"]["ok"] else False, cyber.describe(cy),
+                       "" if cy["egress"]["ok"] else "Adresse Internet hors liste blanche dans le code : "
+                                                     "python trendguard_bot.py cyber"))
+    except Exception as e:               # jamais bloquant
+        out.append(chk("Cybersécurité", None, f"état non mesuré ({type(e).__name__})"))
     out.append(chk("Paliers du réel", None, deploiement.describe(gcfg) + " ; exécutions : "
                    + deploiement.describe_quality(st.get("qualite_execution"))))
     au = st.get("autorisation") or {}

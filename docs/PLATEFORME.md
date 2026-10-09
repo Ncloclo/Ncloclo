@@ -626,6 +626,31 @@ trendguard_bot.py apprentissage`).
 versionné par git), essai progressif en pourcentage du trafic (un seul
 portefeuille).
 
+## Étape 20 du prompt : cybersécurité et autodéfense
+
+Le vingtième document demande une défense complète : inventaire, sorties
+contrôlées, chaîne d'approvisionnement, détection, réponse aux incidents,
+arrêt d'urgence de sécurité, jamais d'autonomie sans limite. Appliqué à
+TrendGuard, avec ce qui existait déjà (centre de sécurité du panneau, rapport
+de sécurité de la nuit, moteur d'autorisation) : `cyber.py`. Détail :
+[`CYBERSECURITE.md`](CYBERSECURITE.md) ; dernier état : [`CYBER.md`](CYBER.md)
+(`python trendguard_bot.py cyber`).
+
+| Exigence de l'étape 20 | Ce qui a été fait |
+| --- | --- |
+| Inventaire des actifs (§6) | 11 actifs, dont la clé Binance (présence et empreinte comparée aux clés exposées, jamais sa valeur) |
+| Sorties contrôlées (§17) | chaque adresse Internet du code comparée à une liste blanche avec son usage ; toute adresse ajoutée est vue |
+| Chaîne d'approvisionnement (§23) | code : aucun fichier modifié hors Pull Request ; bibliothèques : versions installées contre versions testées |
+| Incidents, réponse, intégration au trading (§24-33) | événements du rapport de la nuit et ordre inconnu ; réponse prévue à 8 risques, les réactions automatiques ne font que réduire |
+| Jamais offensif (§47) | aucune bibliothèque réseau dans le module, aucune riposte (test) |
+| Critères, note, verdict (§44-45, §49) | AC-001 à AC-070 ; READY_FOR_PRODUCTION_SECURITY, jamais une défense autonome sans limite |
+
+**Ce qui ne s'applique pas** : SOC, SIEM, XDR (un seul PC : le rapport et le
+panneau en tiennent lieu), pare-feu et segmentation (ceux de Windows et de la
+box), comptes d'utilisateurs et double authentification (Binance et GitHub
+l'exigent pour vous), riposte (interdite), signature d'artefacts (du code
+fusionné par vous).
+
 ## Ce qui reste (votre accord d'abord)
 
 1. **Débat des IA** (§43) : rôles haussier, baissier, critique et synthèse
