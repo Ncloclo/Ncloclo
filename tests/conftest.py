@@ -16,6 +16,19 @@ import v29  # noqa: E402
 from fake_binance import FakeBinance  # noqa: E402
 
 
+def pytest_runtest_logreport(report):
+    """Sur GitHub, chaque test en échec devient une annotation, lisible sans
+    se connecter (zéro échec silencieux)."""
+    if report.failed and os.environ.get("GITHUB_ACTIONS") == "true":
+        path, line, _name = report.location
+        lines = [x for x in (report.longreprtext or "").splitlines() if x.strip()]
+        why = [x[1:].strip() for x in lines if x.startswith("E ")][:3] or lines[-1:] or ["échec"]
+        msg = f"{report.nodeid} ({report.when}) : " + " | ".join(why)[:500]
+        msg = msg.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+        sys.__stdout__.write(f"\n::error file={path},line={(line or 0) + 1}::{msg}\n")
+        sys.__stdout__.flush()
+
+
 @pytest.fixture(autouse=True)
 def _exchange_clock_reset():
     """L'heure du bot (écart avec Binance) est globale : remise à zéro

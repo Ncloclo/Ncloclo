@@ -723,6 +723,22 @@ def doc_points(name: str, heading: str = "## Conclusions", limit: int = 6) -> Li
     return points[:limit]
 
 
+def a_gouvernance(ctx: Dict[str, Any]) -> str:
+    """La gouvernance : qui possède quoi, qui peut quoi, les portes de qualité."""
+    view = ctx.get("gouvernance") or {}
+    return "\n".join([
+        "**Gouvernance de l'architecture** : chaque responsabilité critique a un seul responsable (le risque, les "
+        "politiques, l'autorisation, la validation finale, l'exécution : cinq modules différents) ; chaque donnée "
+        "critique a une seule source de vérité ; les modules d'intelligence ne touchent jamais aux ordres ; un "
+        "seul endroit du code peut acheter, après la porte et la validation finale. Armer le réel, changer le "
+        "risque, lever le mode sûr : vous seul.",
+        "Dix portes de qualité (fonctionnel, contrats, sécurité, performance, fiabilité, intégrité des données, "
+        "observabilité, reprise après panne, reproductibilité, gouvernance) : PASS, FAIL ou WAIVED ; un échec sur "
+        "une porte critique bloque.",
+        "Aujourd'hui : " + (view.get("text") or "non mesuré") + ".",
+        "Détail : python trendguard_bot.py gouvernance. Je lis et j'explique, je n'agis pas."])
+
+
 def a_perception(ctx: Dict[str, Any]) -> str:
     """La perception : ce que le bot voit du marché, source par source."""
     view = ctx.get("perception") or {}
@@ -1153,6 +1169,8 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("keys", ("cle api", "cles api", "api", "binance", "2fa", "double authentification",
               "droit de retrait", "securiser ma cle", "securiser la cle"),
      a_keys, []),
+    ("gouvernance", ("gouvernance de l architecture", "gouvernance", "raci", "qui est responsable",
+                     "portes de qualite", "source de verite", "frontieres entre modules"), a_gouvernance, []),
     ("perception", ("perception", "percoit", "multimodal", "multi-sources", "recoupement des sources",
                     "sources de donnees"), a_perception, []),
     ("jumeau", ("jumeau numerique", "jumeau", "monte carlo", "monte-carlo", "simulateur", "copie du bot"),

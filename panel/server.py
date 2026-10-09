@@ -365,6 +365,7 @@ class PanelApp(SecurityCenter):
                 "objectifs": self.objectifs_view(),
                 "jumeau": self.jumeau_view(),
                 "perception": self.report_line("Perception"),
+                "gouvernance": self.report_line("Gouvernance"),
                 "deploiement": {"text": deploiement.describe(self.g), "stage": deploiement.current(self.g),
                                 "quality": deploiement.describe_quality(self.data.state().get("qualite_execution"))}}
 
@@ -865,7 +866,7 @@ def keep_warm(app: PanelApp, stop: threading.Event) -> None:
     while True:
         try:
             app.warm(full=n % WARM_CANDLES_EVERY == 0)
-        except Exception:
+        except Exception:                # lecture d'avance : la page relira à la demande
             pass
         n += 1
         if stop.wait(WARM_SEC):

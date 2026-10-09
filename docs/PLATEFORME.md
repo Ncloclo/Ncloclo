@@ -590,7 +590,7 @@ en lecture seule : `controle.py`. Détail :
 | --- | --- |
 | Services, santé, dépendances (§5-7) | 18 services en 4 paliers ; vivant, prêt, correct pour le métier ; cascade et points uniques de défaillance (l'ordinateur d'abord) |
 | Objectifs de service, budget d'erreur (§8-9) | disponibilité sur 7 jours, décision du jour, données, sauvegarde, rapport ; gel des changements recommandé si le budget est épuisé |
-| Incidents, procédures (§11-14) | un incident par cause, P0 à P4, ouvert puis clos ; 12 procédures versionnées |
+| Incidents, procédures (§11-14) | un incident par cause, P0 à P4, ouvert puis clos ; 16 procédures versionnées, une pour chaque service |
 | Reprise après sinistre (§25-26) | RPO (âge de la dernière sauvegarde) et RTO (restauration d'essai chronométrée) mesurés |
 | Superviseur borné, autonomie (§15-17, §44) | identité « superviseur » au moteur d'autorisation : relancer le bot, poser le mode sûr ; tout le reste refusé ; aucun automatisme sans limite |
 | Critères, note, verdict (§45-47, §52) | AC-001 à AC-060 ; READY_FOR_PRODUCTION_CONTROLLED_OPERATIONS, jamais une exploitation autonome sans limite |
@@ -816,6 +816,30 @@ Détail : [`PERCEPTION.md`](PERCEPTION.md) ; dernier état :
 **Ce qui ne s'applique pas** : images, vidéo, son, documents scannés,
 capteurs (le bot ne reçoit que des chiffres et des textes ; les textes sont
 jugés par la recherche).
+
+## Documents transverses : RACI, autorités, critères de sortie
+
+Trois documents valent pour toutes les étapes : la RACI normalisée, la
+matrice des autorités et l'ordre officiel, les critères de sortie et les
+frontières contractuelles. Appliqués à TrendGuard : `gouvernance.py`.
+Détail : [`GOUVERNANCE.md`](GOUVERNANCE.md) ; dernier état :
+[`GOUVERNANCE_ETAT.md`](GOUVERNANCE_ETAT.md) (`python trendguard_bot.py gouvernance`).
+
+| Exigence | Ce qui a été fait |
+| --- | --- |
+| RACI normalisée, plans A à K, doublons | 32 responsabilités, exactement un A et au moins un R chacune, une seule fois, un seul plan ; 15 frontières « X ≠ Y » vérifiées |
+| Autorités, sources de vérité | qui peut observer, recommander, bloquer, autoriser, exécuter ; une source de vérité par donnée critique, journal financier touché par son seul propriétaire |
+| Frontières critiques, barrières | vérifiées dans le code : aucun module d'intelligence vers les ordres, un seul appel d'achat après la porte et la validation finale, risque avant autorisation, jumeau isolé |
+| Dix portes de qualité, zéro échec silencieux, note | PASS, FAIL ou WAIVED d'après une preuve mesurée ; P0 en échec : BLOCKED ; `GovernanceReport.v1` |
+
+Corrigé en l'appliquant : quatre procédures de reprise manquantes (panneau,
+rapport, veille, savoir) ; sept exceptions larges ignorées sans raison
+écrite (raison ajoutée, comportement inchangé).
+
+**Numérotation** : les prompts disent 18 contrôle, 19 apprentissage, 20
+cybersécurité, 21 interface, 22 recherche ; les documents de la RACI disent
+19, 20, 21, 22, 23. Ce dépôt suit les prompts pour les titres d'étapes et la
+RACI pour le manifeste des dépendances de l'étape 29.
 
 ## Ce qui reste (votre accord d'abord)
 

@@ -93,7 +93,7 @@ autonome sans limite.
 | Santé (§7) | vivant, prêt, correct pour le métier ; non mesuré n'est jamais une réussite |
 | SLO, budget d'erreur (§8-9) | 5 objectifs mesurés, budget consommé, gel recommandé |
 | Alertes, incidents (§11-13) | alertes dédupliquées (canaux), un incident par cause, P0 à P4, ouverts et clos |
-| Procédures (§14) | 12 procédures versionnées |
+| Procédures (§14) | 16 procédures versionnées, une pour chaque service |
 | Superviseur borné, autonomie (§15-17, §44) | relance et mode sûr seulement ; tout le reste refusé par le moteur d'autorisation ; aucun L5 |
 | Changements, configuration (§18-20) | code par Pull Request fusionnée par vous, contrôles GitHub, retour à la version précédente ; empreinte de la configuration et versions des règles |
 | Capacité (§22) | disque et mémoire |

@@ -30,6 +30,7 @@ from . import (
     deploiement,
     donnees,
     evolution,
+    gouvernance,
     jumeau,
     learning,
     libre,
@@ -558,10 +559,13 @@ def _cached_close(gcfg: Any) -> Tuple[Any, Any]:
     """Cours en cache de l'évolution (jamais retéléchargés ici) ; rien si le
     cache manque."""
     import v29
+    path = os.path.join(v29.APP_DIR, "data_evolution")
+    have = [a for a in gcfg.universe if os.path.exists(os.path.join(path, f"{a.lower()}.csv"))]
+    if not have:
+        return None, None
     try:
-        return evolution.load_history(os.path.join(v29.APP_DIR, "data_evolution"), list(gcfg.universe),
-                                      max_age_days=None)
-    except Exception:                    # cache absent ou illisible : écart au backtest non mesuré
+        return evolution.load_history(path, have, max_age_days=None)
+    except Exception:                    # cache illisible : écart au backtest non mesuré
         return None, None
 
 
@@ -689,6 +693,11 @@ def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
         out.append(chk("Intelligence causale", None, causal.describe(ca)))
     except Exception as e:               # jamais bloquant
         out.append(chk("Intelligence causale", None, f"état non mesuré ({type(e).__name__})"))
+    try:
+        gv = gouvernance.evaluate(gcfg, st)
+        out.append(chk("Gouvernance", None, gouvernance.describe(gv)))
+    except Exception as e:               # jamais bloquant
+        out.append(chk("Gouvernance", None, f"état non mesuré ({type(e).__name__})"))
     try:
         pc = perception.evaluate(gcfg, st, perception.load_caches(gcfg.universe))
         out.append(chk("Perception", None, perception.describe(pc)))

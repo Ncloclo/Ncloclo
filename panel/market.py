@@ -285,7 +285,7 @@ class Market:
                     return
                 try:
                     job()
-                except Exception:
+                except Exception:        # lecture d'avance : la page relira ce cours à la demande
                     pass
         threads = [threading.Thread(target=run, daemon=True, name="cours-binance-avance")
                    for _ in range(min(WORKERS, len(jobs)))]

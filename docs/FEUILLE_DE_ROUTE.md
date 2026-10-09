@@ -106,10 +106,10 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Propriétaire | bot |
 | Dépend de | Contrats de données (contrat), Base de données et journal financier (données) |
 | Bloque | Paper trading et ses critères d'acceptation, Politique, autorisation et porte d'exécution, Trading réel, Auto-évaluation (diagnostic expert, leçons des trades), Panneau de contrôle et Rachelle, Durcissement de production (PC, sauvegardes, reprise) |
-| Code | `trendguard/audit.py`, `trendguard/report.py`, `trendguard/report_health.py` |
-| Tests | `tests/test_contrats.py`, `tests/test_report.py` |
-| Contrats | `AuditEvent.v2`, `HealthReport.v1` |
-| Documentation | [`RAPPORT.md`](RAPPORT.md) |
+| Code | `trendguard/audit.py`, `trendguard/report.py`, `trendguard/report_health.py`, `trendguard/gouvernance.py` |
+| Tests | `tests/test_contrats.py`, `tests/test_report.py`, `tests/test_gouvernance.py` |
+| Contrats | `AuditEvent.v2`, `HealthReport.v1`, `GovernanceReport.v1` |
+| Documentation | [`RAPPORT.md`](RAPPORT.md), [`GOUVERNANCE.md`](GOUVERNANCE.md) |
 | Sécurité | journal d'audit chaîné : toute modification se voit |
 | Observabilité | journal du bot, audit corrélé et causé, rapport quotidien, panneau |
 | Acceptation | chaque opération critique reconstruite : quoi, qui, quand, pourquoi, avec quelle autorisation |

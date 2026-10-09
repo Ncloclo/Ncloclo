@@ -54,6 +54,7 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `DecisionRecord.v1` | décision du jour | journal financier, lignée des trades | 1.0.0 | CONFIDENTIAL | données |
 | `Experiment.v1` | évolution, études (registre.py) | rejeu, contrôle, rapport | 1.0.0 | INTERNAL | données |
 | `Feature.v1` | cœur financier (finance.py) | analyses, journal financier | 1.0.0 | PUBLIC | données |
+| `GovernanceReport.v1` | gouvernance (gouvernance.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | données |
 | `Instrument.v1` | cœur financier (finance.py) | analyses, panneau | 1.0.0 | PUBLIC | données |
 | `MarketData.v1` | Binance (klines publiques) | décision du jour, régimes, qualité | 1.0.0 | INTERNAL | données |
 | `MemoryHealthReport.v1` | mémoire (memoire.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | données |
@@ -983,6 +984,24 @@ Indicateur versionné du magasin (technique, quantitatif).
 | Unicité | un indicateur par crypto, jour et version |
 | Trace (audit) | journal financier |
 | Fichiers | `trendguard/finance.py`, `trendguard/donnees.py` |
+
+## GovernanceReport.v1
+
+Gouvernance de l'architecture : dix portes de qualité, RACI (un seul responsable par responsabilité), qui peut quoi, une source de vérité par donnée, frontières vérifiées dans le code, échecs silencieux.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | gouvernance (gouvernance.py) |
+| Consommateur | rapport, Rachelle, vous |
+| Entrée | code du dépôt, registre des contrats, composants, journal d'audit, état du bot |
+| Sortie | portes, RACI, autorités, sources de vérité, frontières, note |
+| Erreurs | P0 en échec ou contournement : BLOCKED ; statut hors de sa bande : refusé |
+| Droits | lecture seule : mesure et dit, ne change rien |
+| Délai | à la demande ; chaque nuit dans le rapport |
+| Nouveaux essais | aucun |
+| Unicité | un rapport par appel |
+| Trace (audit) | dans docs/GOUVERNANCE_ETAT.md |
+| Fichiers | `trendguard/gouvernance.py` |
 
 ## Instrument.v1
 

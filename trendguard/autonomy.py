@@ -780,12 +780,12 @@ class KeepAwake:
         if self._win:
             try:
                 self._set_state(self.ES_CONTINUOUS)
-            except Exception:
+            except Exception:            # arrêt : Windows rendra la veille de lui-même
                 pass
             self._win = False
         if self._proc is not None:
             try:
                 self._proc.terminate()
-            except Exception:
+            except Exception:            # arrêt : le processus est peut-être déjà terminé
                 pass
             self._proc = None

@@ -153,7 +153,7 @@ def check_system(exchange: Any, state: Dict[str, Any], expected_day: str,
                 t1 = time.time()
                 samples.append(((t1 - t0) * 1000,
                                 server_ms - (t0 + t1) / 2 * 1000))
-            except Exception:
+            except Exception:            # mesure ratée : les autres essais suffisent, aucun : dit plus bas
                 continue
         if not samples:
             out.append(Finding(S, "ALERTE", "Binance injoignable",

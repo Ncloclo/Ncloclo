@@ -157,12 +157,28 @@ RUNBOOKS: Dict[str, Dict[str, Any]] = {
     "RB-DISQUE": {"title": "Disque presque plein", "service": "pc", "steps": (
         "Libérez de la place (le rapport de la nuit montre les dossiers les plus lourds).",
         "Sous 2 Go, la base et les sauvegardes risquent de s'abîmer."), "reversible": True},
+    "RB-PANNEAU": {"title": "Panneau de contrôle injoignable", "service": "panneau", "steps": (
+        "Le bot continue sans le panneau : rien ne dépend de lui pour acheter, vendre ou protéger.",
+        "Relancez-le : python trendguard_bot.py panel (ou redémarrez l'ordinateur : le superviseur le relance)."),
+        "reversible": True},
+    "RB-RAPPORT": {"title": "Rapport de la nuit absent ou en retard", "service": "rapport", "steps": (
+        "Le rapport n'agit sur rien : le bot continue.",
+        "Relancez-le : python trendguard_bot.py rapport maintenant (2 à 3 minutes)."), "reversible": True},
+    "RB-VEILLE": {"title": "Veille des annonces de Binance indisponible", "service": "veille", "steps": (
+        "Le bot continue ; une annonce de retrait de la cote pourrait être vue avec retard.",
+        "Rien à faire : la veille réessaie seule ; vérifiez la connexion si cela dure plus d'une journée."),
+        "reversible": True},
+    "RB-SAVOIR": {"title": "Noyau de savoir sans lecture récente", "service": "savoir", "steps": (
+        "Le savoir ne fait que conseiller : les achats suivent la règle seule.",
+        "Rien à faire ; si cela dure, python trendguard_bot.py savoir montre l'état de chaque source."),
+        "reversible": True},
 }
 SERVICE_RUNBOOK = {"bot": "RB-BOT-ARRETE", "superviseur": "RB-BOT-ARRETE", "urgence": "RB-ARRET-URGENCE",
                    "audit": "RB-AUDIT-ABIME", "journal": "RB-AUDIT-ABIME", "base": "RB-AUDIT-ABIME",
                    "sauvegarde": "RB-SAUVEGARDE", "binance": "RB-BINANCE", "internet": "RB-BINANCE",
                    "donnees": "RB-DONNEES", "alertes": "RB-ALERTES", "pc": "RB-DISQUE", "porte": "RB-PORTE",
-                   "risque": "RB-RISQUE"}
+                   "risque": "RB-RISQUE", "panneau": "RB-PANNEAU", "rapport": "RB-RAPPORT",
+                   "veille": "RB-VEILLE", "savoir": "RB-SAVOIR"}
 SUPERVISOR_FORBIDDEN = ("CHANGE_RISK", "KILL_RESET", "SAFE_MODE_OFF", "AUTHORIZE_BUY", "TRADE_LIVE", "TRADE_PAPER",
                         "ARM_LIVE", "SET_SECRETS", "MERGE_CODE", "CHANGE_SETTINGS")
 

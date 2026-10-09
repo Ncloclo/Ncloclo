@@ -966,7 +966,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         if hasattr(stream, "reconfigure"):
             try:
                 stream.reconfigure(encoding="utf-8", errors="replace")
-            except Exception:
+            except Exception:            # sortie déjà configurée : l'affichage reste lisible
                 pass
     ap = argparse.ArgumentParser(description="TrendGuard — recherche")
     sub = ap.add_subparsers(dest="cmd", required=True)

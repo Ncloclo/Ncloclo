@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import functools
 import hashlib
 import os
 import pathlib
@@ -217,9 +218,22 @@ def current(facts: List[Dict[str, Any]], universe: Sequence[str]) -> List[Dict[s
     return out
 
 
+@functools.lru_cache(maxsize=512)
+def _parse(path: str, _mtime_ns: int, _size: int) -> Tuple[str, ast.AST]:
+    text = pathlib.Path(path).read_text(encoding="utf-8")
+    return text, ast.parse(text)
+
+
+def parsed(path: pathlib.Path) -> Tuple[str, ast.AST]:
+    """Le texte et l'arbre d'un fichier Python, relus seulement quand le
+    fichier change (date et taille)."""
+    st = pathlib.Path(path).stat()
+    return _parse(str(path), st.st_mtime_ns, st.st_size)
+
+
 def _imports(path: pathlib.Path) -> set:
     """Modules du dépôt importés par un fichier (lecture du code)."""
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    tree = parsed(path)[1]
     names = set()
     for n in ast.walk(tree):
         if isinstance(n, ast.ImportFrom):
@@ -441,13 +455,16 @@ def render(r: Dict[str, Any]) -> str:
 
 
 def load_caches(universe: Sequence[str]) -> Dict[str, Optional[pd.DataFrame]]:
-    """Les deux caches de bougies (jamais retéléchargés ici)."""
+    """Les deux caches de bougies, seulement les cryptos déjà en cache
+    (jamais téléchargés ici)."""
     from .evolution import load_history
     out: Dict[str, Optional[pd.DataFrame]] = {}
     for source, folder in (("cache de l'évolution", "data_evolution"), ("cache des études", "data_binance")):
+        path = os.path.join(v29.APP_DIR, folder)
+        have = [a for a in universe if os.path.exists(os.path.join(path, f"{a.lower()}.csv"))]
         try:
-            out[source] = load_history(os.path.join(v29.APP_DIR, folder), list(universe), max_age_days=None)[0]
-        except Exception:                # cache absent ou illisible : cette source manque, c'est dit
+            out[source] = load_history(path, have, max_age_days=None)[0] if have else None
+        except Exception:                # cache illisible : cette source manque, c'est dit
             out[source] = None
     return out
 

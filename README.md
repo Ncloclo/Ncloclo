@@ -564,6 +564,9 @@ rejouées, une panne injectée, la sensibilité aux réglages.
 Étape 29 : perception ([`docs/PERCEPTION.md`](docs/PERCEPTION.md),
 `python trendguard_bot.py perception`) : ce que le bot voit du marché,
 source par source, daté, recoupé ; ce qui manque est dit inconnu.
+Gouvernance ([`docs/GOUVERNANCE.md`](docs/GOUVERNANCE.md),
+`python trendguard_bot.py gouvernance`) : qui est responsable de quoi, qui
+peut quoi, les frontières vérifiées dans le code et dix portes de qualité.
 Cadre de priorités et de dépendances
 ([`docs/FEUILLE_DE_ROUTE.md`](docs/FEUILLE_DE_ROUTE.md),
 `python trendguard_bot.py chantiers portes`) : chaque composant prouvé, et

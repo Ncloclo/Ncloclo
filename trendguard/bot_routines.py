@@ -720,7 +720,7 @@ class RoutinesMixin:
                 continue
             try:
                 prices[a] = float(s.ex.get_ticker()["last"])
-            except Exception:
+            except Exception:            # prévision seulement : la crypto reste sans cours du moment
                 continue
         return anticipation.forecast(
             basis, prices, holdings, now, self.p,

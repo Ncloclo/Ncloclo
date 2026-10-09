@@ -538,6 +538,10 @@ TWIN_STATUSES = ("READY", "REJECTED")
 MONTE_CARLO_STATUSES = ("CONVERGED", "MONTE_CARLO_NOT_CONVERGED", "NOT_RUN")
 OBSERVATION_MODALITIES = ("SERIE", "JUGEMENT", "CARNET", "HORLOGE", "EVENEMENT")
 PERCEPTION_STATUSES = ("READY", "CANDIDATE", "VALIDATING", "DEVELOPMENT", "REJECTED", "NOT_READY")
+GOVERNANCE_STATUSES = ("READY", "CANDIDATE", "VALIDATING", "DEVELOPMENT", "REJECTED", "BLOCKED")
+QUALITY_GATES = ("FUNCTIONAL", "CONTRACT", "SECURITY", "PERFORMANCE", "RELIABILITY", "DATA_INTEGRITY", "OBSERVABILITY",
+                 "FAILURE_RECOVERY", "REPRODUCIBILITY", "GOVERNANCE")
+GATE_RESULTS = ("PASS", "FAIL", "WAIVED")
 GOAL_STATES = ("CREATED", "VALIDATED", "PLANNING", "PLAN_READY", "APPROVAL_PENDING", "APPROVED", "EXECUTING",
                "MONITORING", "COMPLETED", "FAILED", "PAUSED", "CANCELLED", "BLOCKED", "EXPIRED", "REJECTED", "SAFE_MODE")
 WORLD_KINDS = ("OBSERVATION", "INTERPRETATION", "HYPOTHESIS", "INFERENCE", "PREDICTION", "SCENARIO", "DECISION")
@@ -1972,6 +1976,58 @@ class PerceptionReport:
         return _plain(self)
 
 
+@dataclass(frozen=True)
+class GovernanceReport:
+    """Gouvernance de l'architecture (GovernanceReport.v1, documents
+    transverses : RACI normalisée, autorités, critères de sortie) : les dix
+    portes de qualité (PASS, FAIL ou WAIVED), écarts de la RACI, sources de
+    vérité en conflit, contournements, échecs silencieux. Un P0 en échec ou
+    un contournement : BLOCKED quelle que soit la note ; sinon la bande de la
+    note."""
+    VERSION: ClassVar[int] = 1
+    report_id: str
+    created_at: str
+    mode: str
+    status: str
+    readiness_score: float
+    p0_failures: Tuple[str, ...]
+    gates: Tuple[Tuple[str, str], ...]
+    raci_violations: int
+    sor_conflicts: int
+    bypasses: int
+    silent_failures: int
+    engine_version: str
+    version: int = 1
+
+    def __post_init__(self) -> None:
+        _version(self, self.VERSION)
+        _enum("status", self.status, GOVERNANCE_STATUSES)
+        _enum("mode", self.mode, ("paper", "live"))
+        check_uuid("report_id", self.report_id)
+        check_timestamp("created_at", self.created_at)
+        if tuple(g for g, _r in self.gates) != QUALITY_GATES:
+            raise ContractError("INCONSISTENT", "les dix portes de qualité, chacune une fois, dans l'ordre")
+        for _g, res in self.gates:
+            _enum("gate_result", res, GATE_RESULTS)
+        counts = (self.raci_violations, self.sor_conflicts, self.bypasses, self.silent_failures)
+        if any(isinstance(n, bool) or not isinstance(n, int) or n < 0 for n in counts):
+            raise ContractError("OUT_OF_RANGE", "des nombres entiers, jamais négatifs")
+        score = _number("readiness_score", self.readiness_score, positive=False)
+        if not 0 <= score <= 100:
+            raise ContractError("OUT_OF_RANGE", "readiness_score : de 0 à 100")
+        failed = {g for g, res in self.gates if res == "FAIL"}
+        if set(self.p0_failures) - failed:
+            raise ContractError("INCONSISTENT", "un P0 en échec est une porte en échec")
+        blocked = bool(self.p0_failures) or self.bypasses > 0
+        expected = ("BLOCKED" if blocked else "READY" if score >= 95 else "CANDIDATE" if score >= 90
+                    else "VALIDATING" if score >= 80 else "DEVELOPMENT" if score >= 70 else "REJECTED")
+        if self.status != expected:
+            raise ContractError("INCONSISTENT", f"statut {self.status} : attendu {expected} (P0, contournements, note)")
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
 def ohlcv_violations(rows: Any) -> int:
     """Bougies incohérentes (§41) : plus haut sous l'ouverture, la clôture
     ou le plus bas ; plus bas au-dessus ; volume négatif. Une bougie
@@ -2049,7 +2105,7 @@ SCHEMAS.update({c.__name__: c for c in (OrderIntent, RiskDecision, ExecutionAuth
                                         ControlPlaneReport, ModelCard, LearningGovernanceReport,
                                         SecurityPostureReport, InterfaceReadinessReport, ResearchReport,
                                         MemoryHealthReport, WorldModelReport, CausalReport, PlanReport,
-                                        TwinReport, Observation, PerceptionReport)})
+                                        TwinReport, Observation, PerceptionReport, GovernanceReport)})
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -2481,6 +2537,14 @@ REGISTRY: Tuple[Contract, ...] = (
              ": refusé ; P0 : REJECTED", "lecture seule : les interventions restent dans le simulateur",
              "à la demande ; chaque nuit dans le rapport (sans interventions)", "aucun", "un examen par appel",
              "dans docs/CAUSES.md", 3, ("trendguard/causal.py",)),
+    Contract("GovernanceReport.v1", "gouvernance de l'architecture : dix portes de qualité, RACI (un seul "
+             "responsable par responsabilité), qui peut quoi, une source de vérité par donnée, frontières vérifiées "
+             "dans le code, échecs silencieux", "gouvernance (gouvernance.py)", "rapport, Rachelle, vous",
+             "code du dépôt, registre des contrats, composants, journal d'audit, état du bot",
+             "portes, RACI, autorités, sources de vérité, frontières, note",
+             "P0 en échec ou contournement : BLOCKED ; statut hors de sa bande : refusé",
+             "lecture seule : mesure et dit, ne change rien", "à la demande ; chaque nuit dans le rapport", "aucun",
+             "un rapport par appel", "dans docs/GOUVERNANCE_ETAT.md", 3, ("trendguard/gouvernance.py",)),
     Contract("Observation.v1", "une observation de la perception : source, modalité, rang, date du fait, "
              "provenance", "perception (perception.py)", "perception (fusion), rapport", "état du bot, caches de bougies",
              "l'observation", "sans source ou sans provenance : refusée ; date illisible : refusée ; rang hors de 1 à 4 : "
