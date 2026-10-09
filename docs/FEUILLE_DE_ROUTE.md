@@ -346,10 +346,10 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Propriétaire | vous |
 | Dépend de | Connecteur Binance (ordres réels) (dure), Paper trading et ses critères d'acceptation (validation), Politique, autorisation et porte d'exécution (sécurité), Moteur de risque, garde « pas de trade », arrêt d'urgence (sécurité), Rejeu et études (backtest, deux époques, crises) (validation), Observabilité et audit (à l'exécution) |
 | Bloque | rien |
-| Code | `trendguard/bot_execution.py`, `trendguard/deploiement.py` |
-| Tests | `tests/test_live_execution.py`, `tests/test_deploiement.py` |
-| Contrats | `Order.v1`, `ExecutionAuthorization.v1`, `LiveDeploymentReport.v1` |
-| Documentation | [`PLATEFORME.md`](PLATEFORME.md), [`DEPLOIEMENT_REEL.md`](DEPLOIEMENT_REEL.md) |
+| Code | `trendguard/bot_execution.py`, `trendguard/deploiement.py`, `trendguard/objectifs.py` |
+| Tests | `tests/test_live_execution.py`, `tests/test_deploiement.py`, `tests/test_objectifs.py` |
+| Contrats | `Order.v1`, `ExecutionAuthorization.v1`, `LiveDeploymentReport.v1`, `PlanReport.v1` |
+| Documentation | [`PLATEFORME.md`](PLATEFORME.md), [`DEPLOIEMENT_REEL.md`](DEPLOIEMENT_REEL.md), [`OBJECTIFS.md`](OBJECTIFS.md) |
 | Sécurité | porte du réel (porte 8) vérifiée par la porte d'exécution avant chaque achat réel |
 | Observabilité | audit, journal, rapport |
 | Acceptation | porte 8 ouverte : essai paper suffisant, sécurité sans défaut, vérification réussie ; puis paliers (réel simulé, réel contrôlé plafonné, production limitée), chacun par votre réglage |

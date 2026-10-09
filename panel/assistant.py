@@ -723,6 +723,20 @@ def doc_points(name: str, heading: str = "## Conclusions", limit: int = 6) -> Li
     return points[:limit]
 
 
+def a_objectifs(ctx: Dict[str, Any]) -> str:
+    """La mission et le chemin jusqu'au réel."""
+    view = ctx.get("objectifs") or {}
+    return "\n".join([
+        "**Mission et objectifs** : aller au réel en sécurité, quand les preuves le permettent. La mission est "
+        "découpée en objectifs mesurables — chaque point de la porte du réel (60 jours de paper, 10 trades clos, "
+        "vérification sans ordre, alertes, sécurité du rapport…), l'acceptation du paper, puis les paliers du réel "
+        "— chacun avec qui doit agir : vous, le bot, le temps ou le marché.",
+        "Aujourd'hui : " + (view.get("text") or "non mesuré") + ".",
+        "L'estimation est une fourchette, pas une promesse ; armer le réel, changer le risque et lever le mode sûr "
+        "restent à vous seul.",
+        "Détail : python trendguard_bot.py objectifs. Je lis et j'explique, je n'agis pas."])
+
+
 def a_causal(ctx: Dict[str, Any]) -> str:
     """Ce qui cause quoi dans la règle, et ce qui est prouvé."""
     return "\n".join([
@@ -1109,6 +1123,8 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("keys", ("cle api", "cles api", "api", "binance", "2fa", "double authentification",
               "droit de retrait", "securiser ma cle", "securiser la cle"),
      a_keys, []),
+    ("objectifs", ("mission et objectifs", "quand le bot pourra", "passer au reel", "chemin critique", "objectifs",
+                   "date du reel", "combien de temps avant le reel"), a_objectifs, []),
     ("causal", ("intelligence causale", "qu est ce qui cause", "cause racine", "pourquoi le bot perd"), a_causal, []),
     ("monde", ("modele du monde", "etat du monde", "et si le marche", "scenarios", "ce qui a change",
                "et si tout baissait"), a_monde, []),

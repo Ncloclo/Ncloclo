@@ -553,6 +553,10 @@ inventée.
 Étape 26 : intelligence causale ([`docs/CAUSAL.md`](docs/CAUSAL.md),
 `python trendguard_bot.py causal`) : ce qui cause quoi dans la règle, éprouvé
 par intervention dans le simulateur, avec son niveau de preuve.
+Étape 27 : objectifs ([`docs/OBJECTIFS.md`](docs/OBJECTIFS.md),
+`python trendguard_bot.py objectifs`) : le chemin jusqu'au réel, objectif
+par objectif, qui doit agir, et une estimation en fourchette (jamais une
+promesse).
 Cadre de priorités et de dépendances
 ([`docs/FEUILLE_DE_ROUTE.md`](docs/FEUILLE_DE_ROUTE.md),
 `python trendguard_bot.py chantiers portes`) : chaque composant prouvé, et

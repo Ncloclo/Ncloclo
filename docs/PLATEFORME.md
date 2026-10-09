@@ -753,6 +753,25 @@ corrélation et causalité. Appliqué à TrendGuard : `causal.py`. Détail :
 économétriques (le graphe est écrit, on l'éprouve par intervention),
 expériences avec de l'argent réel (jamais : le paper en tient lieu).
 
+## Étape 27 du prompt : objectifs et planification
+
+Le vingt-septième document demande un moteur d'objectifs et de planification
+: hiérarchie d'objectifs, faisabilité, chemin critique, replanification,
+accord humain, sans qu'un plan devienne jamais une exécution. Appliqué à
+TrendGuard : `objectifs.py`. Détail : [`OBJECTIFS.md`](OBJECTIFS.md) ; dernier
+plan : [`PLAN.md`](PLAN.md) (`python trendguard_bot.py objectifs`).
+
+| Exigence de l'étape 27 | Ce qui a été fait |
+| --- | --- |
+| Hiérarchie et cycle de vie des objectifs (§5-12) | mission « aller au réel en sécurité » ; chaque point de la porte du réel, l'acceptation du paper, les paliers du réel ; critère, état, qui agit, priorité, avancement |
+| Chemin critique, calendrier (§15, §22-23) | la plus longue chaîne d'objectifs non atteints ; estimation de la porte du réel en fourchette (une prévision, jamais une garantie) |
+| Accord humain (§38) | ce que vous seul pouvez faire, listé ; armer le réel, le risque, le mode sûr : vous seul (moteur d'autorisation) |
+| Qualité, verdict (§69, §73) | 10 familles mesurées ; READY_FOR_AUTONOMOUS_PLANNING veut dire planifier, jamais exécuter |
+
+**Ce qui ne s'applique pas** : planification multi-agents et ordonnanceur
+(peu d'objectifs, aucun agent ne reçoit de tâche), domaines hors du métier du
+bot, exécution du plan (jamais).
+
 ## Ce qui reste (votre accord d'abord)
 
 1. **Débat des IA** (§43) : rôles haussier, baissier, critique et synthèse

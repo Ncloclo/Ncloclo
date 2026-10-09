@@ -37,6 +37,7 @@ from . import (
     monde,
     moteur_portefeuille,
     moteur_risque,
+    objectifs,
     politique,
     postmortem,
     recherche,
@@ -686,6 +687,11 @@ def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
         out.append(chk("Intelligence causale", None, causal.describe(ca)))
     except Exception as e:               # jamais bloquant
         out.append(chk("Intelligence causale", None, f"état non mesuré ({type(e).__name__})"))
+    try:
+        ob = objectifs.evaluate(gcfg, st)
+        out.append(chk("Mission et objectifs", None, objectifs.describe(ob)))
+    except Exception as e:               # jamais bloquant
+        out.append(chk("Mission et objectifs", None, f"état non mesuré ({type(e).__name__})"))
     out.append(chk("Paliers du réel", None, deploiement.describe(gcfg) + " ; exécutions : "
                    + deploiement.describe_quality(st.get("qualite_execution"))))
     au = st.get("autorisation") or {}

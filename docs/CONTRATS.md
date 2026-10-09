@@ -57,6 +57,7 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `MarketData.v1` | Binance (klines publiques) | décision du jour, régimes, qualité | 1.0.0 | INTERNAL | données |
 | `MemoryHealthReport.v1` | mémoire (memoire.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | données |
 | `OHLCV.v1` | Binance (klines publiques) | décision du jour, qualité des données | 1.0.0 | PUBLIC | données |
+| `PlanReport.v1` | objectifs (objectifs.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | données |
 | `QuantResult.v1` | moteur quantitatif (moteur_quant.py) | vous, rapport docs/QUANT.md, moteurs de stratégie et de risque (lecture) | 1.0.0 | PUBLIC | données |
 | `ResearchReport.v1` | recherche (recherche.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | données |
 | `WorldModelReport.v1` | modèle du monde (monde.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | données |
@@ -1033,6 +1034,24 @@ Règles d'une bougie : plus haut ≥ ouverture, clôture et plus bas ; plus bas 
 | Unicité | mêmes bougies, même verdict |
 | Trace (audit) | journal du bot, qualité |
 | Fichiers | `trendguard/contrats.py`, `trendguard/bot.py`, `trendguard/qualite.py` |
+
+## PlanReport.v1
+
+Mission, objectifs et plan : objectifs mesurables (critère, état, qui agit, dépendances), chemin critique, estimation de l'ouverture de la porte du réel en fourchette, vos actions.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | objectifs (objectifs.py) |
+| Consommateur | rapport, Rachelle, vous |
+| Entrée | porte du réel, acceptation du paper, état du bot, moteur d'autorisation |
+| Sortie | objectifs, chemin critique, estimation, actions, note |
+| Erreurs | exécution automatique : refusée ; fourchette désordonnée : refusée ; P0 : NOT_READY |
+| Droits | lecture seule : un plan ne lance rien |
+| Délai | à la demande ; chaque nuit dans le rapport |
+| Nouveaux essais | aucun |
+| Unicité | un plan par appel |
+| Trace (audit) | dans docs/PLAN.md |
+| Fichiers | `trendguard/objectifs.py` |
 
 ## QuantResult.v1
 

@@ -533,6 +533,9 @@ INTERFACE_STATUSES = ("READY", "REJECTED")
 # Étape 22 (recherche) : verdicts des affirmations.
 MEMORY_STATUSES = ("READY_FOR_GOVERNED_LONG_TERM_MEMORY", "NOT_READY")
 WORLD_STATUSES = ("READY_FOR_ADVANCED_REASONING_AND_WORLD_MODEL", "NOT_READY")
+PLAN_STATUSES = ("READY_FOR_AUTONOMOUS_PLANNING", "NOT_READY")
+GOAL_STATES = ("CREATED", "VALIDATED", "PLANNING", "PLAN_READY", "APPROVAL_PENDING", "APPROVED", "EXECUTING",
+               "MONITORING", "COMPLETED", "FAILED", "PAUSED", "CANCELLED", "BLOCKED", "EXPIRED", "REJECTED", "SAFE_MODE")
 WORLD_KINDS = ("OBSERVATION", "INTERPRETATION", "HYPOTHESIS", "INFERENCE", "PREDICTION", "SCENARIO", "DECISION")
 CLAIM_VERDICTS = ("CONFIRMED", "PROBABLY_TRUE", "UNCERTAIN", "CONTESTED", "PROBABLY_FALSE", "FALSE", "OUTDATED",
                   "INSUFFICIENT_EVIDENCE")
@@ -1780,6 +1783,54 @@ class CausalReport:
         return _plain(self)
 
 
+@dataclass(frozen=True)
+class PlanReport:
+    """Mission, objectifs et plan (PlanReport.v1, étape 27 §3, §12, §69) :
+    objectifs et leur état, estimation en jours (fourchette), chemin
+    critique. Un plan n'est jamais une exécution : aucune exécution
+    automatique ; prêt seulement sans P0 et avec une note d'au moins 95."""
+    VERSION: ClassVar[int] = 1
+    report_id: str
+    created_at: str
+    mode: str
+    status: str
+    readiness_score: float
+    p0_failures: Tuple[str, ...]
+    mission: str
+    goals: Tuple[Tuple[str, str, str], ...]
+    eta_days: Tuple[int, int, int]
+    critical_path: Tuple[str, ...]
+    engine_version: str
+    auto_execute: bool = False
+    version: int = 1
+
+    def __post_init__(self) -> None:
+        _version(self, self.VERSION)
+        _enum("status", self.status, PLAN_STATUSES)
+        _enum("mode", self.mode, ("paper", "live"))
+        check_uuid("report_id", self.report_id)
+        check_timestamp("created_at", self.created_at)
+        if not self.mission.strip() or not self.goals:
+            raise ContractError("MISSING_FIELD", "une mission et ses objectifs")
+        for _g, state, who in self.goals:
+            _enum("goal_state", state, GOAL_STATES)
+            if not who:
+                raise ContractError("MISSING_FIELD", "chaque objectif dit qui agit")
+        lo, mid, hi = self.eta_days
+        if not 0 <= lo <= mid <= hi:
+            raise ContractError("INCONSISTENT", "une fourchette ordonnée, jamais négative")
+        score = _number("readiness_score", self.readiness_score, positive=False)
+        if not 0 <= score <= 100:
+            raise ContractError("OUT_OF_RANGE", "readiness_score : de 0 à 100")
+        if self.status != "NOT_READY" and (self.p0_failures or score < 95):
+            raise ContractError("INCONSISTENT", "prêt : aucun P0 et une note d'au moins 95")
+        if self.auto_execute:
+            raise ContractError("POLICY", "un plan n'est jamais une exécution ni une autorisation", category="POLICY")
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
 def ohlcv_violations(rows: Any) -> int:
     """Bougies incohérentes (§41) : plus haut sous l'ouverture, la clôture
     ou le plus bas ; plus bas au-dessus ; volume négatif. Une bougie
@@ -1856,7 +1907,7 @@ SCHEMAS.update({c.__name__: c for c in (OrderIntent, RiskDecision, ExecutionAuth
                                         FinalValidationResult, GateReadinessReport, LiveDeploymentReport,
                                         ControlPlaneReport, ModelCard, LearningGovernanceReport,
                                         SecurityPostureReport, InterfaceReadinessReport, ResearchReport,
-                                        MemoryHealthReport, WorldModelReport, CausalReport)})
+                                        MemoryHealthReport, WorldModelReport, CausalReport, PlanReport)})
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -2288,6 +2339,13 @@ REGISTRY: Tuple[Contract, ...] = (
              ": refusé ; P0 : REJECTED", "lecture seule : les interventions restent dans le simulateur",
              "à la demande ; chaque nuit dans le rapport (sans interventions)", "aucun", "un examen par appel",
              "dans docs/CAUSES.md", 3, ("trendguard/causal.py",)),
+    Contract("PlanReport.v1", "mission, objectifs et plan : objectifs mesurables (critère, état, qui agit, "
+             "dépendances), chemin critique, estimation de l'ouverture de la porte du réel en fourchette, vos "
+             "actions", "objectifs (objectifs.py)", "rapport, Rachelle, vous", "porte du réel, acceptation du paper, "
+             "état du bot, moteur d'autorisation", "objectifs, chemin critique, estimation, actions, note",
+             "exécution automatique : refusée ; fourchette désordonnée : refusée ; P0 : NOT_READY",
+             "lecture seule : un plan ne lance rien", "à la demande ; chaque nuit dans le rapport", "aucun",
+             "un plan par appel", "dans docs/PLAN.md", 3, ("trendguard/objectifs.py",)),
     Contract("HealthReport.v1", "rapport quotidien et centre de sécurité", "rapport (report.py)",
              "vous (e-mail, panneau)", "état du bot, PC, journal, GitHub", "constats conformes, à corriger, informations",
              "source illisible : information", "lecture seule", "00:30 UTC", "rattrapé au retour du PC",

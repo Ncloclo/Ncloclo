@@ -700,6 +700,8 @@ TOOLS = {"alerts": ("alerts", "alertes : configurer | tester"),
          "autorisation": ("autorisation", "moteur d'autorisation : [matrice] | verifier <identité> <action>"),
          "apprentissage": ("apprentissage", "apprentissage continu et gouvernance des modèles : registre, dérive, "
                            "frontières, critères AC-001 à AC-070 [--out docs/APPRENTISSAGE.md]"),
+         "objectifs": ("objectifs", "mission et objectifs : objectifs mesurables, chemin critique, estimation de "
+                       "la porte du réel, vos actions [--out docs/PLAN.md]"),
          "causal": ("causal", "intelligence causale : graphe de la règle, interventions dans le simulateur, preuves, "
                     "causes racines [--out docs/CAUSES.md]"),
          "monde": ("monde", "modèle du monde et raisonnement : état, changements, raisonnement du jour, scénarios "
