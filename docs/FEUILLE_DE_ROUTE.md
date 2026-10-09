@@ -364,10 +364,10 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Propriétaire | bot |
 | Dépend de | Intelligence financière (savoir, veille, régimes, calendrier) (souple) |
 | Bloque | rien |
-| Code | `trendguard/savoir.py` |
-| Tests | `tests/test_savoir.py` |
-| Contrats | `KnowledgeHold.v1` |
-| Documentation | [`SAVOIR.md`](SAVOIR.md) |
+| Code | `trendguard/savoir.py`, `trendguard/recherche.py` |
+| Tests | `tests/test_savoir.py`, `tests/test_recherche.py` |
+| Contrats | `KnowledgeHold.v1`, `ResearchReport.v1` |
+| Documentation | [`SAVOIR.md`](SAVOIR.md), [`RECHERCHE.md`](RECHERCHE.md) |
 | Sécurité | lecture publique seulement |
 | Observabilité | bilan du savoir chaque nuit |
 | Acceptation | le bot lit et juge ses sources seul |

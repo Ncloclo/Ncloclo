@@ -261,8 +261,9 @@ COMPONENTS: Tuple[Component, ...] = (
               note="bloqué tant que la porte du réel est fermée : python trendguard_bot.py chantiers portes ; "
               "paliers : python trendguard_bot.py deploiement"),
     Component(_c(19), "Recherche autonome", "P2", "DEPLOYED", "INTELLIGENCE",
-              deps=((_c(9), "SOFT"),), files=("trendguard/savoir.py",),
-              tests=("tests/test_savoir.py",), contracts=("KnowledgeHold.v1",), docs=("docs/SAVOIR.md",),
+              deps=((_c(9), "SOFT"),), files=("trendguard/savoir.py", "trendguard/recherche.py"),
+              tests=("tests/test_savoir.py", "tests/test_recherche.py"), contracts=("KnowledgeHold.v1", "ResearchReport.v1"),
+              docs=("docs/SAVOIR.md", "docs/RECHERCHE.md"),
               security="lecture publique seulement", observability="bilan du savoir chaque nuit",
               acceptance="le bot lit et juge ses sources seul"),
     Component(_c(20), "Auto-évaluation (diagnostic expert, leçons des trades)", "P2", "MONITORED", "TRANSVERSE",

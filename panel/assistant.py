@@ -723,6 +723,19 @@ def doc_points(name: str, heading: str = "## Conclusions", limit: int = 6) -> Li
     return points[:limit]
 
 
+def a_recherche(ctx: Dict[str, Any]) -> str:
+    """Ce que le bot lit et ce qu'il en croit."""
+    return "\n".join([
+        "**Recherche et connaissances** : une information lue sur Internet n'est jamais tenue pour vraie d'office. "
+        "Chaque source a son rang (officielle : Binance ; professionnelle : calendrier, Fear & Greed, CoinGecko ; "
+        "presse ; communauté : Reddit, Hacker News, StockTwits, les IA), sa confiance (rang, fiabilité mesurée "
+        "sur les vrais cours, fraîcheur) et sa durée de validité. Un agrégateur qui reprend la presse n'est pas une "
+        "confirmation de plus.",
+        "Seule une annonce officielle de Binance peut empêcher un achat ; le savoir ne peut que reporter un achat, "
+        "et seulement sur des sources prouvées ; une IA n'agit jamais. Les contradictions du jour sont relevées.",
+        "Détail : python trendguard_bot.py recherche. Je lis et j'explique, je n'agis pas."])
+
+
 def a_cyber(ctx: Dict[str, Any]) -> str:
     """La cybersécurité : ce qui est défendu, où le bot peut se connecter."""
     view = ctx.get("cyber") or {}
@@ -1057,6 +1070,8 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("keys", ("cle api", "cles api", "api", "binance", "2fa", "double authentification",
               "droit de retrait", "securiser ma cle", "securiser la cle"),
      a_keys, []),
+    ("recherche", ("recherche et connaissances", "quelles sources", "verification des faits", "contradictions",
+                   "confiance des sources", "le bot croit"), a_recherche, []),
     ("cyber", ("cybersecurite", "cyber", "liste blanche", "integrite du code", "sorties internet", "autodefense",
                "piratage"), a_cyber, []),
     ("security", ("securite", "securiser", "securise", "securisee", "protege", "protegee",

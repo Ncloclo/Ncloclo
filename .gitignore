@@ -26,6 +26,8 @@
 *.expert.json.tmp
 *.modesur.json
 *.modesur.json.tmp
+*.incidents.json
+*.incidents.json.tmp
 *.rapport.json
 *.rapport.json.tmp
 # Alertes en pause après trois refus du mot de passe (alerts.py)

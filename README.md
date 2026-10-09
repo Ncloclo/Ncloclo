@@ -538,6 +538,10 @@ réponse prévue à chaque risque ; jamais offensif.
 Étape 21 : interface ([`docs/INTERFACE.md`](docs/INTERFACE.md)) : chaque
 commande du panneau classée (aucune n'exécute un ordre), fraîcheur des
 données, « Pourquoi ? » sous chaque réponse de Rachelle, lecture à voix haute.
+Étape 22 : recherche et connaissances ([`docs/RECHERCHE.md`](docs/RECHERCHE.md),
+`python trendguard_bot.py recherche`) : rang, confiance et validité de
+chaque source, verdict de chaque affirmation, contradictions ; seule
+Binance peut bloquer un achat.
 Cadre de priorités et de dépendances
 ([`docs/FEUILLE_DE_ROUTE.md`](docs/FEUILLE_DE_ROUTE.md),
 `python trendguard_bot.py chantiers portes`) : chaque composant prouvé, et

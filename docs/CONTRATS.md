@@ -56,6 +56,7 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `MarketData.v1` | Binance (klines publiques) | décision du jour, régimes, qualité | 1.0.0 | INTERNAL | données |
 | `OHLCV.v1` | Binance (klines publiques) | décision du jour, qualité des données | 1.0.0 | PUBLIC | données |
 | `QuantResult.v1` | moteur quantitatif (moteur_quant.py) | vous, rapport docs/QUANT.md, moteurs de stratégie et de risque (lecture) | 1.0.0 | PUBLIC | données |
+| `ResearchReport.v1` | recherche (recherche.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | données |
 | `Envelope.v1` | tout module (contrats.py) | tout module | 1.0.0 | INTERNAL | support |
 | `ErrorEnvelope.v2` | tout module | journal d'audit, rapport | 2.0.0 | INTERNAL | support |
 | `HealthReport.v1` | rapport (report.py) | vous (e-mail, panneau) | 1.0.0 | INTERNAL | support |
@@ -1011,6 +1012,24 @@ Résultat du laboratoire quantitatif : lois, stationnarité, persistance, volati
 | Unicité | mêmes données, même graine : même empreinte du résultat |
 | Trace (audit) | dans le rapport du laboratoire |
 | Fichiers | `trendguard/moteur_quant.py` |
+
+## ResearchReport.v1
+
+Recherche et connaissances : sources (rang, confiance, validité, dépendances), affirmations sur lesquelles le bot agit et leur verdict, contradictions du jour, examen AC-001 à AC-080.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | recherche (recherche.py) |
+| Consommateur | rapport, Rachelle, vous |
+| Entrée | base du savoir (lecture seule), état du bot (retraits de Binance), tests du dépôt |
+| Sortie | sources, verdicts, contradictions, note, verdict |
+| Erreurs | source inventée ou affirmation sans preuve : refusées ; P0 non résolu : REJECTED |
+| Droits | lecture seule : il juge ce que le bot croit, il ne change rien |
+| Délai | à la demande ; chaque nuit dans le rapport |
+| Nouveaux essais | aucun |
+| Unicité | un examen par appel |
+| Trace (audit) | dans docs/CONNAISSANCES.md |
+| Fichiers | `trendguard/recherche.py` |
 
 ## Envelope.v1
 

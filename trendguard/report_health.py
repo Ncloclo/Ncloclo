@@ -36,6 +36,7 @@ from . import (
     moteur_risque,
     politique,
     postmortem,
+    recherche,
     registre,
     risque,
     savoir,
@@ -662,6 +663,11 @@ def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
                                                      "python trendguard_bot.py cyber"))
     except Exception as e:               # jamais bloquant
         out.append(chk("Cybersécurité", None, f"état non mesuré ({type(e).__name__})"))
+    try:
+        rc = recherche.evaluate(gcfg, st)
+        out.append(chk("Recherche et connaissances", None, recherche.describe(rc)))
+    except Exception as e:               # jamais bloquant
+        out.append(chk("Recherche et connaissances", None, f"état non mesuré ({type(e).__name__})"))
     out.append(chk("Paliers du réel", None, deploiement.describe(gcfg) + " ; exécutions : "
                    + deploiement.describe_quality(st.get("qualite_execution"))))
     au = st.get("autorisation") or {}

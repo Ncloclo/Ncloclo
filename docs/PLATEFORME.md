@@ -671,6 +671,28 @@ devienne jamais une autorité de sécurité. Appliqué au panneau (2D) :
 (non construits, le panneau 2D montre tout), mot de réveil, reconnaissance du
 locuteur, dictée et vision, profils et plusieurs écrans (un seul utilisateur).
 
+## Étape 22 du prompt : recherche et connaissances
+
+Le vingt-deuxième document (les documents RACI l'appellent 23) demande un
+moteur de recherche autonome : hiérarchie et confiance des sources,
+vérification des faits, contradictions, validité dans le temps, provenance.
+TrendGuard lisait déjà Internet (noyau de savoir, veille) ; l'étape 22 ajoute
+le jugement de ce qu'il croit : `recherche.py`. Détail :
+[`RECHERCHE.md`](RECHERCHE.md) ; dernier état :
+[`CONNAISSANCES.md`](CONNAISSANCES.md) (`python trendguard_bot.py recherche`).
+
+| Exigence de l'étape 22 | Ce qui a été fait |
+| --- | --- |
+| Hiérarchie, confiance, diversité des sources (§11-13) | 12 sources en 4 rangs ; confiance = rang, fiabilité mesurée sur les vrais cours, fraîcheur ; un agrégateur n'est pas une confirmation de plus |
+| Vérification des faits, contradictions (§21-22) | verdict de chaque affirmation sur laquelle le bot agit (retrait de Binance : confirmé ; report du savoir : probable sur sources prouvées) ; contradictions du jour relevées |
+| Validité dans le temps (§23, §43) | durée de validité par source, de 6 heures à 30 jours ; périmé signalé |
+| Domaine critique (§2, §77) | vérifié : seule une annonce officielle de Binance bloque un achat ; aucune IA n'agit |
+| Critères, note, verdict (§71-72) | AC-001 à AC-080 ; READY ou REJECTED |
+
+**Ce qui ne s'applique pas** : recherche ouverte et scientifique, documents
+et OCR, recherche vectorielle (des sources fixes et des titres publics, pour le
+seul métier du bot) ; le graphe de connaissances est l'étape 24.
+
 ## Ce qui reste (votre accord d'abord)
 
 1. **Débat des IA** (§43) : rôles haussier, baissier, critique et synthèse

@@ -530,6 +530,9 @@ LEARNING_STATUSES = ("READY_FOR_CONTROLLED_CONTINUOUS_LEARNING", "NOT_READY")
 SECURITY_STATUSES = ("READY_FOR_PRODUCTION_SECURITY", "NOT_READY")
 # Étape 21 (interface) : verdict.
 INTERFACE_STATUSES = ("READY", "REJECTED")
+# Étape 22 (recherche) : verdicts des affirmations.
+CLAIM_VERDICTS = ("CONFIRMED", "PROBABLY_TRUE", "UNCERTAIN", "CONTESTED", "PROBABLY_FALSE", "FALSE", "OUTDATED",
+                  "INSUFFICIENT_EVIDENCE")
 # Étape 11 (moteur de risque) : états, décisions pour les achats, phases, niveaux d'alerte.
 RISK_STATES = ("RISK_NORMAL", "RISK_WARNING", "RISK_HIGH", "RISK_CRITICAL", "RISK_BLOCKED")
 RISK_APPROVALS = ("RISK_APPROVED", "RISK_APPROVED_WITH_LIMIT", "RISK_RESTRICTED", "RISK_BLOCKED")
@@ -1591,6 +1594,62 @@ class InterfaceReadinessReport:
         return _plain(self)
 
 
+@dataclass(frozen=True)
+class ResearchReport:
+    """Recherche et connaissances (ResearchReport.v1, étape 22 §71-72) :
+    sources, affirmations sur lesquelles le bot agit et leur verdict,
+    contradictions, examen AC-001 à AC-080. READY seulement sans P0 non résolu
+    et avec une note d'au moins 95 ; aucune source inventée."""
+    VERSION: ClassVar[int] = 1
+    report_id: str
+    created_at: str
+    mode: str
+    status: str
+    readiness_score: float
+    band: str
+    p0_failures: Tuple[str, ...]
+    passed: int
+    failed: int
+    unknown: int
+    not_applicable: int
+    sources: int
+    claims: Tuple[Tuple[str, str, int], ...]
+    contradictions: int
+    engine_version: str
+    fabricated: bool = False
+    version: int = 1
+
+    def __post_init__(self) -> None:
+        _version(self, self.VERSION)
+        _enum("status", self.status, INTERFACE_STATUSES)
+        _enum("band", self.band, GATE_BANDS)
+        _enum("mode", self.mode, ("paper", "live"))
+        check_uuid("report_id", self.report_id)
+        check_timestamp("created_at", self.created_at)
+        for _c, verdict, level in self.claims:
+            _enum("verdict", verdict, CLAIM_VERDICTS)
+            if level not in (1, 2, 3, 4):
+                raise ContractError("OUT_OF_RANGE", "rang d'une source : de 1 (officielle) à 4 (communauté)")
+        if self.sources <= 0 or self.contradictions < 0:
+            raise ContractError("OUT_OF_RANGE", "sources et contradictions : des nombres cohérents")
+        score = _number("readiness_score", self.readiness_score, positive=False)
+        if not 0 <= score <= 100:
+            raise ContractError("OUT_OF_RANGE", "readiness_score : de 0 à 100")
+        if self.passed + self.failed + self.unknown + self.not_applicable != 80:
+            raise ContractError("INCONSISTENT", "les 80 critères AC-001 à AC-080 sont tous comptés")
+        floor = {"READY": 95, "CANDIDATE": 90, "VALIDATION": 80, "DEVELOPMENT": 70, "NOT_READY": 0}
+        upper = {"READY": 100.01, "CANDIDATE": 95, "VALIDATION": 90, "DEVELOPMENT": 80, "NOT_READY": 70}
+        if not floor[self.band] <= score < upper[self.band]:
+            raise ContractError("INCONSISTENT", "la bande suit la note")
+        if self.status == "READY" and (self.p0_failures or score < 95):
+            raise ContractError("INCONSISTENT", "prête : aucun P0 non résolu et une note d'au moins 95")
+        if self.fabricated:
+            raise ContractError("POLICY", "aucune source inventée, aucune affirmation sans preuve", category="POLICY")
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
 def ohlcv_violations(rows: Any) -> int:
     """Bougies incohérentes (§41) : plus haut sous l'ouverture, la clôture
     ou le plus bas ; plus bas au-dessus ; volume négatif. Une bougie
@@ -1666,7 +1725,7 @@ SCHEMAS.update({c.__name__: c for c in (OrderIntent, RiskDecision, ExecutionAuth
                                         PaperAcceptanceReport, PolicyDecision, AuthorizationDecision,
                                         FinalValidationResult, GateReadinessReport, LiveDeploymentReport,
                                         ControlPlaneReport, ModelCard, LearningGovernanceReport,
-                                        SecurityPostureReport, InterfaceReadinessReport)})
+                                        SecurityPostureReport, InterfaceReadinessReport, ResearchReport)})
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -2066,6 +2125,14 @@ REGISTRY: Tuple[Contract, ...] = (
              "interface déclarée autorité de sécurité : refusée", "lecture seule : le panneau transmet, il ne décide "
              "pas", "à la demande", "aucun", "un examen par appel", "dans docs/INTERFACE.md", 4,
              ("panel/interface.py",)),
+    Contract("ResearchReport.v1", "recherche et connaissances : sources (rang, confiance, validité, "
+             "dépendances), affirmations sur lesquelles le bot agit et leur verdict, contradictions du jour, examen "
+             "AC-001 à AC-080", "recherche (recherche.py)", "rapport, Rachelle, vous", "base du savoir (lecture "
+             "seule), état du bot (retraits de Binance), tests du dépôt", "sources, verdicts, contradictions, note, "
+             "verdict", "source inventée ou affirmation sans preuve : refusées ; P0 non résolu : REJECTED",
+             "lecture seule : il juge ce que le bot croit, il ne change rien", "à la demande ; chaque nuit dans le "
+             "rapport", "aucun", "un examen par appel", "dans docs/CONNAISSANCES.md", 3,
+             ("trendguard/recherche.py",)),
     Contract("HealthReport.v1", "rapport quotidien et centre de sécurité", "rapport (report.py)",
              "vous (e-mail, panneau)", "état du bot, PC, journal, GitHub", "constats conformes, à corriger, informations",
              "source illisible : information", "lecture seule", "00:30 UTC", "rattrapé au retour du PC",
