@@ -55,6 +55,9 @@ SETTING_STAGE = {"controle": "CONTROLLED_LIVE", "limite": "LIMITED_PRODUCTION", 
 # dans la journée, capital confié au bot fixé par vous.
 LIMITS = {"CONTROLLED_LIVE": {"buys_day": 2, "daily_pct": 0.40, "capital_cap": True},
           "LIMITED_PRODUCTION": {"buys_day": 4, "daily_pct": 0.75, "capital_cap": True}}
+# Paliers où l'évolution encadrée est gelée : rien n'est appris avec de
+# l'argent réel avant la production (étape 19, apprentissage.py).
+LEARNING_FROZEN = ("CONTROLLED_LIVE", "LIMITED_PRODUCTION")
 LIVE_DAYS = {"LIMITED_PRODUCTION": 30, "PRODUCTION": 90}      # jours en réel avant de proposer le palier
 LIVE_TRADES = {"LIMITED_PRODUCTION": 10, "PRODUCTION": 30}    # trades réels clos
 FAMILY_WEIGHTS = {"safety": 0.25, "reconciliation": 0.15, "reliability": 0.15, "orders": 0.10, "broker": 0.10,

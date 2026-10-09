@@ -723,6 +723,21 @@ def doc_points(name: str, heading: str = "## Conclusions", limit: int = 6) -> Li
     return points[:limit]
 
 
+def a_apprentissage(ctx: Dict[str, Any]) -> str:
+    """La gouvernance des modèles : ce qui apprend, ce qui ne peut changer
+    que par vous."""
+    return "\n".join([
+        "**Gouvernance des modèles** : tout ce qui apprend ou décide à partir des données (la règle, l'évolution "
+        "encadrée, le palier de risque, le moteur de risque, la note des données, le carnet d'ordres, le savoir, "
+        "l'analyse financière, le comité, les IA) a sa fiche, son niveau de risque et son état.",
+        "Seul : la normale du carnet, le calibrage des prévisions, le choix de l'IA par ses mesures. Après épreuves "
+        "et 30 jours d'essai : les réglages de la règle ; le risque par achat, un cran à la fois, jusqu'au plafond "
+        "que vous avez fixé. Vous seul : les plafonds de risque, la porte, l'autorisation, le réel, les clés, le code.",
+        "En réel contrôlé et en production limitée, l'évolution est gelée : rien n'est appris avec de l'argent réel "
+        "avant la production.",
+        "Détail, dérive et 70 critères : python trendguard_bot.py apprentissage. Je lis et j'explique, je n'agis pas."])
+
+
 def a_controle(ctx: Dict[str, Any]) -> str:
     """Le plan de contrôle : la santé de tout TrendGuard et les incidents."""
     view = ctx.get("controle") or {}
@@ -1070,6 +1085,8 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("validation", ("validation du backtest", "backtest valide", "moteur de backtest", "sur ajustement",
                     "surapprentissage", "overfitting", "sharpe degonfle", "probabilite de sur ajustement"),
      a_validation, []),
+    ("apprentissage", ("gouvernance des modeles", "apprentissage continu", "modeles", "derive", "challenger",
+                       "champion", "fiche du modele", "ce que le bot apprend"), a_apprentissage, []),
     ("controle", ("plan de controle", "sante des services", "incident", "incidents", "procedure", "supervision",
                   "superviseur", "sauvegardes", "budget d erreur"), a_controle, []),
     ("deploiement", ("paliers du reel", "palier", "paliers", "deploiement", "reel controle", "production limitee",

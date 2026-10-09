@@ -398,11 +398,11 @@ Contrats de données → Base de données et journal financier → Noyau cogniti
 | Propriétaire | bot |
 | Dépend de | Auto-évaluation (diagnostic expert, leçons des trades) (souple), Rejeu et études (backtest, deux époques, crises) (validation) |
 | Bloque | rien |
-| Code | `trendguard/evolution.py`, `trendguard/registre.py` |
-| Tests | `tests/test_evolution.py` |
-| Contrats | `EvolutionChange.v1`, `Experiment.v1` |
-| Documentation | [`EVOLUTION.md`](EVOLUTION.md) |
-| Sécurité | jamais le risque cumulé, les positions, l'arrêt d'urgence ni le réel |
+| Code | `trendguard/evolution.py`, `trendguard/registre.py`, `trendguard/apprentissage.py` |
+| Tests | `tests/test_evolution.py`, `tests/test_apprentissage.py` |
+| Contrats | `EvolutionChange.v1`, `Experiment.v1`, `ModelCard.v1`, `LearningGovernanceReport.v1` |
+| Documentation | [`EVOLUTION.md`](EVOLUTION.md), [`APPRENTISSAGE_CONTINU.md`](APPRENTISSAGE_CONTINU.md) |
+| Sécurité | jamais le risque cumulé, les positions, l'arrêt d'urgence ni le réel ; gelée en réel contrôlé et en production limitée |
 | Observabilité | registre des expériences |
 | Acceptation | proposer, éprouver, essayer, puis adopter |
 | Santé | 100 % (seuil 75 %) |

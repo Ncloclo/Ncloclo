@@ -21,6 +21,7 @@ from . import (
     anticipation,
     autonomy,
     comite,
+    deploiement,
     evenements,
     evolution,
     finance,
@@ -118,6 +119,10 @@ class RoutinesMixin:
         if not (self.g.evolution and self.track_uptime) or self.state.get("evolution_day") == day:
             return
         self.state["evolution_day"] = day
+        if self.live and deploiement.current(self.g) in deploiement.LEARNING_FROZEN:
+            self.logger.info("[ÉVOLUTION] gelée au palier « " + deploiement.STAGE_FR[deploiement.current(self.g)]
+                             + " » : aucun essai ni changement avec de l'argent réel avant la production")
+            return
         peak, eq = self.state.get("peak_equity"), self.state.get("last_equity")
         storm = bool(self.state.get("halted")) or bool(
             peak and eq and float(eq) < float(peak) * (1 - evolution.STORM_DD))

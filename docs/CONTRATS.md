@@ -32,8 +32,10 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `GateReadinessReport.v1` | examen de la porte (porte_examen.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | cœur |
 | `KnowledgeHold.v1` | noyau de savoir (savoir.py) | décision du jour | 1.0.0 | INTERNAL | cœur |
 | `LLMExecution.v1` | exécution des modèles (modeles.py) | trace des IA, rapport, panneau | 1.0.0 | INTERNAL | cœur |
+| `LearningGovernanceReport.v1` | gouvernance des modèles (apprentissage.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | cœur |
 | `LiveDeploymentReport.v1` | paliers du réel (deploiement.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | cœur |
 | `ModelBenchmark.v1` | banc (modeles.py) | routeur (approbation), fiche du modèle, rapport | 1.0.0 | INTERNAL | cœur |
+| `ModelCard.v1` | gouvernance des modèles (apprentissage.py) | vous, Rachelle, l'examen | 1.0.0 | INTERNAL | cœur |
 | `ModelConsensus.v1` | veille (market_watch.py) | rapport de la veille, panneau, Rachelle | 1.0.0 | PUBLIC | cœur |
 | `ModelDisagreement.v1` | veille (market_watch.py) | rapport de la veille, panneau, Rachelle | 1.0.0 | PUBLIC | cœur |
 | `ModelSelection.v1` | routeur (modeles.py) | exécution des modèles | 1.0.0 | INTERNAL | cœur |
@@ -576,6 +578,24 @@ Un appel à un modèle d'IA.
 | Trace (audit) | table llm_executions, en ajout seulement |
 | Fichiers | `trendguard/modeles.py` |
 
+## LearningGovernanceReport.v1
+
+Apprentissage continu et gouvernance des modèles : registre, champion et challenger, dérive, frontières de l'apprentissage, examen AC-001 à AC-070.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | gouvernance des modèles (apprentissage.py) |
+| Consommateur | rapport, Rachelle, vous |
+| Entrée | registre, état du bot, cours en cache, tests du dépôt |
+| Sortie | état de chaque critère, note, frontières vérifiées, verdict |
+| Erreurs | P0 raté, frontière franchie : NOT_READY ; auto-autorisation : refusée |
+| Droits | lecture seule : il mesure, il ne change rien |
+| Délai | à la demande |
+| Nouveaux essais | aucun |
+| Unicité | un examen par appel |
+| Trace (audit) | dans docs/APPRENTISSAGE.md |
+| Fichiers | `trendguard/apprentissage.py` |
+
 ## LiveDeploymentReport.v1
 
 Exécution réelle par paliers : palier en vigueur (lu dans vos réglages), palier suivant et sa porte, examen AC-001 à AC-060.
@@ -611,6 +631,24 @@ Banc d'évaluation d'un modèle d'IA, versionné.
 | Unicité | un résultat par modèle et par banc |
 | Trace (audit) | table llm_benchmarks, en ajout seulement |
 | Fichiers | `trendguard/modeles.py` |
+
+## ModelCard.v1
+
+Fiche d'un modèle : usage, interdits, données, validation, limites, plan de retour, niveau de risque, état.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | gouvernance des modèles (apprentissage.py) |
+| Consommateur | vous, Rachelle, l'examen |
+| Entrée | réglages, état de l'évolution, versions des moteurs |
+| Sortie | fiche complète, empreinte, état lu dans le bot |
+| Erreurs | fiche incomplète, modèle critique sans propriétaire ni retour, modèle déclaré acheteur hors la règle : refusés |
+| Droits | lecture seule |
+| Délai | à la demande |
+| Nouveaux essais | aucun |
+| Unicité | une fiche par modèle et par version |
+| Trace (audit) | dans docs/APPRENTISSAGE.md |
+| Fichiers | `trendguard/apprentissage.py` |
 
 ## ModelConsensus.v1
 

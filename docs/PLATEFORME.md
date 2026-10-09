@@ -602,6 +602,30 @@ Numérotation : le prompt appelle cette étape 18 ; les documents RACI l'appelle
 19 (contrôle), puis 20 apprentissage, 21 cybersécurité, 22 interface, 23
 recherche. Les titres des prompts sont gardés.
 
+## Étape 19 du prompt : apprentissage continu et gouvernance des modèles
+
+Le dix-neuvième document demande que l'apprentissage soit continu mais
+contrôlé : registre des modèles et leurs fiches, risque de chaque modèle,
+champion et challenger, dérive, frontières de l'apprentissage, retour en
+arrière, aucune auto-modification des barrières. Appliqué à TrendGuard :
+`apprentissage.py`. Détail : [`APPRENTISSAGE_CONTINU.md`](APPRENTISSAGE_CONTINU.md) ;
+dernier examen : [`APPRENTISSAGE.md`](APPRENTISSAGE.md) (`python
+trendguard_bot.py apprentissage`).
+
+| Exigence de l'étape 19 | Ce qui a été fait |
+| --- | --- |
+| Registre, fiches, risque des modèles (§13-15) | 11 modèles (la règle, l'évolution, le palier de risque, le moteur de risque, la note des données, le carnet, le savoir, l'analyse financière, le comité, les IA…), chacun avec sa fiche, son niveau de risque et son état lu dans le bot ; seule la règle décide d'un achat |
+| Machine d'états (§47) | aucun saut d'état ; couper d'urgence toujours permis |
+| Champion et challenger (§19-22) | le réglage en vigueur contre l'essai de l'évolution (épreuves, 30 jours, retour seul) |
+| Dérive (§23) | données (indice de stabilité contre 2018-2022), concept (résultat des trades de la dernière année contre avant), performance et exécution |
+| Frontières (§32, §49, §57) | vérifiées : aucun plafond appris, palier de risque borné par votre plafond, aucune automatisation ni IA sur le risque, la porte ou le code ; **évolution gelée en réel contrôlé et en production limitée** |
+| Critères, note, verdict (§66-67, §70) | AC-001 à AC-070 ; READY_FOR_CONTROLLED_CONTINUOUS_LEARNING, jamais une auto-amélioration sans contrôle |
+
+**Ce qui ne s'applique pas** : entraînement de réseaux et plateforme MLOps
+(la règle est écrite, ses réglages éprouvés), signature d'artefacts (du code
+versionné par git), essai progressif en pourcentage du trafic (un seul
+portefeuille).
+
 ## Ce qui reste (votre accord d'abord)
 
 1. **Débat des IA** (§43) : rôles haussier, baissier, critique et synthèse

@@ -102,8 +102,9 @@ CONDITIONS_FR = {"two_settings": "deux réglages explicites (mode réel et confi
                  "live": "mode réel", "live_armed": "réel armé par vous", "live_gate_open": "porte du réel ouverte",
                  "risk_assessment_valid": "évaluation du risque du jour valide",
                  "risk_check_approved": "contrôle du risque approuvé", "trials_passed": "épreuves réussies",
-                 "permitted_parameter": "réglage permis à son niveau (jamais le risque, les positions, l'arrêt "
-                                        "d'urgence ni le réel)",
+                 "permitted_parameter": "réglage permis à son niveau (jamais les plafonds de risque, les positions, "
+                                        "l'arrêt d'urgence ni le réel ; le risque par achat seulement jusqu'au "
+                                        "plafond que vous avez fixé, TG_RISK_MAX_PCT)",
                  "binance_announcement": "annonce de Binance (retrait de la cote)",
                  "own_portfolio": "son propre portefeuille fictif", "merged_by_owner": "fusionné par vous sur GitHub",
                  "ci_green": "contrôles GitHub au vert", "fast_forward": "avance rapide seulement",

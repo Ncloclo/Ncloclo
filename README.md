@@ -526,6 +526,11 @@ palier.
 `python trendguard_bot.py controle`) : santé de 18 services, incidents
 regroupés par cause avec leur procédure, objectifs de service, sauvegardes
 (RPO, RTO), superviseur borné ; il voit, il n'agit pas.
+Étape 19 : gouvernance des modèles
+([`docs/APPRENTISSAGE_CONTINU.md`](docs/APPRENTISSAGE_CONTINU.md),
+`python trendguard_bot.py apprentissage`) : registre et fiches des modèles,
+dérive mesurée, frontières de l'apprentissage vérifiées ; l'évolution est
+gelée en réel contrôlé.
 Cadre de priorités et de dépendances
 ([`docs/FEUILLE_DE_ROUTE.md`](docs/FEUILLE_DE_ROUTE.md),
 `python trendguard_bot.py chantiers portes`) : chaque composant prouvé, et

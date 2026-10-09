@@ -26,7 +26,7 @@ python trendguard_bot.py autorisation verifier rachelle ARM_LIVE
 | la règle | système | proposer un achat |
 | la porte d'exécution | système | autoriser un achat, si le contrôle du risque est approuvé |
 | le bot | service d'exécution | acheter (paper : contrôle approuvé et autorisation valable ; réel : en plus, réel armé par vous, porte du réel ouverte, évaluation du risque du jour valide), vendre, déclencher l'arrêt d'urgence, poser le mode sûr |
-| l'évolution encadrée | automatisme | changer un réglage permis à son niveau, après ses épreuves (jamais le risque, les positions, l'arrêt d'urgence ni le réel) |
+| l'évolution encadrée | automatisme | changer un réglage permis à son niveau, après ses épreuves (jamais les plafonds de risque, les positions, l'arrêt d'urgence ni le réel ; le risque par achat seulement jusqu'au plafond que vous avez fixé, `TG_RISK_MAX_PCT`) ; gelée en réel contrôlé (étape 19) |
 | le noyau de savoir | automatisme | reporter un achat sur une annonce de Binance |
 | le bot libre | automatisme | acheter dans son propre portefeuille fictif |
 | la maintenance | automatisme | installer une mise à jour fusionnée par vous, contrôles au vert, en avance rapide, jamais en réel |

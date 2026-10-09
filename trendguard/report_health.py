@@ -19,6 +19,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from . import (
     acceptation,
+    apprentissage,
     attribution,
     audit,
     autorisation,
@@ -646,6 +647,13 @@ def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
                        else ""))
     except Exception as e:               # jamais bloquant
         out.append(chk("Plan de contrôle", None, f"état non mesuré ({type(e).__name__})"))
+    try:
+        ap = apprentissage.evaluate(gcfg, st)
+        out.append(chk("Gouvernance des modèles", None if ap["boundaries"]["ok"] else False, apprentissage.describe(ap),
+                       "" if ap["boundaries"]["ok"] else "Une frontière de l'apprentissage n'est plus tenue : "
+                                                         "python trendguard_bot.py apprentissage"))
+    except Exception as e:               # jamais bloquant
+        out.append(chk("Gouvernance des modèles", None, f"état non mesuré ({type(e).__name__})"))
     out.append(chk("Paliers du réel", None, deploiement.describe(gcfg) + " ; exécutions : "
                    + deploiement.describe_quality(st.get("qualite_execution"))))
     au = st.get("autorisation") or {}

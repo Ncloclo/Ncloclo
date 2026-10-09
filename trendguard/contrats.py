@@ -521,6 +521,11 @@ LIVE_READINESS_STATUSES = ("READY_FOR_STAGED_LIVE_EXECUTION", "NOT_READY")
 # Étape 18 (plan de contrôle) : verdict, gravités des incidents.
 CONTROL_STATUSES = ("READY_FOR_PRODUCTION_CONTROLLED_OPERATIONS", "NOT_READY")
 INCIDENT_SEVERITIES = ("P0", "P1", "P2", "P3", "P4")
+# Étape 19 (apprentissage continu) : états des modèles, niveaux de risque, verdict.
+MODEL_STATES = ("DRAFT", "TRAINING", "VALIDATING", "PENDING_APPROVAL", "APPROVED", "SHADOW", "CANARY", "ACTIVE",
+                "DEGRADED", "SUSPENDED", "RETIRED", "REJECTED", "BLOCKED", "EMERGENCY_DISABLED")
+MODEL_RISKS = ("LOW", "MEDIUM", "HIGH", "CRITICAL")
+LEARNING_STATUSES = ("READY_FOR_CONTROLLED_CONTINUOUS_LEARNING", "NOT_READY")
 # Étape 11 (moteur de risque) : états, décisions pour les achats, phases, niveaux d'alerte.
 RISK_STATES = ("RISK_NORMAL", "RISK_WARNING", "RISK_HIGH", "RISK_CRITICAL", "RISK_BLOCKED")
 RISK_APPROVALS = ("RISK_APPROVED", "RISK_APPROVED_WITH_LIMIT", "RISK_RESTRICTED", "RISK_BLOCKED")
@@ -1375,6 +1380,106 @@ class ControlPlaneReport:
         return _plain(self)
 
 
+@dataclass(frozen=True)
+class ModelCard:
+    """Fiche d'un modèle (ModelCard.v1, étape 19 §13-15) : à quoi il sert, ce
+    qu'il ne peut pas faire, ses données, sa validation, ses limites, son
+    plan de retour, son niveau de risque et son état. Un modèle CRITICAL a
+    un propriétaire humain et un plan de retour ; un modèle qui n'achète pas
+    ne peut pas être déclaré capable d'acheter."""
+    VERSION: ClassVar[int] = 1
+    model_id: str
+    name: str
+    kind: str
+    purpose: str
+    forbidden_use: str
+    data: str
+    validation: str
+    limitations: str
+    rollback: str
+    risk: str
+    state: str
+    can_trade: bool
+    owner: str
+    model_version: str
+    fingerprint: str
+    created_at: str
+    version: int = 1
+
+    def __post_init__(self) -> None:
+        _version(self, self.VERSION)
+        _enum("risk", self.risk, MODEL_RISKS)
+        _enum("state", self.state, MODEL_STATES)
+        check_timestamp("created_at", self.created_at)
+        for name in ("model_id", "name", "purpose", "forbidden_use", "data", "validation", "limitations",
+                     "model_version", "fingerprint"):
+            if not str(getattr(self, name)).strip():
+                raise ContractError("MISSING_FIELD", f"fiche incomplète : {name}")
+        if self.risk == "CRITICAL" and (self.owner != "vous" or not self.rollback.strip()):
+            raise ContractError("POLICY", "un modèle critique a un propriétaire humain et un plan de retour",
+                                category="POLICY")
+        if self.can_trade and self.model_id != "regle":
+            raise ContractError("POLICY", "seule la règle décide d'un achat ; les autres modèles conseillent ou "
+                                          "réduisent", category="POLICY")
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
+@dataclass(frozen=True)
+class LearningGovernanceReport:
+    """Apprentissage continu et gouvernance des modèles
+    (LearningGovernanceReport.v1, étape 19 §66-67, §70) : registre, frontières
+    de l'apprentissage, examen AC-001 à AC-070. Prêt seulement sans P0 raté,
+    avec une note d'au moins 95 et des frontières tenues ; jamais une
+    auto-amélioration sans contrôle."""
+    VERSION: ClassVar[int] = 1
+    report_id: str
+    created_at: str
+    mode: str
+    status: str
+    readiness_score: float
+    band: str
+    p0_failures: Tuple[str, ...]
+    passed: int
+    failed: int
+    unknown: int
+    not_applicable: int
+    models: int
+    critical_models: int
+    boundaries_ok: bool
+    engine_version: str
+    self_authorized: bool = False
+    version: int = 1
+
+    def __post_init__(self) -> None:
+        _version(self, self.VERSION)
+        _enum("status", self.status, LEARNING_STATUSES)
+        _enum("band", self.band, GATE_BANDS)
+        _enum("mode", self.mode, ("paper", "live"))
+        check_uuid("report_id", self.report_id)
+        check_timestamp("created_at", self.created_at)
+        if not 0 <= self.critical_models <= self.models or self.models <= 0:
+            raise ContractError("OUT_OF_RANGE", "modèles : des nombres cohérents")
+        score = _number("readiness_score", self.readiness_score, positive=False)
+        if not 0 <= score <= 100:
+            raise ContractError("OUT_OF_RANGE", "readiness_score : de 0 à 100")
+        if self.passed + self.failed + self.unknown + self.not_applicable != 70:
+            raise ContractError("INCONSISTENT", "les 70 critères AC-001 à AC-070 sont tous comptés")
+        floor = {"READY": 95, "CANDIDATE": 90, "VALIDATION": 80, "DEVELOPMENT": 70, "NOT_READY": 0}
+        upper = {"READY": 100.01, "CANDIDATE": 95, "VALIDATION": 90, "DEVELOPMENT": 80, "NOT_READY": 70}
+        if not floor[self.band] <= score < upper[self.band]:
+            raise ContractError("INCONSISTENT", "la bande suit la note")
+        if self.status != "NOT_READY" and (self.p0_failures or score < 95 or not self.boundaries_ok):
+            raise ContractError("INCONSISTENT", "prêt : aucun P0 raté, note ≥ 95, frontières tenues")
+        if self.self_authorized:
+            raise ContractError("POLICY", "l'intelligence n'est jamais son propre mécanisme d'autorisation",
+                                category="POLICY")
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
 def ohlcv_violations(rows: Any) -> int:
     """Bougies incohérentes (§41) : plus haut sous l'ouverture, la clôture
     ou le plus bas ; plus bas au-dessus ; volume négatif. Une bougie
@@ -1449,7 +1554,7 @@ SCHEMAS.update({c.__name__: c for c in (OrderIntent, RiskDecision, ExecutionAuth
                                         RiskAssessment, QuantResult, PortfolioDecision,
                                         PaperAcceptanceReport, PolicyDecision, AuthorizationDecision,
                                         FinalValidationResult, GateReadinessReport, LiveDeploymentReport,
-                                        ControlPlaneReport)})
+                                        ControlPlaneReport, ModelCard, LearningGovernanceReport)})
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -1821,6 +1926,19 @@ REGISTRY: Tuple[Contract, ...] = (
              "une réussite ; prêt avec un incident P0 ouvert : refusé", "lecture seule : il voit, il n'agit pas",
              "à la demande ; chaque nuit dans le rapport", "aucun", "un état par appel ; journal des incidents",
              "incidents ouverts et clos dans <bot>.incidents.json", 2, ("trendguard/controle.py",)),
+    Contract("ModelCard.v1", "fiche d'un modèle : usage, interdits, données, validation, limites, plan de retour, "
+             "niveau de risque, état", "gouvernance des modèles (apprentissage.py)", "vous, Rachelle, l'examen",
+             "réglages, état de l'évolution, versions des moteurs", "fiche complète, empreinte, état lu dans le bot",
+             "fiche incomplète, modèle critique sans propriétaire ni retour, modèle déclaré acheteur hors la règle : "
+             "refusés", "lecture seule", "à la demande", "aucun", "une fiche par modèle et par version", "dans "
+             "docs/APPRENTISSAGE.md", 2, ("trendguard/apprentissage.py",)),
+    Contract("LearningGovernanceReport.v1", "apprentissage continu et gouvernance des modèles : registre, "
+             "champion et challenger, dérive, frontières de l'apprentissage, examen AC-001 à AC-070",
+             "gouvernance des modèles (apprentissage.py)", "rapport, Rachelle, vous", "registre, état du bot, cours "
+             "en cache, tests du dépôt", "état de chaque critère, note, frontières vérifiées, verdict",
+             "P0 raté, frontière franchie : NOT_READY ; auto-autorisation : refusée", "lecture seule : il mesure, il "
+             "ne change rien", "à la demande", "aucun", "un examen par appel", "dans docs/APPRENTISSAGE.md", 2,
+             ("trendguard/apprentissage.py",)),
     Contract("HealthReport.v1", "rapport quotidien et centre de sécurité", "rapport (report.py)",
              "vous (e-mail, panneau)", "état du bot, PC, journal, GitHub", "constats conformes, à corriger, informations",
              "source illisible : information", "lecture seule", "00:30 UTC", "rattrapé au retour du PC",
