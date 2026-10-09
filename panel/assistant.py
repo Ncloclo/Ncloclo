@@ -723,6 +723,20 @@ def doc_points(name: str, heading: str = "## Conclusions", limit: int = 6) -> Li
     return points[:limit]
 
 
+def a_ingenierie(ctx: Dict[str, Any]) -> str:
+    """Comment le code du bot change et arrive sur ce PC."""
+    view = ctx.get("ingenierie") or {}
+    return "\n".join([
+        "**Ingénierie et exploitation** : chaque changement du code est tracé (git : quoi, pourquoi, quand, écrit "
+        "ou non avec une IA) ; les tests tournent sur GitHub à chaque envoi (style, tests, audit des bibliothèques) ; "
+        "les versions des bibliothèques sont figées et comparées à celles installées sur ce PC.",
+        "Le bot n'écrit jamais son propre code : la seule mise à jour qu'il installe est une Pull Request que vous "
+        "avez fusionnée, aux contrôles au vert, avec retour automatique à la version précédente en cas d'échec, et "
+        "jamais en réel sans votre commande.",
+        "Aujourd'hui : " + (view.get("text") or "non mesuré") + ".",
+        "Détail : python trendguard_bot.py ingenierie. Je lis et j'explique, je n'agis pas."])
+
+
 def a_gouvernance(ctx: Dict[str, Any]) -> str:
     """La gouvernance : qui possède quoi, qui peut quoi, les portes de qualité."""
     view = ctx.get("gouvernance") or {}
@@ -1169,6 +1183,8 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("keys", ("cle api", "cles api", "api", "binance", "2fa", "double authentification",
               "droit de retrait", "securiser ma cle", "securiser la cle"),
      a_keys, []),
+    ("ingenierie", ("ingenierie", "devops", "code du bot change", "comment le code", "versions des bibliotheques",
+                    "tests du bot", "auto modification"), a_ingenierie, []),
     ("gouvernance", ("gouvernance de l architecture", "gouvernance", "raci", "qui est responsable",
                      "portes de qualite", "source de verite", "frontieres entre modules"), a_gouvernance, []),
     ("perception", ("perception", "percoit", "multimodal", "multi-sources", "recoupement des sources",

@@ -700,6 +700,8 @@ TOOLS = {"alerts": ("alerts", "alertes : configurer | tester"),
          "autorisation": ("autorisation", "moteur d'autorisation : [matrice] | verifier <identité> <action>"),
          "apprentissage": ("apprentissage", "apprentissage continu et gouvernance des modèles : registre, dérive, "
                            "frontières, critères AC-001 à AC-070 [--out docs/APPRENTISSAGE.md]"),
+         "ingenierie": ("ingenierie", "ingénierie et exploitation : changements tracés, tests, chaîne de contrôle, "
+                        "versions figées, retour arrière, auto-modification [--out docs/INGENIERIE_ETAT.md]"),
          "gouvernance": ("gouvernance", "gouvernance de l'architecture : dix portes de qualité, RACI (un seul "
                          "responsable), qui peut quoi, sources de vérité, frontières [--out docs/GOUVERNANCE_ETAT.md]"),
          "perception": ("perception", "perception : observations datées de chaque source, alignées dans le temps, "

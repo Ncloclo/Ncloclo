@@ -366,6 +366,7 @@ class PanelApp(SecurityCenter):
                 "jumeau": self.jumeau_view(),
                 "perception": self.report_line("Perception"),
                 "gouvernance": self.report_line("Gouvernance"),
+                "ingenierie": self.report_line("Ingénierie et exploitation"),
                 "deploiement": {"text": deploiement.describe(self.g), "stage": deploiement.current(self.g),
                                 "quality": deploiement.describe_quality(self.data.state().get("qualite_execution"))}}
 

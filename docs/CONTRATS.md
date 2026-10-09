@@ -52,6 +52,7 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `BacktestManifest.v1` | moteur de backtest (moteur_backtest.py) | rapport de validation, vous | 1.0.0 | PUBLIC | données |
 | `CausalReport.v1` | intelligence causale (causal.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | données |
 | `DecisionRecord.v1` | décision du jour | journal financier, lignée des trades | 1.0.0 | CONFIDENTIAL | données |
+| `EngineeringReport.v1` | ingénierie (ingenierie.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | données |
 | `Experiment.v1` | évolution, études (registre.py) | rejeu, contrôle, rapport | 1.0.0 | INTERNAL | données |
 | `Feature.v1` | cœur financier (finance.py) | analyses, journal financier | 1.0.0 | PUBLIC | données |
 | `GovernanceReport.v1` | gouvernance (gouvernance.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | données |
@@ -948,6 +949,24 @@ Décision du jour dans le journal financier, avec la date limite de ses données
 | Unicité | une décision par jour |
 | Trace (audit) | journal financier |
 | Fichiers | `trendguard/donnees.py`, `trendguard/bot.py` |
+
+## EngineeringReport.v1
+
+Ingénierie et exploitation : changements du code tracés, tests et couverture par module, chaîne de contrôle GitHub, versions figées contre installées, retour arrière, auto-modification.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | ingénierie (ingenierie.py) |
+| Consommateur | rapport, Rachelle, vous |
+| Entrée | historique git, tests, workflow GitHub, bibliothèques installées |
+| Sortie | changements, tests, dérive, note |
+| Erreurs | auto-modification : NOT_READY ; autorité de production : refusée ; P0 : NOT_READY |
+| Droits | lecture seule : le bot n'écrit jamais son propre code |
+| Délai | à la demande ; chaque nuit dans le rapport |
+| Nouveaux essais | aucun |
+| Unicité | un rapport par appel |
+| Trace (audit) | dans docs/INGENIERIE_ETAT.md |
+| Fichiers | `trendguard/ingenierie.py` |
 
 ## Experiment.v1
 

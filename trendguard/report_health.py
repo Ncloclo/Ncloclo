@@ -31,6 +31,7 @@ from . import (
     donnees,
     evolution,
     gouvernance,
+    ingenierie,
     jumeau,
     learning,
     libre,
@@ -693,6 +694,11 @@ def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
         out.append(chk("Intelligence causale", None, causal.describe(ca)))
     except Exception as e:               # jamais bloquant
         out.append(chk("Intelligence causale", None, f"état non mesuré ({type(e).__name__})"))
+    try:
+        ig = ingenierie.evaluate(gcfg)
+        out.append(chk("Ingénierie et exploitation", None, ingenierie.describe(ig)))
+    except Exception as e:               # jamais bloquant
+        out.append(chk("Ingénierie et exploitation", None, f"état non mesuré ({type(e).__name__})"))
     try:
         gv = gouvernance.evaluate(gcfg, st)
         out.append(chk("Gouvernance", None, gouvernance.describe(gv)))

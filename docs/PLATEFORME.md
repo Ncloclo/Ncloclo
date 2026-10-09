@@ -841,6 +841,26 @@ cybersécurité, 21 interface, 22 recherche ; les documents de la RACI disent
 19, 20, 21, 22, 23. Ce dépôt suit les prompts pour les titres d'étapes et la
 RACI pour le manifeste des dépendances de l'étape 29.
 
+## Étapes 30 et 31 du prompt : ingénierie et exploitation
+
+Les documents 30 (moteur d'ingénierie autonome) et 31 (DevOps, infrastructure
+et nuage) demandent que chaque changement du code soit tracé, testé, validé,
+réversible, et que le déploiement ne devienne jamais une autorité. Appliqués
+à TrendGuard : `ingenierie.py`. Détail : [`INGENIERIE.md`](INGENIERIE.md) ;
+dernier état : [`INGENIERIE_ETAT.md`](INGENIERIE_ETAT.md)
+(`python trendguard_bot.py ingenierie`).
+
+| Exigence | Ce qui a été fait |
+| --- | --- |
+| Changement tracé, testé (30 §13, §19, §29) | historique git lu (sujet, auteur, co-auteur IA, étapes du prompt) ; tests et modules couverts ; composants sans test |
+| Chaîne de contrôle, retour arrière (30 §30-31, 31 §14) | contrôles GitHub (style, tests, audit des bibliothèques, pages web) ; version précédente connue ; retour automatique d'une mise à jour défaillante |
+| Auto-modification interdite (30 §37-38) | vérifié par lecture du code : aucun .py écrit, aucune installation, aucune commande git qui écrit hors de la mise à jour validée par vous |
+| État voulu contre observé, SBOM (31 §12, §21) | versions figées contre installées, toute dérive dite |
+| Déploiement contrôlé (31 §24, §56) | `maintenance.py` : Pull Request fusionnée par vous, contrôles au vert, avance rapide, contrôle de démarrage, jamais en réel sans vous |
+
+**Ce qui ne s'applique pas** : Kubernetes, nuage, Terraform, plusieurs régions
+(un seul PC) ; agents qui modifient le code (le bot ne s'écrit jamais).
+
 ## Ce qui reste (votre accord d'abord)
 
 1. **Débat des IA** (§43) : rôles haussier, baissier, critique et synthèse

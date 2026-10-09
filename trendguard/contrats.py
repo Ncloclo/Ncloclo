@@ -542,6 +542,30 @@ GOVERNANCE_STATUSES = ("READY", "CANDIDATE", "VALIDATING", "DEVELOPMENT", "REJEC
 QUALITY_GATES = ("FUNCTIONAL", "CONTRACT", "SECURITY", "PERFORMANCE", "RELIABILITY", "DATA_INTEGRITY", "OBSERVABILITY",
                  "FAILURE_RECOVERY", "REPRODUCIBILITY", "GOVERNANCE")
 GATE_RESULTS = ("PASS", "FAIL", "WAIVED")
+READINESS_BANDS = ("READY", "RELEASE_CANDIDATE", "VALIDATING", "DEVELOPMENT", "REJECTED", "NOT_READY")
+
+
+def readiness_band(score: float) -> str:
+    """Bandes communes des étapes 30 à 39 : READY à partir de 95, RELEASE_CANDIDATE
+    90, VALIDATING 80, DEVELOPMENT 70, sinon REJECTED."""
+    return ("READY" if score >= 95 else "RELEASE_CANDIDATE" if score >= 90 else "VALIDATING" if score >= 80
+            else "DEVELOPMENT" if score >= 70 else "REJECTED")
+
+
+def _readiness(r: Any) -> float:
+    """Statut, note et défauts P0 cohérents : un P0 donne NOT_READY quelle que
+    soit la note ; sinon le statut est la bande de la note."""
+    _enum("status", r.status, READINESS_BANDS)
+    _enum("mode", r.mode, ("paper", "live"))
+    check_uuid("report_id", r.report_id)
+    check_timestamp("created_at", r.created_at)
+    score = _number("readiness_score", r.readiness_score, positive=False)
+    if not 0 <= score <= 100:
+        raise ContractError("OUT_OF_RANGE", "readiness_score : de 0 à 100")
+    expected = "NOT_READY" if r.p0_failures else readiness_band(score)
+    if r.status != expected:
+        raise ContractError("INCONSISTENT", f"statut {r.status} : attendu {expected} (P0 et note)")
+    return score
 GOAL_STATES = ("CREATED", "VALIDATED", "PLANNING", "PLAN_READY", "APPROVAL_PENDING", "APPROVED", "EXECUTING",
                "MONITORING", "COMPLETED", "FAILED", "PAUSED", "CANCELLED", "BLOCKED", "EXPIRED", "REJECTED", "SAFE_MODE")
 WORLD_KINDS = ("OBSERVATION", "INTERPRETATION", "HYPOTHESIS", "INFERENCE", "PREDICTION", "SCENARIO", "DECISION")
@@ -2028,6 +2052,45 @@ class GovernanceReport:
         return _plain(self)
 
 
+@dataclass(frozen=True)
+class EngineeringReport:
+    """Ingénierie et exploitation (EngineeringReport.v1, étapes 30-31) :
+    changements tracés, tests, couverture par module, dérive des
+    bibliothèques, auto-modification. Une auto-modification interdit READY ;
+    l'ingénierie n'a jamais d'autorité de production."""
+    VERSION: ClassVar[int] = 1
+    report_id: str
+    created_at: str
+    mode: str
+    status: str
+    readiness_score: float
+    p0_failures: Tuple[str, ...]
+    commits: int
+    traced_share: float
+    test_functions: int
+    module_coverage: float
+    drift: Tuple[str, ...]
+    self_modification: Tuple[str, ...]
+    engine_version: str
+    production_authority: bool = False
+    version: int = 1
+
+    def __post_init__(self) -> None:
+        _version(self, self.VERSION)
+        _readiness(self)
+        if any(isinstance(n, bool) or not isinstance(n, int) or n < 0 for n in (self.commits, self.test_functions)):
+            raise ContractError("OUT_OF_RANGE", "des nombres entiers, jamais négatifs")
+        _score01("traced_share", self.traced_share)
+        _score01("module_coverage", self.module_coverage)
+        if self.self_modification and self.status != "NOT_READY":
+            raise ContractError("INCONSISTENT", "une auto-modification : NOT_READY")
+        if self.production_authority:
+            raise ContractError("POLICY", "l'ingénierie n'a jamais d'autorité de production", category="POLICY")
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
 def ohlcv_violations(rows: Any) -> int:
     """Bougies incohérentes (§41) : plus haut sous l'ouverture, la clôture
     ou le plus bas ; plus bas au-dessus ; volume négatif. Une bougie
@@ -2105,7 +2168,8 @@ SCHEMAS.update({c.__name__: c for c in (OrderIntent, RiskDecision, ExecutionAuth
                                         ControlPlaneReport, ModelCard, LearningGovernanceReport,
                                         SecurityPostureReport, InterfaceReadinessReport, ResearchReport,
                                         MemoryHealthReport, WorldModelReport, CausalReport, PlanReport,
-                                        TwinReport, Observation, PerceptionReport, GovernanceReport)})
+                                        TwinReport, Observation, PerceptionReport, GovernanceReport,
+                                        EngineeringReport)})
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -2537,6 +2601,13 @@ REGISTRY: Tuple[Contract, ...] = (
              ": refusé ; P0 : REJECTED", "lecture seule : les interventions restent dans le simulateur",
              "à la demande ; chaque nuit dans le rapport (sans interventions)", "aucun", "un examen par appel",
              "dans docs/CAUSES.md", 3, ("trendguard/causal.py",)),
+    Contract("EngineeringReport.v1", "ingénierie et exploitation : changements du code tracés, tests et "
+             "couverture par module, chaîne de contrôle GitHub, versions figées contre installées, retour arrière, "
+             "auto-modification", "ingénierie (ingenierie.py)", "rapport, Rachelle, vous",
+             "historique git, tests, workflow GitHub, bibliothèques installées", "changements, tests, dérive, note",
+             "auto-modification : NOT_READY ; autorité de production : refusée ; P0 : NOT_READY",
+             "lecture seule : le bot n'écrit jamais son propre code", "à la demande ; chaque nuit dans le rapport",
+             "aucun", "un rapport par appel", "dans docs/INGENIERIE_ETAT.md", 3, ("trendguard/ingenierie.py",)),
     Contract("GovernanceReport.v1", "gouvernance de l'architecture : dix portes de qualité, RACI (un seul "
              "responsable par responsabilité), qui peut quoi, une source de vérité par donnée, frontières vérifiées "
              "dans le code, échecs silencieux", "gouvernance (gouvernance.py)", "rapport, Rachelle, vous",
