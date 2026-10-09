@@ -23,6 +23,7 @@ from . import (
     audit,
     autorisation,
     chantiers,
+    deploiement,
     donnees,
     evolution,
     learning,
@@ -636,6 +637,8 @@ def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
         out.append(chk("Acceptation du paper", None, acceptation.describe(ac)))
     except Exception as e:               # une évaluation impossible n'empêche pas le rapport
         out.append(chk("Acceptation du paper", None, f"évaluation impossible ({type(e).__name__})"))
+    out.append(chk("Paliers du réel", None, deploiement.describe(gcfg) + " ; exécutions : "
+                   + deploiement.describe_quality(st.get("qualite_execution"))))
     au = st.get("autorisation") or {}
     if au.get("day"):
         out.append(chk("Moteur d'autorisation", False if au.get("mismatch") else None,

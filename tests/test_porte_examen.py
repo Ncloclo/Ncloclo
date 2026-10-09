@@ -108,7 +108,7 @@ def test_exchange_rules_are_checked_in_live_only():
     assert bot._instrument({"asset": "eth", "qty": 1.0, "entry": px, "exec_price": px})[0]
     ok, why = bot._instrument({"asset": "eth", "qty": 1e-7, "entry": px, "exec_price": px})
     assert not ok and "nulle" in why                                        # arrondie au pas du lot : zéro
-    assert bot._portfolio({"asset": "eth", "qty": 1.0, "entry": px}, 1000.0, 1000.0, DAY, NOW).instrument[0]
+    assert bot._portfolio({"asset": "eth", "qty": 1.0, "entry": px, "cost": px}, 1000.0, 1000.0, DAY, NOW).instrument[0]
 
 
 # ---------- Chaos (§52-57) ----------

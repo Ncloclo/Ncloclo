@@ -96,7 +96,7 @@ le bot avec et sans la porte : mêmes trades).
 | --- | --- |
 | Contrats explicites, versionnés, registre des contrats, matrice, niveaux de priorité (§3-5, §41, §44, §60-61, §71) | `contrats.py` : 17 contrats (producteur, consommateur, entrée, sortie, erreurs, droits, délai, nouveaux essais, unicité, trace, fichiers, niveau) ; [`CONTRATS.md`](CONTRATS.md) en est tiré et un test vérifie qu'ils restent identiques |
 | Schémas stricts, erreurs standard (§4.3, §36, §64) | intention d'achat, décision de risque, autorisation, mode sûr : vérifiés à la création ; valeur manquante, mauvais type, hors limites ou autre version refusés, jamais corrigés en silence (enveloppe d'erreur : code, catégorie, nouvel essai possible) |
-| Moteur de risque, porte d'exécution, chaîne Signal → Décision → Risque → Autorisation → Ordre sans raccourci (§26, §28, §29, §54) | `porte.py` : 18 contrôles fixes avant CHAQUE achat, en paper comme en réel (mode réel armé, porte du réel, arrêt d'urgence, mode sûr, garde du jour, décision du jour, crypto autorisée, doublon, positions, risque de l'achat, risque cumulé, taille, argent disponible, stop sous le prix, montant minimum, qualité des données au moins 50/100, évaluation du jour du moteur de risque, étape 11 ; règles de Binance en réel, étape 16) ; APPROVED, REJECTED ou EMERGENCY_BLOCK avec la raison ; autorisation valable 5 minutes |
+| Moteur de risque, porte d'exécution, chaîne Signal → Décision → Risque → Autorisation → Ordre sans raccourci (§26, §28, §29, §54) | `porte.py` : 19 contrôles fixes avant CHAQUE achat, en paper comme en réel (mode réel armé, porte du réel, arrêt d'urgence, mode sûr, garde du jour, décision du jour, crypto autorisée, doublon, positions, risque de l'achat, risque cumulé, taille, argent disponible, stop sous le prix, montant minimum, qualité des données au moins 50/100, évaluation du jour du moteur de risque, étape 11 ; règles de Binance en réel, étape 16 ; plafonds du palier en réel, étape 17) ; APPROVED, REJECTED ou EMERGENCY_BLOCK avec la raison ; autorisation valable 5 minutes |
 | Le LLM n'est jamais l'autorité finale (§62-63, §73) | déjà vrai et désormais écrit dans les contrats : les IA donnent un avis, le noyau de savoir peut seulement reporter un achat, la porte est faite de règles fixes |
 | Unicité des opérations critiques (§38) | une seule intention d'achat par crypto et par décision (clé jour:crypto:BUY) ; en réel, l'intention est écrite avant l'ordre et résolue par l'identifiant client (moteur v29) |
 | Traçabilité de bout en bout (§6, §31) | chaque achat et chaque trade portent l'identifiant de la décision du jour, du contrôle du risque et de l'autorisation |
@@ -503,7 +503,7 @@ déclaratif, versionné, expliqué et sûr par défaut. Appliqué à TrendGuard 
 
 | Exigence de l'étape 14 | Ce qui a été fait |
 | --- | --- |
-| Registre, langage, versions (§8-10, §47-48) | 20 politiques versionnées (19 à l'étape 14) (type, gravité, catégorie, condition, action, raison) en langage fermé, sans code exécuté |
+| Registre, langage, versions (§8-10, §47-48) | 21 politiques versionnées (19 à l'étape 14) (type, gravité, catégorie, condition, action, raison) en langage fermé, sans code exécuté |
 | Actions, conflits, décision (§11, §34-37) | huit actions, de « permis » à « compte gelé » ; la plus grave l'emporte ; décision expliquée et valable 5 minutes |
 | Sécurité par défaut (§4) | une politique illisible bloque, jamais ne permet ; un registre incohérent est signalé |
 | Même décision que la porte | 3 000 cas tirés au hasard, 0 écart ; vérifiée à chaque achat du bot, un écart est signalé ; la porte reste le seul point d'application |
@@ -553,6 +553,29 @@ complétée. Détail : [`PORTE_EXECUTION.md`](PORTE_EXECUTION.md) ; dernier exam
 seul), signature par clé matérielle, API de la porte (une fonction du bot,
 aucune API n'achète), marge et levier (Spot au comptant), bande de prix (achat
 recalculé au prix du moment).
+
+## Étape 17 du prompt : exécution réelle par paliers
+
+Le dix-septième document demande un moteur d'exécution réelle contrôlé :
+gestion des ordres, exactement une exécution, rapprochement continu, reprise,
+puis un passage au réel par paliers, sans promotion automatique. Le moteur
+d'exécution est v29 (inchangé), déjà éprouvé ; l'étape 17 l'a examiné et a
+ajouté les paliers. Détail : [`DEPLOIEMENT_REEL.md`](DEPLOIEMENT_REEL.md) ;
+dernier examen : [`DEPLOIEMENT.md`](DEPLOIEMENT.md) (`python trendguard_bot.py
+deploiement`).
+
+| Exigence de l'étape 17 | Ce qui a été fait |
+| --- | --- |
+| Paliers, aucune promotion automatique (§33, §35, §57) | paper → réel simulé (testnet) → réel contrôlé → production limitée → production ; le palier se lit dans vos réglages (`TG_PALIER_REEL`), le bot ne s'en donne jamais un ; chaque porte mesurée, avec ce qui manque |
+| Réel contrôlé (§34) | plafonds appliqués par la porte d'exécution en réel seulement : 2 achats par jour, 40 % du capital acheté par jour, capital confié au bot exigé (production limitée : 4 et 75 %) |
+| Qualité d'exécution (§40-41) | écart entre le prix payé et le cours de décision à chaque achat ; délai d'exécution en réel |
+| Gestion des ordres, rapprochement, reprise (§5-31) | v29 : intention avant l'envoi, identifiant client unique, réponse perdue retrouvée, état inconnu → arrêt, rapprochement des ordres, positions, soldes et frais ; prouvé par ses tests |
+| Critères, note, verdict (§53, §55, §62) | AC-001 à AC-060 mesurés ou prouvés ; READY_FOR_STAGED_LIVE_EXECUTION, jamais une production sans restriction |
+
+**Ce qui ne s'applique pas** : plusieurs courtiers, routage et bascule
+(Binance seul), ordres parents et enfants, algorithmes TWAP et VWAP (un ordre
+au marché, moins de 0,03 % du volume), API et flux d'événements dédiés (journal
+financier, audit et contexte de v29), plusieurs comptes.
 
 ## Ce qui reste (votre accord d'abord)
 

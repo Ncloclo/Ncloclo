@@ -37,6 +37,7 @@ from trendguard import (
     autonomy,
     autorisation,
     chantiers,
+    deploiement,
     evolution,
     expert,
     learning,
@@ -349,7 +350,9 @@ class PanelApp(SecurityCenter):
                 "acceptation": acceptation.evaluate(self.g, self.data.state()),
                 "politique": self.data.state().get("politique") or {},
                 "autorisation": self.data.state().get("autorisation") or {},
-                "porte": {k: v for k, v in (self.data.state().get("porte") or {}).items() if k != "keys"}}
+                "porte": {k: v for k, v in (self.data.state().get("porte") or {}).items() if k != "keys"},
+                "deploiement": {"text": deploiement.describe(self.g), "stage": deploiement.current(self.g),
+                                "quality": deploiement.describe_quality(self.data.state().get("qualite_execution"))}}
 
     def anticipation_view(self) -> Dict[str, Any]:
         """Ce que le bot fera probablement à la prochaine clôture, avec les

@@ -6,6 +6,7 @@ Partie de la classe TrendGuardBot (bot.py), qui en hérite.
 """
 from __future__ import annotations
 
+import time
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
@@ -13,7 +14,16 @@ import ccxt
 
 import v29
 
-from . import autorisation, chantiers, learning, moteur_risque, politique, porte, postmortem
+from . import (
+    autorisation,
+    chantiers,
+    deploiement,
+    learning,
+    moteur_risque,
+    politique,
+    porte,
+    postmortem,
+)
 from . import trend_strategy as ts
 from .bot_types import Slot, last_closed_day
 from .contrats import ContractError, Money, OrderIntent
@@ -366,9 +376,12 @@ class ExecutionMixin:
             self._record_buy(a, now, plan["entry"], plan["qty"], plan["cost"],
                              plan["risk_quote"], "différé" if deferred else "")
             self._bought(a, plan, trace, now)
+            self.state["qualite_execution"] = deploiement.note_quality(
+                self.state.get("qualite_execution"), a, float(plan["ref_price"]), float(plan["entry"]), None)
             if deferred:
                 learning.note_deferral(self._learning(), "bought", ruse_gain)
             return plan
+        sent_at = time.perf_counter()
         res = s.eng.enter_planned(
             s.ctx, plan["qty"], plan["exec_price"], sl_abs=disaster,
             tp_abs=plan["ref_price"] * 100,
@@ -377,6 +390,7 @@ class ExecutionMixin:
                   "equity": equity, "eff_risk_pct": self.p.risk_pct * 100,
                   "score": int(plan["mom"] * 10)},
             candle_ts=int(now.timestamp() * 1000))
+        latency_ms = (time.perf_counter() - sent_at) * 1000
         if res == v29.EntryResult.OPENED:
             self.state.setdefault("entry_regimes", {})[a] = (self.state.get("regime_detail") or {}).get("texte")
             self.state.setdefault("entry_traces", {})[a] = trace
@@ -392,6 +406,9 @@ class ExecutionMixin:
                              plan["risk_quote"], "différé" if deferred else "")
             if deferred:
                 learning.note_deferral(self._learning(), "bought", ruse_gain)
+            self.state["qualite_execution"] = deploiement.note_quality(
+                self.state.get("qualite_execution"), a, float(plan["ref_price"]),
+                float(p.buy_price or plan["exec_price"]), latency_ms)
         else:
             self._audit("ordre.achat", a, f"non exécuté ({getattr(res, 'name', res)})", now=now,
                         authorization=trace["authorization_id"], correlation_id=trace["decision_id"],
@@ -481,6 +498,15 @@ class ExecutionMixin:
         except Exception as e:
             return False, f"règles de Binance illisibles ({type(e).__name__})"
 
+    def _stage_limits(self, plan: Dict[str, Any], equity: float, day: str) -> Tuple[bool, str]:
+        """Plafonds du palier du réel (deploiement.stage_limits) : achats et
+        montant achetés aujourd'hui, capital confié au bot fixé par vous."""
+        log = self.state.get("porte") or {}
+        today = log.get("day") == day
+        return deploiement.stage_limits(deploiement.current(self.g), len(log.get("keys") or []) if today else 0,
+                                        float(log.get("notional") or 0.0) if today else 0.0, float(plan["cost"]),
+                                        float(equity), float(self.g.max_capital))
+
     def _portfolio(self, plan: Dict[str, Any], equity: float, cash: float, day: str, now: datetime) -> Any:
         """Le portefeuille et les politiques du moment, vus par la porte."""
         holdings = self._holdings()
@@ -503,7 +529,8 @@ class ExecutionMixin:
             production=self._production(day) if self.live and g.release_gate else None,
             risk_engine=moteur_risque.gate((self.state.get("moteur_risque") or {}).get("pre"), day, now)
             if g.risk_engine else None,
-            instrument=self._instrument(plan) if self.live else None)
+            instrument=self._instrument(plan) if self.live else None,
+            stage=self._stage_limits(plan, equity, day) if self.live else None)
 
     def _final_validation(self, plan: Dict[str, Any], now: datetime) -> bool:
         """Validation finale juste avant l'ordre (porte.final_validation) :
@@ -591,7 +618,9 @@ class ExecutionMixin:
                 fees: Optional[float] = None) -> None:
         """Achat exécuté : clé d'unicité gardée pour la journée, ordre et
         exécution dans le journal financier, trace dans le journal d'audit."""
-        self.state.setdefault("porte", {}).setdefault("keys", []).append(trace["key"])
+        log = self.state.setdefault("porte", {})
+        log.setdefault("keys", []).append(trace["key"])
+        log["notional"] = float(log.get("notional") or 0.0) + float(plan["cost"])
         qty = float(qty if qty is not None else plan["qty"])
         price = float(price if price is not None else plan["entry"])
         self._journal("record_order", trace["key"], a, "BUY", qty, price, self.g.run_mode, "FILLED",

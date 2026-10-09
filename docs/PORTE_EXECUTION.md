@@ -6,7 +6,7 @@ point par point et complétée là où c'était utile et sûr. Rien ne change en
 paper dans le fonctionnement normal : les compléments ne font que bloquer.
 
 ```text
-plan du jour → intention d'achat → contrôle (18 règles) → autorisation (5 min)
+plan du jour → intention d'achat → contrôle (19 règles) → autorisation (5 min)
 → validation finale, juste avant l'ordre → ordre (v29) → exécution → rapprochement
 ```
 

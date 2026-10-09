@@ -42,6 +42,8 @@ TG_ENV_DOC: Dict[str, str] = {
     "TG_RISK_MAX_PCT": "Palier de risque : risque par achat que le bot peut choisir lui-même si son analyse le justifie (0.02 = 2 % au plus ; 0.01 = jamais plus de 1 %)",
     "TG_HEARTBEAT_MIN": "Intervalle du battement de cœur dans le journal (min, 0 = off)",
     "TG_MAX_CAPITAL": "Capital max géré par le bot en USDT (0 = tout le compte)",
+    "TG_PALIER_REEL": "Palier du réel, changé seulement par vous : controle (défaut : 2 achats par jour, 40 % du "
+                      "capital par jour, TG_MAX_CAPITAL exigé), limite (4 achats, 75 %), production",
     "TG_DD_THROTTLE": "Profil prudent : baisse:multiplicateur (ex. 0.10:0.5) ; vide = off",
     "TG_AUTO_DIAGNOSE_DAYS": "Auto-diagnostic tous les N jours (0 = désactivé)",
     "TG_ANTICIPATION": "true : alerte quand une vente ou un achat sont probables à la prochaine clôture",
@@ -146,6 +148,10 @@ class GuardConfig:
     # du bot principal ; activé par l'environnement.
     libre: bool = False
     max_capital: float = 0.0            # 0 = tout le compte
+    # Palier du réel (deploiement.py) : changé seulement par vous ; le bot ne
+    # monte jamais seul d'un palier. « production » dans le code (essais),
+    # « controle » par défaut dans l'environnement (TG_PALIER_REEL).
+    live_stage: str = "production"
     keep_awake: bool = False            # anti-veille (activé par l'environnement)
     max_spread: float = 0.005           # ruse : carnet anormal → achat différé
     entry_retry_hours: float = 6.0      # achat différé : nouveaux essais pendant 6 h
@@ -180,6 +186,8 @@ class GuardConfig:
             raise ValueError("BTC doit faire partie de l'univers (régime).")
         if self.max_capital < 0:
             raise ValueError("TG_MAX_CAPITAL doit être >= 0.")
+        if self.live_stage not in ("controle", "limite", "production"):
+            raise ValueError("TG_PALIER_REEL doit être controle, limite ou production.")
         if not (0 < self.kill_drawdown < 1):
             raise ValueError("TG_KILL_DRAWDOWN doit être dans ]0, 1[.")
         if self.kill_resume_days < 0:
@@ -268,6 +276,7 @@ def load_guard_config_from_env() -> GuardConfig:
         libre=v29._env_b("TG_BOT_LIBRE", True),
         savoir_db=v29._env_s("TG_SAVOIR_DB", os.path.join(v29.APP_DIR, "trendguard_savoir.db")),
         max_capital=v29._env_f("TG_MAX_CAPITAL", 0.0),
+        live_stage=v29._env_s("TG_PALIER_REEL", "controle").lower(),
         keep_awake=v29._env_b("TG_KEEP_AWAKE", True),
         max_spread=v29._env_f("TG_MAX_SPREAD", 0.005),
         entry_retry_hours=v29._env_f("TG_ENTRY_RETRY_HOURS", 6.0),

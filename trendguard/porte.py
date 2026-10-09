@@ -14,7 +14,9 @@ données du jour (au moins 50 sur 100 : en dessous, les données sont trop
 abîmées pour décider ; étape 3, §76), évaluation du jour du moteur de risque
 (moteur_risque.py, étape 11 : absente, périmée ou bloquée, aucun achat), et
 en réel les règles de Binance pour cet achat (paire cotée et active, pas du
-lot, bornes de quantité, montant minimum ; étape 16, §11).
+lot, bornes de quantité, montant minimum ; étape 16, §11) et les plafonds du
+palier du réel (achats par jour, montant acheté par jour, capital confié au
+bot fixé par vous ; deploiement.py, étape 17).
 
 Validation finale (étape 16, §21) : juste avant l'ordre, l'autorisation
 est-elle encore valable, liée à son contrôle et non consommée ? L'arrêt
@@ -53,7 +55,7 @@ from .contrats import (
 )
 from .texte import fr
 
-POLICY_VERSION = "porte.v2"              # v2 (étape 16) : règles de Binance en réel, validation finale
+POLICY_VERSION = "porte.v3"              # v2 (étape 16) : règles de Binance, validation finale ; v3 (17) : paliers
 MARGIN = 0.10               # écart toléré entre le plan (clôture) et l'achat (prix, capital du moment)
 MIN_NOTIONAL = 10.0         # même minimum que la taille des positions (trend_strategy.size_position)
 AUTH_SECONDS = 300          # une autorisation vaut 5 minutes
@@ -84,6 +86,7 @@ class Portfolio:
     production: Optional[Tuple[bool, str]] = None  # porte du réel (ouverte, détail) ; None : non mesurée (essais)
     risk_engine: Optional[Tuple[bool, str]] = None  # moteur de risque (évaluation valide, détail) ; None : essais
     instrument: Optional[Tuple[bool, str]] = None   # règles de Binance pour cet achat (réel) ; None : paper, essais
+    stage: Optional[Tuple[bool, str]] = None        # plafonds du palier du réel (deploiement.py) ; None : paper, essais
 
 
 def _limits(intent: OrderIntent, pf: Portfolio, p: Any) -> List[Tuple[str, bool, str]]:
@@ -131,6 +134,8 @@ def _limits(intent: OrderIntent, pf: Portfolio, p: Any) -> List[Tuple[str, bool,
          "non mesuré (essais)" if pf.risk_engine is None else pf.risk_engine[1]),
         ("Instrument négociable", pf.instrument is None or pf.instrument[0],
          ("paper" if not pf.live else "non vérifié (essais)") if pf.instrument is None else pf.instrument[1]),
+        ("Plafonds du palier", pf.stage is None or pf.stage[0],
+         ("paper" if not pf.live else "non vérifiés (essais)") if pf.stage is None else pf.stage[1]),
     ]
     return checks
 
@@ -196,7 +201,7 @@ def fingerprint(pf: Portfolio) -> str:
     items = (round(pf.equity, 8), round(pf.cash, 8), tuple(sorted(pf.held_risk)), pf.risk_mult, pf.expected_day,
              tuple(sorted(pf.universe)), tuple(sorted(pf.allowed)), tuple(sorted(pf.vetoed)),
              tuple(sorted(pf.bought_today)), pf.halted, pf.garde_blocked, pf.safe_mode.active, pf.data_quality,
-             pf.live, pf.live_armed, pf.production, pf.risk_engine, pf.instrument)
+             pf.live, pf.live_armed, pf.production, pf.risk_engine, pf.instrument, pf.stage)
     return hashlib.sha256(repr(items).encode("utf-8")).hexdigest()[:16]
 
 

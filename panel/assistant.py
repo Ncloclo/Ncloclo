@@ -723,6 +723,21 @@ def doc_points(name: str, heading: str = "## Conclusions", limit: int = 6) -> Li
     return points[:limit]
 
 
+def a_deploiement(ctx: Dict[str, Any]) -> str:
+    """Les paliers du réel : où en est le bot, ce qui fait monter d'un palier."""
+    view = ctx.get("deploiement") or {}
+    return "\n".join([
+        "**Paliers du réel** : paper → réel simulé (testnet de Binance) → réel contrôlé → production limitée → "
+        "production, un palier à la fois. Seul un réglage que vous changez fait monter d'un palier ; le bot ne "
+        "s'en donne jamais un, même avec d'excellents résultats.",
+        "Aujourd'hui : " + (view.get("text") or "palier inconnu") + ".",
+        "Réel contrôlé : 2 achats par jour au plus, 40 % du capital acheté par jour, capital confié au bot fixé par "
+        "vous (TG_MAX_CAPITAL) ; production limitée : 4 achats, 75 %. Ces plafonds ne font que réduire.",
+        "Exécutions : " + (view.get("quality") or "aucune exécution mesurée") + ".",
+        "Détail des portes et des 60 critères : python trendguard_bot.py deploiement. Je lis et j'explique, je "
+        "n'agis pas."])
+
+
 def a_porte(ctx: Dict[str, Any]) -> str:
     """La porte d'exécution : le dernier contrôle avant un ordre."""
     view = ctx.get("porte") or {}
@@ -1041,6 +1056,8 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("validation", ("validation du backtest", "backtest valide", "moteur de backtest", "sur ajustement",
                     "surapprentissage", "overfitting", "sharpe degonfle", "probabilite de sur ajustement"),
      a_validation, []),
+    ("deploiement", ("paliers du reel", "palier", "paliers", "deploiement", "reel controle", "production limitee",
+                     "promotion"), a_deploiement, []),
     ("porte", ("porte d execution", "validation finale", "execution gate", "juste avant l ordre",
                "derniere verification", "chaos"), a_porte, []),
     ("autorisation", ("moteur d autorisation", "autorisation", "qui peut", "droits", "permissions",

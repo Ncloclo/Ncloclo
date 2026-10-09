@@ -26,7 +26,7 @@ python trendguard_bot.py politique simulation     # les politiques de risque ép
 
 ## Le registre
 
-Vingt politiques (version `politiques-1.1.0`). Dix-huit sont bloquantes et
+Vingt et une politiques (version `politiques-1.2.0`). Dix-neuf sont bloquantes et
 correspondent chacune à un contrôle de la porte d'exécution : mode réel armé
 par vous (sinon : votre accord d'abord), porte du réel, arrêt d'urgence (sinon
 : compte gelé), mode sûr, garde « pas de trade » du jour (sinon : pas d'achat
@@ -34,7 +34,7 @@ aujourd'hui), décision du jour, crypto autorisée, doublon, nombre de positions
 risque de l'achat, risque cumulé, taille, argent disponible (ni levier ni
 emprunt), stop sous le prix, montant minimum, qualité des données, évaluation du
 moteur de risque (sinon : mode sûr), et en réel les règles de Binance pour
-l'achat (étape 16). Deux informent sans bloquer : le profil
+l'achat (étape 16) et les plafonds du palier (étape 17). Deux informent sans bloquer : le profil
 prudent (taille réduite après une baisse de 10 %) et une grande annonce dans les
 48 heures (prudence, effet non prouvé).
 

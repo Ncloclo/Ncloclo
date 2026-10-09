@@ -37,6 +37,7 @@ TAIL_BYTES = 65_536
 # une action inconnue est refusée : le journal ne note que ce qu'il connaît.
 EVENT_TYPES = {
     "porte.controle": "Risk.Assessment.Completed",
+    "porte.validation_finale": "Execution.FinalValidation.Blocked",
     "ordre.achat": "Order.Buy.Executed",
     "ordre.vente": "Order.Sell.Executed",
     "capital.nouvel_essai": "Portfolio.Capital.Reset",

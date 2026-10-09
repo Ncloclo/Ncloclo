@@ -42,7 +42,7 @@ from . import trend_strategy as ts
 from .contrats import POLICY_ACTIONS, ContractError, OrderIntent, PolicyDecision
 from .texte import fr
 
-REGISTRY_VERSION = "politiques-1.1.0"     # 1.1.0 (étape 16) : POL-EXCHANGE-RULES
+REGISTRY_VERSION = "politiques-1.2.0"     # 1.1.0 (étape 16) : POL-EXCHANGE-RULES ; 1.2.0 (17) : POL-LIVE-STAGE
 TTL_SECONDS = porte.AUTH_SECONDS
 ACTIONS = POLICY_ACTIONS
 SEVERITY = {a: k for k, a in enumerate(ACTIONS)}           # la plus grave l'emporte
@@ -118,6 +118,8 @@ REGISTRY: Tuple[Dict[str, Any], ...] = (
          _f("risk_engine_ok", "==", True), "SAFE_MODE", "Moteur de risque", "RISK_ENGINE"),
     _pol("POL-EXCHANGE-RULES", "Règles de Binance pour cet achat (réel)", "INSTRUMENT", "COMPLIANCE",
          _f("instrument_ok", "==", True), "BLOCK", "Instrument négociable", "EXCHANGE_RULES"),
+    _pol("POL-LIVE-STAGE", "Plafonds du palier du réel (réel contrôlé, production limitée)", "AUTONOMY", "SECURITY",
+         _f("stage_ok", "==", True), "BLOCK", "Plafonds du palier", "LIVE_STAGE_LIMITS"),
     _pol("POL-DRAWDOWN-THROTTLE", "Profil prudent : risque réduit après une baisse", "RISK", "SOFT",
          _f("risk_mult", ">=", 1.0), "REDUCE_SIZE", "", "DRAWDOWN_THROTTLE", severity="SOFT"),
     _pol("POL-EVENT", "Grande annonce dans les 48 heures (prudence, effet non prouvé)", "EVENT", "SOFT",
@@ -147,7 +149,8 @@ def context(intent: OrderIntent, pf: porte.Portfolio, p: Any, events_soon: int =
             "entry": intent.entry, "notional": intent.qty * intent.entry, "min_notional": porte.MIN_NOTIONAL,
             "data_quality": porte.QUALITY_MIN if pf.data_quality is None else pf.data_quality,
             "risk_engine_ok": pf.risk_engine is None or bool(pf.risk_engine[0]), "risk_mult": pf.risk_mult,
-            "instrument_ok": pf.instrument is None or bool(pf.instrument[0]), "events_soon": int(events_soon)}
+            "instrument_ok": pf.instrument is None or bool(pf.instrument[0]),
+            "stage_ok": pf.stage is None or bool(pf.stage[0]), "events_soon": int(events_soon)}
 
 
 def holds(cond: Dict[str, Any], ctx: Dict[str, Any], seen: List[Tuple[str, Any, Any]]) -> bool:

@@ -515,6 +515,12 @@ code restent à vous seul ; chaque action du panneau est vérifiée.
 (rien n'a changé depuis le contrôle), règles de Binance en réel, une seule
 route d'achat, chaos de 10 000 demandes sans ordre non autorisé ; examen
 AC-001 à AC-050.
+Étape 17 : exécution réelle par paliers
+([`docs/DEPLOIEMENT_REEL.md`](docs/DEPLOIEMENT_REEL.md),
+`python trendguard_bot.py deploiement`) : paper, réel simulé, réel contrôlé
+(2 achats par jour, 40 % du capital par jour, capital plafonné), production
+limitée, production ; seul votre réglage `TG_PALIER_REEL` fait monter d'un
+palier.
 Cadre de priorités et de dépendances
 ([`docs/FEUILLE_DE_ROUTE.md`](docs/FEUILLE_DE_ROUTE.md),
 `python trendguard_bot.py chantiers portes`) : chaque composant prouvé, et

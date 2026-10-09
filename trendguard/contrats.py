@@ -515,6 +515,9 @@ ACCEPTANCE_BANDS = ("PAPER_READY", "PAPER_READY_CANDIDATE", "VALIDATING", "DEVEL
 FINAL_VALIDATION_STATUSES = ("PASS", "BLOCK")
 GATE_READINESS_STATUSES = ("READY_FOR_CONTROLLED_LIVE_EXECUTION", "NOT_READY")
 GATE_BANDS = ("READY", "CANDIDATE", "VALIDATION", "DEVELOPMENT", "NOT_READY")
+# Étape 17 (exécution réelle par paliers) : paliers, verdict.
+DEPLOYMENT_STAGES = ("SHADOW", "PAPER", "SIMULATED_LIVE", "CONTROLLED_LIVE", "LIMITED_PRODUCTION", "PRODUCTION")
+LIVE_READINESS_STATUSES = ("READY_FOR_STAGED_LIVE_EXECUTION", "NOT_READY")
 # Étape 11 (moteur de risque) : états, décisions pour les achats, phases, niveaux d'alerte.
 RISK_STATES = ("RISK_NORMAL", "RISK_WARNING", "RISK_HIGH", "RISK_CRITICAL", "RISK_BLOCKED")
 RISK_APPROVALS = ("RISK_APPROVED", "RISK_APPROVED_WITH_LIMIT", "RISK_RESTRICTED", "RISK_BLOCKED")
@@ -1251,6 +1254,68 @@ class GateReadinessReport:
         return _plain(self)
 
 
+@dataclass(frozen=True)
+class LiveDeploymentReport:
+    """Exécution réelle par paliers (LiveDeploymentReport.v1, étape 17
+    §33-35, §53-57, §62) : palier en vigueur, palier suivant et sa porte,
+    examen AC-001 à AC-060. READY_FOR_STAGED_LIVE_EXECUTION seulement sans
+    P0 raté et avec une note d'au moins 95 ; jamais une promotion
+    automatique, jamais une production sans restriction."""
+    VERSION: ClassVar[int] = 1
+    report_id: str
+    created_at: str
+    mode: str
+    stage: str
+    next_stage: str
+    next_gate_open: bool
+    missing: Tuple[str, ...]
+    status: str
+    readiness_score: float
+    band: str
+    p0_failures: Tuple[str, ...]
+    passed: int
+    failed: int
+    unknown: int
+    not_applicable: int
+    engine_version: str
+    auto_promoted: bool = False
+    version: int = 1
+
+    def __post_init__(self) -> None:
+        _version(self, self.VERSION)
+        _enum("stage", self.stage, DEPLOYMENT_STAGES)
+        _enum("status", self.status, LIVE_READINESS_STATUSES)
+        _enum("band", self.band, GATE_BANDS)
+        _enum("mode", self.mode, ("paper", "live"))
+        check_uuid("report_id", self.report_id)
+        check_timestamp("created_at", self.created_at)
+        i = DEPLOYMENT_STAGES.index(self.stage)
+        expected = DEPLOYMENT_STAGES[i + 1] if i + 1 < len(DEPLOYMENT_STAGES) else ""
+        if self.next_stage != expected:
+            raise ContractError("INCONSISTENT", "le palier suivant est toujours le palier d'après, un à la fois")
+        if (self.mode == "paper") != (self.stage in ("SHADOW", "PAPER")):
+            raise ContractError("INCONSISTENT", "un palier du réel suppose le mode réel, et l'inverse")
+        if self.next_gate_open == bool(self.missing) or (self.next_gate_open and not self.next_stage):
+            raise ContractError("INCONSISTENT", "une porte fermée dit ce qui manque ; une porte ouverte, rien")
+        score = _number("readiness_score", self.readiness_score, positive=False)
+        if not 0 <= score <= 100:
+            raise ContractError("OUT_OF_RANGE", "readiness_score : de 0 à 100")
+        if self.passed + self.failed + self.unknown + self.not_applicable != 60:
+            raise ContractError("INCONSISTENT", "les 60 critères AC-001 à AC-060 sont tous comptés")
+        floor = {"READY": 95, "CANDIDATE": 90, "VALIDATION": 80, "DEVELOPMENT": 70, "NOT_READY": 0}
+        upper = {"READY": 100.01, "CANDIDATE": 95, "VALIDATION": 90, "DEVELOPMENT": 80, "NOT_READY": 70}
+        if not floor[self.band] <= score < upper[self.band]:
+            raise ContractError("INCONSISTENT", "la bande suit la note")
+        if self.status == "READY_FOR_STAGED_LIVE_EXECUTION" and (self.p0_failures or score < 95):
+            raise ContractError("INCONSISTENT", "prête : aucun P0 raté et une note d'au moins 95")
+        if self.auto_promoted:
+            raise ContractError("POLICY", "aucune promotion automatique : seul votre réglage fait monter d'un palier",
+                                category="POLICY")
+
+    def as_dict(self) -> Dict[str, Any]:
+        return _plain(self)
+
+
 def ohlcv_violations(rows: Any) -> int:
     """Bougies incohérentes (§41) : plus haut sous l'ouverture, la clôture
     ou le plus bas ; plus bas au-dessus ; volume négatif. Une bougie
@@ -1324,7 +1389,7 @@ SCHEMAS.update({c.__name__: c for c in (OrderIntent, RiskDecision, ExecutionAuth
                                         Scenario, FinancialSignal, StrategyDecision, BacktestResult,
                                         RiskAssessment, QuantResult, PortfolioDecision,
                                         PaperAcceptanceReport, PolicyDecision, AuthorizationDecision,
-                                        FinalValidationResult, GateReadinessReport)})
+                                        FinalValidationResult, GateReadinessReport, LiveDeploymentReport)})
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -1680,6 +1745,14 @@ REGISTRY: Tuple[Contract, ...] = (
              "P0 raté ou non mesurable, ordre non autorisé au chaos : NOT_READY ; un « prêt » incohérent est refusé",
              "lecture seule : jamais une autorisation du réel", "à la demande", "aucun", "un examen par appel",
              "dans docs/PORTE_EXAMEN.md", 2, ("trendguard/porte_examen.py",)),
+    Contract("LiveDeploymentReport.v1", "exécution réelle par paliers : palier en vigueur (lu dans vos réglages), "
+             "palier suivant et sa porte, examen AC-001 à AC-060", "paliers du réel (deploiement.py)",
+             "rapport, Rachelle, vous", "réglages, état du bot, acceptation du paper, porte du réel, examen de la "
+             "porte d'exécution, tests du dépôt", "palier, portes et ce qui manque, état de chaque critère, note "
+             "pondérée, verdict", "P0 raté ou non mesurable : NOT_READY ; palier sauté, porte ouverte qui dit ce qui "
+             "manque, promotion automatique : refusés", "lecture seule : jamais une promotion ni une autorisation du "
+             "réel", "à la demande", "aucun", "un examen par appel", "dans docs/DEPLOIEMENT.md", 2,
+             ("trendguard/deploiement.py",)),
     Contract("HealthReport.v1", "rapport quotidien et centre de sécurité", "rapport (report.py)",
              "vous (e-mail, panneau)", "état du bot, PC, journal, GitHub", "constats conformes, à corriger, informations",
              "source illisible : information", "lecture seule", "00:30 UTC", "rattrapé au retour du PC",

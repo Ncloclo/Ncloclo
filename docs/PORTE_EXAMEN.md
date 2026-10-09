@@ -10,7 +10,7 @@ s'ouvre pas, et l'armer reste à vous seul.
 - **PRÊTE pour un réel contrôlé** (READY_FOR_CONTROLLED_LIVE_EXECUTION).
 - Note de préparation 100,0/100 (prête) ; critères P0 non satisfaits : 0.
 - Chaos : 10 000 demandes d'achat, 131 ordre(s) envoyé(s), 0 non autorisé(s), 0
-  après l'arrêt d'urgence, 0 doublon ; 5,01 ms au 95e centile.
+  après l'arrêt d'urgence, 0 doublon ; 1,00 ms au 95e centile.
 - Bot : aucun achat contrôlé dans l'état lu.
 - Mesurable seulement en réel : la fiabilité du vrai Binance en ordres réels,
   les délais réels d'accusé de réception et d'exécution, le rapprochement avec
@@ -78,7 +78,7 @@ s'ouvre pas, et l'armer reste à vous seul.
 | AC-023 Chaque ordre est lié à son autorisation | P0 | conforme | prouvé par 1 test(s) du dépôt |
 | AC-024 Chaque exécution est réconciliée | P0 | conforme | prouvé par 3 test(s) du dépôt |
 | AC-025 Tout écart critique crée un incident | P0 | conforme | prouvé par 2 test(s) du dépôt |
-| AC-026 L'arrêt d'urgence bloque tout nouvel ordre | P0 | conforme | achat bloqué en 1,57 ms ; chaos : 0 ordre après l'arrêt d'urgence (demande n° 5 001 sur 10 000) ; 2 test(s) du dépôt |
+| AC-026 L'arrêt d'urgence bloque tout nouvel ordre | P0 | conforme | achat bloqué en 0,15 ms ; chaos : 0 ordre après l'arrêt d'urgence (demande n° 5 001 sur 10 000) ; 2 test(s) du dépôt |
 | AC-027 Disjoncteurs | P1 | conforme | prouvé par 3 test(s) du dépôt |
 | AC-028 Aucun secret dans les journaux | P0 | conforme | prouvé par 2 test(s) du dépôt |
 | AC-029 Une IA ne peut pas envoyer d'ordre | P0 | conforme | aucune route d'achat hors du bot ; Rachelle, les IA et les agents n'en ont aucune ; 2 test(s) du dépôt |
@@ -102,4 +102,4 @@ s'ouvre pas, et l'armer reste à vous seul.
 | AC-047 Résiste à un changement de politique pendant l'exécution | P0 | conforme | prouvé par 1 test(s) du dépôt |
 | AC-048 Mode d'urgence | P0 | conforme | prouvé par 2 test(s) du dépôt |
 | AC-049 Réconciliation | P0 | conforme | prouvé par 2 test(s) du dépôt |
-| AC-050 Aucune performance au prix de la sécurité | P1 | conforme | contrôle + autorisation + validation finale : 5,01 ms au 95e centile (cible 100) ; contrôle seul 1,63 ms (cible 50) ; aucun raccourci : chaque achat passe tout ; 1 test(s) du dépôt |
+| AC-050 Aucune performance au prix de la sécurité | P1 | conforme | contrôle + autorisation + validation finale : 1,00 ms au 95e centile (cible 100) ; contrôle seul 0,15 ms (cible 50) ; aucun raccourci : chaque achat passe tout ; 1 test(s) du dépôt |

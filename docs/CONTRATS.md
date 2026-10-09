@@ -31,6 +31,7 @@ Tiré du registre `trendguard/contrats.py` (`python -m trendguard.contrats` le r
 | `GateReadinessReport.v1` | examen de la porte (porte_examen.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | cœur |
 | `KnowledgeHold.v1` | noyau de savoir (savoir.py) | décision du jour | 1.0.0 | INTERNAL | cœur |
 | `LLMExecution.v1` | exécution des modèles (modeles.py) | trace des IA, rapport, panneau | 1.0.0 | INTERNAL | cœur |
+| `LiveDeploymentReport.v1` | paliers du réel (deploiement.py) | rapport, Rachelle, vous | 1.0.0 | INTERNAL | cœur |
 | `ModelBenchmark.v1` | banc (modeles.py) | routeur (approbation), fiche du modèle, rapport | 1.0.0 | INTERNAL | cœur |
 | `ModelConsensus.v1` | veille (market_watch.py) | rapport de la veille, panneau, Rachelle | 1.0.0 | PUBLIC | cœur |
 | `ModelDisagreement.v1` | veille (market_watch.py) | rapport de la veille, panneau, Rachelle | 1.0.0 | PUBLIC | cœur |
@@ -555,6 +556,24 @@ Un appel à un modèle d'IA.
 | Unicité | identifiant unique par appel |
 | Trace (audit) | table llm_executions, en ajout seulement |
 | Fichiers | `trendguard/modeles.py` |
+
+## LiveDeploymentReport.v1
+
+Exécution réelle par paliers : palier en vigueur (lu dans vos réglages), palier suivant et sa porte, examen AC-001 à AC-060.
+
+| Rubrique | Contrat |
+| --- | --- |
+| Producteur | paliers du réel (deploiement.py) |
+| Consommateur | rapport, Rachelle, vous |
+| Entrée | réglages, état du bot, acceptation du paper, porte du réel, examen de la porte d'exécution, tests du dépôt |
+| Sortie | palier, portes et ce qui manque, état de chaque critère, note pondérée, verdict |
+| Erreurs | P0 raté ou non mesurable : NOT_READY ; palier sauté, porte ouverte qui dit ce qui manque, promotion automatique : refusés |
+| Droits | lecture seule : jamais une promotion ni une autorisation du réel |
+| Délai | à la demande |
+| Nouveaux essais | aucun |
+| Unicité | un examen par appel |
+| Trace (audit) | dans docs/DEPLOIEMENT.md |
+| Fichiers | `trendguard/deploiement.py` |
 
 ## ModelBenchmark.v1
 
