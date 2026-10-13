@@ -536,6 +536,21 @@ def describe(r: Dict[str, Any]) -> str:
     return head
 
 
+def render_scored_sections(lines: List[str], r: Dict[str, Any], family_weights: Dict[str, float],
+                            family_fr: Dict[str, str]) -> None:
+    """Ajoute à `lines` les sections Markdown « Familles » (note pondérée
+    par famille) et « Critères » (chaque critère avec son état), communes à
+    tous les rapports d'examen qui notent des critères par famille
+    (apprentissage, controle, cyber, deploiement, porte_examen, recherche)."""
+    lines += ["", "## Familles", "", "| Famille | poids | note |", "| --- | --- | --- |"]
+    for fam, w in family_weights.items():
+        s = r["family_scores"].get(fam)
+        lines.append(f"| {family_fr[fam]} | {fr(w * 100, '.0f')} % | {fr(s, '.0f') if s is not None else '—'} |")
+    lines += ["", "## Critères", "", "| Critère | priorité | état | preuve |", "| --- | --- | --- | --- |"]
+    for x in r["rows"]:
+        lines.append(f"| {x['id']} {x['title']} | {x['priority']} | {STATUS_FR[x['status']]} | {x['detail']} |")
+
+
 def render(r: Dict[str, Any]) -> str:
     """docs/ACCEPTATION.md : le verdict, les familles, chaque critère."""
     o = r["observation"]
@@ -551,13 +566,7 @@ def render(r: Dict[str, Any]) -> str:
              f"clos, {o['open']} position(s) ouverte(s)) ; il en faut {OBSERVATION_DAYS} jours et "
              f"{EVENTS_MIN_RARE} événements au moins ({OBSERVATION_DAYS_RECOMMENDED} jours recommandés)."]
     lines += [f"- Manque : {m}." for m in r["missing"]]
-    lines += ["", "## Familles", "", "| Famille | poids | note |", "| --- | --- | --- |"]
-    for fam, w in FAMILY_WEIGHTS.items():
-        s = r["family_scores"].get(fam)
-        lines.append(f"| {FAMILY_FR[fam]} | {fr(w * 100, '.0f')} % | {fr(s, '.0f') if s is not None else '—'} |")
-    lines += ["", "## Critères", "", "| Critère | priorité | état | preuve |", "| --- | --- | --- | --- |"]
-    for x in r["rows"]:
-        lines.append(f"| {x['id']} {x['title']} | {x['priority']} | {STATUS_FR[x['status']]} | {x['detail']} |")
+    render_scored_sections(lines, r, FAMILY_WEIGHTS, FAMILY_FR)
     d = r["divergence"]
     lines += ["", "## Paper et backtest de la même période", ""]
     if d["status"] == "OK":

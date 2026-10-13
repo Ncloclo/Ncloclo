@@ -421,15 +421,8 @@ def render(r: Dict[str, Any]) -> str:
               f"- **{'Prête pour un réel par paliers' if ready else 'PAS PRÊTE'}** ({r['status']}) : jamais une "
               "production sans restriction ; chaque palier reste à votre décision.",
               f"- Note {fr(r['score'], '.1f')}/100 ({porte_examen.BAND_FR[r['band']]}) ; critères P0 non satisfaits : "
-              f"{len(r['p0_failures'])}" + (f" ({', '.join(r['p0_failures'])})" if r["p0_failures"] else "") + ".",
-              "", "## Familles", "", "| Famille | poids | note |", "| --- | --- | --- |"]
-    for fam, w in FAMILY_WEIGHTS.items():
-        s = r["family_scores"].get(fam)
-        lines.append(f"| {FAMILY_FR[fam]} | {fr(w * 100, '.0f')} % | {fr(s, '.0f') if s is not None else '—'} |")
-    lines += ["", "## Critères", "", "| Critère | priorité | état | preuve |", "| --- | --- | --- | --- |"]
-    for x in r["rows"]:
-        lines.append(f"| {x['id']} {x['title']} | {x['priority']} | {acceptation.STATUS_FR[x['status']]} | "
-                     f"{x['detail']} |")
+              f"{len(r['p0_failures'])}" + (f" ({', '.join(r['p0_failures'])})" if r["p0_failures"] else "") + "."]
+    acceptation.render_scored_sections(lines, r, FAMILY_WEIGHTS, FAMILY_FR)
     return "\n".join(lines)
 
 

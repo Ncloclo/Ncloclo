@@ -108,6 +108,20 @@ def test_bot_files_are_read_and_written_by_one_pair_of_functions():
     assert not own, own
 
 
+def test_scored_report_sections_are_rendered_by_one_function():
+    """Les rapports d'examen qui notent des critères par famille
+    (acceptation, apprentissage, controle, cyber, deploiement, porte_examen,
+    recherche) partagent la même mise en page des sections « Familles » et
+    « Critères » (acceptation.render_scored_sections), au lieu de la
+    recopier à chaque fois."""
+    users = [path.relative_to(ROOT).as_posix() for _pkg, path, _tree in _modules("trendguard")
+             if '"## Familles"' in path.read_text(encoding="utf-8")]
+    assert users == ["trendguard/acceptation.py"]
+    for mod in ("apprentissage", "controle", "cyber", "deploiement", "porte_examen", "recherche"):
+        text = (ROOT / "trendguard" / f"{mod}.py").read_text(encoding="utf-8")
+        assert "acceptation.render_scored_sections(" in text, mod
+
+
 def test_code_diagnostic_finds_repeats_unused_names_and_imports(tmp_path):
     block = "\n".join(f"    total_{i} = compute_something(first_argument, second_argument, {i})"
                       for i in range(6))

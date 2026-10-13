@@ -242,6 +242,11 @@ trendguard_bot.py ─► trendguard
 - Les fichiers JSON du bot se lisent et s'écrivent par deux fonctions
   (`autonomy.read_json`, `autonomy.write_json`), et tout envoi d'alerte passe
   par une seule (`AlertHub._send`).
+- Les rapports d'examen qui notent des critères par famille (`acceptation`,
+  `apprentissage`, `controle`, `cyber`, `deploiement`, `porte_examen`,
+  `recherche`) rendent leurs sections « Familles » et « Critères » par une
+  seule fonction (`acceptation.render_scored_sections`), au lieu de les
+  recopier.
 - Le bot est une seule classe en trois fichiers : `bot.py` (le cœur),
   `bot_routines.py` et `bot_execution.py` (deux parties ajoutées par
   héritage), avec les types communs dans `bot_types.py`.

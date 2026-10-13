@@ -748,15 +748,8 @@ def render(r: Dict[str, Any]) -> str:
               f"- Code : {ch['commit'] or 'version inconnue'}" + (" (modifications locales)" if ch["dirty"] else "")
               + f" ; configuration {ch['config']} ; " + ", ".join(f"{k} {v}" for k, v in ch["versions"].items()) + ".",
               f"- Superviseur : peut {', '.join(autorisation.ACTION_FR[a] for a in sup['allowed'])} ; refusé : "
-              f"{len(sup['refused'])} action(s) critique(s) sur {len(SUPERVISOR_FORBIDDEN)}.",
-              "", "## Familles", "", "| Famille | poids | note |", "| --- | --- | --- |"]
-    for fam, w in FAMILY_WEIGHTS.items():
-        s = r["family_scores"].get(fam)
-        lines.append(f"| {FAMILY_FR[fam]} | {fr(w * 100, '.0f')} % | {fr(s, '.0f') if s is not None else '—'} |")
-    lines += ["", "## Critères", "", "| Critère | priorité | état | preuve |", "| --- | --- | --- | --- |"]
-    for x in r["rows"]:
-        lines.append(f"| {x['id']} {x['title']} | {x['priority']} | {acceptation.STATUS_FR[x['status']]} | "
-                     f"{x['detail']} |")
+              f"{len(sup['refused'])} action(s) critique(s) sur {len(SUPERVISOR_FORBIDDEN)}."]
+    acceptation.render_scored_sections(lines, r, FAMILY_WEIGHTS, FAMILY_FR)
     return "\n".join(lines)
 
 
