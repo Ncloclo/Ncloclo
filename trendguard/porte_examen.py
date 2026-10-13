@@ -514,14 +514,7 @@ def render(r: Dict[str, Any]) -> str:
                        ("unauthorized", "ordres non autorisés (oracle)"), ("after_kill", "ordres après l'arrêt d'urgence"),
                        ("duplicates", "doublons envoyés")):
         lines.append(f"| {label} | {fr(ch[key], ',d')} |")
-    lines += ["", "## Familles", "", "| Famille | poids | note |", "| --- | --- | --- |"]
-    for fam, w in FAMILY_WEIGHTS.items():
-        s = r["family_scores"].get(fam)
-        lines.append(f"| {FAMILY_FR[fam]} | {fr(w * 100, '.0f')} % | {fr(s, '.0f') if s is not None else '—'} |")
-    lines += ["", "## Critères", "", "| Critère | priorité | état | preuve |", "| --- | --- | --- | --- |"]
-    for x in r["rows"]:
-        lines.append(f"| {x['id']} {x['title']} | {x['priority']} | {acceptation.STATUS_FR[x['status']]} | "
-                     f"{x['detail']} |")
+    acceptation.render_scored_sections(lines, r, FAMILY_WEIGHTS, FAMILY_FR)
     return "\n".join(lines)
 
 

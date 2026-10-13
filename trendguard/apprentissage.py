@@ -549,15 +549,8 @@ def render(r: Dict[str, Any]) -> str:
               "- **Vous seul** : " + " ; ".join(b["lists"]["HUMAN"]) + ".",
               f"- Vérifié : {'tenu' if b['ok'] else 'NON TENU'} (évolution : {', '.join(b['evolution_params'])} ; "
               f"plafond du palier de risque {fr(b['risk_cap_pct'], '.2f')} % ; gelée en "
-              + ", ".join(deploiement.STAGE_FR[s] for s in b["frozen_stages"]) + ").",
-              "", "## Familles", "", "| Famille | poids | note |", "| --- | --- | --- |"]
-    for fam, w in FAMILY_WEIGHTS.items():
-        s = r["family_scores"].get(fam)
-        lines.append(f"| {FAMILY_FR[fam]} | {fr(w * 100, '.0f')} % | {fr(s, '.0f') if s is not None else '—'} |")
-    lines += ["", "## Critères", "", "| Critère | priorité | état | preuve |", "| --- | --- | --- | --- |"]
-    for x in r["rows"]:
-        lines.append(f"| {x['id']} {x['title']} | {x['priority']} | {acceptation.STATUS_FR[x['status']]} | "
-                     f"{x['detail']} |")
+              + ", ".join(deploiement.STAGE_FR[s] for s in b["frozen_stages"]) + ")."]
+    acceptation.render_scored_sections(lines, r, FAMILY_WEIGHTS, FAMILY_FR)
     return "\n".join(lines)
 
 

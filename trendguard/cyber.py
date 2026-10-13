@@ -395,14 +395,7 @@ def render(r: Dict[str, Any]) -> str:
         lines += [f"- HORS liste blanche : {h} ({', '.join(eg['where'][h])})" for h in eg["unknown"]]
     lines += ["", "## Réponse prévue", "", "| Risque | ce qui se fait seul | ce qui vous revient |", "| --- | --- | --- |"]
     lines += [f"| {a} | {b} | {c} |" for a, b, c in r["responses"]]
-    lines += ["", "## Familles", "", "| Famille | poids | note |", "| --- | --- | --- |"]
-    for fam, w in FAMILY_WEIGHTS.items():
-        s = r["family_scores"].get(fam)
-        lines.append(f"| {FAMILY_FR[fam]} | {fr(w * 100, '.0f')} % | {fr(s, '.0f') if s is not None else '—'} |")
-    lines += ["", "## Critères", "", "| Critère | priorité | état | preuve |", "| --- | --- | --- | --- |"]
-    for x in r["rows"]:
-        lines.append(f"| {x['id']} {x['title']} | {x['priority']} | {acceptation.STATUS_FR[x['status']]} | "
-                     f"{x['detail']} |")
+    acceptation.render_scored_sections(lines, r, FAMILY_WEIGHTS, FAMILY_FR)
     return "\n".join(lines)
 
 
