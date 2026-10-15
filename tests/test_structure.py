@@ -108,6 +108,13 @@ def test_bot_files_are_read_and_written_by_one_pair_of_functions():
     assert not own, own
 
 
+def test_panel_opens_the_knowledge_core_in_one_place():
+    """panel/data.py : savoir() et evenements() ouvrent le noyau de savoir
+    par la même méthode (BotData._open_savoir), pas chacun à sa façon."""
+    text = (ROOT / "panel" / "data.py").read_text(encoding="utf-8")
+    assert text.count("savoir.Memory(") == 1
+
+
 def test_code_diagnostic_finds_repeats_unused_names_and_imports(tmp_path):
     block = "\n".join(f"    total_{i} = compute_something(first_argument, second_argument, {i})"
                       for i in range(6))
