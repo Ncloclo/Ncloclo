@@ -116,6 +116,14 @@ def test_hub_test_messages_and_disabled_channels():
     hub.close()
 
 
+def test_hub_close_stops_its_thread():
+    hub = alerts.AlertHub(FakeTelegram(), [Recorder()], async_mode=True)
+    thread = hub._thread
+    assert thread is not None and thread.is_alive()
+    hub.close(timeout=2.0)
+    assert hub._thread is None and not thread.is_alive()
+
+
 def test_build_notifier_from_env_keeps_secrets_out_of_errors():
     env = {"SMTP_HOST": "smtp.example.com", "ALERT_EMAIL_TO": "a@b.c", "SMTP_PASSWORD": "motdepasse-secret",
            "WHATSAPP_PHONE": "+225", "CALLMEBOT_APIKEY": "cle-secrete-123"}

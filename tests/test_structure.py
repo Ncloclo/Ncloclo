@@ -108,6 +108,18 @@ def test_bot_files_are_read_and_written_by_one_pair_of_functions():
     assert not own, own
 
 
+def test_a_queue_worker_thread_is_stopped_in_one_place():
+    """Notifier (v29.infra) et AlertHub (trendguard.alerts) arrêtent chacun
+    un fil d'envoi dédié par la même sentinelle : une seule fonction le fait
+    (v29.infra.stop_queue_worker), pas une copie par classe."""
+    hits = []
+    for _pkg, path, _tree in _modules("trendguard", "v29"):
+        rel = path.relative_to(ROOT).as_posix()
+        if "put_nowait(None)" in path.read_text(encoding="utf-8"):
+            hits.append(rel)
+    assert hits == ["v29/infra.py"]
+
+
 def test_code_diagnostic_finds_repeats_unused_names_and_imports(tmp_path):
     block = "\n".join(f"    total_{i} = compute_something(first_argument, second_argument, {i})"
                       for i in range(6))

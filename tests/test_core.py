@@ -4,7 +4,9 @@ persistance, utilitaires."""
 import logging
 import math
 import os
+import queue
 import re
+import threading
 import time
 from datetime import timedelta
 
@@ -436,6 +438,37 @@ def test_notifier_critical_logged():
     v29.Notifier("", "", logger=lg)("alerte critique", critical=True)
     assert any(r.levelno == logging.ERROR and "alerte critique" in r.getMessage()
                for r in records)
+
+
+def test_notifier_close_stops_its_thread():
+    n = v29.Notifier("jeton", "chat", async_mode=True)
+    thread = n._thread
+    assert thread is not None and thread.is_alive()
+    n.close(timeout=2.0)
+    assert n._thread is None and not thread.is_alive()
+
+
+def test_stop_queue_worker_joins_and_tolerates_a_full_queue():
+    q = queue.Queue(maxsize=1)
+    started = []
+
+    def run():
+        started.append(True)
+        q.get()
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    time.sleep(0.05)
+    v29.stop_queue_worker(thread, q, timeout=2.0)
+    assert started and not thread.is_alive()
+
+    full = queue.Queue(maxsize=1)
+    full.put_nowait("déjà dans la file")
+    noop = threading.Thread(target=lambda: None)
+    noop.start()
+    v29.stop_queue_worker(noop, full, timeout=2.0)  # queue.Full avalée, sans exception
+    assert full.qsize() == 1  # la sentinelle n'a pas pu entrer, le message est resté
+    v29.stop_queue_worker(None, full)  # sans fil : ne fait rien
 
 
 def test_heartbeat_tick(paper_env):
