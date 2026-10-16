@@ -79,6 +79,20 @@ def build_heartbeat_logger(cfg: Config) -> logging.Logger:
     return lg
 
 
+def stop_queue_worker(thread: Optional[threading.Thread], q: "queue.Queue",
+                      timeout: float = 5.0) -> None:
+    """Arrête un fil d'envoi qui boucle sur ``q.get()`` : une sentinelle
+    ``None`` dans la file lui fait sortir sa boucle, puis on attend sa fin.
+    Partagé par chaque classe qui diffuse ses messages dans un fil dédié
+    (``Notifier`` ici, ``AlertHub`` dans trendguard.alerts)."""
+    if thread is not None:
+        try:
+            q.put_nowait(None)
+        except queue.Full:
+            pass
+        thread.join(timeout)
+
+
 class Notifier:
     """Notifications Telegram. Par défaut ASYNCHRONES (thread dédié) :
     un envoi lent ne retarde jamais une action de trading (panic, stop)."""
@@ -180,13 +194,8 @@ class Notifier:
         return ok
 
     def close(self, timeout: float = 5.0) -> None:
-        if self._thread is not None:
-            try:
-                self._q.put_nowait(None)
-            except queue.Full:
-                pass
-            self._thread.join(timeout)
-            self._thread = None
+        stop_queue_worker(self._thread, self._q, timeout)
+        self._thread = None
 
 
 class ProcessLock:

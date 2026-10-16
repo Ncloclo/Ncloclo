@@ -139,6 +139,7 @@ from .infra import (  # noqa: F401
     build_heartbeat_logger,
     build_logger,
     release_locks,
+    stop_queue_worker,
 )
 from .models import (  # noqa: F401
     AUTO_CLEARABLE_HALTS,

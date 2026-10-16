@@ -464,13 +464,8 @@ class AlertHub:
         return False, f"{name} n'est pas configuré (python trendguard_bot.py alerts configurer)"
 
     def close(self, timeout: float = 5.0) -> None:
-        if self._thread is not None:
-            try:
-                self._q.put_nowait(None)
-            except queue.Full:
-                pass
-            self._thread.join(timeout)
-            self._thread = None
+        v29.stop_queue_worker(self._thread, self._q, timeout)
+        self._thread = None
         if self.telegram is not None and hasattr(self.telegram, "close"):
             self.telegram.close()
 
