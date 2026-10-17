@@ -74,7 +74,7 @@ points à corriger.
 | K6 | Alertes toujours muettes : e-mail en pause après 7 refus du mot de passe ; aucune des alertes de la nuit (batterie, arrêts) ne vous est parvenue | **Élevée** | Vous : mot de passe d'application Gmail (ligne 1) |
 | K7 | Disque : 18,0 Go libres (8 %), dont 25,2 Go dans Téléchargements | Moyenne | Vous : trier Téléchargements (ligne 26) |
 | K8 | Propositions sur GitHub : la n° 5 (surveillance des plantages) est déjà en service depuis J10 et en conflit ; n° 3 et n° 4 anciennes ; n° 6, revue de la semaine : « rien à changer » | Faible | Vous : fermer n° 3, 4 et 5 ; fusionner ou fermer n° 6, à votre choix |
-| K9 | Une faille connue dans `multidict` 6.7.1, corrigée en 6.9.1, mais ccxt 4.5.85, sa dernière version, impose 6.7.1 (constat de l'amélioration quotidienne) | Information | Le contrôle des failles du rapport l'affiche ; corrigé dès que ccxt l'acceptera |
+| K9 | Une faille connue dans `multidict` 6.7.1, corrigée en 6.9.1, mais ccxt 4.5.85, sa dernière version, impose 6.7.1 (constat de l'amélioration quotidienne) | Information | **fait** (17/10) : ccxt 4.5.88 accepte enfin `multidict` 6.9.1 ; les bibliothèques du bot sont à jour |
 
 Livré en même temps, à votre demande « améliore avec ce prompt » : la
 deuxième phase du prompt maître (qualité des données, tests de résistance,
