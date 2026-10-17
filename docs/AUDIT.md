@@ -97,6 +97,17 @@ annonce américaine : le compte rendu de la Fed, mercredi 7 octobre à 18 h UTC
   Jamais » (aujourd'hui, il ne règle que le secteur), réversible par la
   commande `rapport restaurer` comme les autres réglages de veille. Le
   revers : pendant une coupure, la batterie se vide au lieu de dormir.
+- **K13** (constat du 17/10, amélioration quotidienne) : un test instable,
+  `test_stalled_cycle_dumps_thread_stacks` (`tests/test_real_conditions.py`),
+  échoue à deux reprises sur la suite complète (33 minutes, plus de 900
+  tests) mais jamais isolé ni sur un sous-ensemble : sous la charge de la
+  suite entière, la pile écrite dans `<journal>.blocage.txt` ne contient
+  parfois que celle d'un autre fil, pas celle du cycle bloqué. La fonction
+  réelle du bot (`faulthandler.dump_traceback_later` dans `bot.py`) n'est pas
+  mise en cause, seule l'assertion du test est sensible à l'ordre et au
+  nombre de fils accumulés par les autres tests. À rendre robuste (par
+  exemple une nouvelle tentative bornée) lors d'une prochaine amélioration ;
+  sans effet sur le bot en marche.
 
 ## Diagnostic approfondi du 6 octobre, 0 h
 
