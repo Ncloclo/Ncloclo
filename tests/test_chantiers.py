@@ -9,6 +9,7 @@ import json
 import logging
 import pathlib
 import sqlite3
+import threading
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -140,6 +141,17 @@ def test_the_live_gate_opens_only_when_every_condition_is_met(tmp_path):
     assert "durée" in missing and "trades clos" in missing
     chantiers.note_verification(g, True, True)                                             # testnet : ne compte pas
     assert not chantiers.live_gate(g, {}, now=NOW, env=env)["open"]
+
+
+def test_live_gate_does_not_leak_an_alert_thread(tmp_path):
+    """live_gate construit une messagerie d'alertes jetable (alerts.build_notifier)
+    pour savoir si un canal est configuré : elle doit être refermée, sinon le fil
+    d'envoi qu'elle ouvre s'accumule à chaque mesure quotidienne."""
+    g, env = _ready_world(tmp_path)
+    before = threading.active_count()
+    for _ in range(5):
+        chantiers.live_gate(g, {}, now=NOW, env=env)
+    assert threading.active_count() == before
 
 
 def test_a_closed_live_gate_refuses_every_real_buy():
