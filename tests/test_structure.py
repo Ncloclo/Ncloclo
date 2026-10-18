@@ -2,6 +2,7 @@
 envoi : sens des dépendances, modules et fonctions longues documentés."""
 import ast
 import pathlib
+import re
 
 from research import diagnostic_code as dc
 from trendguard import trend_strategy as ts
@@ -105,6 +106,18 @@ def test_bot_files_are_read_and_written_by_one_pair_of_functions():
         text = path.read_text(encoding="utf-8")
         if rel != "trendguard/autonomy.py" and ("json.dump(" in text or "os.replace(" in text):
             own.append(rel)
+    assert not own, own
+
+
+def test_git_commands_go_through_systeme():
+    """Une commande git lancée sans passer par systeme.run (ou systeme.git,
+    qui s'appuie dessus) rouvrirait une fenêtre de console sous Windows ;
+    un seul endroit (systeme.py) a le droit d'appeler subprocess.run pour
+    git (ingenierie.py, cyber.py, controle.py, registre.py passent déjà
+    par lui)."""
+    direct = re.compile(r'subprocess\.run\(\s*\[\s*["\']git["\']')
+    own = [path.relative_to(ROOT).as_posix() for _pkg, path, _tree in _modules("trendguard", "panel", "research")
+           if path.name != "systeme.py" and direct.search(path.read_text(encoding="utf-8"))]
     assert not own, own
 
 

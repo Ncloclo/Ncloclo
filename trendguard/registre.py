@@ -30,7 +30,7 @@ import pandas as pd
 
 import v29
 
-from . import autonomy
+from . import autonomy, systeme
 from . import trend_strategy as ts
 from .texte import fr
 
@@ -53,10 +53,11 @@ def registry_path(gcfg: Any) -> str:
 
 def git_version(root: str = v29.APP_DIR) -> str:
     """Version du code (empreinte git courte, suivie de « -dirty » si des
-    fichiers suivis ont été modifiés depuis), « inconnue » hors d'un dépôt."""
+    fichiers suivis ont été modifiés depuis), « inconnue » hors d'un dépôt.
+    Commande lancée par `systeme.run` (sans fenêtre de console sous Windows),
+    comme les autres accès git du bot (ingenierie.py, cyber.py, controle.py)."""
     try:
-        out = subprocess.run(["git", "describe", "--always", "--dirty", "--abbrev=7"], cwd=root,
-                             capture_output=True, text=True, timeout=10)
+        out = systeme.run(["git", "describe", "--always", "--dirty", "--abbrev=7"], cwd=root, timeout=10)
     except (OSError, subprocess.SubprocessError):
         return "inconnue"
     return out.stdout.strip() or "inconnue"
