@@ -108,6 +108,15 @@ def test_bot_files_are_read_and_written_by_one_pair_of_functions():
     assert not own, own
 
 
+def test_cached_history_is_loaded_by_one_function():
+    """Les commandes qui acceptent de travailler sans historique en cache
+    (acceptation, apprentissage, causal, deploiement, jumeau) passent par
+    evolution.load_history_safe, pas par leur propre try/except."""
+    own = [path.relative_to(ROOT).as_posix() for _pkg, path, _tree in _modules("trendguard")
+           if path.name != "evolution.py" and "close, volume = None, None" in path.read_text(encoding="utf-8")]
+    assert not own, own
+
+
 def test_code_diagnostic_finds_repeats_unused_names_and_imports(tmp_path):
     block = "\n".join(f"    total_{i} = compute_something(first_argument, second_argument, {i})"
                       for i in range(6))

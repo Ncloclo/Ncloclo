@@ -140,6 +140,30 @@ def test_history_cache_is_refreshed_only_when_stale(tmp_path):
     assert len(calls) == 2
 
 
+def test_load_history_safe_reads_the_cache(tmp_path):
+    calls = []
+
+    def fetch(_ex, bases, since):
+        calls.append(since)
+        idx = pd.date_range("2026-01-01", periods=5, freq="D", tz="UTC")
+        close = pd.DataFrame({b.lower(): [1.0, 2.0, 3.0, 4.0, 5.0] for b in bases}, index=idx)
+        return close, close * 1e6, {}
+
+    ev.load_history(str(tmp_path), ["BTC", "ETH"], fetch=fetch)
+    close, volume = ev.load_history_safe(str(tmp_path), ["BTC", "ETH"])
+    assert list(close.columns) == ["btc", "eth"] and volume is not None
+    assert len(calls) == 1                                        # cache lu, jamais rafraîchi
+
+
+def test_load_history_safe_returns_none_on_missing_or_invalid_cache(tmp_path, monkeypatch):
+    def raises(*_a, **_k):
+        raise ValueError("cache invalide")
+
+    monkeypatch.setattr(ev, "load_history", raises)
+    close, volume = ev.load_history_safe(str(tmp_path / "absent"), ["BTC"])
+    assert close is None and volume is None
+
+
 def test_panel_and_assistant_follow_the_evolved_settings(tmp_path):
     g = _cfg(tmp_path, evolution=True)
     with open(ev.state_path(g), "w", encoding="utf-8") as fh:

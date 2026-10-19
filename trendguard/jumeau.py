@@ -283,7 +283,7 @@ def render(r: Dict[str, Any]) -> str:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     """Commande `jumeau` : le jumeau sur les cours en cache ; écrit avec --out."""
     from .config import load_guard_config_from_env
-    from .evolution import load_history, params_for
+    from .evolution import load_history_safe, params_for
     from .systeme import read_state
     ap = argparse.ArgumentParser(description="Jumeau numérique et simulation")
     ap.add_argument("--cache", default=os.path.join(v29.APP_DIR, "data_evolution"))
@@ -292,10 +292,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     v29.ensure_utf8_stdio()
     g = load_guard_config_from_env()
     g = dataclasses.replace(g, params=params_for(g))
-    try:
-        close, volume = load_history(args.cache, list(g.universe), max_age_days=None)
-    except (OSError, ValueError):
-        close, volume = None, None
+    close, volume = load_history_safe(args.cache, g.universe)
     r = evaluate(g, read_state(g.db_file) or {}, close, volume)
     report_of(r)
     text = render(r)

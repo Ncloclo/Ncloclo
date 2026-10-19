@@ -574,7 +574,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     """Commande `acceptation` : le verdict du jour (cours en cache pour
     l'écart au backtest), écrit avec --out."""
     from .config import load_guard_config_from_env
-    from .evolution import load_history, params_for
+    from .evolution import load_history_safe, params_for
     from .systeme import read_state
     ap = argparse.ArgumentParser(description="Critères d'acceptation du paper (AC-001 à AC-044)")
     ap.add_argument("--cache", default=os.path.join(v29.APP_DIR, "data_evolution"))
@@ -583,10 +583,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     v29.ensure_utf8_stdio()
     g = load_guard_config_from_env()
     state = read_state(g.db_file) or {}
-    try:
-        close, volume = load_history(args.cache, list(g.universe), max_age_days=None)
-    except (OSError, ValueError):
-        close, volume = None, None
+    close, volume = load_history_safe(args.cache, g.universe)
     r = evaluate(g, state, close=close, volume=volume, params=params_for(g))
     try:
         report_of(r)

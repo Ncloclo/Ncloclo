@@ -565,7 +565,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     """Commande `apprentissage` : registre, dérive (cours en cache),
     frontières, examen ; écrit avec --out."""
     from .config import load_guard_config_from_env
-    from .evolution import load_history, params_for
+    from .evolution import load_history_safe, params_for
     from .systeme import read_state
     ap = argparse.ArgumentParser(description="Apprentissage continu et gouvernance des modèles (AC-001 à AC-070)")
     ap.add_argument("--cache", default=os.path.join(v29.APP_DIR, "data_evolution"))
@@ -574,10 +574,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     v29.ensure_utf8_stdio()
     g = load_guard_config_from_env()
     g = dataclasses.replace(g, params=params_for(g))
-    try:
-        close, volume = load_history(args.cache, list(g.universe), max_age_days=None)
-    except (OSError, ValueError):
-        close, volume = None, None
+    close, volume = load_history_safe(args.cache, g.universe)
     r = evaluate(g, read_state(g.db_file) or {}, close=close, volume=volume)
     try:
         report_of(r)

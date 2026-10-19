@@ -48,7 +48,7 @@ import os
 import sys
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -851,6 +851,16 @@ def load_history(cache: str, bases: List[str], max_age_days: Optional[int] = 2,
                      ).dropna(subset=["PriceUSD"]).to_csv(
             os.path.join(cache, f"{a}.csv"), index=False)
     return ts.load_coinmetrics(cache, bases)
+
+
+def load_history_safe(cache: str, bases: Sequence[str]) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+    """Comme `load_history` (cache jamais rafraîchi), mais `(None, None)` au
+    lieu de lever une exception si le cache est absent ou invalide : pour
+    les commandes qui acceptent de travailler sans historique."""
+    try:
+        return load_history(cache, list(bases), max_age_days=None)
+    except (OSError, ValueError):
+        return None, None
 
 
 # ══════════════════════════════════════════════════════════════════════
