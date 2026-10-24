@@ -449,9 +449,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     close, volume = load_history(args.cache, list(g.universe), max_age_days=None)
     s = study(close, volume, params_for(g))
     text = render_study(s, view)
-    if args.out:
-        with open(args.out, "w", encoding="utf-8") as fh:
-            fh.write(ts.format_markdown(text) + "\n")
-    print(text)
+    ts.write_report(text, args.out)
     print(f"({fr_plain(len(s['schemes']))} tailles éprouvées)")
     return 0

@@ -587,8 +587,5 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"Registre ou verdict non conforme à son contrat : {e}")
         return 1
     text = render(r)
-    if args.out:
-        with open(args.out, "w", encoding="utf-8") as fh:
-            fh.write(ts.format_markdown(text) + "\n")
-    print(text)
+    ts.write_report(text, args.out)
     return 0 if r["status"] != "NOT_READY" else 1

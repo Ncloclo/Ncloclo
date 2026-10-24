@@ -885,6 +885,19 @@ def test_format_markdown_rules():
     assert ts.format_markdown("Texte :\n- a\n- b") == "Texte :\n\n- a\n- b"
 
 
+def test_write_report_prints_and_writes_markdown(tmp_path, capsys):
+    """La sortie commune des commandes de diagnostic en lecture seule
+    (gouvernance, mémoire, sre…) : affichée toujours, écrite en Markdown
+    seulement si un chemin est donné."""
+    text = "Texte :\n- a\n- b"
+    ts.write_report(text, "")
+    assert capsys.readouterr().out == text + "\n"
+    out = tmp_path / "rapport.md"
+    ts.write_report(text, str(out))
+    assert capsys.readouterr().out == text + "\n"
+    assert out.read_text(encoding="utf-8") == ts.format_markdown(text) + "\n"
+
+
 def test_repository_markdown_is_formatted():
     """README et rapport respectent les règles markdownlint du dépôt."""
     import os
