@@ -108,6 +108,19 @@ def test_bot_files_are_read_and_written_by_one_pair_of_functions():
     assert not own, own
 
 
+def test_read_only_reports_are_written_by_one_function():
+    """Les commandes de diagnostic en lecture seule (gouvernance, mémoire,
+    sre, apprentissage…) affichent et écrivent leur rapport Markdown par
+    trend_strategy.write_report, pas par leur propre copie du bloc --out."""
+    own = []
+    for _pkg, path, _tree in _modules("trendguard"):
+        rel = path.relative_to(ROOT).as_posix()
+        text = path.read_text(encoding="utf-8")
+        if rel != "trendguard/trend_strategy.py" and "fh.write(ts.format_markdown(text)" in text:
+            own.append(rel)
+    assert not own, own
+
+
 def test_code_diagnostic_finds_repeats_unused_names_and_imports(tmp_path):
     block = "\n".join(f"    total_{i} = compute_something(first_argument, second_argument, {i})"
                       for i in range(6))
