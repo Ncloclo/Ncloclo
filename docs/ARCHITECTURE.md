@@ -275,6 +275,11 @@ trendguard_bot.py ─► trendguard
 - **Secrets** : jamais écrits dans un journal ni affichés ; saisie masquée
   seulement (`set-keys`, `set-panel-password`, `alerts configurer`,
   `watch set-key`).
+- **Entrées du panneau** : chaque route qui lit un nombre dans la requête
+  (jours de `/api/equity`, lignes de `/api/log`, bougies de `/api/candles`)
+  le borne à un intervalle raisonnable (`panel/data.py`, `panel/market.py`),
+  pour qu'une valeur extrême ne provoque jamais une erreur inattendue au lieu
+  d'une réponse normale.
 - **Argent** : paper par défaut, 1 % de risque par achat, arrêt d'urgence ;
   le mode réel exige une double confirmation.
 - **Tests** : chaque changement de comportement vient avec un test ; la suite

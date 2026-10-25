@@ -109,6 +109,14 @@ def test_bot_purchases_are_on_the_charts(demo_server):
     assert last["asset"] and last["price"] > 0 and last["count"] >= 6
 
 
+def test_equity_endpoint_bounds_an_extreme_days(demo_server):
+    base, _ = demo_server
+    # `days` démesuré ferait lever OverflowError (timedelta) sans bornage :
+    # la route doit répondre normalement, comme pour `lines` et `limit`.
+    code, huge = _json(base + "/api/equity?days=999999999999")
+    assert code == 200 and huge["points"] == _json(base + "/api/equity?days=3650")[1]["points"]
+
+
 def test_selection_endpoint_and_sells_on_charts(demo_server):
     base, _ = demo_server
     a = _json(base + "/api/assets")[1]
@@ -407,6 +415,10 @@ def test_bot_data_reads_state_equity_and_log(tmp_path, logger):
     assert data.log_tail(10) == [f"ligne {i}" for i in range(40, 50)]
     buys = data.buys()
     assert {b["asset"] for b in buys} >= set(st["paper"]["holdings"])
+    # Un nombre de jours démesuré est borné (comme log_tail et klines bornent
+    # déjà leurs entrées), au lieu de faire lever OverflowError.
+    assert data.equity(days=10 ** 12) == data.equity(days=3650) == eq
+    assert data.equity(days=0) == data.equity(days=-5) == data.equity(days=1)
     assert [b["t"] for b in buys] == sorted(b["t"] for b in buys)
     why = data.reasoning()
     assert why["current"]["day"] == st["last_decision_day"] and why["history"][0]["day"] == st["last_decision_day"]

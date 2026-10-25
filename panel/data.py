@@ -112,6 +112,7 @@ class BotData:
             con.close()
 
     def equity(self, days: int = 90, max_points: int = 1500) -> List[Dict[str, float]]:
+        days = max(1, min(3650, int(days)))      # borné comme log_tail et klines
         con = _ro(self.g.db_file)
         if con is None:
             return []
