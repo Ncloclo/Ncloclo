@@ -1,0 +1,61 @@
+Analyse en cours (21 paires, historique Binance depuis 2018)…
+══════════════════════════════════════════════════════════════════════════════
+DIAGNOSTIC TRENDGUARD (PAPER, 2026-10-25)
+══════════════════════════════════════════════════════════════════════════════
+
+── Système
+  ℹ️  Python 3.12.15 sur Linux 6.17.0-1022-azure
+  ✅ Horloge : PC à l'heure de Binance (± 0,1 s)
+  ✅ Latence réseau vers Binance : 136 ms (meilleure de 5 mesures)
+  ℹ️  Bot arrêté (aucune instance ne détient le verrou)
+
+── Veille
+  ℹ️  Veille par IA pas encore exécutée (quotidienne quand le bot tourne ; clés d'IA : python trendguard_bot.py watch set-key <ia>)
+
+── Données
+  ✅ Bougie du 2026-10-25 disponible pour 21/21 paires
+  ℹ️  Liquidité Binance < 5 M$/j, exclues des achats : ETC (3,5 M$), NEO (0,8 M$), XTZ (0,8 M$)
+
+── Marché
+  ℹ️  Régime BTC HAUSSIER (achats autorisés) depuis 68 j — BTC 80 154 vs moyenne 150 j 71 586 (+12,0 %)
+  ℹ️  Volatilité BTC 30 j : 25 % annualisée (percentile 1 de l'historique)
+
+── Signaux
+  ℹ️  Achats signalés : aucun
+  ℹ️  Proches d'une cassure (< 3 %) : TRX (−2,3 %)
+
+── Portefeuille
+  ℹ️  Aucune position ouverte (100 % USDT)
+
+── Stratégie
+  ℹ️  Backtest Binance 2019-01-01 → 2026-10-25 (paramètres actuels) : +32,4 %/an, baisse max −24,7 %, Sharpe 1,16, 319 trades, 42 % gagnants, espérance +1,14 R
+  ✅ Rendement sur 12 mois glissants : +19,5 % (percentile 48 ; historique : P10 −1,7 %, médiane +20,8 %, 19 % des fenêtres négatives)
+  ℹ️  Probabilité historique de finir en gain selon la durée — 12 mois : 81 % des fenêtres en gain (bootstrap 85 %) ; 24 mois : 93 % des fenêtres en gain (bootstrap 95 %) ; 36 mois : 100 % des fenêtres en gain (bootstrap 98 %) (indication, pas une garantie ; trade par trade : 35-50 % de gagnants)
+  ✅ Baisse actuelle de la stratégie depuis son pic : −8,8 %
+  ✅ Espérance des 78 trades des 24 derniers mois : +1,48 R (intervalle 90 % : +0,65 à +2,40 R)
+
+── Réel vs attendu
+  ℹ️  Aucun trade clos par le bot pour l'instant
+
+── Alternatives
+  ℹ️  Tournoi des 12 stratégies sur 2 ans (1 % de risque par trade) — TrendGuard rang 5/12
+      1. Cassure de Bollinger (J. Bollinger) : Sharpe 2,02, +260 %, 85 trades, 47 % gagnants
+      2. Tortues, système 1 (R. Dennis) : Sharpe 1,80, +293 %, 99 trades, 36 % gagnants
+      3. Tendance rapide : Sharpe 1,65, +130 %, 92 trades, 43 % gagnants
+      4. Tendance lente : Sharpe 1,62, +106 %, 64 trades, 44 % gagnants
+      5. TrendGuard (référence) : Sharpe 1,54, +106 %, 86 trades, 41 % gagnants
+      6. Tortues, système 2 (R. Dennis) : Sharpe 1,43, +181 %, 61 trades, 39 % gagnants
+      7. Régime « largeur de marché » : Sharpe 1,29, +70 %, 69 trades, 45 % gagnants
+      8. Régime BTC et largeur : Sharpe 1,29, +70 %, 69 trades, 45 % gagnants
+      9. Croisement 50/200 (P. T. Jones) : Sharpe 1,17, +137 %, 21 trades, 43 % gagnants
+      10. Double momentum (G. Antonacci) : Sharpe 1,10, +78 %, 16 trades, 44 % gagnants
+      11. Rotation momentum : Sharpe 1,04, +63 %, 108 trades, 33 % gagnants
+      12. Retour à la moyenne : Sharpe 0,39, +7 %, 143 trades, 66 % gagnants
+  ✅ Aucune alternative ne justifie de revoir la stratégie (classement indicatif, jamais appliqué automatiquement)
+
+══════════════════════════════════════════════════════════════════════════════
+✅ VERDICT : tout est conforme.
+
+Rappel : aucune stratégie ne garantit 99 % de réussite. Celle-ci vise ~1 % de perte par trade et des gains de plusieurs R, avec 35-50 % de trades gagnants ; le succès se mesure sur la durée (docs/STRATEGIES.md).
+
+Rapport enregistré : out/diagnostic.txt
