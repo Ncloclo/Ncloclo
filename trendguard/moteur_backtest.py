@@ -903,6 +903,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.out:
         os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
         with open(args.out, "w", encoding="utf-8") as fh:
-            fh.write(text + "\n")
+            fh.write(ts.format_markdown(text) + "\n")
     print(text)
     return 0 if r["verdict"]["status"] in ("VALID", "VALID_WITH_WARNINGS") else 1

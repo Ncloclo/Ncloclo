@@ -236,3 +236,16 @@ def test_the_full_validation_measures_everything(market):
 def test_rachelle_explains_the_validation():
     a = asst.local_answer("le backtest est il valide ? validation du backtest", {})["answer"]
     assert "python trendguard_bot.py validation" in a and "jamais une garantie" in a
+
+
+def test_the_report_written_to_disk_is_markdownlint_formatted(tmp_path, monkeypatch, market):
+    """`--out` doit écrire un Markdown déjà conforme (docs/ARCHITECTURE.md),
+    comme les dix-huit autres commandes de diagnostic : lignes repliées à 80
+    caractères, séparateurs de tableau espacés."""
+    close, volume = market
+    from trendguard import evolution
+    monkeypatch.setattr(evolution, "load_history", lambda *a, **k: (close, volume))
+    out = tmp_path / "VALIDATION.md"
+    assert mb.main(["--rapide", "--out", str(out)]) in (0, 1)
+    text = out.read_text(encoding="utf-8").rstrip("\n")
+    assert ts.format_markdown(text) == text
