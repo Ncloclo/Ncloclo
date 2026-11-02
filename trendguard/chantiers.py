@@ -536,9 +536,12 @@ def live_gate(gcfg: Any, state: Optional[Dict[str, Any]] = None, now: Optional[d
             jok, jtext = False, f"illisible ({type(e).__name__})"
     items.append(("Journal financier intact", jok, jtext))
     notifier = alerts.build_notifier(None, dict(env))
-    items.append(("Alertes configurées", bool(getattr(notifier, "enabled", False)),
-                  "au moins un canal" if getattr(notifier, "enabled", False) else
-                  "aucun canal : python trendguard_bot.py alerts configurer"))
+    try:
+        items.append(("Alertes configurées", bool(getattr(notifier, "enabled", False)),
+                      "au moins un canal" if getattr(notifier, "enabled", False) else
+                      "aucun canal : python trendguard_bot.py alerts configurer"))
+    finally:
+        notifier.close()
     rep = {}
     for lock in (gcfg.lock_file, _paper_sibling(gcfg.lock_file)):
         r = autonomy.read_json(autonomy.sidecar(lock, ".rapport.json")) if lock else {}
