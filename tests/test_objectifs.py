@@ -49,6 +49,18 @@ def test_the_estimate_is_a_range_never_a_promise():
     assert slow["critical"] == "durée de l'essai paper"
 
 
+def test_age_in_days_reuses_chantiers_and_survives_a_naive_timestamp():
+    """`objectifs` n'a plus son propre calcul d'âge (doublon de
+    `chantiers._age_days`) : un `started_at` sans fuseau horaire, par exemple
+    après une base restaurée à la main, plantait auparavant (TypeError, date
+    naïve comparée à `now`, lui-même toujours avec fuseau)."""
+    naive = {"started_at": (NOW - timedelta(days=20)).replace(tzinfo=None).isoformat(), "trades": [{}] * 3}
+    gs = {g["id"]: g for g in objectifs.goals(GATE, naive, NOW)}
+    assert abs(gs["Essai paper : durée"]["progress"] - 20 / 60) < 1e-3
+    e = objectifs.eta(naive, NOW)
+    assert e["days_left"] == 40.0
+
+
 def test_critical_path_and_owner_actions():
     gs = objectifs.goals(GATE, STATE, NOW)
     path = objectifs.critical_path(gs)
