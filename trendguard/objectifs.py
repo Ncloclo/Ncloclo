@@ -54,19 +54,12 @@ CRITICAL_STEPS = (("armer le réel (deux réglages)", "ARM_LIVE"), ("changer les
                   ("lever le mode sûr", "SAFE_MODE_OFF"))
 
 
-def _age_days(iso: Any, now: datetime) -> Optional[float]:
-    try:
-        return (now - datetime.fromisoformat(str(iso))).total_seconds() / 86400 if iso else None
-    except ValueError:
-        return None
-
-
 def goals(gate: Dict[str, Any], state: Dict[str, Any], now: datetime,
           acceptance: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     """Les objectifs, chacun mesurable : la porte du réel point par point,
     l'acceptation du paper, puis les paliers du réel (à vous)."""
     out = []
-    days = _age_days(state.get("started_at"), now) or 0.0
+    days = chantiers._age_days(state.get("started_at"), now) or 0.0
     trades = len(state.get("trades") or [])
     items = gate.get("items") if isinstance(gate.get("items"), (list, tuple)) else []
     for item in items:
@@ -106,7 +99,7 @@ def eta(state: Dict[str, Any], now: datetime, per_year: float = TRADES_PER_YEAR)
     paper qui restent, et les trades qui manquent au rythme du backtest
     (fourchette : la moitié à une fois et demie ce rythme). Une estimation,
     jamais une garantie ; les actions qui vous reviennent s'ajoutent."""
-    days = _age_days(state.get("started_at"), now) or 0.0
+    days = chantiers._age_days(state.get("started_at"), now) or 0.0
     left_days = max(0.0, chantiers.PAPER_DAYS_MIN - days)
     left_trades = max(0, chantiers.PAPER_TRADES_MIN - len(state.get("trades") or []))
     rate = per_year / 365.0
