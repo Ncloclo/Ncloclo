@@ -22,7 +22,6 @@ import argparse
 import dataclasses
 import hashlib
 import os
-import subprocess
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -30,7 +29,7 @@ import pandas as pd
 
 import v29
 
-from . import autonomy
+from . import autonomy, systeme
 from . import trend_strategy as ts
 from .texte import fr
 
@@ -54,12 +53,8 @@ def registry_path(gcfg: Any) -> str:
 def git_version(root: str = v29.APP_DIR) -> str:
     """Version du code (empreinte git courte, suivie de « -dirty » si des
     fichiers suivis ont été modifiés depuis), « inconnue » hors d'un dépôt."""
-    try:
-        out = subprocess.run(["git", "describe", "--always", "--dirty", "--abbrev=7"], cwd=root,
-                             capture_output=True, text=True, timeout=10)
-    except (OSError, subprocess.SubprocessError):
-        return "inconnue"
-    return out.stdout.strip() or "inconnue"
+    out = systeme.git(systeme.Deps(), root, "describe", "--always", "--dirty", "--abbrev=7")
+    return (out or "").strip() or "inconnue"
 
 
 def fingerprint(close: pd.DataFrame, volume: Optional[pd.DataFrame], end: str) -> Dict[str, Any]:
