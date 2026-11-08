@@ -96,6 +96,16 @@ def test_a_finding_about_the_pc_is_worded_once():
         assert len(where) == 1 and where[0].startswith("trendguard/report_"), (words, where)
 
 
+def test_panel_tabs_are_not_a_half_built_tab_widget():
+    """panel/static/index.html : le menu est une navigation (liens, `aria-current`
+    posé par app.js selon la page affichée), pas des onglets ARIA. Lui donner
+    `role="tablist"` sans le reste du motif (`role="tab"`, `aria-selected`,
+    flèches du clavier) annoncerait à un lecteur d'écran une interface dont la
+    navigation au clavier ne répond pas à ce qu'il attend."""
+    html = (ROOT / "panel" / "static" / "index.html").read_text(encoding="utf-8")
+    assert 'role="tablist"' not in html
+
+
 def test_bot_files_are_read_and_written_by_one_pair_of_functions():
     """Les fichiers JSON du bot (superviseur, évolution, rapport, sélection,
     pause des alertes) : autonomy.read_json et autonomy.write_json."""
