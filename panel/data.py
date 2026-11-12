@@ -231,16 +231,23 @@ class BotData:
                               accuracy=(r["bench"] or {}).get("accuracy"))
                          for r in rows if r["configured"]]}
 
-    def evenements(self, state: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
-        """Calendrier économique (lecture seule) : annonces américaines
-        importantes de la veille à dans 7 jours, réaction du bitcoin mesurée à
-        la dernière décision ; None sans noyau de savoir."""
+    def _open_savoir(self) -> Optional[savoir.Memory]:
+        """Connexion en lecture seule au noyau de savoir, ou None s'il est
+        désactivé, absent ou illisible (utilisé par `evenements` et `savoir`)."""
         path = getattr(self.g, "savoir_db", "") or savoir.DEFAULT_DB
         if not getattr(self.g, "savoir", False) or not os.path.exists(path):
             return None
         try:
-            memory = savoir.Memory(path, readonly=True)
+            return savoir.Memory(path, readonly=True)
         except sqlite3.Error:
+            return None
+
+    def evenements(self, state: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+        """Calendrier économique (lecture seule) : annonces américaines
+        importantes de la veille à dans 7 jours, réaction du bitcoin mesurée à
+        la dernière décision ; None sans noyau de savoir."""
+        memory = self._open_savoir()
+        if memory is None:
             return None
         try:
             book = memory.get(evenements.KEY)
@@ -258,12 +265,8 @@ class BotData:
     def savoir(self) -> Optional[Dict[str, Any]]:
         """Noyau de savoir (lecture seule) : taille, dernière lecture,
         fiabilité des sources, avis du bot ; None s'il n'existe pas encore."""
-        path = getattr(self.g, "savoir_db", "") or savoir.DEFAULT_DB
-        if not getattr(self.g, "savoir", False) or not os.path.exists(path):
-            return None
-        try:
-            memory = savoir.Memory(path, readonly=True)
-        except sqlite3.Error:
+        memory = self._open_savoir()
+        if memory is None:
             return None
         try:
             out = savoir.summary(memory, datetime.now(timezone.utc).date().isoformat())
