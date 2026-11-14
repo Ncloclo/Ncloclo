@@ -552,6 +552,25 @@ def readiness_band(score: float) -> str:
             else "DEVELOPMENT" if score >= 70 else "REJECTED")
 
 
+def _readiness_score(v: Any) -> float:
+    """readiness_score : un nombre de 0 à 100, repris par tous les rapports de
+    préparation."""
+    score = _number("readiness_score", v, positive=False)
+    if not 0 <= score <= 100:
+        raise ContractError("OUT_OF_RANGE", "readiness_score : de 0 à 100")
+    return score
+
+
+def _check_gate_band(band: str, score: float) -> None:
+    """La bande (`GATE_BANDS`) suit la note : READY à partir de 95, CANDIDATE
+    90, VALIDATION 80, DEVELOPMENT 70, sinon NOT_READY ; repris par tous les
+    rapports de préparation qui utilisent `GATE_BANDS`."""
+    floor = {"READY": 95, "CANDIDATE": 90, "VALIDATION": 80, "DEVELOPMENT": 70, "NOT_READY": 0}
+    upper = {"READY": 100.01, "CANDIDATE": 95, "VALIDATION": 90, "DEVELOPMENT": 80, "NOT_READY": 70}
+    if not floor[band] <= score < upper[band]:
+        raise ContractError("INCONSISTENT", "la bande suit la note")
+
+
 def _readiness(r: Any) -> float:
     """Statut, note et défauts P0 cohérents : un P0 donne NOT_READY quelle que
     soit la note ; sinon le statut est la bande de la note."""
@@ -559,9 +578,7 @@ def _readiness(r: Any) -> float:
     _enum("mode", r.mode, ("paper", "live"))
     check_uuid("report_id", r.report_id)
     check_timestamp("created_at", r.created_at)
-    score = _number("readiness_score", r.readiness_score, positive=False)
-    if not 0 <= score <= 100:
-        raise ContractError("OUT_OF_RANGE", "readiness_score : de 0 à 100")
+    score = _readiness_score(r.readiness_score)
     expected = "NOT_READY" if r.p0_failures else readiness_band(score)
     if r.status != expected:
         raise ContractError("INCONSISTENT", f"statut {r.status} : attendu {expected} (P0 et note)")
@@ -1100,9 +1117,7 @@ class PaperAcceptanceReport:
         _enum("mode", self.mode, ("paper", "testnet", "live"))
         check_uuid("report_id", self.report_id)
         check_timestamp("created_at", self.created_at)
-        score = _number("readiness_score", self.readiness_score, positive=False)
-        if not 0 <= score <= 100:
-            raise ContractError("OUT_OF_RANGE", "readiness_score : de 0 à 100")
+        score = _readiness_score(self.readiness_score)
         if self.passed + self.failed + self.unknown + self.not_applicable != 44:
             raise ContractError("INCONSISTENT", "les 44 critères AC-001 à AC-044 sont tous comptés")
         if self.observation_days < 0 or self.observation_events < 0:
@@ -1286,17 +1301,12 @@ class GateReadinessReport:
         _enum("mode", self.mode, ("paper", "testnet", "live"))
         check_uuid("report_id", self.report_id)
         check_timestamp("created_at", self.created_at)
-        score = _number("readiness_score", self.readiness_score, positive=False)
-        if not 0 <= score <= 100:
-            raise ContractError("OUT_OF_RANGE", "readiness_score : de 0 à 100")
+        score = _readiness_score(self.readiness_score)
         if self.passed + self.failed + self.unknown + self.not_applicable != 50:
             raise ContractError("INCONSISTENT", "les 50 critères AC-001 à AC-050 sont tous comptés")
         if self.chaos_orders < 0 or not 0 <= self.chaos_unauthorized <= self.chaos_orders:
             raise ContractError("OUT_OF_RANGE", "chaos : des nombres d'ordres cohérents")
-        floor = {"READY": 95, "CANDIDATE": 90, "VALIDATION": 80, "DEVELOPMENT": 70, "NOT_READY": 0}
-        upper = {"READY": 100.01, "CANDIDATE": 95, "VALIDATION": 90, "DEVELOPMENT": 80, "NOT_READY": 70}
-        if not floor[self.band] <= score < upper[self.band]:
-            raise ContractError("INCONSISTENT", "la bande suit la note")
+        _check_gate_band(self.band, score)
         if self.status == "READY_FOR_CONTROLLED_LIVE_EXECUTION" and (
                 self.p0_failures or score < 95 or self.chaos_orders <= 0 or self.chaos_unauthorized):
             raise ContractError("INCONSISTENT", "prête : aucun P0 raté, note ≥ 95, chaos passé sans ordre non autorisé")
@@ -1350,15 +1360,10 @@ class LiveDeploymentReport:
             raise ContractError("INCONSISTENT", "un palier du réel suppose le mode réel, et l'inverse")
         if self.next_gate_open == bool(self.missing) or (self.next_gate_open and not self.next_stage):
             raise ContractError("INCONSISTENT", "une porte fermée dit ce qui manque ; une porte ouverte, rien")
-        score = _number("readiness_score", self.readiness_score, positive=False)
-        if not 0 <= score <= 100:
-            raise ContractError("OUT_OF_RANGE", "readiness_score : de 0 à 100")
+        score = _readiness_score(self.readiness_score)
         if self.passed + self.failed + self.unknown + self.not_applicable != 60:
             raise ContractError("INCONSISTENT", "les 60 critères AC-001 à AC-060 sont tous comptés")
-        floor = {"READY": 95, "CANDIDATE": 90, "VALIDATION": 80, "DEVELOPMENT": 70, "NOT_READY": 0}
-        upper = {"READY": 100.01, "CANDIDATE": 95, "VALIDATION": 90, "DEVELOPMENT": 80, "NOT_READY": 70}
-        if not floor[self.band] <= score < upper[self.band]:
-            raise ContractError("INCONSISTENT", "la bande suit la note")
+        _check_gate_band(self.band, score)
         if self.status == "READY_FOR_STAGED_LIVE_EXECUTION" and (self.p0_failures or score < 95):
             raise ContractError("INCONSISTENT", "prête : aucun P0 raté et une note d'au moins 95")
         if self.auto_promoted:
@@ -1406,15 +1411,10 @@ class ControlPlaneReport:
             _enum("severity", sev, INCIDENT_SEVERITIES)
         if not 0 <= self.services_down <= self.services or self.services <= 0:
             raise ContractError("OUT_OF_RANGE", "services : des nombres cohérents")
-        score = _number("readiness_score", self.readiness_score, positive=False)
-        if not 0 <= score <= 100:
-            raise ContractError("OUT_OF_RANGE", "readiness_score : de 0 à 100")
+        score = _readiness_score(self.readiness_score)
         if self.passed + self.failed + self.unknown + self.not_applicable != 60:
             raise ContractError("INCONSISTENT", "les 60 critères AC-001 à AC-060 sont tous comptés")
-        floor = {"READY": 95, "CANDIDATE": 90, "VALIDATION": 80, "DEVELOPMENT": 70, "NOT_READY": 0}
-        upper = {"READY": 100.01, "CANDIDATE": 95, "VALIDATION": 90, "DEVELOPMENT": 80, "NOT_READY": 70}
-        if not floor[self.band] <= score < upper[self.band]:
-            raise ContractError("INCONSISTENT", "la bande suit la note")
+        _check_gate_band(self.band, score)
         if self.status != "NOT_READY" and (self.p0_failures or score < 95
                                            or any(sev == "P0" for _i, sev in self.incidents)):
             raise ContractError("INCONSISTENT", "prêt : aucun P0 raté, note ≥ 95, aucun incident P0 ouvert")
@@ -1506,15 +1506,10 @@ class LearningGovernanceReport:
         check_timestamp("created_at", self.created_at)
         if not 0 <= self.critical_models <= self.models or self.models <= 0:
             raise ContractError("OUT_OF_RANGE", "modèles : des nombres cohérents")
-        score = _number("readiness_score", self.readiness_score, positive=False)
-        if not 0 <= score <= 100:
-            raise ContractError("OUT_OF_RANGE", "readiness_score : de 0 à 100")
+        score = _readiness_score(self.readiness_score)
         if self.passed + self.failed + self.unknown + self.not_applicable != 70:
             raise ContractError("INCONSISTENT", "les 70 critères AC-001 à AC-070 sont tous comptés")
-        floor = {"READY": 95, "CANDIDATE": 90, "VALIDATION": 80, "DEVELOPMENT": 70, "NOT_READY": 0}
-        upper = {"READY": 100.01, "CANDIDATE": 95, "VALIDATION": 90, "DEVELOPMENT": 80, "NOT_READY": 70}
-        if not floor[self.band] <= score < upper[self.band]:
-            raise ContractError("INCONSISTENT", "la bande suit la note")
+        _check_gate_band(self.band, score)
         if self.status != "NOT_READY" and (self.p0_failures or score < 95 or not self.boundaries_ok):
             raise ContractError("INCONSISTENT", "prêt : aucun P0 raté, note ≥ 95, frontières tenues")
         if self.self_authorized:
@@ -1562,15 +1557,10 @@ class SecurityPostureReport:
             _enum("severity", sev, INCIDENT_SEVERITIES)
         if self.assets <= 0:
             raise ContractError("OUT_OF_RANGE", "un inventaire compte au moins un actif")
-        score = _number("readiness_score", self.readiness_score, positive=False)
-        if not 0 <= score <= 100:
-            raise ContractError("OUT_OF_RANGE", "readiness_score : de 0 à 100")
+        score = _readiness_score(self.readiness_score)
         if self.passed + self.failed + self.unknown + self.not_applicable != 70:
             raise ContractError("INCONSISTENT", "les 70 critères AC-001 à AC-070 sont tous comptés")
-        floor = {"READY": 95, "CANDIDATE": 90, "VALIDATION": 80, "DEVELOPMENT": 70, "NOT_READY": 0}
-        upper = {"READY": 100.01, "CANDIDATE": 95, "VALIDATION": 90, "DEVELOPMENT": 80, "NOT_READY": 70}
-        if not floor[self.band] <= score < upper[self.band]:
-            raise ContractError("INCONSISTENT", "la bande suit la note")
+        _check_gate_band(self.band, score)
         if self.status != "NOT_READY" and (self.p0_failures or score < 95 or self.unknown_hosts
                                            or any(sev == "P0" for _w, sev in self.events)):
             raise ContractError("INCONSISTENT", "prête : aucun P0 raté, note ≥ 95, aucune sortie hors liste "
@@ -1614,15 +1604,10 @@ class InterfaceReadinessReport:
         check_timestamp("created_at", self.created_at)
         if self.commands <= 0:
             raise ContractError("OUT_OF_RANGE", "un panneau a au moins une commande")
-        score = _number("readiness_score", self.readiness_score, positive=False)
-        if not 0 <= score <= 100:
-            raise ContractError("OUT_OF_RANGE", "readiness_score : de 0 à 100")
+        score = _readiness_score(self.readiness_score)
         if self.passed + self.failed + self.unknown + self.not_applicable != 70:
             raise ContractError("INCONSISTENT", "les 70 critères AC-001 à AC-070 sont tous comptés")
-        floor = {"READY": 95, "CANDIDATE": 90, "VALIDATION": 80, "DEVELOPMENT": 70, "NOT_READY": 0}
-        upper = {"READY": 100.01, "CANDIDATE": 95, "VALIDATION": 90, "DEVELOPMENT": 80, "NOT_READY": 70}
-        if not floor[self.band] <= score < upper[self.band]:
-            raise ContractError("INCONSISTENT", "la bande suit la note")
+        _check_gate_band(self.band, score)
         if self.status == "READY" and (self.p0_failures or score < 95):
             raise ContractError("INCONSISTENT", "prête : aucun P0 non résolu et une note d'au moins 95")
         if self.ui_authority:
@@ -1670,15 +1655,10 @@ class ResearchReport:
                 raise ContractError("OUT_OF_RANGE", "rang d'une source : de 1 (officielle) à 4 (communauté)")
         if self.sources <= 0 or self.contradictions < 0:
             raise ContractError("OUT_OF_RANGE", "sources et contradictions : des nombres cohérents")
-        score = _number("readiness_score", self.readiness_score, positive=False)
-        if not 0 <= score <= 100:
-            raise ContractError("OUT_OF_RANGE", "readiness_score : de 0 à 100")
+        score = _readiness_score(self.readiness_score)
         if self.passed + self.failed + self.unknown + self.not_applicable != 80:
             raise ContractError("INCONSISTENT", "les 80 critères AC-001 à AC-080 sont tous comptés")
-        floor = {"READY": 95, "CANDIDATE": 90, "VALIDATION": 80, "DEVELOPMENT": 70, "NOT_READY": 0}
-        upper = {"READY": 100.01, "CANDIDATE": 95, "VALIDATION": 90, "DEVELOPMENT": 80, "NOT_READY": 70}
-        if not floor[self.band] <= score < upper[self.band]:
-            raise ContractError("INCONSISTENT", "la bande suit la note")
+        _check_gate_band(self.band, score)
         if self.status == "READY" and (self.p0_failures or score < 95):
             raise ContractError("INCONSISTENT", "prête : aucun P0 non résolu et une note d'au moins 95")
         if self.fabricated:
@@ -1851,9 +1831,7 @@ class PlanReport:
         lo, mid, hi = self.eta_days
         if not 0 <= lo <= mid <= hi:
             raise ContractError("INCONSISTENT", "une fourchette ordonnée, jamais négative")
-        score = _number("readiness_score", self.readiness_score, positive=False)
-        if not 0 <= score <= 100:
-            raise ContractError("OUT_OF_RANGE", "readiness_score : de 0 à 100")
+        score = _readiness_score(self.readiness_score)
         if self.status != "NOT_READY" and (self.p0_failures or score < 95):
             raise ContractError("INCONSISTENT", "prêt : aucun P0 et une note d'au moins 95")
         if self.auto_execute:
@@ -1896,9 +1874,7 @@ class TwinReport:
             raise ContractError("MISSING_FIELD", "les données dites : réelles, synthétiques ou aucune")
         if self.sync_ratio is not None and not 0 <= _number("sync_ratio", self.sync_ratio, positive=False) <= 1:
             raise ContractError("OUT_OF_RANGE", "sync_ratio : de 0 à 1")
-        score = _number("readiness_score", self.readiness_score, positive=False)
-        if not 0 <= score <= 100:
-            raise ContractError("OUT_OF_RANGE", "readiness_score : de 0 à 100")
+        score = _readiness_score(self.readiness_score)
         if self.status == "READY" and (self.p0_failures or score < 95 or self.monte_carlo != "CONVERGED"):
             raise ContractError("INCONSISTENT", "prêt : aucun P0, une note d'au moins 95 et un Monte-Carlo convergé")
         if self.production_write:
@@ -1983,9 +1959,7 @@ class PerceptionReport:
             raise ContractError("OUT_OF_RANGE", "des nombres entiers, jamais négatifs")
         if self.confirmed + self.conflicts > self.facts:
             raise ContractError("INCONSISTENT", "plus de faits confirmés ou en conflit que de faits")
-        score = _number("readiness_score", self.readiness_score, positive=False)
-        if not 0 <= score <= 100:
-            raise ContractError("OUT_OF_RANGE", "readiness_score : de 0 à 100")
+        score = _readiness_score(self.readiness_score)
         if self.p0_failures and self.status != "NOT_READY":
             raise ContractError("INCONSISTENT", "un P0 : NOT_READY quelle que soit la note")
         if self.status == "READY" and score < 95:
@@ -2036,9 +2010,7 @@ class GovernanceReport:
         counts = (self.raci_violations, self.sor_conflicts, self.bypasses, self.silent_failures)
         if any(isinstance(n, bool) or not isinstance(n, int) or n < 0 for n in counts):
             raise ContractError("OUT_OF_RANGE", "des nombres entiers, jamais négatifs")
-        score = _number("readiness_score", self.readiness_score, positive=False)
-        if not 0 <= score <= 100:
-            raise ContractError("OUT_OF_RANGE", "readiness_score : de 0 à 100")
+        score = _readiness_score(self.readiness_score)
         failed = {g for g, res in self.gates if res == "FAIL"}
         if set(self.p0_failures) - failed:
             raise ContractError("INCONSISTENT", "un P0 en échec est une porte en échec")
