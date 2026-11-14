@@ -108,6 +108,18 @@ def test_bot_files_are_read_and_written_by_one_pair_of_functions():
     assert not own, own
 
 
+def test_readiness_score_and_gate_band_are_checked_by_one_pair_of_functions():
+    """readiness_score (0 à 100) et la bande GATE_BANDS (READY à NOT_READY) :
+    vérifiés par une seule fonction chacun (`_readiness_score`,
+    `_check_gate_band`), pas recopiés dans chaque rapport de préparation."""
+    text = (ROOT / "trendguard" / "contrats.py").read_text(encoding="utf-8")
+    score_check = ('if not 0 <= score <= 100:\n'
+                    '        raise ContractError("OUT_OF_RANGE", "readiness_score : de 0 à 100")')
+    band_tables = 'floor = {"READY": 95, "CANDIDATE": 90, "VALIDATION": 80, "DEVELOPMENT": 70, "NOT_READY": 0}'
+    assert text.count(score_check) == 1
+    assert text.count(band_tables) == 1
+
+
 def test_code_diagnostic_finds_repeats_unused_names_and_imports(tmp_path):
     block = "\n".join(f"    total_{i} = compute_something(first_argument, second_argument, {i})"
                       for i in range(6))
