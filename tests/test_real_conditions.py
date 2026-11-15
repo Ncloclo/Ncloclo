@@ -3,6 +3,7 @@ vérification publique sur Binance (sans clé ni ordre)."""
 
 import dataclasses
 import io
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -454,6 +455,38 @@ def test_stalled_cycle_dumps_thread_stacks(logger, tmp_path, monkeypatch):
         tgbot._running = True
     dump = (tmp_path / "tg.log.blocage.txt").read_text(encoding="utf-8")
     assert "Timeout" in dump and "cycle" in dump and calls["n"] == 2
+
+
+def test_stalled_cycle_dump_is_not_lost_among_many_threads(logger, tmp_path, monkeypatch):
+    """Avec beaucoup de threads vivants en même temps (alertes, veille,
+    superviseur…), la pile du thread bloqué reste dans le fichier : au-delà
+    de 100 threads, faulthandler.dump_traceback risque de ne plus la montrer
+    (limite fixe de CPython), ce que le bot évite en l'écrivant lui-même en
+    premier (trendguard.bot._dump_on_stall)."""
+    extra = [threading.Thread(target=time.sleep, args=(2,), daemon=True) for _ in range(150)]
+    for t in extra:
+        t.start()
+    close, volume = synthetic_market()
+    log = tmp_path / "tg.log"
+    bot, fb = make_bot("paper", close, logger)
+    bot.g = dataclasses.replace(bot.g, log_file=str(log))
+    monkeypatch.setattr(tg.TrendGuardBot, "STALL_DUMP_SEC", 0.3)
+    calls = {"n": 0}
+
+    def cycle(now=None):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            time.sleep(1.0)                      # blocage simulé
+            tgbot._running = False
+    monkeypatch.setattr(bot, "run_cycle", cycle)
+    monkeypatch.setattr(tgbot, "_sleep", lambda s, should_stop=None: None)
+    tgbot._running = True
+    try:
+        bot.run_forever()
+    finally:
+        tgbot._running = True
+    dump = (tmp_path / "tg.log.blocage.txt").read_text(encoding="utf-8")
+    assert "Timeout" in dump and "Thread principal" in dump and "cycle" in dump and calls["n"] == 2
 
 
 # ---------- Saisie guidée des clés API ----------

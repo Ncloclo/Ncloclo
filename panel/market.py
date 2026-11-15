@@ -33,6 +33,7 @@ KEEP_FRESH_SEC = 45         # valeur consultée depuis moins de 45 s : tenue à 
 WORKERS = 4                 # lectures simultanées en arrière-plan
 SIZES = (100, 200, 500, 1000)   # bougies lues par paliers : une lecture sert tous les graphiques
 UA = "TrendGuard-panneau"
+MAX_BYTES = 3_000_000       # garde-fou mémoire ; un cours ou des bougies Binance pèsent quelques Ko
 
 Load = Callable[[], Any]
 
@@ -41,20 +42,22 @@ _session_lock = threading.Lock()
 
 
 def http_json(url: str, timeout: float = 20.0) -> Any:
-    """JSON d'une adresse publique, par une connexion gardée ouverte."""
+    """JSON d'une adresse publique, par une connexion gardée ouverte ; la
+    lecture est bornée (MAX_BYTES) pour ne jamais charger en mémoire une
+    réponse anormalement grosse dans ce processus qui tourne en continu."""
     global _session
     if requests is None:
         req = urllib.request.Request(url, headers={"User-Agent": UA})
         with urllib.request.urlopen(req, timeout=timeout) as r:
-            return json.loads(r.read())
+            return json.loads(r.read(MAX_BYTES))
     with _session_lock:
         if _session is None:
             _session = requests.Session()
             _session.headers["User-Agent"] = UA
             _session.mount("https://", requests.adapters.HTTPAdapter(pool_maxsize=WORKERS + 4))
-    r = _session.get(url, timeout=timeout)
-    r.raise_for_status()
-    return r.json()
+    with _session.get(url, timeout=timeout, stream=True) as r:
+        r.raise_for_status()
+        return json.loads(r.raw.read(MAX_BYTES, decode_content=True))
 
 
 def _worker(ref: "weakref.ref[Market]", tasks: "queue.Queue[Tuple[str, Load]]",
