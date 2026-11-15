@@ -511,6 +511,71 @@ def test_market_warm_reads_the_pages_ahead():
     Market(_binance([], down), background=False).warm(["btc"])               # panne : ignorée
 
 
+# ---------- http_json : jamais une réponse illimitée en mémoire ----------
+
+class _FakeRaw:
+    def __init__(self, data: bytes):
+        self.data = data
+        self.calls: list = []
+
+    def read(self, amt=None, decode_content=False):
+        self.calls.append(amt)
+        return self.data if amt is None else self.data[:amt]
+
+
+class _FakeResponse:
+    def __init__(self, data: bytes):
+        self.raw = _FakeRaw(data)
+
+    def raise_for_status(self):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+class _FakeSession:
+    def __init__(self, data: bytes):
+        self._data = data
+        self.headers: dict = {}
+        self.last = None
+
+    def mount(self, *a, **kw):
+        pass
+
+    def get(self, url, timeout=None, stream=None):
+        assert stream is True            # sans quoi requests lirait tout avant qu'on ne borne
+        self.last = _FakeResponse(self._data)
+        return self.last
+
+
+def test_http_json_reads_a_normal_response_with_a_bounded_call(monkeypatch):
+    from panel import market
+    monkeypatch.setattr(market, "_session", None)
+    fake = _FakeSession(b'{"symbol": "BTCUSDT", "price": "84000"}')
+    monkeypatch.setattr(market.requests, "Session", lambda: fake)
+    out = market.http_json("https://data-api.binance.vision/x")
+    assert out == {"symbol": "BTCUSDT", "price": "84000"}
+    assert fake.last.raw.calls == [market.MAX_BYTES]     # jamais une lecture illimitée
+
+
+def test_http_json_never_loads_an_oversized_reply_in_full(monkeypatch):
+    from panel import market
+    monkeypatch.setattr(market, "_session", None)
+    # Pas de crochet fermant avant MAX_BYTES : si la lecture n'était pas
+    # bornée, elle grossirait sans fin ; tronquée, elle devient un JSON
+    # invalide, signe que la borne a bien agi.
+    oversized = b"[" + b"1," * (market.MAX_BYTES)
+    fake = _FakeSession(oversized)
+    monkeypatch.setattr(market.requests, "Session", lambda: fake)
+    with pytest.raises(json.JSONDecodeError):
+        market.http_json("https://data-api.binance.vision/x")
+    assert fake.last.raw.calls == [market.MAX_BYTES]
+
+
 # ---------- Courbe du capital, graphiques, alimentation, veille ----------
 
 class _Data:
