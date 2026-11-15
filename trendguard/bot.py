@@ -8,8 +8,11 @@ import faulthandler
 import logging
 import math
 import os
+import sys
+import threading
 import time
-from datetime import datetime
+import traceback
+from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 import ccxt
@@ -1204,11 +1207,15 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
                 hang = None
         backoff = 5
         self.track_uptime = True
+        hang_timer: Optional[threading.Timer] = None
         try:
             while _running and not self.stop_requested():
                 self._touch_alive(force=True)
                 if hang is not None:
-                    faulthandler.dump_traceback_later(self.STALL_DUMP_SEC, file=hang)
+                    hang_timer = threading.Timer(self.STALL_DUMP_SEC, _dump_on_stall,
+                                                 (hang, self.STALL_DUMP_SEC))
+                    hang_timer.daemon = True
+                    hang_timer.start()
                 try:
                     self.run_cycle()
                     backoff = 5
@@ -1220,14 +1227,33 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
                     self.logger.exception(f"[CYCLE] KO: {e}")
                     wait, backoff = backoff, min(backoff * 2, 300)
                 finally:
-                    if hang is not None:
-                        faulthandler.cancel_dump_traceback_later()
+                    if hang_timer is not None:
+                        hang_timer.cancel()
                 _sleep(wait, self.waiting)
         finally:
+            if hang_timer is not None:
+                hang_timer.cancel()
             if hang is not None:
-                faulthandler.cancel_dump_traceback_later()
                 hang.close()
             self._note_stop()
+
+
+def _dump_on_stall(file: Any, timeout: float) -> None:
+    """Pile du thread principal (celui de la boucle), toujours écrite en
+    premier, puis celle des autres threads pour contexte. Au-delà de 100
+    threads vivants, `faulthandler.dump_traceback` (comme l'ancien
+    `dump_traceback_later`) ne garantit plus de montrer celle du thread
+    principal (limite fixe de CPython) ; c'est pourtant elle qui dit où le
+    bot s'est arrêté, donc on l'écrit nous-mêmes en premier, sans cette
+    limite."""
+    file.write(f"Timeout ({timedelta(seconds=timeout)}) !\n")
+    frame = sys._current_frames().get(threading.main_thread().ident)
+    if frame is not None:
+        file.write("Thread principal (bloqué) :\n")
+        file.writelines(traceback.format_stack(frame))
+        file.write("\n")
+    faulthandler.dump_traceback(file=file, all_threads=True)
+    file.flush()
 
 
 _running = True
