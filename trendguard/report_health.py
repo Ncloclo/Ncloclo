@@ -571,6 +571,16 @@ def _cached_close(gcfg: Any) -> Tuple[Any, Any]:
         return None, None
 
 
+def _info_check(label: str, evaluate: Callable[[], Any], describe: Callable[[Any], str]) -> Check:
+    """Contrôle d'information consultatif (jamais bloquant pour le rapport) :
+    `evaluate()` puis `describe(résultat)` ; si le calcul échoue, « état non
+    mesuré » au lieu d'empêcher le reste du rapport."""
+    try:
+        return chk(label, None, describe(evaluate()))
+    except Exception as e:
+        return chk(label, None, f"état non mesuré ({type(e).__name__})")
+
+
 def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
     """Risque et analyse du portefeuille, d'après la dernière décision :
     qualité des données, VaR, tests de résistance, attribution des
@@ -675,57 +685,25 @@ def analysis_checks(gcfg: Any, st: Dict[str, Any]) -> List[Check]:
                                                      "python trendguard_bot.py cyber"))
     except Exception as e:               # jamais bloquant
         out.append(chk("Cybersécurité", None, f"état non mesuré ({type(e).__name__})"))
-    try:
-        rc = recherche.evaluate(gcfg, st)
-        out.append(chk("Recherche et connaissances", None, recherche.describe(rc)))
-    except Exception as e:               # jamais bloquant
-        out.append(chk("Recherche et connaissances", None, f"état non mesuré ({type(e).__name__})"))
+    out.append(_info_check("Recherche et connaissances", lambda: recherche.evaluate(gcfg, st), recherche.describe))
     try:
         mm = memoire.evaluate(gcfg, st)
         out.append(chk("Mémoire", False if mm["health"]["p0"] else None, memoire.describe(mm)))
     except Exception as e:               # jamais bloquant
         out.append(chk("Mémoire", None, f"état non mesuré ({type(e).__name__})"))
-    try:
-        mo = monde.evaluate(gcfg, st)
-        out.append(chk("Modèle du monde", None, monde.describe(mo)))
-    except Exception as e:               # jamais bloquant
-        out.append(chk("Modèle du monde", None, f"état non mesuré ({type(e).__name__})"))
-    try:
-        ca = causal.evaluate(gcfg, st)
-        out.append(chk("Intelligence causale", None, causal.describe(ca)))
-    except Exception as e:               # jamais bloquant
-        out.append(chk("Intelligence causale", None, f"état non mesuré ({type(e).__name__})"))
-    try:
-        sr = sre.evaluate(gcfg, st, record=True)
-        out.append(chk("Fiabilité (SRE)", None, sre.describe(sr)))
-    except Exception as e:               # jamais bloquant
-        out.append(chk("Fiabilité (SRE)", None, f"état non mesuré ({type(e).__name__})"))
-    try:
-        ig = ingenierie.evaluate(gcfg)
-        out.append(chk("Ingénierie et exploitation", None, ingenierie.describe(ig)))
-    except Exception as e:               # jamais bloquant
-        out.append(chk("Ingénierie et exploitation", None, f"état non mesuré ({type(e).__name__})"))
-    try:
-        gv = gouvernance.evaluate(gcfg, st)
-        out.append(chk("Gouvernance", None, gouvernance.describe(gv)))
-    except Exception as e:               # jamais bloquant
-        out.append(chk("Gouvernance", None, f"état non mesuré ({type(e).__name__})"))
-    try:
-        pc = perception.evaluate(gcfg, st, perception.load_caches(gcfg.universe))
-        out.append(chk("Perception", None, perception.describe(pc)))
-    except Exception as e:               # jamais bloquant
-        out.append(chk("Perception", None, f"état non mesuré ({type(e).__name__})"))
-    try:
-        close, volume = _cached_close(gcfg)
-        jm = jumeau.evaluate(gcfg, st, close, volume, params=evolution.params_for(gcfg), light=True)
-        out.append(chk("Jumeau numérique", None, jumeau.describe(jm)))
-    except Exception as e:               # jamais bloquant
-        out.append(chk("Jumeau numérique", None, f"état non mesuré ({type(e).__name__})"))
-    try:
-        ob = objectifs.evaluate(gcfg, st)
-        out.append(chk("Mission et objectifs", None, objectifs.describe(ob)))
-    except Exception as e:               # jamais bloquant
-        out.append(chk("Mission et objectifs", None, f"état non mesuré ({type(e).__name__})"))
+    out.append(_info_check("Modèle du monde", lambda: monde.evaluate(gcfg, st), monde.describe))
+    out.append(_info_check("Intelligence causale", lambda: causal.evaluate(gcfg, st), causal.describe))
+    out.append(_info_check("Fiabilité (SRE)", lambda: sre.evaluate(gcfg, st, record=True), sre.describe))
+    out.append(_info_check("Ingénierie et exploitation", lambda: ingenierie.evaluate(gcfg), ingenierie.describe))
+    out.append(_info_check("Gouvernance", lambda: gouvernance.evaluate(gcfg, st), gouvernance.describe))
+    out.append(_info_check("Perception",
+                           lambda: perception.evaluate(gcfg, st, perception.load_caches(gcfg.universe)),
+                           perception.describe))
+    out.append(_info_check(
+        "Jumeau numérique",
+        lambda: jumeau.evaluate(gcfg, st, *_cached_close(gcfg), params=evolution.params_for(gcfg), light=True),
+        jumeau.describe))
+    out.append(_info_check("Mission et objectifs", lambda: objectifs.evaluate(gcfg, st), objectifs.describe))
     out.append(chk("Paliers du réel", None, deploiement.describe(gcfg) + " ; exécutions : "
                    + deploiement.describe_quality(st.get("qualite_execution"))))
     au = st.get("autorisation") or {}
