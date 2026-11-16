@@ -19,7 +19,7 @@ import trendguard_bot as tg
 import v29
 from panel import assistant as pa
 from panel import server as ps
-from trendguard import alerts
+from trendguard import alerts, monde, objectifs, recherche
 from trendguard import evolution as ev
 from trendguard import report as rp
 from trendguard import report_health as rph
@@ -374,6 +374,24 @@ def test_score_history_gives_the_trend(root):
         rp.save(g, {"day": day, "score": {"ok": ok, "warn": 3, "info": 5, "total": 36}, "text": "x"})
     hist = rp.load_latest(g)["history"]
     assert [(h["day"], h["ok"]) for h in hist] == [("2026-09-29", 26), ("2026-09-30", 28)]
+
+
+def test_an_information_check_failing_never_blocks_the_others(root, monkeypatch):
+    """`analysis_checks` rassemble des informations consultatives
+    (recherche, mémoire, monde, causal, SRE…) ; l'une d'elles qui échoue
+    (panne, cache absent) devient « état non mesuré », sans empêcher le
+    calcul ni l'affichage de toutes les autres."""
+    g = tg.GuardConfig(db_file=":memory:", log_file=os.devnull, lock_file=str(root / "tg.lock"))
+
+    def broken(*a, **kw):
+        raise RuntimeError("panne")
+    monkeypatch.setattr(recherche, "evaluate", broken)
+    checks = {c["label"]: c for c in rph.analysis_checks(g, {})}
+    assert checks["Recherche et connaissances"]["ok"] is None
+    assert checks["Recherche et connaissances"]["detail"] == "état non mesuré (RuntimeError)"
+    # Les contrôles qui suivent dans la liste restent calculés normalement.
+    assert checks["Modèle du monde"]["detail"] == monde.describe(monde.evaluate(g, {}))
+    assert checks["Mission et objectifs"]["detail"] == objectifs.describe(objectifs.evaluate(g, {}))
 
 
 def test_bot_launches_the_report_once_after_0030(tmp_path, monkeypatch):
