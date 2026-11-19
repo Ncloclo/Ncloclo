@@ -824,6 +824,17 @@ def format_markdown(text: str, width: int = 80) -> str:
     return "\n".join(out)
 
 
+def write_report(text: str, out: str = "") -> None:
+    """Rapport d'une commande de diagnostic (--out) : affich\u00e9, et, si demand\u00e9,
+    mis en forme (`format_markdown`) puis \u00e9crit dans `out` (dossier cr\u00e9\u00e9 au
+    besoin)."""
+    if out:
+        os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
+        with open(out, "w", encoding="utf-8") as fh:
+            fh.write(format_markdown(text) + "\n")
+    print(text)
+
+
 def research_report(data_dir: str, out_path: str,
                     oos_end: Optional[str] = None) -> str:
     """Rapport de recherche (docs/TRENDGUARD_REPORT.md) sur les clôtures Coin

@@ -299,8 +299,5 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     r = evaluate(g, read_state(g.db_file) or {}, close, volume)
     report_of(r)
     text = render(r)
-    if args.out:
-        with open(args.out, "w", encoding="utf-8") as fh:
-            fh.write(ts.format_markdown(text) + "\n")
-    print(text)
+    ts.write_report(text, args.out)
     return 0 if r["quality"]["status"] == "READY" else 1
