@@ -1393,9 +1393,5 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     r = run(close, volume, params_for(g), seed=args.graine)
     result_of(r)
     text = render(r)
-    if args.out:
-        os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
-        with open(args.out, "w", encoding="utf-8") as fh:
-            fh.write(ts.format_markdown(text) + "\n")
-    print(text)
+    ts.write_report(text, args.out)
     return 0
