@@ -3,6 +3,7 @@ vérification publique sur Binance (sans clé ni ordre)."""
 
 import dataclasses
 import io
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -430,20 +431,18 @@ def test_network_outage_defers_quickly_without_waiting_every_pair(logger):
     assert len(calls) <= 3                       # BTC d'abord : arrêt immédiat
 
 
-def test_stalled_cycle_dumps_thread_stacks(logger, tmp_path, monkeypatch):
-    """Un cycle bloqué (ici 0,3 s au lieu de 20 min) laisse la pile des
-    threads dans <journal>.blocage.txt ; un cycle normal n'écrit rien."""
-    close, volume = synthetic_market()
+def _run_stalled_cycle(bot, tmp_path, monkeypatch, stall_sec=0.3):
+    """Fait tourner `bot` deux cycles, le second bloqué `stall_sec` au lieu
+    de 20 min, et renvoie (texte de <journal>.blocage.txt, nombre de cycles)."""
     log = tmp_path / "tg.log"
-    bot, fb = make_bot("paper", close, logger)
     bot.g = dataclasses.replace(bot.g, log_file=str(log))
-    monkeypatch.setattr(tg.TrendGuardBot, "STALL_DUMP_SEC", 0.3)
+    monkeypatch.setattr(tg.TrendGuardBot, "STALL_DUMP_SEC", stall_sec)
     calls = {"n": 0}
 
     def cycle(now=None):
         calls["n"] += 1
         if calls["n"] == 2:
-            time.sleep(1.0)                      # blocage simulé
+            time.sleep(stall_sec * 3)             # blocage simulé
             tgbot._running = False
     monkeypatch.setattr(bot, "run_cycle", cycle)
     monkeypatch.setattr(tgbot, "_sleep", lambda s, should_stop=None: None)
@@ -452,8 +451,34 @@ def test_stalled_cycle_dumps_thread_stacks(logger, tmp_path, monkeypatch):
         bot.run_forever()
     finally:
         tgbot._running = True
-    dump = (tmp_path / "tg.log.blocage.txt").read_text(encoding="utf-8")
-    assert "Timeout" in dump and "cycle" in dump and calls["n"] == 2
+    return (tmp_path / "tg.log.blocage.txt").read_text(encoding="utf-8"), calls["n"]
+
+
+def test_stalled_cycle_dumps_thread_stacks(logger, tmp_path, monkeypatch):
+    """Un cycle bloqué (ici 0,3 s au lieu de 20 min) laisse la pile des
+    threads dans <journal>.blocage.txt ; un cycle normal n'écrit rien."""
+    close, volume = synthetic_market()
+    bot, fb = make_bot("paper", close, logger)
+    dump, n = _run_stalled_cycle(bot, tmp_path, monkeypatch)
+    assert "Blocage" in dump and "cycle" in dump and n == 2
+
+
+def test_stalled_cycle_dump_keeps_main_thread_with_many_others(logger, tmp_path, monkeypatch):
+    """Pendant une panne réseau, de nombreux envois d'alerte peuvent rester
+    bloqués en même temps que le cycle principal : le relevé doit quand même
+    dire où CELUI-LÀ s'est arrêté (faulthandler.dump_traceback_later, utilisé
+    avant, plafonne son relevé à 100 threads et pouvait l'omettre)."""
+    close, volume = synthetic_market()
+    bot, fb = make_bot("paper", close, logger)
+    others = [threading.Thread(target=time.sleep, args=(5,), daemon=True) for _ in range(150)]
+    for t in others:
+        t.start()
+    try:
+        dump, n = _run_stalled_cycle(bot, tmp_path, monkeypatch)
+    finally:
+        for t in others:
+            t.join(timeout=5)
+    assert "cycle" in dump and "principal" in dump and n == 2
 
 
 # ---------- Saisie guidée des clés API ----------

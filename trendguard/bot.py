@@ -4,12 +4,14 @@ Partie du bot TrendGuard (paquet trendguard, point d'entrée : trendguard_bot.py
 """
 from __future__ import annotations
 
-import faulthandler
 import logging
 import math
 import os
+import sys
+import threading
 import time
-from datetime import datetime
+import traceback
+from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 import ccxt
@@ -1190,6 +1192,23 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
 
     STALL_DUMP_SEC = 20 * 60
 
+    @staticmethod
+    def _dump_stalled_threads(main_ident: int, file: Any, stall_sec: float) -> None:
+        """Pile de chaque thread dans <journal>.blocage.txt, celle du thread
+        principal d'abord : lui seul dit où le bot s'est arrêté. On n'utilise
+        pas faulthandler.dump_traceback_later, qui plafonne son relevé à 100
+        threads et peut donc omettre le principal si d'autres (envois
+        d'alerte figés, par exemple) sont plus nombreux au même moment."""
+        frames = dict(sys._current_frames())
+        main_frame = frames.pop(main_ident, None)
+        ordered = ([(main_ident, main_frame)] if main_frame is not None else []) + list(frames.items())
+        file.write(f"Blocage de plus de {timedelta(seconds=stall_sec)} !\n")
+        for ident, frame in ordered:
+            label = "principal" if ident == main_ident else hex(ident)
+            file.write(f"\nThread {label} (plus récent appel en premier) :\n")
+            file.write("".join(reversed(traceback.format_stack(frame))))
+        file.flush()
+
     def run_forever(self) -> None:
         """Boucle principale : un cycle après l'autre jusqu'à l'arrêt demandé,
         avec une attente croissante après une erreur."""
@@ -1202,13 +1221,18 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
                 hang = open(self.g.log_file + ".blocage.txt", "a", encoding="utf-8")
             except OSError:
                 hang = None
+        main_ident = threading.get_ident()
+        timer: Optional[threading.Timer] = None
         backoff = 5
         self.track_uptime = True
         try:
             while _running and not self.stop_requested():
                 self._touch_alive(force=True)
                 if hang is not None:
-                    faulthandler.dump_traceback_later(self.STALL_DUMP_SEC, file=hang)
+                    timer = threading.Timer(self.STALL_DUMP_SEC, self._dump_stalled_threads,
+                                             args=(main_ident, hang, self.STALL_DUMP_SEC))
+                    timer.daemon = True
+                    timer.start()
                 try:
                     self.run_cycle()
                     backoff = 5
@@ -1220,12 +1244,13 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
                     self.logger.exception(f"[CYCLE] KO: {e}")
                     wait, backoff = backoff, min(backoff * 2, 300)
                 finally:
-                    if hang is not None:
-                        faulthandler.cancel_dump_traceback_later()
+                    if timer is not None:
+                        timer.cancel()
                 _sleep(wait, self.waiting)
         finally:
+            if timer is not None:
+                timer.cancel()
             if hang is not None:
-                faulthandler.cancel_dump_traceback_later()
                 hang.close()
             self._note_stop()
 
