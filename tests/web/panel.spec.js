@@ -357,7 +357,8 @@ test("positions, veille, journal, réglages et thème", async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test("téléphone : barre d'onglets, aucun défilement horizontal", async ({ page }) => {
+test("téléphone : barre d'onglets, aucun défilement horizontal ni libellé qui déborde sur le suivant",
+     async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   for (const tab of ["dash", "news", "charts", "assets", "positions"]) {
     await page.goto(`${BASE}/#${tab}`);
@@ -365,5 +366,13 @@ test("téléphone : barre d'onglets, aucun défilement horizontal", async ({ pag
     await page.waitForTimeout(300);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow, tab).toBeLessThanOrEqual(0);
+  }
+  // Un mot trop long pour sa colonne (ex. « Graphiques ») ne doit jamais
+  // déborder sur le libellé voisin (les deux illisibles, collés l'un à
+  // l'autre) : chaque libellé reste dans sa propre colonne.
+  const labels = await page.evaluate(() => [...document.querySelectorAll(".tab span")]
+    .map((s) => s.getBoundingClientRect()));
+  for (let i = 1; i < labels.length; i++) {
+    expect(labels[i].left, `onglet n° ${i + 1}`).toBeGreaterThanOrEqual(labels[i - 1].right - 0.5);
   }
 });
