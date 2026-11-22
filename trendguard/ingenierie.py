@@ -78,17 +78,38 @@ def changes(deps: Optional[systeme.Deps] = None, root: pathlib.Path = ROOT, n: i
             "detail": f"{len(commits)} derniers changements lus"}
 
 
+def _entry_point_reexports(root: pathlib.Path) -> Dict[str, str]:
+    """Symboles ré-exportés par l'entrée unique (`trendguard_bot.py`, « un
+    seul point d'entrée », docs/ARCHITECTURE.md : `from trendguard.x import
+    a, b as c`) → le module `trendguard` dont chacun vient."""
+    tree = perception.parsed(root / "trendguard_bot.py")[1]
+    symbols: Dict[str, str] = {}
+    for n in ast.walk(tree):
+        if isinstance(n, ast.ImportFrom) and n.level == 0 and n.module and n.module.startswith("trendguard."):
+            mod = n.module.split(".")[-1]
+            symbols.update({(a.asname or a.name): mod for a in n.names})
+    return symbols
+
+
 def tests_inventory(root: pathlib.Path = ROOT) -> Dict[str, Any]:
     """Les tests (§19, §22) : fichiers, fonctions de test, modules du bot
     importés directement par au moins un test (une mesure par module, pas par
-    ligne), composants de la feuille de route sans test (hors attente)."""
+    ligne ; compte aussi l'usage d'un symbole ré-exporté par l'entrée unique,
+    `trendguard_bot.py`, la façon dont les tests y accèdent le plus souvent),
+    composants de la feuille de route sans test (hors attente)."""
     files = sorted((root / "tests").glob("test_*.py"))
+    reexports = _entry_point_reexports(root)
     functions, imported = 0, set()
     for f in files:
         src, tree = perception.parsed(f)
         functions += sum(1 for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name.startswith("test_"))
         imported |= perception._imports(f)
         imported |= set(re.findall(r"trendguard\.([a-z_]+)", src)) | set(re.findall(r"panel\.([a-z_]+)", src))
+        bot_aliases = {(a.asname or a.name) for n in ast.walk(tree) if isinstance(n, ast.Import)
+                       for a in n.names if a.name == "trendguard_bot"}
+        used = {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)
+                and isinstance(n.value, ast.Name) and n.value.id in bot_aliases}
+        imported |= {reexports[s] for s in used if s in reexports}
     modules = sorted(p.stem for d in ("trendguard", "panel") for p in (root / d).glob("*.py")
                      if not p.stem.startswith("__"))
     untested = [m for m in modules if m not in imported]

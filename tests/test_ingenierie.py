@@ -44,9 +44,36 @@ def test_tests_and_the_github_pipeline():
     t = ingenierie.tests_inventory()
     assert t["functions"] > 500 and t["files"] > 50 and t["coverage"] >= 0.9
     assert not t["components_without_tests"]                             # hors composants en attente
+    # explain, replay et selection ne sont jamais importés directement par un
+    # test : ils ne sont appelés que par leur nom ré-exporté par l'entrée
+    # unique (`tg.explain_decision`, `tg.replay`, `tg.read_selection`...).
+    assert not ({"explain", "replay", "selection"} & set(t["untested"]))
     p = ingenierie.pipeline()
     assert p["ok"] and p["steps"]["style (ruff)"] and p["steps"]["tests (pytest)"] and p["timeout"] >= 30
     assert p["pins"]["total"] and not p["pins"]["loose"]                 # bibliothèques figées
+
+
+def test_coverage_counts_a_module_used_through_the_single_entry_point(tmp_path):
+    """Un module n'est jamais importé directement par un test, mais l'un de
+    ses symboles est ré-exporté par l'entrée unique (`trendguard_bot.py`,
+    docs/ARCHITECTURE.md) et appelé par `tg.<nom>` : compté comme testé.
+    Un module ré-exporté mais dont aucun symbole n'est jamais appelé reste
+    « sans test »."""
+    for d in ("trendguard", "panel", "tests"):
+        (tmp_path / d).mkdir()
+    (tmp_path / "trendguard" / "explain.py").write_text(
+        "def explain_decision():\n    return 1\n", encoding="utf-8")
+    (tmp_path / "trendguard" / "selection.py").write_text(
+        "def read_selection():\n    return {}\n", encoding="utf-8")
+    (tmp_path / "trendguard_bot.py").write_text(
+        "from trendguard.explain import explain_decision\n"
+        "from trendguard.selection import read_selection\n", encoding="utf-8")
+    (tmp_path / "tests" / "test_sample.py").write_text(
+        "import trendguard_bot as tg\n\n\ndef test_x():\n    assert tg.explain_decision() == 1\n",
+        encoding="utf-8")
+    t = ingenierie.tests_inventory(tmp_path)
+    assert "explain" not in t["untested"]            # tg.explain_decision() est appelé
+    assert "selection" in t["untested"]               # read_selection n'est jamais appelé
 
 
 def test_self_modification_is_refused(tmp_path):
