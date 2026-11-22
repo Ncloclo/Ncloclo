@@ -23,7 +23,7 @@ rapport donne la ligne « Ingénierie et exploitation ».
 | Exigence | Dans TrendGuard |
 | --- | --- |
 | Changement tracé (§13, §29) | historique git : version, sujet, auteur, date, co-auteur IA déclaré ; les étapes du prompt retrouvées dans l'historique |
-| Tests (§19, §22) | fonctions de test, fichiers, modules du bot importés directement par un test (une mesure par module, pas par ligne) ; composants de la feuille de route sans test |
+| Tests (§19, §22) | fonctions de test, fichiers, modules du bot importés directement par un test, ou utilisés par leur nom ré-exporté par l'entrée unique (`trendguard_bot.py`) (une mesure par module, pas par ligne) ; composants de la feuille de route sans test |
 | Construction (§21) | chaque fichier Python se lit sans erreur |
 | Chaîne de contrôle (§30, §47) | contrôles GitHub à chaque envoi : style (ruff), tests, audit des bibliothèques, pages web ; durée maximale |
 | Retour arrière (§31) | version précédente connue ; mise à jour défaillante : retour automatique |
