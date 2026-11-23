@@ -10,6 +10,7 @@ import pytest
 from research import sentiment as se
 from test_trendguard import synthetic_market
 
+
 def test_daily_funding_uses_only_rates_known_at_the_close():
     days = pd.date_range("2024-01-01", periods=12, freq="D", tz="UTC")
     times = pd.date_range("2024-01-01", periods=12 * 3, freq="8h", tz="UTC")
