@@ -76,6 +76,9 @@ def watch_summary(rep: Dict[str, Any]) -> Dict[str, Any]:
     return {"day": rep.get("day"), "generated": rep.get("generated"), "items": rep.get("items"),
             "fear_greed": ind.get("fear_greed"), "fear_greed_label": ind.get("fear_greed_label"),
             "usdc_usdt": ind.get("usdc_usdt"), "providers": providers,
+            # Contrats à terme de Binance (trendguard/derives.py) : financement,
+            # intérêt ouvert, comptes acheteurs.
+            "derives": ind.get("derives"),
             "errors": list(rep.get("errors") or [])}
 
 

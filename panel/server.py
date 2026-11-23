@@ -220,6 +220,8 @@ class PanelApp(SecurityCenter):
             "testnet": bool(self.g.binance_testnet and self.g.run_mode == "live"),
             "state": self.control.state(),
             "equity": eq, "start_equity": start, "peak": shown_peak(eq, peak),
+            # Capital dans votre monnaie et retrait complet (trendguard/devise.py).
+            "devise": st.get("devise"),
             "drawdown_pct": drawdown_pct(eq, peak),
             "halted": bool(st.get("halted")), "halt_reason": st.get("halt_reason"),
             "resume_note": st.get("resume_note") if st.get("halted") else None,

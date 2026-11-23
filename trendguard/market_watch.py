@@ -47,10 +47,11 @@ import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
-from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 import v29
 
+from . import derives
 from .contrats import ModelConsensus, ModelDisagreement
 from .texte import fr
 
@@ -337,9 +338,18 @@ def collect_news(held: Iterable[str], now: datetime,
     return fresh[:MAX_ITEMS], errors
 
 
-def market_indicators(fetch: Callable[[str], Any] = http_json) -> Tuple[Dict[str, Any], List[str]]:
+def market_indicators(fetch: Callable[[str], Any] = http_json,
+                      universe: Optional[Sequence[str]] = None) -> Tuple[Dict[str, Any], List[str]]:
+    """Fear & Greed, parité USDC/USDT et, si `universe` est donné, ce que
+    disent les contrats à terme de Binance (derives.py : financement,
+    intérêt ouvert, comptes acheteurs)."""
     out: Dict[str, Any] = {}
     errors: List[str] = []
+    if universe:
+        d_ind, d_err = derives.indicators(fetch, universe)
+        if len(d_ind) > 1:                  # plus que l'heure du relevé
+            out["derives"] = d_ind
+        errors += d_err
     try:
         d = fetch("https://api.alternative.me/fng/?limit=1")["data"][0]
         out["fear_greed"] = int(d["value"])
@@ -773,7 +783,7 @@ def daily_report(universe: Iterable[str], held: Iterable[str], now: datetime, me
         errors.append(f"Annonces Binance : {friendly_error(e)}")
     items, err = collect_news(held, now, fetch_bytes)
     errors += err
-    indicators, err = market_indicators(fetch_json)
+    indicators, err = market_indicators(fetch_json, universe)
     errors += err
     providers = configured(env) if use_ai else []
     weights = provider_weights(memory.opinions(), close)
@@ -851,6 +861,9 @@ def render(report: Dict[str, Any]) -> str:
         lines.append(f"Fear & Greed : {ind['fear_greed']} ({ind['fear_greed_label']})"
                      + (f" · USDC/USDT {fr(ind['usdc_usdt'], '.4f')}" if "usdc_usdt" in ind
                         else ""))
+    futures = derives.describe(ind.get("derives"))
+    if futures:
+        lines.append(futures)
     if report["vetoes"]:
         lines.append("Achats bloqués (annonces officielles Binance) : "
                      + ", ".join(f"{a.upper()} jusqu'au {v['until']}" for a, v in sorted(report["vetoes"].items())))

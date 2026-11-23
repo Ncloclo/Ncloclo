@@ -127,6 +127,20 @@ $("#auto-btn").addEventListener("click", async (ev) => {
 
 // ---------- Tableau de bord ----------
 let dashChart = null, dashSeries = null;
+
+// Capital dans votre monnaie (trendguard/devise.py) : FCFA ou euros, et ce
+// qu'un retrait complet donnerait, frais de change et impôt déduits.
+function renderLocalMoney(d) {
+  const node = $("#d-equity-local");
+  if (!node) return;
+  if (!d || !d.code || d.code === "USDT" || d.equity == null) { node.hidden = true; return; }
+  const money = (v) => nf(d.code === "FCFA" ? 0 : 2).format(v) + " " + d.code;
+  node.textContent = `≈ ${money(d.equity)} · retrait complet : ${money(d.withdraw_net)} nets `
+    + `(${fpct(d.gain_net_pct, 1)}, frais de change ${nf(1).format(d.change_cost * 100)} %, `
+    + `impôt ${nf(0).format(d.tax_rate * 100)} %)`;
+  node.className = "sub " + (d.gain_net_pct >= 0 ? "up" : "down");
+  node.hidden = false;
+}
 async function renderDash() {
   if (!S) await refreshStatus();
   const newsP = loadNews().then((n) => { renderTicker(n); newsAlerts(n); }).catch(() => { /* bandeau : réessai au prochain rafraîchissement */ });
@@ -140,6 +154,7 @@ async function renderDash() {
     sub.textContent = `${fpct(ch)} depuis le départ (${fusd(S.start_equity)})`;
     sub.className = "sub " + (ch >= 0 ? "up" : "down");
   } else sub.textContent = "Aucune décision encore prise";
+  renderLocalMoney(S.devise);
   if (!dashChart && LWC) {
     dashChart = makeChart($("#d-equity-chart"), { handleScroll: false, handleScale: false, rightPriceScale: { visible: false }, timeScale: { visible: false } }, false);
     const c = COLORS();
@@ -1032,6 +1047,30 @@ function renderAnalysis(a) {
 }
 
 // ---------- Veille ----------
+// Contrats à terme de Binance (trendguard/derives.py) : financement payé
+// toutes les 8 h par les acheteurs (positif) ou les vendeurs (négatif), et
+// intérêt ouvert de BTC. Information seulement : aucun achat n'en dépend.
+function renderFutures(d) {
+  const fund = $("#w-fund"), oi = $("#w-oi");
+  if (!fund || !oi) return;
+  d = d || {};
+  const yearly = (r) => r * 3 * 365 * 100;
+  if (d.funding_btc == null) { fund.textContent = "—"; $("#w-fund-sub").textContent = ""; }
+  else {
+    fund.textContent = `${fpct(yearly(d.funding_btc), 1)} / an`;
+    fund.className = "num " + (yearly(d.funding_btc) > 30 ? "down" : yearly(d.funding_btc) < 0 ? "up" : "");
+    $("#w-fund-sub").textContent = `BTC · moyenne des cryptos ${d.funding_mean == null ? "—" : fpct(yearly(d.funding_mean), 1)} / an`
+      + (yearly(d.funding_btc) > 30 ? " · beaucoup d'effet de levier à l'achat" : yearly(d.funding_btc) < 0 ? " · les vendeurs paient" : "");
+  }
+  if (d.oi_btc_30d == null) { oi.textContent = "—"; $("#w-oi-sub").textContent = ""; }
+  else {
+    oi.textContent = fpct(d.oi_btc_30d * 100, 1);
+    oi.className = "num";
+    $("#w-oi-sub").textContent = d.long_share_btc == null ? "contrats en cours sur BTC"
+      : `${nf(0).format(d.long_share_btc * 100)} % des comptes sont acheteurs`;
+  }
+}
+
 async function renderWatch() {
   const w = await api("/api/watch");
   const last = w.last, mood = $("#w-mood");
@@ -1053,6 +1092,7 @@ async function renderWatch() {
   peg.textContent = off == null ? "—" : nf(4).format(r.usdc_usdt);
   peg.className = "num " + (off == null ? "" : off > 0.005 ? "down" : "up");
   $("#w-peg-sub").textContent = off == null ? "" : off > 0.005 ? "un stablecoin décroche" : "normale : les deux valent 1 dollar";
+  renderFutures(r.derives);
   $("#w-items").textContent = r.items == null ? "—" : String(r.items);
   const made = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})/.exec(r.generated || "");
   $("#w-items-sub").textContent = made ? `rapport du ${fdate(made[1])} à ${made[2]} UTC` : "";

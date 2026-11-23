@@ -23,6 +23,7 @@ from . import (
     autonomy,
     comite,
     contrats,
+    devise,
     donnees,
     evolution,
     garde,
@@ -276,8 +277,8 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         st.update(start_equity=float(self.g.paper_capital), peak_equity=None, last_equity=None,
                   trades=[], realized_pnl_total=0.0, started_at=v29._utcnow_iso(), halted=False,
                   halt_reason=None, halted_at=None, resume_note=None, risk_mult=1.0)
-        for k in ("pending_entries", "auto_resumed_at", "auto_resumes"):
-            st.pop(k, None)
+        for k in ("pending_entries", "auto_resumed_at", "auto_resumes", "devise"):
+            st.pop(k, None)       # devise : le nouveau départ a son propre taux de change
         held = ", ".join(a.upper() for a in sorted(book.get("holdings") or {})) or "aucune position"
         msg = (f"capital du paper changé : {fr(float(old_capital or 0), ',.0f')} → "
                f"{fr(self.g.paper_capital, ',.0f')} {self.g.quote}. Nouvel essai paper avec ce capital ; "
@@ -468,6 +469,31 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         self._last_equity_log = now
         self.store.log_equity(float(equity), float(cash), 0.0, 0.0,
                               bool(self.state.get("halted")), self.g.run_mode)
+        self._update_devise(float(equity))
+
+    def _update_devise(self, equity: float) -> None:
+        """Capital et retrait complet dans votre monnaie (devise.py), gardés
+        dans l'état pour le panneau et le résumé du jour. Taux EUR/USDT relu
+        au plus une fois par heure ; une lecture ratée garde le dernier."""
+        code = getattr(self.g, "devise", "USDT")
+        if code == "USDT":
+            self.state.pop("devise", None)
+            return
+        d = self.state.get("devise") if isinstance(self.state.get("devise"), dict) else {}
+        eurusdt, at = d.get("eurusdt"), float(d.get("rate_ts") or 0.0)
+        if not eurusdt or time.time() - at >= devise.RATE_REFRESH_SEC:
+            fresh = devise.eur_usdt(self.exchange)
+            if fresh:
+                eurusdt, at = fresh, time.time()
+        rate = devise.per_usdt(code, eurusdt)
+        if rate is None:
+            return
+        rate_start = d.get("rate_start") if d.get("code") == code else None
+        start = float(self.state.get("start_equity") or equity)
+        v = devise.view(code, equity, start, rate, rate_start or rate,
+                        self.g.frais_change, self.g.impot_plus_values)
+        v.update(eurusdt=eurusdt, rate_ts=at, at=v29._utcnow_iso())
+        self.state["devise"] = v
 
     def stop_requested(self) -> bool:
         """Arrêt propre demandé depuis le panneau (fichier .stop). Une
@@ -1169,6 +1195,9 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         holdings = self._holdings()
         lines = [f"TrendGuard, clôture du {day} — capital {fr(equity, ',.2f')} {self.g.quote} "
                  f"— marché {'haussier' if bull else 'baissier (aucun achat)'}"]
+        money = devise.line(self.state.get("devise"))
+        if money:
+            lines.append(money)
         for a, r in exits:
             lines.append(f"  ↘ vente {a.upper()} ({EXIT_SHORT.get(r, r.lower())})")
         for pl in entries:

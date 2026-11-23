@@ -20,7 +20,7 @@ import ccxt
 
 import v29
 
-from . import alerts, autonomy, chantiers, evolution, porte
+from . import alerts, autonomy, chantiers, devise, evolution, porte
 from . import bot as _bot
 from . import diagnostics as dg
 from . import trend_strategy as ts
@@ -836,6 +836,9 @@ def _status(gcfg: GuardConfig, resume: bool) -> int:
     money = lambda v: f"{fr(float(v), ',.2f')} {gcfg.quote}" if v is not None else "–"  # noqa: E731
     print(f"Dernière décision : bougie du {state.get('last_decision_day') or '–'}")
     print(f"Capital           : {money(state.get('last_equity'))}")
+    local = devise.line(state.get("devise"))
+    if local:
+        print(f"Dans votre monnaie: {local.strip().lstrip('💰').strip()}")
     print(f"Plus haut         : {money(state.get('peak_equity'))}")
     print("Arrêt d'urgence   : " + (f"DÉCLENCHÉ — {state.get('halt_reason')}"
                                     if state.get("halted") else "prêt, non déclenché"))

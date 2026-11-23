@@ -70,6 +70,14 @@ TG_ENV_DOC: Dict[str, str] = {
     "PANEL_PORT": "Panneau : port web (8765)",
     "TG_ALLOW_RECOVERY": "true : adopter les ordres du bot inconnus de la base (base perdue)",
     "TG_PAPER_CAPITAL": "Capital initial du mode paper (USDT)",
+    "TG_PAPER_REEL": "true : en paper, achats et ventes au vrai carnet d'ordres de Binance (niveau par niveau), "
+                     "quantités arrondies aux règles de la paire, stops surveillés sur les plus bas de chaque minute",
+    "TG_PAPER_FRAIS": "Paper : frais Binance d'un ordre au marché (0.001 = 0,1 %, niveau de base)",
+    "TG_PAPER_FRAIS_BNB": "true : en paper, frais payés en BNB (25 % de moins, comme chez Binance)",
+    "TG_DEVISE": "Monnaie d'affichage du capital et d'un retrait complet : FCFA (défaut), EUR ou USDT",
+    "TG_FRAIS_CHANGE": "Frais d'une conversion entre votre monnaie et l'USDT (P2P, mobile money, banque) : "
+                       "0.02 = 2 % par conversion (estimation à remplacer par vos vrais taux)",
+    "TG_IMPOT_PLUS_VALUES": "Impôt sur le gain d'un retrait complet, selon votre pays (0.0 par défaut ; 0.15 = 15 %)",
     "TG_DB_FILE": "Base SQLite du bot",
     "TG_LOG_FILE": "Fichier de log",
     "TG_LOCK_FILE": "Fichier de verrou (une seule instance)",
@@ -157,6 +165,18 @@ class GuardConfig:
     entry_retry_hours: float = 6.0      # achat différé : nouveaux essais pendant 6 h
     allow_recovery: bool = False        # adopter les ordres du bot inconnus
     paper_capital: float = 10_000.0
+    # Exécution paper au plus près du réel (realisme.py) : carnet d'ordres,
+    # frais, règles de la paire, stops à la minute. Désactivée dans le code
+    # (essais, rejeu : la parité avec le backtest reste exacte), activée par
+    # l'environnement (TG_PAPER_REEL=true).
+    paper_reel: bool = False
+    paper_fee: float = 0.001
+    paper_fee_bnb: bool = False
+    # Capital dans votre monnaie (devise.py) : USDT dans le code (aucune
+    # conversion), FCFA par défaut dans l'environnement (TG_DEVISE).
+    devise: str = "USDT"
+    frais_change: float = 0.02
+    impot_plus_values: float = 0.0
     enable_live_trading: bool = False
     live_confirmation: str = ""
     binance_testnet: bool = False
@@ -202,6 +222,14 @@ class GuardConfig:
             raise ValueError("TG_ENTRY_RETRY_HOURS doit être >= 0.")
         if self.savoir_minutes < 15:
             raise ValueError("TG_SAVOIR_MINUTES doit être >= 15 (sources publiques ménagées).")
+        if not (0 <= self.paper_fee < 0.01):
+            raise ValueError("TG_PAPER_FRAIS doit être dans [0, 0.01[ (0.001 = 0,1 %).")
+        if self.devise not in ("USDT", "EUR", "FCFA"):
+            raise ValueError("TG_DEVISE doit être FCFA, EUR ou USDT.")
+        if not (0 <= self.frais_change < 0.2):
+            raise ValueError("TG_FRAIS_CHANGE doit être dans [0, 0.2[ (0.02 = 2 %).")
+        if not (0 <= self.impot_plus_values < 1):
+            raise ValueError("TG_IMPOT_PLUS_VALUES doit être dans [0, 1[ (0.15 = 15 %).")
         self.params.validate()
         for name, default in (
                 ("db_file", os.path.join(v29.APP_DIR, f"trendguard_{self.run_mode}.db")),
@@ -282,6 +310,12 @@ def load_guard_config_from_env() -> GuardConfig:
         entry_retry_hours=v29._env_f("TG_ENTRY_RETRY_HOURS", 6.0),
         allow_recovery=v29._env_b("TG_ALLOW_RECOVERY", False),
         paper_capital=v29._env_f("TG_PAPER_CAPITAL", 10_000.0),
+        paper_reel=v29._env_b("TG_PAPER_REEL", True),
+        paper_fee=v29._env_f("TG_PAPER_FRAIS", 0.001),
+        paper_fee_bnb=v29._env_b("TG_PAPER_FRAIS_BNB", False),
+        devise=v29._env_s("TG_DEVISE", "FCFA").upper(),
+        frais_change=v29._env_f("TG_FRAIS_CHANGE", 0.02),
+        impot_plus_values=v29._env_f("TG_IMPOT_PLUS_VALUES", 0.0),
         enable_live_trading=v29._env_b("ENABLE_LIVE_TRADING", False),
         live_confirmation=v29._env_s("LIVE_TRADING_CONFIRMATION", ""),
         binance_testnet=v29._env_b("BINANCE_TESTNET", False),

@@ -7,7 +7,7 @@ Partie de la classe TrendGuardBot (bot.py), qui en hérite.
 from __future__ import annotations
 
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
 
 import ccxt
@@ -23,6 +23,7 @@ from . import (
     politique,
     porte,
     postmortem,
+    realisme,
 )
 from . import trend_strategy as ts
 from .bot_types import Slot, last_closed_day
@@ -59,13 +60,23 @@ class ExecutionMixin:
                 self._save_slot(s)
 
     def _maintain_paper(self) -> None:
-        """Paper : simulation du stop catastrophe exchange en intrajournalier."""
+        """Paper : simulation du stop catastrophe exchange en intrajournalier.
+        Exécution réelle (TG_PAPER_REEL) : le stop est comparé au plus bas de
+        chaque minute écoulée, comme un STOP_LOSS chez Binance, pas au seul
+        dernier prix relevé (une mèche entre deux relevés ne passe plus)."""
         book = self.state["paper"]["holdings"]
         for a in list(book):
             h = book[a]
             s = self.slots.get(a.upper())
             if s is None:
                 continue
+            if self.g.paper_reel:
+                touched, read = self._paper_stop_minutes(s, h)
+                if touched is not None:
+                    self._paper_exit(a, touched, "EXCHANGE_STOP", trigger=touched)
+                    continue
+                if read:
+                    continue
             try:
                 px = s.ex.get_ticker()["last"]
             except Exception as e:
@@ -73,18 +84,59 @@ class ExecutionMixin:
                                     f"({type(e).__name__}) → nouvel essai au prochain cycle")
                 continue
             if px <= h["disaster"]:
-                self._paper_exit(a, min(px, h["disaster"]), "EXCHANGE_STOP")
+                trig = min(px, h["disaster"])
+                self._paper_exit(a, trig, "EXCHANGE_STOP",
+                                 trigger=trig if self.g.paper_reel else None)
 
-    def _paper_exit(self, a: str, px: float, reason: str) -> None:
+    def _paper_stop_minutes(self, s: Slot, h: Dict[str, Any]) -> Tuple[Optional[float], bool]:
+        """(prix de déclenchement ou None, bougies lues). Les minutes sont
+        relues depuis la dernière surveillance, minute en cours comprise."""
+        now_ms = int(self._now.timestamp() * 1000)
+        since = int(h.get("watch_ms") or now_ms - 2 * realisme.MINUTE_MS)
+        bars = realisme.minute_bars(s.ex.exchange, s.symbol, since, now_ms)
+        if bars is None:
+            return None, False
+        hit = realisme.stop_touch(bars, float(h["disaster"]), since)
+        if hit is not None:
+            t, px = hit
+            self.logger.warning(
+                f"[PAPER] {s.symbol} : stop {fr(h['disaster'], '.6g')} touché dans la minute "
+                f"de {datetime.fromtimestamp(t / 1000, tz=timezone.utc):%H:%M} UTC")
+            return px, True
+        if bars:
+            h["watch_ms"] = int(bars[-1][0])   # la minute en cours sera relue
+        return None, True
+
+    def _paper_exit(self, a: str, px: float, reason: str,
+                    trigger: Optional[float] = None) -> None:
+        """Vente paper. Exécution réelle : au carnet d'ordres du moment (stop :
+        à partir du prix de déclenchement), aux frais de Binance. Carnet
+        illisible, ou exécution réelle désactivée : frais et glissement fixes."""
         book = self.state["paper"]
         h = book["holdings"].pop(a)
-        proceeds = h["qty"] * px * (1 - self.p.fee - self.p.slippage)
+        execution = None
+        proceeds = None
+        if self.g.paper_reel:
+            s = self.slots.get(a.upper())
+            ob = realisme.read_book(s.ex.exchange, s.symbol) if s is not None else None
+            f = realisme.fill(ob, "sell", h["qty"]) if ob else None
+            if f is not None:
+                fee = realisme.fee_rate(self.g.paper_fee, self.g.paper_fee_bnb)
+                ref = px
+                px = realisme.sell_price(trigger, f)
+                proceeds = h["qty"] * px * (1 - fee)
+                execution = {"modele": "carnet", "reference": ref, "cout_pct": f.cost_pct,
+                             "frais_pct": fee, "complet": f.complete}
+        if proceeds is None:
+            proceeds = h["qty"] * px * (1 - self.p.fee - self.p.slippage)
         book["cash"] += proceeds
         pnl = proceeds - h["cost"]
         opened = v29._parse_iso(h["entry_date"]) or self._now
         trade = {"asset": a, "date": self._now.isoformat(), "days": (self._now - opened).days,
                  "entry_date": h["entry_date"], "entry": h["entry"], "exit": px, "pnl": pnl,
                  "r": pnl / h["risk_quote"], "reason": reason}
+        if execution is not None:
+            trade["execution"] = execution
         if h.get("trace"):
             trade["trace"] = h["trace"]
         trade["qty"] = h["qty"]
@@ -164,6 +216,47 @@ class ExecutionMixin:
             if target >= last * 0.99:
                 continue   # sortie gérée par le stop de clôture
             b["disaster"] = target
+            if self.g.paper_reel:
+                # Comme un stop remonté chez Binance : seules les minutes qui
+                # suivent la remontée sont comparées au nouveau niveau.
+                b["watch_ms"] = int(self._now.timestamp() * 1000)
+
+    def _paper_fill_entry(self, s: Slot, plan: Dict[str, Any],
+                          cash: float) -> Tuple[Optional[Dict[str, Any]], str]:
+        """Achat paper au vrai carnet d'ordres (TG_PAPER_REEL) : prix moyen
+        obtenu niveau par niveau, frais de Binance, quantité arrondie au pas
+        de la paire, minimum de Binance respecté. Le risque ne dépasse jamais
+        celui prévu : la quantité baisse si le carnet coûte plus que prévu.
+        (plan exécutable ou None, raison) ; carnet illisible : plan inchangé
+        (ancien modèle)."""
+        ob = realisme.read_book(s.ex.exchange, s.symbol)
+        f = realisme.fill(ob, "buy", plan["qty"]) if ob else None
+        if f is None:
+            return plan, ""
+        p = self.p
+        fee = realisme.fee_rate(self.g.paper_fee, self.g.paper_fee_bnb)
+        stop = plan["stop"]
+        exit_keep = 1 - p.fee - p.slippage   # sortie au stop : hypothèse prudente de la stratégie
+        unit = f.price * (1 + fee) - stop * exit_keep
+        if unit <= 0:
+            return None, "le carnet d'ordres place le prix d'achat sous le stop"
+        qty = min(plan["qty"], plan["risk_quote"] / unit, max(cash, 0.0) / (f.price * (1 + fee)))
+        qty = s.ex.round_amount(qty)
+        if qty <= 0 or qty * f.price < s.ex.min_notional():
+            return None, (f"montant sous le minimum de Binance ({fr(s.ex.min_notional(), '.0f')} "
+                          f"{self.g.quote})")
+        # Une quantité plus petite traverse moins de niveaux : son prix moyen
+        # est au plus celui calculé, le risque reste sous celui prévu.
+        f = realisme.fill(ob, "buy", qty) or f
+        unit = f.price * (1 + fee) - stop * exit_keep
+        out = dict(plan)
+        out.update({"qty": qty, "entry": f.price, "exec_price": f.price,
+                    "cost": qty * f.price * (1 + fee), "risk_quote": qty * unit,
+                    "unit_risk": unit,
+                    "execution": {"modele": "carnet", "reference": plan.get("exec_price"),
+                                  "meilleur_prix": f.best, "cout_pct": f.cost_pct,
+                                  "frais_pct": fee, "complet": f.complete}})
+        return out, ""
 
     # ---------- Ruse : exécution des achats ----------
 
@@ -304,7 +397,9 @@ class ExecutionMixin:
             return None
         try:
             t = s.ex.get_ticker()
-            px_now = float(t["ask"] if self.live else t["last"])
+            # Un achat au marché paie le prix des vendeurs (ask), en réel comme
+            # en paper réaliste ; ancien paper : dernier prix échangé.
+            px_now = float(t["ask"] if (self.live or self.g.paper_reel) else t["last"])
         except Exception as e:
             self._defer_entry(plan, equity, now, f"prix indisponible ({type(e).__name__})")
             return None
@@ -343,6 +438,15 @@ class ExecutionMixin:
                 f"vs clôture) → quantité {fr(plan['qty'], '.6g')} → {fr(adj['qty'], '.6g')} "
                 f"(risque {fr(adj['risk_quote'], '.2f')} {self.g.quote})")
         plan = adj
+        if not self.live and self.g.paper_reel:
+            # Avant la porte : elle contrôle la quantité et le coût réels.
+            real, why = self._paper_fill_entry(s, plan, cash)
+            if real is None:
+                self.logger.warning(f"[ENTRY] {a.upper()} annulée : {why}")
+                self._entry_notes[a] = ("cancelled", f"Achat annulé : {why}")
+                self._note_asset(a, *self._entry_notes[a])
+                return None
+            plan = real
         # Porte d'exécution : aucun achat sans contrôle du risque ni autorisation.
         try:
             trace = self._gate(plan, equity, cash, now)
@@ -369,6 +473,10 @@ class ExecutionMixin:
                 "risk_quote": plan["risk_quote"], "cost": plan["cost"],
                 "disaster": disaster, "regime": (self.state.get("regime_detail") or {}).get("texte"),
                 "trace": trace}
+            if self.g.paper_reel:
+                book["holdings"][a]["watch_ms"] = int(now.timestamp() * 1000)
+                if plan.get("execution"):
+                    book["holdings"][a]["execution"] = plan["execution"]
             self.logger.info(
                 f"[ENTRY] {a.upper()} qty={plan['qty']:.6f} @ "
                 f"{plan['entry']:.6f} stop={plan['stop']:.6f} "
