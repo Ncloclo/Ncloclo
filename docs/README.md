@@ -23,8 +23,10 @@ du bot (installation, commandes, panneau) est dans le
 | [`SELECTION.md`](SELECTION.md) | quelles cryptos trader, et quand vendre ? |
 | [`ADAPTATION.md`](ADAPTATION.md) | le bot peut-il « apprendre et s'adapter » ? |
 | [`STRATEGIES.md`](STRATEGIES.md) | le bot peut-il « apprendre la meilleure stratégie » ? |
+| [`COUTS_REELS.md`](COUTS_REELS.md) | combien coûtent vraiment les ordres au carnet de Binance, et jusqu'à quel capital ? |
+| [`SENTIMENT.md`](SENTIMENT.md) | le financement des contrats à terme ou la peur et l'avidité auraient-ils aidé ? |
 
-Les cinq dernières indiquent en tête la commande qui les régénère ; le rapport
+Les sept dernières indiquent en tête la commande qui les régénère ; le rapport
 de recherche se régénère avec `python trendguard_bot.py strategy research --data
 data`. Ce sont des diagnostics : aucune étude ne change une règle du bot.
 

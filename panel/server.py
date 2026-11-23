@@ -31,6 +31,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
+import pandas as pd
+
 from trendguard import (
     acceptation,
     anticipation,
@@ -51,6 +53,7 @@ from trendguard import (
     uptime,
 )
 from trendguard import market_watch as mw
+from trendguard import trend_strategy as ts
 from trendguard.texte import fr
 
 from . import interface
@@ -73,6 +76,7 @@ WARM_SEC = 60               # cours relus d'avance toutes les minutes…
 WARM_CANDLES_EVERY = 4      # … et bougies des pages toutes les quatre minutes
 MAX_BODY = 32_000           # octets acceptés dans le corps d'une requête
 MAX_DISCARD = 1_000_000     # corps démesuré : lu sans être gardé jusqu'à 1 Mo, puis refusé
+STRATEGY_DAYS = 500         # bougies journalières de la règle du bot (graphique détaillé)
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
        "img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; "
        "base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
@@ -220,6 +224,8 @@ class PanelApp(SecurityCenter):
             "testnet": bool(self.g.binance_testnet and self.g.run_mode == "live"),
             "state": self.control.state(),
             "equity": eq, "start_equity": start, "peak": shown_peak(eq, peak),
+            # Capital dans votre monnaie et retrait complet (trendguard/devise.py).
+            "devise": st.get("devise"),
             "drawdown_pct": drawdown_pct(eq, peak),
             "halted": bool(st.get("halted")), "halt_reason": st.get("halt_reason"),
             "resume_note": st.get("resume_note") if st.get("halted") else None,
@@ -497,9 +503,10 @@ class PanelApp(SecurityCenter):
             r["why"] = interface.why(r, self.data.state())     # « Pourquoi ? » : d'où vient la réponse
         return 200, r
 
-    def candles(self, asset: str, interval: str, limit: int) -> Dict[str, Any]:
+    def candles(self, asset: str, interval: str, limit: int, levels: bool = False) -> Dict[str, Any]:
         """Bougies d'une crypto de l'univers pour les graphiques, avec la position
-        en cours et les achats et ventes placés sur leur bougie."""
+        en cours et les achats et ventes placés sur leur bougie. `levels` :
+        niveaux journaliers de la règle du bot en plus (graphique détaillé)."""
         asset = asset.lower()
         if asset not in {b.lower() for b in self.g.universe}:
             raise ValueError("crypto inconnue")
@@ -539,8 +546,41 @@ class PanelApp(SecurityCenter):
                 markers.append({"t": t, "type": "sell", "price": tr.get("exit"),
                                 "date": tr.get("date"), "text": f"Vente {r} R"})
         markers.sort(key=lambda m: (m["t"], m["type"] != "buy"))
-        return {"asset": asset, "interval": interval, "candles": rows, "stale": stale,
-                "position": position, "markers": markers}
+        out = {"asset": asset, "interval": interval, "candles": rows, "stale": stale,
+               "position": position, "markers": markers}
+        if levels:
+            out["strategy"] = self._strategy_levels(asset)
+        return out
+
+    def _strategy_levels(self, asset: str) -> Optional[Dict[str, Any]]:
+        """Règle d'achat du bot jour par jour, sur les bougies journalières de
+        Binance et par la fonction même de la stratégie (asset_features) :
+        plus haut des N clôtures précédentes que la clôture doit dépasser,
+        volatilité (stop initial = clôture - k × vol) et momentum. Le jour en
+        cours n'a que son niveau de cassure, connu dès 00:00 UTC ; sa
+        volatilité et son momentum attendent la clôture. None si les cours
+        manquent : le graphique s'affiche sans."""
+        p = evolution.params_for(self.g)
+        try:
+            rows, stale = self.market.klines(asset, "1d", STRATEGY_DAYS)
+        except Exception:            # réseau : les bougies, déjà lues, suffisent
+            return None
+        if len(rows) <= p.breakout_n:
+            return None
+        live = rows[-1][0] + 86400 > time.time()
+        f = ts.asset_features(pd.Series([float(r[4]) for r in rows]), p)
+
+        def num(v: Any) -> Optional[float]:
+            return float(v) if v is not None and math.isfinite(float(v)) else None
+
+        days = []
+        for i, r in enumerate(rows):
+            closed = not (live and i == len(rows) - 1)
+            days.append([int(r[0]), num(f["prior_high"].iloc[i]),
+                         num(f["vol"].iloc[i]) if closed else None,
+                         num(f["mom"].iloc[i]) if closed else None])
+        return {"days": days, "breakout_n": p.breakout_n, "atr_n": p.atr_n,
+                "init_stop_atr": p.init_stop_atr, "mom_n": p.mom_n, "stale": stale}
 
     # ---------- Routage ----------
 
@@ -619,7 +659,7 @@ class PanelApp(SecurityCenter):
             "/api/analyse": self.data.analyse,
             "/api/assets": self.assets,
             "/api/candles": lambda: self.candles(q("asset", "btc"), q("interval", "1h"),
-                                                 int(q("limit", "300"))),
+                                                 int(q("limit", "300")), q("levels", "") == "1"),
             "/api/regime": self._regime_view,
             "/api/watch": self.data.watch,
             "/api/reasoning": self.data.reasoning,

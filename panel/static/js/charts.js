@@ -5,8 +5,10 @@ import { cssVar, el, fpx, fR, LWC, up } from "./core.js";
 
 // ---------- Graphiques (TradingView Lightweight Charts) ----------
 export const charts = new Set();
+// Options communes ; celles de `extra` complètent chaque groupe (échelle,
+// temps, curseur…) au lieu de le remplacer.
 export function chartOptions(extra = {}, logo = true) {
-  return Object.assign({
+  const base = {
     autoSize: true,
     layout: { background: { type: "solid", color: "transparent" }, textColor: cssVar("--ink-2"), fontFamily: getComputedStyle(document.body).fontFamily, attributionLogo: logo },
     grid: { vertLines: { color: cssVar("--border") }, horzLines: { color: cssVar("--border") } },
@@ -14,19 +16,30 @@ export function chartOptions(extra = {}, logo = true) {
     timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false },
     crosshair: { mode: LWC ? LWC.CrosshairMode.Normal : 0 },
     localization: { locale: "fr-FR", priceFormatter: fpx },
-  }, extra);
+  };
+  Object.entries(extra || {}).forEach(([k, v]) => {
+    const group = v && typeof v === "object" && !Array.isArray(v) && base[k] && typeof base[k] === "object";
+    base[k] = group ? Object.assign({}, base[k], v) : v;
+  });
+  return base;
 }
+// Après un changement de thème : couleurs de base relues, options propres à
+// chaque graphique gardées.
+export const restyleCharts = () => charts.forEach((c) => c.applyOptions(chartOptions(c.tgExtra, c.tgLogo)));
 // Logo TradingView (crédit de la bibliothèque) sur les graphiques détaillés ;
-// sur les petits graphiques, le crédit figure dans le menu.
-export function makeChart(box, extra, logo = true) {
+// sur les petits graphiques, le crédit figure dans le menu. `fit` : tracé
+// recadré quand la largeur change (pas pour les panneaux synchronisés, qui
+// suivent le graphique principal).
+export function makeChart(box, extra, logo = true, fit = true) {
   if (!LWC) { box.textContent = "Bibliothèque de graphiques introuvable."; return null; }
   const c = LWC.createChart(box, chartOptions(extra, logo));
   c.tgLogo = logo;
+  c.tgExtra = extra || {};
   // En taille automatique, la largeur n'est connue qu'après le premier
   // affichage : ajusté avant, le tracé resterait tassé à droite. Il est donc
   // réajusté dès que la largeur change.
   let width = 0;
-  c.timeScale().subscribeSizeChange((w) => { if (w !== width) { width = w; c.timeScale().fitContent(); } });
+  if (fit) c.timeScale().subscribeSizeChange((w) => { if (w !== width) { width = w; c.timeScale().fitContent(); } });
   charts.add(c);
   return c;
 }

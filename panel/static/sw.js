@@ -1,8 +1,8 @@
 // Application installable (PWA) : l'interface s'ouvre même si le réseau
 // est lent ; les données (/api/) ne sont jamais mises en cache.
-const CACHE = "trendguard-panneau-v11";
-const SHELL = ["/", "/app.css", "/app.js", "/js/core.js", "/js/charts.js", "/js/assistant.js",
-  "/js/rapport.js", "/icon.svg", "/manifest.webmanifest",
+const CACHE = "trendguard-panneau-v12";
+const SHELL = ["/", "/app.css", "/app.js", "/js/core.js", "/js/charts.js", "/js/analyse.js",
+  "/js/indicateurs.js", "/js/assistant.js", "/js/rapport.js", "/icon.svg", "/manifest.webmanifest",
   "/vendor/lightweight-charts.standalone.production.js"];
 
 self.addEventListener("install", (e) => {

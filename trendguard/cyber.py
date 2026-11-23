@@ -45,6 +45,7 @@ ALLOWLIST: Dict[str, Tuple[str, str]] = {
     "www.binance.com": ("annonces officielles de Binance (veille)", "courtier"),
     "data-api.binance.vision": ("bougies publiques de Binance (historique)", "courtier"),
     "testnet.binance.vision": ("testnet de Binance (réel simulé)", "courtier"),
+    "fapi.binance.com": ("contrats à terme de Binance : financement, intérêt ouvert (lecture, veille)", "savoir"),
     "api.github.com": ("contrôles et mises à jour du code (lecture)", "code"),
     "github.com": ("dépôt du code", "code"), "raw.githubusercontent.com": ("fichiers publics du dépôt", "code"),
     "pypi.org": ("versions des bibliothèques (lecture)", "code"),

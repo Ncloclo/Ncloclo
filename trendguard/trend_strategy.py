@@ -459,6 +459,11 @@ class BacktestHooks:
     # jour, capital, plus haut) → multiplicateur ≥ 0 (palier de risque,
     # arrêt d'urgence simulé ; 0 = aucun achat ce jour-là).
     risk_scale: Optional[Callable[[int, float, float], float]] = None
+    # Coût d'exécution réel (research/couts.py) : (crypto, montant de l'ordre
+    # en USDT, "buy" ou "sell") → glissement en fraction du prix, à la place
+    # du glissement fixe p.slippage. La quantité achetée reste celle du bot ;
+    # seul le prix obtenu change. None : glissement fixe (la boucle du bot).
+    exec_cost: Optional[Callable[[str, float, str], float]] = None
 
 
 @dataclass
@@ -513,10 +518,16 @@ def backtest(close: pd.DataFrame, volume: Optional[pd.DataFrame], p: TrendParams
     trades: List[Dict[str, Any]] = []
     eq_hist, expo_hist = [], []
 
+    def out_cost(a: str, notional: float) -> float:
+        """Frais et glissement d'une vente (fixes, ou réels via le crochet)."""
+        if hooks.exec_cost is None:
+            return cost_out
+        return p.fee + hooks.exec_cost(a, notional, "sell")
+
     def close_trade(a: str, px: float, d: Any, reason: str) -> None:
         nonlocal cash
         h = holdings.pop(a)
-        proceeds = h.qty * px * (1 - cost_out)
+        proceeds = h.qty * px * (1 - out_cost(a, h.qty * px))
         cash += proceeds
         pnl = proceeds - h.cost + realized.pop(a, 0.0)
         took.discard(a)
@@ -542,12 +553,12 @@ def backtest(close: pd.DataFrame, volume: Optional[pd.DataFrame], p: TrendParams
                 if a in took or not _finite(px):
                     continue
                 unit = h.risk_quote / h.qty          # risque initial par unité
-                if px * (1 - cost_out) - h.cost / h.qty >= tp_r * unit:
+                if px * (1 - out_cost(a, h.qty * px)) - h.cost / h.qty >= tp_r * unit:
                     if tp_frac >= 1:
                         close_trade(a, px, d, "TP")
                     else:
                         q = h.qty * tp_frac
-                        proceeds = q * px * (1 - cost_out)
+                        proceeds = q * px * (1 - out_cost(a, q * px))
                         cash += proceeds
                         realized[a] = realized.get(a, 0.0) + proceeds - h.cost * tp_frac
                         h.qty -= q
@@ -571,6 +582,21 @@ def backtest(close: pd.DataFrame, volume: Optional[pd.DataFrame], p: TrendParams
             plans = hooks.filter_plans(i, plans, holdings, equity)
         for plan in plans:
             a = plan["asset"]
+            if hooks.exec_cost is not None:
+                # Prix d'achat réel (écart et profondeur du carnet) ; comme le
+                # bot en paper réaliste, la quantité baisse si l'achat coûte
+                # plus que prévu : le risque ne dépasse jamais celui prévu.
+                slip = hooks.exec_cost(a, plan["qty"] * plan["ref_price"], "buy")
+                entry = plan["ref_price"] * (1 + slip)
+                unit = entry * (1 + p.fee) - plan["stop"] * (1 - p.fee - p.slippage)
+                if unit <= 0:
+                    continue
+                qty = min(plan["qty"], plan["risk_quote"] / unit,
+                          max(cash, 0.0) / (entry * (1 + p.fee)))
+                if qty * entry < 10:
+                    continue
+                plan = dict(plan, qty=qty, entry=entry, cost=qty * entry * (1 + p.fee),
+                            risk_quote=qty * unit)
             cash -= plan["cost"]
             holdings[a] = Holding(a, plan["qty"], plan["entry"], plan["stop"],
                                   plan["ref_price"], d, plan["risk_quote"],

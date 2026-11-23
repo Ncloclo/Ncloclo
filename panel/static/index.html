@@ -34,6 +34,8 @@
   <symbol id="i-send" viewBox="0 0 24 24"><path d="M3 20.5 21.5 12 3 3.5 3 10l12 2-12 2z"/></symbol>
   <symbol id="i-trash" viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4zm-3 6h12l-1 12H7zm4 2v8h1.6v-8zm3.4 0v8H15v-8z"/></symbol>
   <symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 4h6v2H6v4H4zm10 0h6v6h-2V6h-4zM4 14h2v4h4v2H4zm14 0h2v6h-6v-2h4z"/></symbol>
+  <symbol id="i-fit" viewBox="0 0 24 24"><path d="M3 3h6v2H5v4H3zm12 0h6v6h-2V5h-4zM3 15h2v4h4v2H3zm16 0h2v6h-6v-2h4zM7 15l3-4 2.5 2.5L16 8l1.6 1.2-4.9 6.9-2.5-2.5-1.6 2.1z"/></symbol>
+  <symbol id="i-ind" viewBox="0 0 24 24"><path d="M3 19h18v2H3zM4 15.5l4.6-5.7 3.6 2.9L17.8 5l1.6 1.2-6.9 9.4-3.6-2.9-3.4 4.1zM15 15h2v3h-2zm4-3h2v6h-2z"/></symbol>
 </svg>
 
 <div class="shell">
@@ -87,6 +89,7 @@
             <span class="label">Capital du bot</span>
             <strong class="big num" id="d-equity">—</strong>
             <span class="sub" id="d-equity-sub"></span>
+            <span class="sub" id="d-equity-local" hidden></span>
           </div>
           <div class="hero-chart" id="d-equity-chart" role="img" aria-label="Évolution du capital"></div>
         </div>
@@ -155,17 +158,23 @@
         <div class="card">
           <div class="card-head"><h2>Actualités crypto et finance</h2><span class="sub" id="n-sub"></span></div>
           <div class="toolbar">
-            <div class="seg" role="group" aria-label="Filtrer les actualités">
-              <button type="button" data-news="all" aria-pressed="true">Toutes</button>
-              <button type="button" data-news="crypto" aria-pressed="false">Crypto</button>
-              <button type="button" data-news="finance" aria-pressed="false">Finance</button>
-              <button type="button" data-news="bot" aria-pressed="false">Cryptos du bot</button>
+            <div class="tool-group">
+              <span class="tool-label" id="tl-news">Afficher</span>
+              <div class="seg" role="group" aria-labelledby="tl-news">
+                <button type="button" data-news="all" aria-pressed="true">Toutes</button>
+                <button type="button" data-news="crypto" aria-pressed="false">Crypto</button>
+                <button type="button" data-news="finance" aria-pressed="false">Finance</button>
+                <button type="button" data-news="bot" aria-pressed="false">Cryptos du bot</button>
+              </div>
             </div>
-            <select id="news-lang" aria-label="Langue">
-              <option value="all">Toutes les langues</option>
-              <option value="fr">Français</option>
-              <option value="en">Anglais</option>
-            </select>
+            <div class="tool-group">
+              <label class="tool-label" for="news-lang">Langue</label>
+              <select id="news-lang">
+                <option value="all">Toutes les langues</option>
+                <option value="fr">Français</option>
+                <option value="en">Anglais</option>
+              </select>
+            </div>
             <input type="search" id="news-search" placeholder="Rechercher (Fed, bitcoin, ETF…)" aria-label="Rechercher une actualité">
           </div>
           <ol class="news-list" id="n-list"></ol>
@@ -175,7 +184,7 @@
 
       <!-- Graphiques -->
       <section class="page" id="page-charts" data-title="Graphiques en temps réel">
-        <p class="hint">Mis à jour automatiquement. Cliquez sur un graphique pour l'ouvrir en détail : bougies, volume, achats et ventes, stops, zoom.</p>
+        <p class="hint">Mis à jour automatiquement. Cliquez sur un graphique pour l'ouvrir en détail : unités de temps, bougies ou Heikin Ashi, indicateurs (moyennes, Bollinger, Ichimoku, RSI, MACD, volume…), règle du bot, lecture technique, zoom.</p>
         <div class="chart-grid" id="chart-grid"></div>
       </section>
 
@@ -195,19 +204,25 @@
           </div>
         </div>
         <div class="toolbar">
-          <div class="seg" role="group" aria-label="Filtrer">
-            <button type="button" data-filter="all" aria-pressed="true">Toutes</button>
-            <button type="button" data-filter="selected" aria-pressed="false">Sélectionnées</button>
-            <button type="button" data-filter="held" aria-pressed="false">Détenues</button>
-            <button type="button" data-filter="watch" aria-pressed="false" title="Cryptos proches d'un signal d'achat">Surveillées</button>
-            <button type="button" data-filter="vetoed" aria-pressed="false">Bloquées</button>
+          <div class="tool-group">
+            <span class="tool-label" id="tl-filter">Afficher</span>
+            <div class="seg" role="group" aria-labelledby="tl-filter">
+              <button type="button" data-filter="all" aria-pressed="true">Toutes</button>
+              <button type="button" data-filter="selected" aria-pressed="false">Sélectionnées</button>
+              <button type="button" data-filter="held" aria-pressed="false">Détenues</button>
+              <button type="button" data-filter="watch" aria-pressed="false" title="Cryptos proches d'un signal d'achat">Surveillées</button>
+              <button type="button" data-filter="vetoed" aria-pressed="false">Bloquées</button>
+            </div>
+          </div>
+          <div class="tool-group">
+            <label class="tool-label" for="asset-sort">Trier par</label>
+            <select id="asset-sort">
+              <option value="name">Nom</option>
+              <option value="change">Variation 24 h</option>
+              <option value="volume">Volume 24 h</option>
+            </select>
           </div>
           <input type="search" id="asset-search" placeholder="Rechercher (BTC, Cardano…)" aria-label="Rechercher une crypto">
-          <select id="asset-sort" aria-label="Trier">
-            <option value="name">Nom</option>
-            <option value="change">Variation 24 h</option>
-            <option value="volume">Volume 24 h</option>
-          </select>
         </div>
         <div class="asset-grid" id="asset-grid"></div>
       </section>
@@ -240,6 +255,8 @@
           <div class="kpi card"><span class="label">Achats bloqués (Binance)</span><strong class="num" id="w-vetoes">—</strong><span class="sub">annonces officielles de retrait</span></div>
           <div class="kpi card"><span class="label">Peur &amp; Avidité</span><strong id="w-fng">—</strong><span class="sub">0 = peur extrême, 100 = euphorie</span></div>
           <div class="kpi card"><span class="label">Parité USDC/USDT</span><strong class="num" id="w-peg">—</strong><span class="sub" id="w-peg-sub"></span></div>
+          <div class="kpi card"><span class="label">Financement des contrats à terme</span><strong class="num" id="w-fund">—</strong><span class="sub" id="w-fund-sub"></span></div>
+          <div class="kpi card"><span class="label">Intérêt ouvert BTC (30 jours)</span><strong class="num" id="w-oi">—</strong><span class="sub" id="w-oi-sub"></span></div>
           <div class="kpi card"><span class="label">Actualités lues</span><strong class="num" id="w-items">—</strong><span class="sub" id="w-items-sub"></span></div>
         </div>
         <div class="card"><div class="card-head"><h2>Alertes et retraits annoncés</h2></div><ul id="w-list" class="alert-list"></ul></div>
@@ -378,19 +395,55 @@
 <!-- Détail d'un graphique -->
 <dialog id="detail" aria-labelledby="detail-title">
   <div class="detail-head">
-    <div>
+    <div class="detail-title">
       <h2 id="detail-title">Détail</h2>
       <div class="legend" id="detail-legend"></div>
     </div>
     <div class="detail-actions">
-      <div class="seg" id="detail-intervals" role="group" aria-label="Intervalle">
-        <button type="button" data-interval="15m">15 min</button>
-        <button type="button" data-interval="1h">1 h</button>
-        <button type="button" data-interval="4h">4 h</button>
-        <button type="button" data-interval="1d">1 jour</button>
+      <button class="icon-btn" id="detail-fit" type="button" title="Recadrer : tout afficher" aria-label="Recadrer le graphique"><svg><use href="#i-fit"/></svg></button>
+      <button class="icon-btn" id="detail-full" type="button" title="Plein écran" aria-label="Plein écran" aria-pressed="false"><svg><use href="#i-expand"/></svg></button>
+      <button class="icon-btn" id="detail-close" type="button" title="Fermer (Échap)" aria-label="Fermer"><svg><use href="#i-close"/></svg></button>
+    </div>
+  </div>
+  <!-- Réglages du graphique : de gauche à droite, du plus courant au plus fin -->
+  <div class="detail-tools" role="toolbar" aria-label="Réglages du graphique">
+    <div class="tool-group asset-only">
+      <span class="tool-label" id="tl-interval">Unité de temps</span>
+      <div class="seg" id="detail-intervals" role="group" aria-labelledby="tl-interval">
+        <button type="button" data-interval="15m" title="Une bougie toutes les 15 minutes">15 min</button>
+        <button type="button" data-interval="1h" title="Une bougie par heure">1 h</button>
+        <button type="button" data-interval="4h" title="Une bougie toutes les 4 heures">4 h</button>
+        <button type="button" data-interval="1d" title="Une bougie par jour (celles des décisions du bot)">1 jour</button>
       </div>
-      <button class="icon-btn" id="detail-full" type="button" title="Plein écran" aria-label="Plein écran"><svg><use href="#i-expand"/></svg></button>
-      <button class="icon-btn" id="detail-close" type="button" title="Fermer" aria-label="Fermer"><svg><use href="#i-close"/></svg></button>
+    </div>
+    <div class="tool-group asset-only">
+      <span class="tool-label" id="tl-type">Affichage</span>
+      <div class="seg" id="detail-types" role="group" aria-labelledby="tl-type">
+        <button type="button" data-ctype="candles" title="Bougies : ouverture, plus haut, plus bas, clôture">Bougies</button>
+        <button type="button" data-ctype="bars" title="Barres : les mêmes prix en traits">Barres</button>
+        <button type="button" data-ctype="heikin" title="Heikin Ashi : bougies lissées, la tendance se lit mieux">Heikin Ashi</button>
+        <button type="button" data-ctype="line" title="Ligne des clôtures">Ligne</button>
+      </div>
+    </div>
+    <div class="tool-group">
+      <span class="tool-label" id="tl-scale">Échelle</span>
+      <div class="seg" id="detail-scales" role="group" aria-labelledby="tl-scale">
+        <button type="button" data-scale="normal" title="Échelle des prix">Prix</button>
+        <button type="button" data-scale="log" title="Échelle logarithmique : une même hausse en % a la même hauteur">Log</button>
+        <button type="button" data-scale="pct" title="Variation en % depuis la première bougie affichée">%</button>
+      </div>
+    </div>
+    <div class="tool-group tool-end asset-only">
+      <button class="btn ghost ind-btn" id="ind-btn" type="button" aria-expanded="false" aria-controls="ind-menu"><svg><use href="#i-ind"/></svg>Indicateurs<span class="count" id="ind-count">0</span></button>
+    </div>
+    <div class="ind-menu" id="ind-menu" role="dialog" aria-label="Indicateurs du graphique" hidden>
+      <div class="ind-menu-head">
+        <div><strong>Indicateurs</strong><span class="sub" id="ind-limits"></span></div>
+        <button class="icon-btn small" id="ind-close" type="button" title="Fermer la liste" aria-label="Fermer la liste des indicateurs"><svg><use href="#i-close"/></svg></button>
+      </div>
+      <div class="ind-presets" role="group" aria-label="Modèles d'indicateurs" id="ind-presets"></div>
+      <div class="ind-families" id="ind-families"></div>
+      <p class="ind-note">Information seulement : le bot n'achète que sur sa propre règle (cassure de 30 jours, momentum de 90 jours, marché BTC haussier) et ne vend que sur ses stops. Ces indicateurs ne passent aucun ordre.</p>
     </div>
   </div>
   <div class="detail-body">
@@ -403,7 +456,10 @@
         </div>
       </div>
     </div>
-    <dl class="dl detail-stats" id="detail-stats"></dl>
+    <aside class="detail-side">
+      <dl class="dl detail-stats" id="detail-stats"></dl>
+      <section class="detail-tech" id="detail-tech" aria-labelledby="tech-title" hidden></section>
+    </aside>
   </div>
 </dialog>
 

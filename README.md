@@ -174,8 +174,22 @@ panneau de contrôle ») :
   les cryptos proches d'un signal d'achat. Une actualité sensible (piratage,
   retrait, régulation) qui cite une crypto détenue s'affiche dans les alertes ;
 - **Graphiques** : capital, régime BTC et chaque position en temps réel ; un
-  clic ouvre le détail (bougies, volume, achats et ventes, stops, zoom,
-  intervalles de 15 min à 1 jour). Tous les achats du bot sont marqués d'une
+  clic ouvre le détail, comme sur une plateforme de trading. Barre d'outils
+  rangée par groupes : unité de temps (15 min à 1 jour), affichage (bougies,
+  barres, Heikin Ashi, ligne), échelle (prix, logarithmique, %) et
+  indicateurs : 26, rangés par famille, expliqués en une phrase, avec des
+  modèles prêts (Essentiel, Tendance, Élan, Volatilité, Volume, Ichimoku,
+  Règle du bot). Sur le prix : moyennes mobiles 20, 50 et 200, moyennes
+  exponentielles, VWAP, Ichimoku, Supertrend, SAR, Bollinger, Keltner,
+  Donchian, points pivots, Fibonacci. Dans des panneaux synchronisés dessous
+  (zoom, défilement, curseur) : volume, RSI, MACD, stochastique, ADX, MFI,
+  OBV, CCI, Williams %R, ROC, ATR. Et la règle du bot elle-même, calculée par
+  la stratégie : cassure de 30 jours, momentum de 90 jours. Une légende
+  vivante donne les valeurs sous le curseur ; une lecture technique de la
+  dernière bougie explique chaque signal (haussier, baissier, à surveiller)
+  et rappelle que le bot ne suit que sa règle et ses stops. La courbe du
+  capital a son panneau de baisse depuis le plus haut, le régime BTC son
+  écart à la moyenne de 150 jours. Tous les achats du bot sont marqués d'une
   flèche ▲ au prix payé, sur le graphique de la crypto (intervalle choisi pour
   que l'achat reste visible) et sur la courbe du capital ; les ventes d'une
   flèche ▼. Le bot inscrit chaque achat à l'instant où il a lieu : le panneau
