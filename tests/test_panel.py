@@ -573,6 +573,49 @@ def test_chart_window_is_the_rule_of_the_page():
     assert ps.chart_window(None, now) == ("1h", 72)
 
 
+def test_detailed_chart_gets_the_bot_rule_levels(tmp_path):
+    """Graphique détaillé : la règle d'achat du bot jour par jour, calculée par
+    la stratégie elle-même ; les cartes et les courbes s'en passent."""
+    import pandas as pd
+
+    from trendguard import evolution
+    from trendguard import trend_strategy as ts
+    today = int(time.time()) // 86400 * 86400
+    daily = [[today - (499 - i) * 86400, 1.0, 2.0, 0.5, 100 + 10 * (i % 37) / 37 + i * 0.05, 10.0]
+             for i in range(500)]
+
+    class M:
+        def klines(self, base, interval="1h", limit=300):
+            if interval == "1d":
+                return [list(r) for r in daily][-limit:], False
+            return [[today + i * 3600, 1.0, 2.0, 0.5, 101.0, 10.0] for i in range(limit)], False
+
+    app = ps.PanelApp(_cfg(tmp_path), _Data(), M(), None)
+    assert "strategy" not in app.candles("eth", "1h", 48)
+    s = app.candles("eth", "1h", 48, levels=True)["strategy"]
+    p = evolution.params_for(app.g)
+    assert (s["breakout_n"], s["atr_n"], s["init_stop_atr"], s["mom_n"]) == \
+        (p.breakout_n, p.atr_n, p.init_stop_atr, p.mom_n)
+    f = ts.asset_features(pd.Series([r[4] for r in daily]), p)
+    assert [d[0] for d in s["days"]] == [r[0] for r in daily]
+    i = 400                                            # un jour clos
+    assert s["days"][i][1] == pytest.approx(max(r[4] for r in daily[i - p.breakout_n:i]))
+    assert s["days"][i][2] == pytest.approx(f["vol"].iloc[i])
+    assert s["days"][i][3] == pytest.approx(f["mom"].iloc[i])
+    assert s["days"][0][1] is None                     # moins de N clôtures connues
+    # Jour en cours : son niveau de cassure est connu, vol et momentum attendent la clôture.
+    assert s["days"][-1][1] == pytest.approx(max(r[4] for r in daily[-1 - p.breakout_n:-1]))
+    assert s["days"][-1][2] is None and s["days"][-1][3] is None
+
+    class Down(M):
+        def klines(self, base, interval="1h", limit=300):
+            if interval == "1d":
+                raise OSError("réseau coupé")
+            return super().klines(base, interval, limit)
+    c = ps.PanelApp(_cfg(tmp_path), _Data(), Down(), None).candles("eth", "1h", 48, levels=True)
+    assert c["strategy"] is None and len(c["candles"]) == 48      # le graphique s'affiche sans
+
+
 def test_panel_warms_prices_candles_and_held_charts(tmp_path):
     asked = []
 

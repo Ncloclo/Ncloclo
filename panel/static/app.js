@@ -1,10 +1,12 @@
 // Panneau TrendGuard : interface. Données : API JSON du serveur local
 // (panel/server.py). Tout texte venant des données passe par textContent.
 // Modules : js/core.js (outils communs), js/charts.js (graphiques),
-// js/assistant.js (Rachelle), js/rapport.js (rapport quotidien et centre de
-// sécurité).
+// js/analyse.js et js/indicateurs.js (graphique détaillé, indicateurs
+// techniques), js/assistant.js (Rachelle), js/rapport.js (rapport quotidien
+// et centre de sécurité).
 import { $, $$, api, CANDIDATE, countUp, cssVar, el, fage, fdate, fdur, fpct, fpx, fR, ftime, fusd, fvol, LWC, nf, onUnauthorized, prefs, REASON, reduceMotion, ripple, sign, STATUS, toast, up, withLoader } from "./js/core.js";
-import { addPositionLines, buyMarkersOn, candleData, chartOptions, charts, COLORS, dropChart, gridInterval, legend, makeChart, tradeMarkers, uniq } from "./js/charts.js";
+import { addPositionLines, buyMarkersOn, candleData, COLORS, dropChart, gridInterval, legend, makeChart, restyleCharts, tradeMarkers, uniq } from "./js/charts.js";
+import { AssetChart, DEFAULT_IDS, EquityChart, MAX_COLORS, MAX_PANES, PRESETS, RegimeChart, renderIndicatorMenu, technicalReading } from "./js/analyse.js";
 import { closeChat } from "./js/assistant.js";
 import { renderReport, renderSecurity } from "./js/rapport.js";
 // Pourcentages de risque : 1 → « 1 », 1,25 → « 1,25 ».
@@ -19,14 +21,15 @@ function applyTheme(mode) {
   prefs.set("theme", mode);
   $$("[data-theme-set]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.themeSet === mode)));
   $('meta[name="theme-color"]').setAttribute("content", cssVar("--bg"));
-  charts.forEach((c) => c.applyOptions(chartOptions({}, c.tgLogo)));
+  restyleCharts();
+  restyleDetail();
 }
 $("#theme-btn").addEventListener("click", () => {
   const dark = cssVar("color-scheme") !== "light";
   applyTheme(dark ? "light" : "dark");
 });
 $$("[data-theme-set]").forEach((b) => b.addEventListener("click", () => applyTheme(b.dataset.themeSet)));
-matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => charts.forEach((c) => c.applyOptions(chartOptions({}, c.tgLogo))));
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { restyleCharts(); restyleDetail(); });
 
 // ---------- Navigation ----------
 const TABS = ["dash", "news", "charts", "assets", "positions", "watch", "log", "settings"];
@@ -627,84 +630,212 @@ async function renderCharts() {
 }
 
 // ---------- Détail d'un graphique ----------
+// Une crypto : graphique d'analyse (js/analyse.js : prix, indicateurs,
+// panneaux synchronisés, lecture technique). Le capital et le régime : leur
+// courbe et un panneau. Les réglages sont gardés d'une ouverture à l'autre.
 let D = null;
 const detail = $("#detail");
+const indMenu = $("#ind-menu"), indBtn = $("#ind-btn");
+const IV_LABEL = { "15m": "15 min", "1h": "1 h", "4h": "4 h", "1d": "1 jour" };
+const savedIds = () => {
+  const v = prefs.get("indicators", null);
+  return v == null ? DEFAULT_IDS : v.split(",").filter(Boolean);
+};
+const pressed = (sel, key, value) => $$(`${sel} button`).forEach((b) => b.setAttribute("aria-pressed", String(b.dataset[key] === value)));
+const isAsset = () => D && D.view instanceof AssetChart;
+function closeMenu() {
+  indMenu.hidden = true;
+  indBtn.setAttribute("aria-expanded", "false");
+}
 function closeDetail() {
   if (!D) return;
   clearInterval(D.timer);
-  dropChart(D.chart);
+  if (D.view) D.view.destroy();
   D = null;
+  closeMenu();
   if (detail.open) detail.close();
   detail.classList.remove("full");
+  $("#detail-full").setAttribute("aria-pressed", "false");
 }
 $("#detail-close").addEventListener("click", closeDetail);
 detail.addEventListener("close", closeDetail);
-detail.addEventListener("click", (e) => { if (e.target === detail) closeDetail(); });
-$("#detail-full").addEventListener("click", () => detail.classList.toggle("full"));
+// Échap ferme d'abord la liste des indicateurs, puis le graphique.
+detail.addEventListener("cancel", (e) => {
+  if (!indMenu.hidden) { e.preventDefault(); closeMenu(); indBtn.focus(); }
+});
+detail.addEventListener("click", (e) => {
+  if (e.target === detail) closeDetail();
+  else if (!indMenu.hidden && !indMenu.contains(e.target) && !indBtn.contains(e.target)) closeMenu();
+});
+$("#detail-full").addEventListener("click", (e) => {
+  const on = detail.classList.toggle("full");
+  e.currentTarget.setAttribute("aria-pressed", String(on));
+  e.currentTarget.title = on ? "Quitter le plein écran" : "Plein écran";
+});
+$("#detail-fit").addEventListener("click", () => { if (D && D.view) D.view.fit(); });
 $$("#detail-intervals button").forEach((b) => b.addEventListener("click", () => {
   if (!D) return;
   D.interval = b.dataset.interval;
   D.fitted = false;
   prefs.set("interval", D.interval);
-  withLoader(`Intervalle ${b.textContent}…`, loadDetail, "detail-loader");
+  withLoader(`Unité de temps : ${b.textContent}…`, loadDetail, "detail-loader");
+}));
+$$("#detail-types button").forEach((b) => b.addEventListener("click", () => {
+  prefs.set("ctype", b.dataset.ctype);
+  pressed("#detail-types", "ctype", b.dataset.ctype);
+  if (isAsset()) D.view.setType(b.dataset.ctype);
+}));
+$$("#detail-scales button").forEach((b) => b.addEventListener("click", () => {
+  prefs.set("scale", b.dataset.scale);
+  pressed("#detail-scales", "scale", b.dataset.scale);
+  if (D && D.view) D.view.setScale(b.dataset.scale);
 }));
 
-function openDetail(spec) {
-  closeDetail();
-  const c = COLORS();
-  D = { spec, interval: prefs.get("interval", "1h"), fitted: false, lines: [], series: [] };
-  $("#detail-title").textContent = spec.kind === "asset" ? `${up(spec.asset)}/USDT` : spec.title;
-  $("#detail-intervals").hidden = spec.kind !== "asset";
-  const box = $("#detail-chart");
+// Liste des indicateurs : modèles, puis cases par famille.
+$("#ind-presets").replaceChildren(...PRESETS.map(([key, label]) => {
+  const b = el("button", "chip", label);
+  b.type = "button";
+  b.dataset.preset = key;
+  return b;
+}));
+function renderMenu(focusId) {
+  if (!isAsset()) return;
+  const v = D.view, ids = v.ids();
+  renderIndicatorMenu($("#ind-families"), v);
+  $("#ind-count").textContent = String(ids.length);
+  $("#ind-limits").textContent = ` · ${v.paneCount()} / ${MAX_PANES} panneaux · ${v.colorCount()} / ${MAX_COLORS} couleurs sur le prix`;
+  const same = (a) => a.length === ids.length && a.every((id) => ids.includes(id));
+  $$("#ind-presets [data-preset]").forEach((b) => b.setAttribute("aria-pressed", String(same(PRESETS.find((p) => p[0] === b.dataset.preset)[2]))));
+  if (focusId) { const cb = $(`#ind-families [data-ind="${focusId}"]`); if (cb) cb.focus(); }
+}
+function indicatorsChanged(focusId) {
+  prefs.set("indicators", D.view.ids().join(","));
+  renderMenu(focusId);
+  renderTech();
+}
+indBtn.addEventListener("click", () => {
+  const open = indMenu.hidden;
+  indMenu.hidden = !open;
+  indBtn.setAttribute("aria-expanded", String(open));
+  if (open) {
+    renderMenu();
+    const first = indMenu.querySelector("[data-preset]");
+    if (first) first.focus();
+  }
+});
+$("#ind-close").addEventListener("click", () => { closeMenu(); indBtn.focus(); });
+$("#ind-presets").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-preset]");
+  if (!b || !isAsset()) return;
+  D.view.setIds(PRESETS.find((p) => p[0] === b.dataset.preset)[2]);
+  indicatorsChanged();
+  toast(`Indicateurs : modèle « ${b.textContent} »`, "ok");
+});
+$("#ind-families").addEventListener("change", (e) => {
+  const cb = e.target.closest("input[data-ind]");
+  if (!cb || !isAsset()) return;
+  const refused = D.view.toggle(cb.dataset.ind, cb.checked);
+  if (refused) { cb.checked = !cb.checked; toast(refused, "err"); return; }
+  indicatorsChanged(cb.dataset.ind);
+});
+
+// Lecture technique de la dernière bougie (colonne de droite) : texte normal,
+// sens donné par un repère coloré (▲ haussier, ▼ baissier, ◆ à surveiller).
+const SIGN = { up: ["▲", "haussier"], down: ["▼", "baissier"], warn: ["◆", "à surveiller"] };
+function techList(rows) {
+  const dl = el("dl", "dl tech-list");
+  rows.forEach(([k, v, cls]) => {
+    const dd = el("dd");
+    const [mark, word] = SIGN[cls] || ["•", "neutre"];
+    const sig = el("span", "sig " + (cls || "flat"), mark);
+    sig.title = word;
+    sig.setAttribute("aria-label", word);
+    dd.append(sig, v);
+    dl.append(el("dt", "", k), dd);
+  });
+  return dl;
+}
+function renderTech() {
+  const box = $("#detail-tech");
+  const r = isAsset() ? technicalReading(D.view, S ? S.regime_bull : null) : null;
+  if (!r) { box.hidden = true; return; }
+  const plural = (n, word) => `${n} ${word}${n > 1 ? "s" : ""}`;
+  const head = el("h3", "", "Lecture technique");
+  head.id = "tech-title";
+  head.append(el("span", "sub", ` · bougies de ${IV_LABEL[D.interval] || D.interval}`));
+  const tally = el("p", "tally");
+  tally.append(el("b", "up", plural(r.vote.up, "haussier")), " · ", el("b", "down", plural(r.vote.down, "baissier")), " · ", el("b", "", plural(r.vote.flat, "neutre")));
+  const bar = el("div", "tally-bar");
+  bar.setAttribute("aria-hidden", "true");
+  [["up", r.vote.up], ["flat", r.vote.flat], ["down", r.vote.down]].forEach(([k, n]) => {
+    if (!n) return;
+    const seg = el("i", k);
+    seg.style.flexGrow = String(n);
+    bar.append(seg);
+  });
+  const parts = [head, tally, bar, techList(r.rows)];
+  if (r.bot.length) parts.push(el("h3", "", "Règle du bot"), techList(r.bot));
+  parts.push(el("p", "tech-note", "Lecture indicative de la dernière bougie, pour décrypter le marché. Le bot ne s'en sert pas : il suit sa règle et ses stops."));
+  box.replaceChildren(...parts);
+  box.hidden = false;
+}
+
+// Vue du graphique selon son genre (refaite au changement de thème).
+function mountView() {
+  const spec = D.spec, c = COLORS(), box = $("#detail-chart"), ro = $("#detail-readout");
+  ro.replaceChildren();
   $$("#detail-chart > :not(.readout):not(.loader)").forEach((n) => n.remove());
-  detail.showModal();
-  D.chart = makeChart(box);
-  if (!D.chart) return;
+  const scale = prefs.get("scale", "normal");
   if (spec.kind === "asset") {
-    D.series.push(D.chart.addCandlestickSeries({ upColor: c.up, downColor: c.down, wickUpColor: c.up, wickDownColor: c.down, borderVisible: false }));
-    const vol = D.chart.addHistogramSeries({ priceFormat: { type: "volume" }, priceScaleId: "", color: c.muted + "66" });
-    vol.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
-    D.series.push(vol);
-    legend($("#detail-legend"), [[c.up, "Hausse"], [c.down, "Baisse"], [c.up, "▲ Achats du bot"], [c.down, "▼ Ventes"], [c.accent, "Entrée", true], [c.down, "Stop de clôture"], [c.down, "Stop catastrophe", true], [c.muted, "Volume"]]);
+    D.view = new AssetChart(box, ro, { ids: savedIds(), ctype: prefs.get("ctype", "candles"), scale });
+    legend($("#detail-legend"), [[c.up, "Hausse"], [c.down, "Baisse"], [c.up, "▲ Achats du bot"], [c.down, "▼ Ventes"], [c.accent, "Entrée", true], [c.down, "Stop de clôture"], [c.down, "Stop catastrophe", true]]);
+    $("#ind-count").textContent = String(D.view.ids().length);
   } else if (spec.kind === "equity") {
-    D.series.push(D.chart.addBaselineSeries({ baseValue: { type: "price", price: 0 }, topLineColor: c.up, topFillColor1: c.up + "44", topFillColor2: c.up + "05", bottomLineColor: c.down, bottomFillColor1: c.down + "05", bottomFillColor2: c.down + "44", lineWidth: 2 }));
+    D.view = new EquityChart(box, ro);
     legend($("#detail-legend"), [[c.up, "Au-dessus du départ"], [c.down, "En dessous du départ"], [c.up, "▲ Achats du bot"], [c.down, "▼ Ventes du bot"]]);
   } else {
-    D.series.push(D.chart.addLineSeries({ color: c.ink, lineWidth: 2 }));
-    D.series.push(D.chart.addLineSeries({ color: c.sma, lineWidth: 2, crosshairMarkerVisible: false }));
+    D.view = new RegimeChart(box, ro);
     legend($("#detail-legend"), [[c.ink, "BTC (clôture)"], [c.sma, "Moyenne 150 jours : au-dessus, achats autorisés"]]);
   }
-  D.chart.subscribeCrosshairMove((param) => {
-    const ro = $("#detail-readout");
-    const d = param && param.time && D ? param.seriesData.get(D.series[0]) : null;
-    if (!d) { ro.textContent = D && D.lastText ? D.lastText : ""; return; }
-    ro.textContent = d.open != null
-      ? `O ${fpx(d.open)}  H ${fpx(d.high)}  B ${fpx(d.low)}  C ${fpx(d.close)}`
-      : `${fpx(d.value)}`;
-  });
+  D.view.setScale(scale);
+}
+function openDetail(spec) {
+  closeDetail();
+  const asset = spec.kind === "asset";
+  D = { spec, interval: prefs.get("interval", "1h"), fitted: false };
+  $("#detail-title").textContent = asset ? `${up(spec.asset)}/USDT` : spec.title;
+  $$("#detail .asset-only").forEach((n) => { n.hidden = !asset; });
+  pressed("#detail-types", "ctype", prefs.get("ctype", "candles"));
+  pressed("#detail-scales", "scale", prefs.get("scale", "normal"));
+  $("#detail-tech").hidden = true;
+  $("#detail-stats").replaceChildren();          // pas de chiffres d'un autre graphique
+  detail.showModal();
+  mountView();
   withLoader("Chargement du graphique…", loadDetail, "detail-loader");
   D.timer = setInterval(loadDetail, 10000);
+}
+function restyleDetail() {
+  if (!D || !D.view) return;
+  D.view.destroy();
+  mountView();
+  D.fitted = false;
+  loadDetail();
 }
 
 function stats(rows) {
   $("#detail-stats").replaceChildren(...rows.flatMap(([k, v, cls]) => [el("dt", "", k), el("dd", cls || "", v)]));
 }
 async function loadDetail() {
-  if (!D || !D.chart) return;
-  const spec = D.spec, c = COLORS();
-  $$("#detail-intervals button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.interval === D.interval)));
+  if (!D || !D.view) return;
+  const spec = D.spec, view = D.view;
+  pressed("#detail-intervals", "interval", D.interval);
   try {
     if (spec.kind === "asset") {
-      const d = await api(`/api/candles?asset=${spec.asset}&interval=${D.interval}&limit=500`);
-      if (!D || D.spec !== spec) return;
+      const d = await api(`/api/candles?asset=${spec.asset}&interval=${D.interval}&limit=500&levels=1`);
+      if (!D || D.view !== view) return;
+      view.update(d);
       const cd = candleData(d.candles);
-      D.series[0].setData(cd);
-      D.series[1].setData(uniq(d.candles.map((r) => ({ time: r[0], value: r[5], color: (r[4] >= r[1] ? c.up : c.down) + "55" }))));
-      D.series[0].setMarkers(tradeMarkers(d.markers, c));
-      D.lines.forEach((l) => D.series[0].removePriceLine(l));
-      D.lines = addPositionLines(D.series[0], d.position);
       const lastC = cd[cd.length - 1], first = cd[0];
-      D.lastText = lastC ? `Dernier : ${fpx(lastC.close)}` : "";
       const hi = Math.max(...cd.map((x) => x.high)), lo = Math.min(...cd.map((x) => x.low));
       const rows = [["Cours", fpx(lastC && lastC.close)], ["Sur la période", fpct(lastC && first ? (lastC.close / first.open - 1) * 100 : null), lastC && first && lastC.close >= first.open ? "up" : "down"], ["Plus haut", fpx(hi)], ["Plus bas", fpx(lo)]];
       if (d.position) {
@@ -718,32 +849,29 @@ async function loadDetail() {
       if (buys.length) rows.push(["Dernier achat", `${fdate(buys[buys.length - 1].date)} à ${fpx(buys[buys.length - 1].price)}`]);
       if (d.stale) rows.push(["Données", "en retard (réseau)", "warn"]);
       stats(rows);
+      renderTech();
+      if (!indMenu.hidden) renderMenu();
     } else if (spec.kind === "equity") {
       const eq = await api("/api/equity?days=365");
-      if (!D || D.spec !== spec) return;
+      if (!D || D.view !== view) return;
       const pts = uniq(eq.points.map((p) => ({ time: p.t, value: p.v })));
       const start = pts.length ? pts[0].value : 0;
-      D.series[0].applyOptions({ baseValue: { type: "price", price: start } });
-      D.series[0].setData(pts);
-      D.series[0].setMarkers(buyMarkersOn(pts, eq.buys, c, true, eq.sells));
+      const dd = view.update(pts, fusd);
+      if (view.series) view.series.setMarkers(buyMarkersOn(pts, eq.buys, COLORS(), true, eq.sells));
       const last = pts[pts.length - 1], hi = Math.max(...pts.map((p) => p.value));
-      D.lastText = last ? `Capital : ${fusd(last.value)}` : "";
+      const worst = dd.length ? Math.min(...dd.map((p) => p.value)) : null;
       stats([["Capital", fusd(last && last.value)], ["Au départ de la courbe", fusd(start)],
         ["Variation", fpct(last && start ? (last.value / start - 1) * 100 : null), last && last.value >= start ? "up" : "down"],
-        ["Plus haut", fusd(hi)], ["Baisse depuis le plus haut", fpct(last && hi ? (last.value / hi - 1) * 100 : null)], ["Points", String(pts.length)]]);
+        ["Plus haut", fusd(hi)], ["Baisse depuis le plus haut", fpct(last && hi ? (last.value / hi - 1) * 100 : null)],
+        ["Pire baisse de la courbe", fpct(worst), worst < 0 ? "down" : ""], ["Points", String(pts.length)]]);
     } else {
       const reg = await api("/api/regime");
-      if (!D || D.spec !== spec) return;
-      D.series[0].setData(uniq(reg.points.map((p) => ({ time: p.t, value: p.close }))));
-      D.series[1].setData(uniq(reg.points.map((p) => ({ time: p.t, value: p.sma }))));
-      D.series[0].setMarkers(tradeMarkers(reg.markers, c));
-      legend($("#detail-legend"), [[c.ink, "BTC (clôture)"], [c.sma, `Moyenne ${reg.sma} jours : au-dessus, achats autorisés`]]);
+      if (!D || D.view !== view) return;
+      view.update(reg);
       const l = reg.points[reg.points.length - 1];
-      D.lastText = l ? `BTC ${fpx(l.close)}` : "";
       stats([["BTC", fpx(l && l.close)], [`Moyenne ${reg.sma} j`, fpx(l && l.sma)], ["Écart", fpct(l ? (l.close / l.sma - 1) * 100 : null), reg.bull ? "up" : "down"], ["Régime", reg.bull ? "Haussier : achats autorisés" : "Baissier : aucun achat", reg.bull ? "up" : "down"]]);
     }
-    if (!D.fitted) { D.chart.timeScale().fitContent(); D.fitted = true; }
-    $("#detail-readout").textContent = D.lastText || "";
+    if (!D.fitted) { view.fit(); D.fitted = true; }
   } catch (e) {
     toast(`Graphique : ${e.message}`, "err");
   }
@@ -1365,7 +1493,8 @@ function tick() {
 document.addEventListener("visibilitychange", () => { if (!document.hidden) { lastStatus = 0; lastTab = 0; tick(); } });
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
-  if (D) closeDetail();
+  if (D && !indMenu.hidden) { e.preventDefault(); closeMenu(); indBtn.focus(); }    // la liste d'abord
+  else if (D) closeDetail();
   else if (!$("#chat").hidden) closeChat();
 });
 
