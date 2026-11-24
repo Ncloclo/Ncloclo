@@ -32,7 +32,7 @@ import pandas as pd
 
 import v29
 
-from . import qualite, regimes
+from . import derives, flux, qualite, regimes
 from . import trend_strategy as ts
 from .agents import (
     Agent,
@@ -137,8 +137,49 @@ def a_chercheur(v: View) -> AgentResult:
         return _r("chercheur", "NEUTRE", 0, ["aucun travail de recherche récent sur ces règles"])
     return _r("chercheur", "NEUTRE", 0,
               [f"recherche récente : « {p['title']} » ({p['part']}) — à vérifier : {p['question']}"
+               + (f" Test du bot : {p['verdict']}" if p.get("verdict") else "")
                for p in rows[:2]],
               uncertainties=("une piste de recherche n'est pas une preuve sur les données du bot",))
+
+
+def a_macro(v: View) -> AgentResult:
+    """Annonces économiques américaines importantes des 48 prochaines heures
+    (calendrier, evenements.py). Il informe, il ne vote pas : leur effet sur
+    les cryptos du bot n'est pas prouvé (mesure en cours)."""
+    ev = v.get("macro", {})
+    if not ev.get("upcoming"):
+        return _r("macro", "NEUTRE", 0, ["aucune grande annonce américaine dans les 48 heures"])
+    return _r("macro", "NEUTRE", 0, [ev.get("line") or f"{len(ev['upcoming'])} annonce(s) dans les 48 heures"],
+              uncertainties=("une annonce peut faire bouger les cours dans les deux sens",))
+
+
+def a_derives(v: View) -> AgentResult:
+    """Contrats à terme de Binance (derives.py) : financement de la crypto et
+    de BTC, intérêt ouvert, part des comptes acheteurs. Un levier acheteur
+    très élevé annonce des liquidations possibles. Il informe, il ne vote
+    pas (docs/SENTIMENT.md : pas d'aide prouvée à la stratégie)."""
+    d, asset = v.get("derives", {}), v["marche"]["asset"]
+    if not d:
+        return _r("derives", "NEUTRE", 0, ["contrats à terme : pas de relevé récent"])
+    rate = (d.get("funding") or {}).get(asset)
+    ev = []
+    if rate is not None:
+        a = derives.annual(rate)
+        ev.append(f"financement de {asset.upper()} {fr(a * 100, '+.1f')} % par an"
+                  + (" : levier acheteur élevé, liquidations possibles" if a > 0.30 else
+                     " : vendeurs à découvert payés, marché pessimiste" if a < -0.10 else ""))
+    line = derives.describe(d)
+    if line:
+        ev.append(line)
+    return _r("derives", "NEUTRE", 0, ev or ["contrats à terme : relevé incomplet"])
+
+
+def a_flux(v: View) -> AgentResult:
+    """Offre de stablecoins (flux.py) : argent frais disponible ou argent qui
+    sort des cryptos. Il informe, il ne vote pas tant qu'une étude n'a pas
+    prouvé son utilité."""
+    line = flux.describe(v.get("flux", {}))
+    return _r("flux", "NEUTRE", 0, [line or "stablecoins : pas de relevé récent"])
 
 
 def a_risque(v: View) -> AgentResult:
@@ -261,6 +302,12 @@ AGENTS: Tuple[Agent, ...] = (
                    ("marche", "savoir"), weight=0.5), a_sentiment),
     Agent(Manifest("chercheur", "1.0.0", "veille de la recherche (bibliothèque)", "analyse", ("chercheur",),
                    ("savoir",), weight=0.0), a_chercheur),
+    Agent(Manifest("macro", "1.0.0", "annonces économiques (calendrier)", "analyse", ("macro",),
+                   ("macro",), weight=0.0), a_macro),
+    Agent(Manifest("derives", "1.0.0", "contrats à terme (financement, levier)", "analyse", ("derives",),
+                   ("marche", "derives"), weight=0.0), a_derives),
+    Agent(Manifest("flux", "1.0.0", "flux de stablecoins", "analyse", ("flux",),
+                   ("flux",), weight=0.0), a_flux),
     Agent(Manifest("risque", "1.0.0", "gestionnaire du risque", "analyse", ("risque",),
                    ("marche", "portefeuille", "politique"), weight=1.0, veto=True, critical=True), a_risque),
     Agent(Manifest("portefeuille", "1.0.0", "gérant du portefeuille", "analyse", ("portefeuille",),
@@ -332,7 +379,8 @@ def board(asset: str, day: str, close: pd.DataFrame, snap: Dict[str, float], p: 
           held: Dict[str, float], equity: float, risk_mult: float, policy: Dict[str, Any],
           opinion: Optional[Dict[str, Any]] = None, ranking: Optional[Dict[str, Any]] = None,
           regime: Optional[Dict[str, Any]] = None, quality: Optional[Dict[str, Any]] = None,
-          pistes: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+          pistes: Optional[List[Dict[str, Any]]] = None,
+          contexte: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Le tableau noir d'une mission : les données de chaque rubrique, que
     chaque agent ne lit que si son manifeste le permet (`regime` : régime du
     jour déjà calculé par le bot, sinon recalculé ; `quality` : note des
@@ -358,6 +406,8 @@ def board(asset: str, day: str, close: pd.DataFrame, snap: Dict[str, float], p: 
         "qualite": quality or qualite.quality(close[[asset]].loc[:pd.Timestamp(day, tz="UTC")], day),
         "regime": {"bull": bull, "sma": p.regime_sma, **{k: rg.get(k) for k in ("texte", "volatilite", "phase")}},
         "savoir": {"opinion": opinion or {}, "pistes": list(pistes or [])},
+        # Contexte du jour, pour les agents qui informent sans voter.
+        **{k: dict((contexte or {}).get(k) or {}) for k in ("macro", "derives", "flux")},
         "portefeuille": {"held": dict(held), "equity": equity, "risk_mult": risk_mult},
         "politique": dict(policy, params={k: getattr(p, k) for k in (
             "min_volume_usd", "max_positions", "max_total_risk", "risk_pct", "init_stop_atr", "min_history")}),
@@ -487,8 +537,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     policy = {"halted": bool(st.get("halted")), "safe_mode": bool((st.get("mode_sur") or {}).get("active")),
               "garde_blocked": g_.get("blocked") or [] if g_.get("day") == day else []}
     ranking = {r["asset"]: r for r in ((st.get("selection") or {}).get("ranking") or [])}
+    sv = st.get("savoir") or {}
+    contexte = {"macro": st.get("evenements") or {}, "flux": sv.get("flux") or {},
+                "derives": derives.latest(getattr(g, "watch_db", ""))}
     data = board(asset, day, close, snap, p, held, float(st.get("last_equity") or 0) or 1.0,
-                 float(st.get("risk_mult") or 1.0), policy, (st.get("savoir") or {}).get("opinion"), ranking)
+                 float(st.get("risk_mult") or 1.0), policy, sv.get("opinion"), ranking,
+                 pistes=sv.get("pistes"), contexte=contexte)
     view, res = evaluate(asset, data)
     print(f"COMITÉ D'AGENTS — {asset.upper()}, bougie du {day} (consultatif : la règle et la porte décident)")
     for k, r in res.results.items():

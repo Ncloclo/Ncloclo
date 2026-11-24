@@ -104,12 +104,17 @@ function renderLibrary(b) {
     a.rel = "noopener noreferrer";
     li.append(a, el("span", "sub", ` · ${fdate(p.published)} · ${p.themes.join(", ")}`),
       el("div", "sub", `${p.part} : ${p.question}`));
+    if (p.verdict) {
+      li.className = p.status === "a_etudier" ? "warn" : "ok";
+      li.append(el("div", "sub", `Test du bot : ${p.verdict}`));
+    }
     return li;
   });
   if (!rows.length) rows.push(el("li", "ok", b.fetched_at ? "Aucun travail récent ne touche aux règles du bot." : "Pas encore lue : première lecture avec le noyau de savoir."));
   if (b.error) rows.push(el("li", "warn", `Dernière lecture ratée : ${b.error} (nouvel essai dans 6 h).`));
   $("#w-lib").replaceChildren(...rows);
-  $("#w-lib-sub").textContent = b.fetched_at ? `${b.kept} travaux gardés · lue le ${fdate(b.fetched_at)}` : "pas encore lue";
+  $("#w-lib-sub").textContent = (b.fetched_at ? `${b.kept} travaux gardés · lue le ${fdate(b.fetched_at)}` : "pas encore lue")
+    + (b.tested_on ? ` · pistes testées le ${fdate(b.tested_on)}` : "");
 }
 // Noyau de savoir : ce que le bot a lu, qui a raison, son avis.
 const VERDICT = { fiable: ["up", "Fiable"], trompeuse: ["down", "Trompeuse (à lire à l'envers)"], hasard: ["", "Pas mieux que le hasard"], observation: ["", "En observation"] };

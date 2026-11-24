@@ -27,9 +27,10 @@ du bot (installation, commandes, panneau) est dans le
 | [`COUTS_REELS.md`](COUTS_REELS.md) | combien coûtent vraiment les ordres au carnet de Binance, et jusqu'à quel capital ? |
 | [`PETIT_CAPITAL.md`](PETIT_CAPITAL.md) | le bot fait-il avec 100 USDT ce qu'il fait avec 10 000 ? |
 | [`INTELLIGENCE.md`](INTELLIGENCE.md) | diagnostic expert du 24 novembre 2026 : intelligence, compétences, autonomie, performances |
+| [`COMBINAISONS.md`](COMBINAISONS.md) | combiner TrendGuard avec les Tortues ou la cassure de Bollinger fait-il mieux ? |
 | [`SENTIMENT.md`](SENTIMENT.md) | le financement des contrats à terme ou la peur et l'avidité auraient-ils aidé ? |
 
-Les huit dernières indiquent en tête la commande qui les régénère ; le rapport
+Les dix dernières indiquent en tête la commande qui les régénère ; le rapport
 de recherche se régénère avec `python trendguard_bot.py strategy research --data
 data`. Ce sont des diagnostics : une règle du bot ne change qu'après l'une
 d'elles (dernière en date : `PETIT_CAPITAL.md`, minimum d'achat, 24/11/2026).

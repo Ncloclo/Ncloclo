@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import v29
-from trendguard import attribution, bibliotheque, evenements, libre, modeles, savoir
+from trendguard import attribution, bibliotheque, evenements, libre, modeles, pistes, savoir
 from trendguard import market_watch as mw
 from trendguard.journal import silent_logger
 
@@ -237,14 +237,15 @@ class BotData:
         except sqlite3.Error:
             return None
         try:
-            book = memory.get(bibliotheque.KEY)
+            book, tested = memory.get(bibliotheque.KEY), memory.get(pistes.KEY)
         except (sqlite3.Error, ValueError):
             return None
         finally:
             memory.close()
         book = book if isinstance(book, dict) else {}
-        return {"pistes": bibliotheque.pistes(book), "kept": len(book.get("papers") or []),
-                "fetched_at": book.get("fetched_at"), "error": book.get("error") or ""}
+        return {"pistes": bibliotheque.pistes(book, verdicts=tested), "kept": len(book.get("papers") or []),
+                "fetched_at": book.get("fetched_at"), "error": book.get("error") or "",
+                "tested_on": (tested or {}).get("day") if isinstance(tested, dict) else None}
 
     def modeles(self) -> Dict[str, Any]:
         """Modèles d'IA (lecture seule) : santé mesurée des modèles configurés,
