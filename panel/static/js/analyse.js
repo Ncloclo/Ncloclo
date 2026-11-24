@@ -618,16 +618,26 @@ export class EquityChart {
   destroy() { this.stack.destroy(); }
 }
 
+// Une courbe et sa moyenne longue, l'écart dessous : le régime du bot (BTC
+// et sa moyenne de 150 jours) ou un marché hors cryptos (sa propre tendance,
+// son niveau de cassure et sa position fictive). Options : label, unit
+// (« j » ou « séances »), words (au-dessus, en dessous), breakout.
 export class RegimeChart {
-  constructor(host, readout) {
+  constructor(host, readout, opts = {}) {
     const c = COLORS();
+    this.opts = { label: "BTC", unit: "j", long: "jours", words: ["achats permis", "aucun achat"], breakout: false, ...opts };
     this.readout = readout;
+    this.lines = [];
     this.points = [];
     this.stack = new ChartStack(host, (t) => this.show(t));
     const m = this.stack.main;
     if (!m) return;
     this.btc = m.addLineSeries({ color: c.ink, lineWidth: 2, ...LIVE });
     this.sma = m.addLineSeries({ color: c.sma, lineWidth: 2, crosshairMarkerVisible: false });
+    if (this.opts.breakout) {
+      this.high = m.addLineSeries({ color: c.accent, lineWidth: 1, lineStyle: LS.Dashed, crosshairMarkerVisible: false,
+        priceLineVisible: false, lastValueVisible: false });
+    }
     m.tgPrimary = this.btc;
     this.pane = this.stack.addPane("gap", 0, (v) => fpctS(v));
     if (!this.pane.chart) return;
@@ -644,6 +654,9 @@ export class RegimeChart {
     this.btc.setData(reg.points.map((p) => ({ time: p.t, value: p.close })));
     this.sma.setData(reg.points.map((p) => ({ time: p.t, value: p.sma })));
     this.btc.setMarkers(tradeMarkers(reg.markers, COLORS()));
+    if (this.high) this.high.setData(reg.points.filter((p) => p.high != null).map((p) => ({ time: p.t, value: p.high })));
+    this.lines.forEach((l) => this.btc.removePriceLine(l));
+    this.lines = addPositionLines(this.btc, reg.position);       // position fictive : entrée et stop
     const gap = reg.points.map((p) => ({ time: p.t, value: (p.close / p.sma - 1) * 100 }));
     if (this.gap) {
       this.gap.setData(gap);
@@ -659,11 +672,13 @@ export class RegimeChart {
     if (!p) return;
     const gap = (p.close / p.sma - 1) * 100;
     const line1 = el("div", "ro-line ro-ind");
-    line1.append(legendItem(c.ink, "BTC", fpx(p.close)), legendItem(c.sma, `Moyenne ${this.reg.sma} j`, fpx(p.sma)));
+    const o = this.opts;
+    line1.append(legendItem(c.ink, o.label, fpx(p.close)), legendItem(c.sma, `Moyenne ${this.reg.sma} ${o.unit}`, fpx(p.sma)));
+    if (this.high && p.high != null) line1.append(legendItem(c.accent, "Cassure si au-dessus de", fpx(p.high)));
     this.readout.replaceChildren(line1);
     if (this.pane) {
-      this.pane.legend.replaceChildren(el("strong", "", `Écart à la moyenne ${this.reg.sma} jours`),
-        legendItem(gap >= 0 ? c.up : c.down, gap >= 0 ? "achats permis" : "aucun achat", fpctS(gap)));
+      this.pane.legend.replaceChildren(el("strong", "", `Écart à la moyenne ${this.reg.sma} ${o.long}`),
+        legendItem(gap >= 0 ? c.up : c.down, gap >= 0 ? o.words[0] : o.words[1], fpctS(gap)));
     }
   }
   fit() { this.stack.fit(); }

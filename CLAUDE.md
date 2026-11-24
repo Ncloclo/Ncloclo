@@ -144,6 +144,9 @@ survivant).
 - Décision : suivi en argent fictif seulement (`trendguard/multi_actifs.py`,
   page Veille) ; aucun ordre réel (il faudrait un courtier ; Binance n'a que
   PAXG et EUR). Le XOF a une parité fixe avec l'euro.
+- Panneau : une page par classe d'actifs (`panel/static/js/pages/marches.js`,
+  `/api/markets`, `/api/market`), lue dans `data_multi/` et le noyau de
+  savoir ; menu en trois groupes (Mon bot, Marchés, Analyse).
 
 ### Sur Binance au-delà des 21 cryptos (24/11/2026)
 

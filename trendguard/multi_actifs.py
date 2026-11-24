@@ -304,3 +304,102 @@ def refresh(memory: Any, now: datetime, fetch: Fetch, cache: str, capital: float
         book["error"] = friendly_error(e)
     memory.put(KEY, book)
     return book
+
+
+# ══════════════════════════════════════════════════════════════════════
+# PANNEAU : une page par classe d'actifs (lecture seule)
+# ══════════════════════════════════════════════════════════════════════
+
+# Pages du panneau : (onglet, catégorie), dans l'ordre du menu.
+CLASSES: Tuple[Tuple[str, str], ...] = (
+    ("commodities", "Matières premières"), ("forex", "Devises"), ("indices", "Indices"),
+    ("stocks", "Actions"), ("bonds", "Obligations"))
+ALL_CODES = list(dict.fromkeys([c for c, *_ in UNIVERSE] + [c for c, *_ in BINANCE]))
+SESSIONS = {"1d": 1, "1m": 21, "3m": 63, "1y": 252}     # séances de chaque variation
+SPARK_SESSIONS = {"1m": 21, "3m": 63, "1y": 252, "5y": 1260}
+SPARK_POINTS = 120                                       # points d'une courbe de carte, au plus
+
+
+def codes_of(category: str) -> List[str]:
+    """Marchés d'une catégorie : ceux de l'univers, puis ceux de la manche
+    Binance qui n'y sont pas."""
+    return list(dict.fromkeys([c for c, _n, k, _s in UNIVERSE if k == category]
+                              + [c for c, _n, k, _s in BINANCE if k == category]))
+
+
+def _num(v: Any) -> Optional[float]:
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return f if np.isfinite(f) else None
+
+
+def market_detail(code: str, close: pd.Series, p: Optional[ts.TrendParams] = None) -> Dict[str, Any]:
+    """Ce que la page d'un marché dit de lui à sa dernière séance :
+    variations, plus haut et plus bas sur un an, moyenne de 150 séances,
+    niveau de cassure (plus haut des 30 séances précédentes), momentum,
+    volatilité, stop initial d'un achat du jour, tendance et signal de la
+    règle (calculés comme pour le suivi quotidien). Information seulement."""
+    p = p or ts.TrendParams()
+    s = close.dropna().astype(float)
+    row: Dict[str, Any] = {"code": code, "name": NAME.get(code, code), "category": CATEGORY.get(code, ""),
+                           "symbol": SYMBOL.get(code, ""), "binance": BINANCE_NAME.get(code, "")}
+    if s.empty:
+        return dict(row, close=None, date=None, trend=False, signal=False)
+    f = ts.asset_features(s, p, pd.Series(LIQUID, index=s.index))
+    snap = {k: float(f[k].iloc[-1]) for k in ("close", "vol", "prior_high", "mom", "age", "vol30")}
+    px = float(s.iloc[-1])
+    avg = _num(s.rolling(REGIME_N, min_periods=REGIME_N).mean().iloc[-1])
+    trend = bool(avg is not None and px > avg)
+    year = s[s.index > s.index[-1] - pd.Timedelta(days=365)]
+    vol, high = _num(snap["vol"]), _num(snap["prior_high"])
+    return dict(row, close=px, date=str(s.index[-1].date()),
+                changes={k: (px / float(s.iloc[-1 - n]) - 1) * 100 if len(s) > n else None
+                         for k, n in SESSIONS.items()},
+                high_1y=float(year.max()), low_1y=float(year.min()),
+                sma=avg, gap_pct=(px / avg - 1) * 100 if avg else None,
+                breakout=high, breakout_gap_pct=(px / high - 1) * 100 if high else None,
+                mom=_num(snap["mom"]),
+                vol_pct=vol / px * 100 if vol and px else None,
+                stop=px - p.init_stop_atr * vol if vol else None,
+                trend=trend, signal=bool(trend and ts.entry_signal(snap, p)))
+
+
+def market_points(close: pd.Series, days: int = 0) -> List[Dict[str, Any]]:
+    """Points du graphique d'un marché : clôture, moyenne de 150 séances et
+    niveau de cassure de chaque séance où la moyenne existe ; les `days`
+    derniers jours (0 : tout). Temps en secondes (minuit UTC)."""
+    s = close.dropna().astype(float)
+    if s.empty:
+        return []
+    n = ts.TrendParams().breakout_n
+    sma = s.rolling(REGIME_N, min_periods=REGIME_N).mean()
+    high = s.shift(1).rolling(n, min_periods=n).max()
+    frame = pd.DataFrame({"close": s, "sma": sma, "high": high}).dropna(subset=["sma"])
+    if days:
+        frame = frame[frame.index > s.index[-1] - pd.Timedelta(days=days)]
+    return [{"t": int(d.timestamp()), "close": round(float(c), 6), "sma": round(float(m), 6),
+             "high": None if pd.isna(h) else round(float(h), 6)}
+            for d, c, m, h in zip(frame.index, frame["close"], frame["sma"], frame["high"])]
+
+
+def spark(close: pd.Series, window: str = "1y", points: int = SPARK_POINTS) -> List[float]:
+    """Clôtures de la courbe d'une carte sur `window` (1m, 3m, 1y, 5y),
+    éclaircies à `points` au plus ; la dernière clôture est toujours gardée."""
+    s = close.dropna().astype(float).iloc[-(SPARK_SESSIONS.get(window, 252) + 1):]
+    if len(s) > points:
+        step = -(-len(s) // points)                        # arrondi au-dessus
+        s = s.iloc[::-1].iloc[::step].iloc[::-1]
+    return [round(float(v), 6) for v in s.values]
+
+
+def held_positions(book: Any) -> Dict[str, List[Dict[str, Any]]]:
+    """Positions des deux portefeuilles fictifs, par marché."""
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    book = book if isinstance(book, dict) else {}
+    for key, label in (("portfolio", "Portefeuille fictif hors cryptos"), ("binance", "Manche Binance fictive")):
+        for pos in ((book.get(key) or {}).get("positions") or []):
+            if isinstance(pos, dict) and pos.get("code"):
+                out.setdefault(str(pos["code"]), []).append(dict(pos, book=label))
+    return out

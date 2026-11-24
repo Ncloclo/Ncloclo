@@ -1,7 +1,7 @@
 // Panneau TrendGuard : état du bot (lu toutes les 5 s), barre du haut,
 // bouton AUTO et achat en temps réel (événement « tg:achat »).
 
-import { $, api, fpx, fusd, ripple, toast, up } from "./core.js";
+import { $, $$, api, fpx, fusd, ripple, toast, up } from "./core.js";
 
 export let S = null, lastOk = 0, nextDecisionAt = 0, statusErr = false;
 export async function refreshStatus() {
@@ -46,10 +46,11 @@ function renderStatus() {
   btn.setAttribute("aria-label", running ? "Arrêter l'automatisation du bot" : "Démarrer l'automatisation du bot");
   $("#logout-btn").hidden = !S.password;
   // Onglet Positions : nombre de positions ouvertes.
-  const badge = $("#tab-pos");
-  badge.textContent = String(S.positions || 0);
-  badge.hidden = !S.positions;
-  badge.title = `${S.positions || 0} position${S.positions > 1 ? "s" : ""} ouverte${S.positions > 1 ? "s" : ""}`;
+  $$('[data-badge="pos"]').forEach((badge) => {
+    badge.textContent = String(S.positions || 0);
+    badge.hidden = !S.positions;
+    badge.title = `${S.positions || 0} position${S.positions > 1 ? "s" : ""} ouverte${S.positions > 1 ? "s" : ""}`;
+  });
 }
 function confirmLive() {
   const dlg = $("#confirm");

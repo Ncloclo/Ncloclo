@@ -9,7 +9,9 @@ import os
 import pathlib
 import sqlite3
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+
+import pandas as pd
 
 import v29
 from trendguard import (
@@ -105,10 +107,45 @@ def _ts(value: Any) -> Optional[int]:
     return int(dt.timestamp()) if dt else None
 
 
+def markets_view(key: str, close: pd.DataFrame, book: Dict[str, Any], window: str = "1y") -> Dict[str, Any]:
+    """Page d'une classe d'actifs : chaque marché lu, sa courbe sur `window`,
+    son état pour la règle et ses positions fictives (lecture seule)."""
+    category = dict(multi_actifs.CLASSES).get(key)
+    if category is None:
+        raise ValueError("classe d'actifs inconnue")
+    window = window if window in multi_actifs.SPARK_SESSIONS else "1y"
+    held = multi_actifs.held_positions(book)
+    rows, missing = [], []
+    for code in multi_actifs.codes_of(category):
+        s = close[code].dropna() if code in close.columns else pd.Series(dtype=float)
+        if s.empty:
+            missing.append(multi_actifs.NAME.get(code, code))
+            continue
+        rows.append(dict(multi_actifs.market_detail(code, s), spark=multi_actifs.spark(s, window),
+                         positions=held.get(code, [])))
+    return {"key": key, "category": category, "window": window, "rows": rows, "missing": missing,
+            "fetched_at": book.get("fetched_at"), "error": book.get("error") or ""}
+
+
+def market_view(code: str, close: pd.DataFrame, book: Dict[str, Any], days: int = 0) -> Dict[str, Any]:
+    """Fenêtre de détail d'un marché : son état et les points de son
+    graphique (clôture, moyenne de 150 séances, niveau de cassure)."""
+    if code not in multi_actifs.NAME:
+        raise ValueError("marché inconnu")
+    s = close[code].dropna() if code in close.columns else pd.Series(dtype=float)
+    if s.empty:
+        raise ValueError("historique pas encore lu : première lecture avec le noyau de savoir")
+    detail = dict(multi_actifs.market_detail(code, s), positions=multi_actifs.held_positions(book).get(code, []))
+    return {"detail": detail, "points": multi_actifs.market_points(s, max(0, min(int(days), 4000))),
+            "sma": multi_actifs.REGIME_N, "breakout_n": 30}
+
+
 class BotData:
     def __init__(self, gcfg: Any, market: Market):
         self.g = gcfg
         self.market = market
+        self.multi_cache = os.path.join(v29.APP_DIR, "data_multi")       # suivi quotidien (savoir.py)
+        self._multi: Optional[Tuple[Tuple[float, ...], pd.DataFrame]] = None
 
     # ---------- État ----------
 
@@ -263,6 +300,27 @@ class BotData:
                 "text": book.get("text") or "", "rows": book.get("rows") or [],
                 "periods": book.get("periods") or [], "rate": book.get("rate", levier.BORROW_RATE),
                 "exposure_pct": book.get("exposure_pct") or []}
+
+    def _multi_close(self) -> pd.DataFrame:
+        """Clôtures de tous les marchés hors cryptos, sur le calendrier commun du
+        suivi quotidien ; relues seulement quand un fichier change."""
+        files = [os.path.join(self.multi_cache, f"{c}.csv") for c in multi_actifs.ALL_CODES]
+        sig = tuple(os.path.getmtime(f) if os.path.exists(f) else 0.0 for f in files)
+        if self._multi is None or self._multi[0] != sig:
+            self._multi = (sig, multi_actifs.load(self.multi_cache, multi_actifs.ALL_CODES))
+        return self._multi[1]
+
+    def _multi_book(self) -> Dict[str, Any]:
+        got = self._from_savoir(multi_actifs.KEY)
+        return got[0] if got and isinstance(got[0], dict) else {}
+
+    def markets(self, key: str, window: str = "1y") -> Dict[str, Any]:
+        """Page d'une classe d'actifs (lecture seule)."""
+        return markets_view(key, self._multi_close(), self._multi_book(), window)
+
+    def market_info(self, code: str, days: int = 0) -> Dict[str, Any]:
+        """Détail d'un marché hors cryptos (lecture seule)."""
+        return market_view(code, self._multi_close(), self._multi_book(), days)
 
     def marches(self) -> Optional[Dict[str, Any]]:
         """Tous les marchés hors cryptos (lecture seule) : état de chacun pour
