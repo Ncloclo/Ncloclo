@@ -160,11 +160,26 @@ sont jamais envoyés sur GitHub. VS Code les masque dans l'explorateur
 | `control.py` | bouton AUTO / ARRÊTER (superviseur), démarrage avec l'ordinateur |
 | `assistant.py`, `news.py` | Rachelle ; actualités et marchés |
 | `demo.py` | données fictives pour `--demo` et les tests |
-| `static/app.js` | les pages de l'interface (module ES) |
-| `static/js/core.js` | outils communs : formats, DOM, temps de chargement, API, notifications |
-| `static/js/charts.js` | graphiques, flèches d'achats et de ventes, niveaux d'entrée et de stop |
+| `static/app.js` | point d'entrée : thème, achat en temps réel, clavier, démarrage |
+| `static/js/core.js` | outils communs : formats, DOM, tableaux, temps de chargement, API, notifications |
+| `static/js/charts.js` | graphiques communs : options, flèches d'achats et de ventes, stops, courbes animées |
+| `static/js/indicateurs.js` | calculs des indicateurs techniques, purs et testés |
+| `static/js/analyse.js` | graphique d'analyse : prix, indicateurs, panneaux synchronisés, lectures technique et rapide |
+| `static/js/etat.js` | état du bot, barre du haut, bouton AUTO, achat en temps réel |
+| `static/js/navigation.js` | onglets, rafraîchissement de la page affichée |
+| `static/js/detail.js` | fenêtre de détail d'un graphique |
+| `static/js/connexion.js` | mot de passe du panneau |
+| `static/js/pages/*.js` | une page par onglet (tableau, actualités, graphiques, cryptos, positions, veille, journal, réglages) |
 | `static/js/assistant.js` | fenêtre de Rachelle, garde-fou des secrets côté navigateur |
 | `static/js/rapport.js` | rapport quotidien et centre de sécurité (onglet Réglages) |
+| `static/app.css` | une feuille, en 12 sections numérotées (sommaire en tête) |
+
+Règles de l'interface : une page s'enregistre auprès de `navigation.js` et ne
+connaît pas les autres pages ; ce qu'une page doit annoncer passe par un
+événement (« tg:achat ») ; tout texte venant des données passe par
+`textContent` ; un contrôle (bouton, groupe de boutons, liste, recherche) a la
+hauteur `--ctl-h` ; une couleur d'indicateur vient de la palette validée
+(`--s1` à `--s6`).
 
 ## Le paquet `v29/`
 

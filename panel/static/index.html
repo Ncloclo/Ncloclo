@@ -44,14 +44,18 @@
       <img src="icon.svg" alt="" width="30" height="30">
       <div><strong>TrendGuard</strong><span id="brand-mode">Panneau de contrôle</span></div>
     </div>
-    <div class="tabs" role="tablist">
+    <!-- Onglets rangés par usage : le bot, les marchés, puis les réglages -->
+    <div class="tabs">
+      <p class="tab-group" aria-hidden="true">Mon bot</p>
       <a class="tab" href="#dash" data-tab="dash"><svg><use href="#i-dash"/></svg><span>Tableau de bord</span></a>
-      <a class="tab" href="#news" data-tab="news"><svg><use href="#i-news"/></svg><span>Actualités</span></a>
+      <a class="tab" href="#positions" data-tab="positions"><svg><use href="#i-pos"/></svg><span>Positions</span><span class="tab-badge" id="tab-pos" hidden></span></a>
+      <a class="tab" href="#log" data-tab="log"><svg><use href="#i-log"/></svg><span>Journal</span></a>
+      <p class="tab-group" aria-hidden="true">Marchés</p>
       <a class="tab" href="#charts" data-tab="charts"><svg><use href="#i-charts"/></svg><span>Graphiques</span></a>
       <a class="tab" href="#assets" data-tab="assets"><svg><use href="#i-coins"/></svg><span>Cryptos</span></a>
-      <a class="tab" href="#positions" data-tab="positions"><svg><use href="#i-pos"/></svg><span>Positions</span></a>
+      <a class="tab" href="#news" data-tab="news"><svg><use href="#i-news"/></svg><span>Actualités</span></a>
       <a class="tab" href="#watch" data-tab="watch"><svg><use href="#i-watch"/></svg><span>Veille</span></a>
-      <a class="tab" href="#log" data-tab="log"><svg><use href="#i-log"/></svg><span>Journal</span></a>
+      <hr class="tab-sep" aria-hidden="true">
       <a class="tab" href="#settings" data-tab="settings"><svg><use href="#i-cog"/></svg><span>Réglages</span></a>
     </div>
     <p class="side-note" id="side-note">Données du bot sur ce PC · cours Binance publics · graphiques <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView</a></p>
@@ -280,11 +284,14 @@
       <!-- Journal -->
       <section class="page" id="page-log" data-title="Journal du bot">
         <div class="toolbar">
-          <select id="log-level" aria-label="Niveau">
-            <option value="all">Tout</option>
-            <option value="warn">Avertissements et erreurs</option>
-            <option value="error">Erreurs</option>
-          </select>
+          <div class="tool-group">
+            <label class="tool-label" for="log-level">Afficher</label>
+            <select id="log-level">
+              <option value="all">Tout</option>
+              <option value="warn">Avertissements et erreurs</option>
+              <option value="error">Erreurs</option>
+            </select>
+          </div>
           <label class="check"><input type="checkbox" id="log-follow" checked> Suivre en direct</label>
         </div>
         <div class="card log-card"><ol id="log" class="log"></ol></div>

@@ -7,7 +7,7 @@
 // marché BTC) et ses stops, que le serveur calcule avec la stratégie même.
 
 import { cssVar, el, fpx, LWC, nf } from "./core.js";
-import { addPositionLines, COLORS, dropChart, makeChart, tradeMarkers } from "./charts.js";
+import { addPositionLines, COLORS, dropChart, LIVE, makeChart, tradeMarkers } from "./charts.js";
 import * as ti from "./indicateurs.js";
 
 export const STEP = { "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400 };
@@ -36,6 +36,16 @@ export const fcompact = (v) => {
   if (a >= 1e3) return s + nf(1).format(a / 1e3) + " k";
   return s + nf(a >= 10 || a === 0 ? 0 : 2).format(a);
 };
+
+// Bougies de l'API ([t, o, h, b, c, volume]) : une par instant, dans l'ordre.
+export function candleRows(candles) {
+  const rows = [];
+  (candles || []).forEach((r) => {
+    const row = { time: r[0], open: r[1], high: r[2], low: r[3], close: r[4], volume: r[5] };
+    if (!rows.length || row.time > rows[rows.length - 1].time) rows.push(row); else rows[rows.length - 1] = row;
+  });
+  return rows;
+}
 
 // ---------- Calculs d'une série de bougies (mis en cache) ----------
 class Ctx {
@@ -415,11 +425,7 @@ export class AssetChart {
   update(d) {
     this.data = d;
     this.interval = d.interval;
-    const rows = [];
-    (d.candles || []).forEach((r) => {
-      const row = { time: r[0], open: r[1], high: r[2], low: r[3], close: r[4], volume: r[5] };
-      if (!rows.length || row.time > rows[rows.length - 1].time) rows.push(row); else rows[rows.length - 1] = row;
-    });
+    const rows = candleRows(d.candles);
     this.ctx = new Ctx(rows, d.interval, d.strategy);
     this.dec = decimalsFor(rows.length ? rows[rows.length - 1].close : null);
     this.draw();
@@ -566,7 +572,7 @@ export class EquityChart {
     this.stack = new ChartStack(host, (t) => this.show(t));
     const m = this.stack.main;
     if (!m) return;
-    this.series = m.addBaselineSeries(baseline(c.up, c.down));
+    this.series = m.addBaselineSeries({ ...baseline(c.up, c.down), ...LIVE });
     m.tgPrimary = this.series;
     this.pane = this.stack.addPane("dd", 0, (v) => fpctS(v));
     if (!this.pane.chart) return;
@@ -613,7 +619,7 @@ export class RegimeChart {
     this.stack = new ChartStack(host, (t) => this.show(t));
     const m = this.stack.main;
     if (!m) return;
-    this.btc = m.addLineSeries({ color: c.ink, lineWidth: 2 });
+    this.btc = m.addLineSeries({ color: c.ink, lineWidth: 2, ...LIVE });
     this.sma = m.addLineSeries({ color: c.sma, lineWidth: 2, crosshairMarkerVisible: false });
     m.tgPrimary = this.btc;
     this.pane = this.stack.addPane("gap", 0, (v) => fpctS(v));
@@ -655,6 +661,24 @@ export class RegimeChart {
   fit() { this.stack.fit(); }
   setScale(kind) { this.stack.scale(kind); }
   destroy() { this.stack.destroy(); }
+}
+
+// ---------- Lecture rapide d'une carte ----------
+// Quatre repères de la dernière bougie : [texte, sens (up, down, warn ou
+// ""), explication]. Information seulement, comme la lecture complète.
+export function quickReading(candles) {
+  const rows = candleRows(candles);
+  if (rows.length < 35) return [];
+  const c = new Ctx(rows, null, null), i = rows.length - 1, px = c.close[i], out = [];
+  const m = c.sma(50)[i] ?? c.sma(20)[i], n = c.sma(50)[i] != null ? 50 : 20;
+  if (m != null) out.push([`Tendance ${px >= m ? "▲" : "▼"}`, px >= m ? "up" : "down", `Prix ${px >= m ? "au-dessus" : "en dessous"} de sa moyenne ${n} (${fpctS((px / m - 1) * 100)})`]);
+  const r = c.rsi()[i];
+  if (r != null) out.push([`RSI ${f1(r)}`, r >= 70 || r <= 30 ? "warn" : r >= 50 ? "up" : "down", r >= 70 ? "Suracheté : repli possible" : r <= 30 ? "Survendu : rebond possible" : r >= 50 ? "Élan haussier" : "Élan baissier"]);
+  const h = c.macd().hist[i];
+  if (h != null) out.push([`MACD ${h >= 0 ? "▲" : "▼"}`, h >= 0 ? "up" : "down", h >= 0 ? "MACD au-dessus de son signal" : "MACD sous son signal"]);
+  const vs = c.volSma()[i];
+  if (vs) out.push([`Volume × ${f1(c.vol[i] / vs)}`, "", "Volume de la dernière bougie rapporté à sa moyenne 20"]);
+  return out;
 }
 
 // ---------- Lecture technique de la dernière bougie ----------
