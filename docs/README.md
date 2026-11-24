@@ -29,9 +29,11 @@ du bot (installation, commandes, panneau) est dans le
 | [`INTELLIGENCE.md`](INTELLIGENCE.md) | diagnostic expert du 24 novembre 2026 : intelligence, compétences, autonomie, performances |
 | [`COMBINAISONS.md`](COMBINAISONS.md) | combiner TrendGuard avec les Tortues ou la cassure de Bollinger fait-il mieux ? |
 | [`MULTI_ACTIFS.md`](MULTI_ACTIFS.md) | la règle du bot sur l'or, le pétrole, les devises, les indices, les obligations et les actions |
+| [`BINANCE_HORS_CRYPTOS.md`](BINANCE_HORS_CRYPTOS.md) | l'or tokenisé, l'euro et les actions tokenisées de Binance, avec les frais du bot |
+| [`UNIVERS_CRYPTO.md`](UNIVERS_CRYPTO.md) | plus de cryptos que les 21 du bot (Solana, NEAR, Sui, Avalanche…) ? |
 | [`SENTIMENT.md`](SENTIMENT.md) | le financement des contrats à terme ou la peur et l'avidité auraient-ils aidé ? |
 
-Les onze dernières indiquent en tête la commande qui les régénère ; le rapport
+Les treize dernières indiquent en tête la commande qui les régénère ; le rapport
 de recherche se régénère avec `python trendguard_bot.py strategy research --data
 data`. Ce sont des diagnostics : une règle du bot ne change qu'après l'une
 d'elles (dernière en date : `PETIT_CAPITAL.md`, minimum d'achat, 24/11/2026).

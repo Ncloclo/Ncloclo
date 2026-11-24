@@ -75,9 +75,22 @@ UNIVERSE: Tuple[Tuple[str, str, str, str], ...] = (
     ("tte", "TotalEnergies", "Actions", "TTE.PA"),
     ("mc", "LVMH", "Actions", "MC.PA"),
 )
-NAME = {c: n for c, n, _k, _s in UNIVERSE}
-CATEGORY = {c: k for c, _n, k, _s in UNIVERSE}
-SYMBOL = {c: s for c, _n, _k, s in UNIVERSE}
+# Hors cryptos, mais tradables sur Binance (jetons) : la manche que l'étude
+# docs/BINANCE_HORS_CRYPTOS.md propose de suivre en paper. (code, nom et
+# jeton, catégorie, symbole Yahoo du sous-jacent). Écartés : fonds à levier,
+# sociétés non cotées, cotations trop récentes.
+BINANCE: Tuple[Tuple[str, str, str, str], ...] = (
+    ("or", "Or (PAXG, XAUT)", "Matières premières", "GC=F"),
+    ("eurusd", "Euro (EUR/USDT)", "Devises", "EURUSD=X"),
+    ("nvda", "Nvidia (NVDAB)", "Actions", "NVDA"), ("mu", "Micron (MUB)", "Actions", "MU"),
+    ("googl", "Alphabet (GOOGLB)", "Actions", "GOOGL"), ("intc", "Intel (INTCB)", "Actions", "INTC"),
+    ("mstr", "Strategy (MSTRB)", "Actions", "MSTR"), ("be", "Bloom Energy (BEB)", "Actions", "BE"),
+    ("qqq", "Fonds Nasdaq 100 (QQQB)", "Indices", "QQQ"),
+)
+BINANCE_NAME = {c: n for c, n, _k, _s in BINANCE}
+NAME = {**{c: n for c, n, _k, _s in BINANCE}, **{c: n for c, n, _k, _s in UNIVERSE}}
+CATEGORY = {**{c: k for c, _n, k, _s in BINANCE}, **{c: k for c, _n, k, _s in UNIVERSE}}
+SYMBOL = {**{c: s for c, _n, _k, s in BINANCE}, **{c: s for c, _n, _k, s in UNIVERSE}}
 CATEGORIES = ("Matières premières", "Devises", "Indices", "Obligations", "Actions")
 BIASED = {"Actions"}                 # mesurées à part, jamais dans un verdict
 CHART = ("https://query1.finance.yahoo.com/v8/finance/chart/{sym}"
@@ -115,16 +128,19 @@ def parse_chart(raw: bytes) -> pd.Series:
 
 
 def download(cache: str, fetch: Fetch, codes: Optional[List[str]] = None,
-             start: str = START, pause: float = 1.0) -> Dict[str, str]:
+             start: str = START, pause: float = 1.0,
+             symbols: Optional[Dict[str, str]] = None) -> Dict[str, str]:
     """Télécharge l'historique journalier de chaque actif dans `cache`
-    (un fichier par actif : date, clôture). Rend {code: erreur} pour ceux
+    (un fichier par actif : date, clôture). `symbols` : {code : symbole
+    Yahoo} pour des actifs hors de l'univers. Rend {code: erreur} pour ceux
     qui ont échoué ; un échec n'arrête pas les autres."""
     os.makedirs(cache, exist_ok=True)
     p1 = int(pd.Timestamp(start, tz="UTC").timestamp())
     p2 = int(time.time())
+    known = dict(SYMBOL, **(symbols or {}))
     errors = {}
-    for code in codes or [c for c, *_ in UNIVERSE]:
-        url = CHART.format(sym=urllib.parse.quote(SYMBOL[code]), p1=p1, p2=p2)
+    for code in codes or list(symbols or {}) or [c for c, *_ in UNIVERSE]:
+        url = CHART.format(sym=urllib.parse.quote(known[code]), p1=p1, p2=p2)
         try:
             s = parse_chart(fetch(url))
             if s.empty:
@@ -212,7 +228,8 @@ def summary(close: pd.DataFrame) -> List[Dict[str, Any]]:
         snap = {k: float(v[-1]) for k, v in c.items()}
         rows.append({"code": a, "name": NAME.get(a, a), "category": CATEGORY.get(a, ""),
                      "close": snap["close"], "trend": bool(trend[a][-1]),
-                     "signal": bool(trend[a][-1] and ts.entry_signal(snap, p))})
+                     "signal": bool(trend[a][-1] and ts.entry_signal(snap, p)),
+                     "binance": BINANCE_NAME.get(a, "")})
     return rows
 
 
@@ -238,17 +255,19 @@ def due(book: Any, now: datetime) -> bool:
     return (now - when).total_seconds() >= 3600 * (RETRY_HOURS if book.get("error") else REFRESH_HOURS)
 
 
-def portfolio(close: pd.DataFrame, start: str, capital: float) -> Dict[str, Any]:
-    """Portefeuille fictif hors cryptos (sans les actions) depuis `start` :
-    la règle rejouée chaque jour sur les clôtures réelles, au coût réel de
-    chaque marché. Rejouer plutôt que tenir des comptes : le résultat est
-    exactement celui du backtest, sans dérive possible."""
-    sub = unbiased(close)
+def portfolio(close: pd.DataFrame, start: str, capital: float, binance: bool = False) -> Dict[str, Any]:
+    """Portefeuille fictif depuis `start` : la règle rejouée chaque jour sur
+    les clôtures réelles. Par défaut, hors cryptos sans les actions, au coût
+    réel de chaque marché ; `binance` : la manche tradable sur Binance (or,
+    euro, actions tokenisées), aux frais de Binance. Rejouer plutôt que tenir
+    des comptes : le résultat est exactement celui du backtest."""
+    sub = close[[c for c in BINANCE_NAME if c in close.columns]] if binance else unbiased(close)
+    real = not binance
     end = str(sub.index[-1].date())
     if end < start:
         return {"start": start, "capital": capital, "equity": capital, "return_pct": 0.0,
                 "positions": [], "trades": 0, "curve": []}
-    r = backtest(sub, start, end, capital=capital, real_costs=True)
+    r = backtest(sub, start, end, capital=capital, real_costs=real)
     eq = float(r.equity.iloc[-1]) if len(r.equity) else capital
     last = {a: float(sub[a].dropna().iloc[-1]) for a in r.holdings}
     positions = [{"code": a, "name": NAME.get(a, a), "category": CATEGORY.get(a, ""), "entry": h.entry,
@@ -272,13 +291,15 @@ def refresh(memory: Any, now: datetime, fetch: Fetch, cache: str, capital: float
         return book
     book["tried_at"] = now.isoformat(timespec="seconds")
     try:
-        errors = download(cache, fetch, pause=pause)
-        close = load(cache)
+        codes = list(dict.fromkeys([c for c, *_ in UNIVERSE] + list(BINANCE_NAME)))
+        errors = download(cache, fetch, codes=codes, pause=pause, symbols=SYMBOL)
+        close = load(cache, codes)
         if close.empty:
             raise ValueError("aucun historique lisible")
         start = book.get("start") or now.date().isoformat()
         book.update(fetched_at=book["tried_at"], error="", start=start, unread=sorted(errors),
-                    rows=summary(close), portfolio=portfolio(close, start, float(capital)))
+                    rows=summary(close), portfolio=portfolio(close, start, float(capital)),
+                    binance=portfolio(close, start, float(capital), binance=True))
     except Exception as e:
         book["error"] = friendly_error(e)
     memory.put(KEY, book)

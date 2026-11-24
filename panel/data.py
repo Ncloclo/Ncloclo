@@ -251,7 +251,7 @@ class BotData:
         finally:
             memory.close()
         book = book if isinstance(book, dict) else {}
-        return {"rows": book.get("rows") or [], "portfolio": book.get("portfolio"),
+        return {"rows": book.get("rows") or [], "portfolio": book.get("portfolio"), "binance": book.get("binance"),
                 "fetched_at": book.get("fetched_at"), "error": book.get("error") or "",
                 "unread": [multi_actifs.NAME.get(c, c) for c in book.get("unread") or []]}
 

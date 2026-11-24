@@ -951,5 +951,11 @@ def main(argv: Optional[List[str]] = None) -> int:
 
 def _panel(gcfg: GuardConfig, args: argparse.Namespace) -> int:
     from panel import server as panel_server
+
+    from .config import LIVE_UNIVERSE_DEFAULT
+    if args.demo:
+        # Démonstration : toujours les mêmes données fictives, quel que soit
+        # l'univers choisi sur ce PC (TG_UNIVERSE) ; les tests en dépendent.
+        gcfg = dataclasses.replace(gcfg, universe=LIVE_UNIVERSE_DEFAULT)
     return panel_server.main(gcfg, args.host, args.port, args.demo,
                              not (args.no_open or args.login))

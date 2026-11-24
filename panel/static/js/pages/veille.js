@@ -95,16 +95,19 @@ function renderCalendar(c) {
 }
 // Tous les marchés hors cryptos (trendguard/multi_actifs.py) : état pour la
 // règle et portefeuille en argent fictif. Information seulement.
+function portfolioLine(title, pf) {
+  return pf
+    ? `${title} depuis le ${fdate(pf.start)} : ${nf(2).format(pf.capital)} → ${nf(2).format(pf.equity)} USDT (${fpct(pf.return_pct)}), `
+      + `${pf.positions.length} position${pf.positions.length > 1 ? "s" : ""}${pf.positions.length ? " : " + pf.positions.map((p) => p.name).join(", ") : ""} ; ${pf.trades} vente${pf.trades > 1 ? "s" : ""}.`
+    : `${title} : pas encore lancé (première lecture avec le noyau de savoir).`;
+}
 function renderMarkets(m) {
   $("#w-mkt-card").hidden = !m;
   if (!m) return;
-  const pf = m.portfolio;
-  $("#w-mkt-pf").textContent = pf
-    ? `Portefeuille fictif depuis le ${fdate(pf.start)} : ${nf(2).format(pf.capital)} → ${nf(2).format(pf.equity)} USDT (${fpct(pf.return_pct)}), `
-      + `${pf.positions.length} position${pf.positions.length > 1 ? "s" : ""}${pf.positions.length ? " : " + pf.positions.map((p) => p.name).join(", ") : ""} ; ${pf.trades} vente${pf.trades > 1 ? "s" : ""}.`
-    : "Portefeuille fictif : pas encore lancé (première lecture avec le noyau de savoir).";
+  $("#w-mkt-pf").textContent = portfolioLine("Portefeuille fictif hors cryptos (coûts réels de chaque marché)", m.portfolio);
+  $("#w-mkt-bn").textContent = portfolioLine("Manche Binance fictive : or, euro, actions tokenisées (frais de Binance)", m.binance);
   const rows = (m.rows || []).map((r) => ({
-    cells: [r.name, r.category, nf(r.close < 10 ? 4 : 2).format(r.close),
+    cells: [r.name + (r.binance ? " · sur Binance" : ""), r.category, nf(r.close < 10 ? 4 : 2).format(r.close),
       r.trend ? "au-dessus de sa moyenne 150" : "sous sa moyenne 150",
       r.signal ? "achat possible" : "—"],
     cls: [null, null, null, r.trend ? "up" : "down", r.signal ? "up" : ""],
