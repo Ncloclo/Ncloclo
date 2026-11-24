@@ -42,6 +42,7 @@ async function renderWatch() {
   renderCalendar(w.evenements);
   renderLibrary(w.bibliotheque);
   renderMarkets(w.marches);
+  renderLeverage(w.levier);
   const r = w.report || {}, ai = w.ai || { configured: [], possible: [] };
   const FNG = { "extreme fear": "Peur extrême", fear: "Peur", neutral: "Neutre", greed: "Avidité", "extreme greed": "Avidité extrême" };
   const fng = $("#w-fng");
@@ -117,6 +118,25 @@ function renderMarkets(m) {
   const sub = m.fetched_at ? `lus le ${fdate(m.fetched_at)}` : "pas encore lus";
   $("#w-mkt-sub").textContent = sub + (m.error ? ` · dernière lecture ratée : ${m.error}` : "")
     + (m.unread && m.unread.length ? ` · illisibles : ${m.unread.join(", ")}` : "");
+}
+// Levier (trendguard/levier.py) : étude refaite chaque semaine par le bot et
+// verdict de sa règle fixée d'avance. Information seulement : il trade au
+// comptant, sans emprunt.
+function renderLeverage(l) {
+  $("#w-lev-card").hidden = !l;
+  if (!l) return;
+  const years = (l.periods || []).map(([a, b]) => `${String(a).slice(0, 4)}-${String(b).slice(0, 4)}`);
+  const cell = (p) => `${fpct(p.cagr_pct, 1)} par an · ${fpct(p.max_dd_pct, 1)} · ${nf(2).format(p.calmar)}`;
+  const rows = (l.rows || []).map((r, i) => ({
+    cells: [r.name, ...years.map((_y, k) => (r.periods[k] ? cell(r.periods[k]) : "–")),
+      i === 0 ? "référence" : r.why ? `refusé : ${r.why}` : "permis"],
+    cls: [null, ...years.map(() => null), i === 0 ? "" : r.why ? "down" : "up"],
+  }));
+  table($("#w-lev-table"), ["Politique", ...years.map((y) => `${y} : rendement · pire baisse · Calmar`), "Verdict de la règle"],
+    rows, null, "Pas encore étudié : première étude dans la semaine.", false);
+  $("#w-lev-verdict").textContent = l.text ? `Verdict du bot : ${l.text}.` : "Pas encore étudié : aucun levier.";
+  $("#w-lev-sub").textContent = l.day
+    ? `étude du ${fdate(l.day)} · emprunt compté à ${nf(0).format((l.rate || 0) * 100)} % par an` : "pas encore étudié";
 }
 // Bibliothèque de recherche (trendguard/bibliotheque.py) : pistes, jamais des règles.
 function renderLibrary(b) {

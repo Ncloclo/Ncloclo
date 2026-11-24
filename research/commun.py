@@ -39,7 +39,7 @@ def study_args(description: str, default_out: Optional[str], argv: Optional[List
 def write_report(text: str, out: str) -> None:
     """Rapport écrit dans docs/ (dossier créé au besoin), puis affiché."""
     os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
-    with open(out, "w", encoding="utf-8") as fh:
+    with open(out, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text + "\n")
     print(text)
     print(f"\nRapport écrit : {out}")

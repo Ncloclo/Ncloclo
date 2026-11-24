@@ -161,6 +161,24 @@ survivant).
   jamais vue moins bonne. Appliqué au bot paper seulement, par `TG_UNIVERSE`
   dans `.env` (le code garde les 21 par défaut).
 
+### Levier (24/11/2026)
+
+`trendguard/levier.py` : chaque semaine (01:30 UTC), le bot rejoue sa stratégie
+avec un levier fixe (1,25× à 3×) et une politique adaptative (1,5× en marché
+haussier, à moins de 10 % du sommet), emprunt compté à 10 % par an. Une
+politique n'est permise que si son Calmar n'est pas moins bon sur 2018-2022 ET
+depuis 2023, et si sa pire baisse reste au-dessus de −30 %. Verdict dans la page
+Veille ; jamais appliqué : le bot trade au comptant, sans moteur d'emprunt.
+
+- `python -m research.levier --cache data_binance` (`docs/LEVIER.md`) : aucun
+  levier permis, même avec un emprunt à 20 %. Jusqu'à 2×, le Calmar ne bouge
+  presque pas (1,62 → 1,63 puis 0,95 → 0,97) : rendement et baisse sont
+  multipliés ensemble. Sans levier, la baisse depuis 2023 atteint déjà −33,6 % ;
+  à 1,25×, −40,3 % (arrêt d'urgence touché). L'adaptative fait pire (Calmar
+  1,21 sur 2018-2022).
+- Ne pas proposer de levier réel sans accord exprès : testnet d'abord, moteur
+  d'emprunt à construire, verrous du réel inchangés.
+
 ## Commandes (Windows, depuis la racine)
 
 - **Installation** (Python 3.12, la version de la CI, géré par uv) : `uv python

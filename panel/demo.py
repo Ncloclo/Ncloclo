@@ -10,7 +10,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Tuple
 
-from trendguard import attribution, evenements, stress
+from trendguard import attribution, evenements, levier, stress
 from trendguard.texte import fr
 
 from .data import merge_buys, reasoning_view
@@ -269,7 +269,29 @@ class DemoData:
                 "ai": {"configured": ["Claude", "GPT", "Gemini", "Mistral"],
                        "possible": ["Claude", "GPT", "Gemini", "DeepSeek", "Mistral", "Kimi",
                                     "Perplexity", "Grok"]},
-                "savoir": self.savoir(), "evenements": self.evenements()}
+                "savoir": self.savoir(), "evenements": self.evenements(), "levier": self.levier()}
+
+    def levier(self) -> Dict[str, Any]:
+        """Étude du levier d'exemple (même forme que BotData.levier), jugée par
+        la vraie règle de levier.py."""
+        def per(cagr: float, dd: float, calmar: float, borrow: float) -> Dict[str, float]:
+            return {"cagr_pct": cagr, "max_dd_pct": dd, "calmar": calmar, "borrow_pct": borrow}
+        rows: List[Dict[str, Any]] = [
+            {"name": levier.BASE, "lev": 1.0, "adaptive": False,
+             "periods": [per(41.2, -25.4, 1.62, 0), per(32.0, -33.6, 0.95, 0)]},
+            {"name": "1,25× fixe", "lev": 1.25, "adaptive": False,
+             "periods": [per(51.4, -31.5, 1.63, 5), per(38.9, -40.3, 0.97, 19)]},
+            {"name": "2× fixe", "lev": 2.0, "adaptive": False,
+             "periods": [per(79.2, -48.7, 1.63, 18), per(55.3, -57.1, 0.97, 32)]},
+            {"name": levier.ADAPTIVE_NAME, "lev": levier.ADAPTIVE, "adaptive": True,
+             "periods": [per(47.9, -39.7, 1.21, 7), per(38.3, -37.8, 1.01, 19)]}]
+        for r in rows:
+            r["why"] = "" if r is rows[0] else levier.refusal(r, rows[0])
+        allowed, policy, text = levier.decide(rows)
+        day = datetime.now(timezone.utc).date().isoformat()
+        return {"day": day, "allowed": allowed, "policy": policy, "text": text, "rows": rows,
+                "periods": [list(levier.DESIGN), [levier.VERIFY_START, day]], "rate": levier.BORROW_RATE,
+                "exposure_pct": [17.0, 33.1]}
 
     def evenements(self) -> Dict[str, Any]:
         """Calendrier économique d'exemple (même forme que BotData.evenements)."""

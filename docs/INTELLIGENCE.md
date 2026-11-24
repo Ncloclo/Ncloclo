@@ -79,6 +79,11 @@ prédisent pas mieux que le hasard.
 - **Étude des combinaisons** (`docs/COMBINAISONS.md`) : TrendGuard avec les
   Tortues ou la cassure de Bollinger fait mieux depuis 2023, moins bien sur
   2018-2022 ; la règle fixée d'avance n'en retient aucune.
+- **Levier étudié par le bot** (`docs/LEVIER.md`) : chaque semaine, il rejoue
+  sa stratégie avec un levier fixe ou adaptatif, emprunt compté. Sa règle n'en
+  permet aucun : sans levier, la baisse depuis 2023 atteint déjà −34 % ; à
+  1,25×, l'arrêt d'urgence (−40 %) aurait été touché. Jamais appliqué : le bot
+  trade au comptant.
 - **Erreurs des sources** : Reddit n'est plus présenté comme une erreur de
   modèle d'IA ; le refus des lectures sans compte est dit tel quel.
 - **Environnement** : aucune fenêtre de console vide, journal en direct,

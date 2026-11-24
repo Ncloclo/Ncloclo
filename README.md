@@ -50,6 +50,10 @@ diagnostic du code dans [`docs/DIAGNOSTIC_CODE.md`](docs/DIAGNOSTIC_CODE.md).
    Le bot fonctionne ainsi dès 100 USDT comme avec 10 000 ; sous 50 USDT, il
    refuse de plus en plus d'achats
    ([`docs/PETIT_CAPITAL.md`](docs/PETIT_CAPITAL.md)).
+5. **Levier** : aucun, le bot trade au comptant. Chaque semaine, il rejoue sa
+   stratégie avec un levier fixe (1,25× à 3×) ou adaptatif, emprunt compté, et
+   sa règle fixée d'avance n'en permet aucun : sans levier, la pire baisse
+   depuis 2023 atteint déjà −34 % ([`docs/LEVIER.md`](docs/LEVIER.md)).
 
 ### Résultats
 

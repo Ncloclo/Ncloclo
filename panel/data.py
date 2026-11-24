@@ -16,6 +16,7 @@ from trendguard import (
     attribution,
     bibliotheque,
     evenements,
+    levier,
     libre,
     modeles,
     multi_actifs,
@@ -232,11 +233,11 @@ class BotData:
         return {"last": state.get("last_watch"), "vetoes": vetoes, "report_text": text,
                 "report": watch_summary(rep), "ai": ai_summary(), "savoir": self.savoir(),
                 "evenements": self.evenements(state), "modeles": self.modeles(),
-                "bibliotheque": self.bibliotheque(), "marches": self.marches()}
+                "bibliotheque": self.bibliotheque(), "marches": self.marches(), "levier": self.levier()}
 
-    def marches(self) -> Optional[Dict[str, Any]]:
-        """Tous les marchés hors cryptos (lecture seule) : état de chacun pour
-        la règle et portefeuille en argent fictif ; None sans noyau de savoir."""
+    def _from_savoir(self, *keys: str) -> Optional[List[Any]]:
+        """Valeurs gardées dans le noyau de savoir (lecture seule) ; None sans
+        noyau de savoir ou s'il est illisible."""
         path = getattr(self.g, "savoir_db", "") or savoir.DEFAULT_DB
         if not getattr(self.g, "savoir", False) or not os.path.exists(path):
             return None
@@ -245,12 +246,31 @@ class BotData:
         except sqlite3.Error:
             return None
         try:
-            book = memory.get(multi_actifs.KEY)
+            return [memory.get(k) for k in keys]
         except (sqlite3.Error, ValueError):
             return None
         finally:
             memory.close()
-        book = book if isinstance(book, dict) else {}
+
+    def levier(self) -> Optional[Dict[str, Any]]:
+        """Étude du levier (lecture seule) : levier permis par la règle du bot
+        et chaque politique étudiée ; jamais appliqué. None sans noyau de savoir."""
+        got = self._from_savoir(levier.KEY)
+        if got is None:
+            return None
+        book = got[0] if isinstance(got[0], dict) else {}
+        return {"day": book.get("day"), "allowed": book.get("allowed", 1.0), "policy": book.get("policy") or "",
+                "text": book.get("text") or "", "rows": book.get("rows") or [],
+                "periods": book.get("periods") or [], "rate": book.get("rate", levier.BORROW_RATE),
+                "exposure_pct": book.get("exposure_pct") or []}
+
+    def marches(self) -> Optional[Dict[str, Any]]:
+        """Tous les marchés hors cryptos (lecture seule) : état de chacun pour
+        la règle et portefeuille en argent fictif ; None sans noyau de savoir."""
+        got = self._from_savoir(multi_actifs.KEY)
+        if got is None:
+            return None
+        book = got[0] if isinstance(got[0], dict) else {}
         return {"rows": book.get("rows") or [], "portfolio": book.get("portfolio"), "binance": book.get("binance"),
                 "fetched_at": book.get("fetched_at"), "error": book.get("error") or "",
                 "unread": [multi_actifs.NAME.get(c, c) for c in book.get("unread") or []]}
@@ -259,19 +279,10 @@ class BotData:
         """Bibliothèque de recherche (lecture seule) : pistes tirées des
         travaux récents d'arXiv, avec la question à vérifier ; None sans
         noyau de savoir."""
-        path = getattr(self.g, "savoir_db", "") or savoir.DEFAULT_DB
-        if not getattr(self.g, "savoir", False) or not os.path.exists(path):
+        got = self._from_savoir(bibliotheque.KEY, pistes.KEY)
+        if got is None:
             return None
-        try:
-            memory = savoir.Memory(path, readonly=True)
-        except sqlite3.Error:
-            return None
-        try:
-            book, tested = memory.get(bibliotheque.KEY), memory.get(pistes.KEY)
-        except (sqlite3.Error, ValueError):
-            return None
-        finally:
-            memory.close()
+        book, tested = got
         book = book if isinstance(book, dict) else {}
         return {"pistes": bibliotheque.pistes(book, verdicts=tested), "kept": len(book.get("papers") or []),
                 "fetched_at": book.get("fetched_at"), "error": book.get("error") or "",

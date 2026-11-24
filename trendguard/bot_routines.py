@@ -29,6 +29,7 @@ from . import (
     finance,
     flux,
     learning,
+    levier,
     libre,
     modeles,
     moteur_portefeuille,
@@ -179,6 +180,24 @@ class RoutinesMixin:
             self.logger.info("[PISTES] le bot teste les pistes de sa bibliothèque de recherche")
         else:
             self.logger.warning("[PISTES] test des pistes impossible à lancer")
+
+    LEVIER_MINUTE = 90          # étude du levier : à partir de 01:30 UTC, une fois par semaine
+
+    def _launch_levier(self, now: datetime) -> None:
+        """Le bot refait lui-même son étude du levier (levier.py), une fois
+        par semaine, dans un processus séparé : sa règle dit le levier permis,
+        et il n'emprunte jamais (il trade au comptant)."""
+        if not (self.g.savoir and self.track_uptime):
+            return
+        today = now.date().isoformat()
+        if now.hour * 60 + now.minute < self.LEVIER_MINUTE or not levier.due(
+                {"day": self.state.get("levier_day")}, today):
+            return
+        self.state["levier_day"] = today
+        if autonomy.launch_tool(self.g, ["levier", "etude"], ".levier.log"):
+            self.logger.info("[LEVIER] le bot refait son étude du levier (aucun emprunt)")
+        else:
+            self.logger.warning("[LEVIER] étude du levier impossible à lancer")
 
     def _launch_report(self, now: datetime) -> None:
         """Rapport quotidien (report.py) à partir de 00:30 UTC, une fois par
