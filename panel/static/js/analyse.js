@@ -652,12 +652,13 @@ export class RegimeChart {
     this.byTime = new Map(reg.points.map((p) => [p.t, p]));
     this.stack.main.tgValueAt = (t) => (this.byTime.get(t) || {}).close;
     this.btc.setData(reg.points.map((p) => ({ time: p.t, value: p.close })));
-    this.sma.setData(reg.points.map((p) => ({ time: p.t, value: p.sma })));
+    const avg = reg.points.filter((p) => p.sma != null);      // marché coté depuis peu : pas encore de moyenne
+    this.sma.setData(avg.map((p) => ({ time: p.t, value: p.sma })));
     this.btc.setMarkers(tradeMarkers(reg.markers, COLORS()));
     if (this.high) this.high.setData(reg.points.filter((p) => p.high != null).map((p) => ({ time: p.t, value: p.high })));
     this.lines.forEach((l) => this.btc.removePriceLine(l));
     this.lines = addPositionLines(this.btc, reg.position);       // position fictive : entrée et stop
-    const gap = reg.points.map((p) => ({ time: p.t, value: (p.close / p.sma - 1) * 100 }));
+    const gap = avg.map((p) => ({ time: p.t, value: (p.close / p.sma - 1) * 100 }));
     if (this.gap) {
       this.gap.setData(gap);
       this.pane.chart.tgValueAt = (t) => { const p = this.byTime.get(t); return p ? (p.close / p.sma - 1) * 100 : null; };
@@ -670,7 +671,7 @@ export class RegimeChart {
     if (!this.points.length || !this.byTime) return;
     const p = t == null ? this.points[this.points.length - 1] : this.byTime.get(t), c = COLORS();
     if (!p) return;
-    const gap = (p.close / p.sma - 1) * 100;
+    const gap = p.sma == null ? null : (p.close / p.sma - 1) * 100;
     const line1 = el("div", "ro-line ro-ind");
     const o = this.opts;
     line1.append(legendItem(c.ink, o.label, fpx(p.close)), legendItem(c.sma, `Moyenne ${this.reg.sma} ${o.unit}`, fpx(p.sma)));
@@ -678,7 +679,7 @@ export class RegimeChart {
     this.readout.replaceChildren(line1);
     if (this.pane) {
       this.pane.legend.replaceChildren(el("strong", "", `Écart à la moyenne ${this.reg.sma} ${o.long}`),
-        legendItem(gap >= 0 ? c.up : c.down, gap >= 0 ? o.words[0] : o.words[1], fpctS(gap)));
+        gap == null ? el("span", "", "historique trop court") : legendItem(gap >= 0 ? c.up : c.down, gap >= 0 ? o.words[0] : o.words[1], fpctS(gap)));
     }
   }
   fit() { this.stack.fit(); }

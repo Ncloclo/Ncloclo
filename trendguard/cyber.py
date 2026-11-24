@@ -67,6 +67,7 @@ ALLOWLIST: Dict[str, Tuple[str, str]] = {
     "decrypt.co": ("actualités (savoir)", "savoir"), "www.cnbc.com": ("actualités (savoir)", "savoir"),
     "www.lemonde.fr": ("actualités (savoir)", "savoir"), "journalducoin.com": ("actualités (savoir)", "savoir"),
     "cryptoast.fr": ("actualités (savoir)", "savoir"), "www.reddit.com": ("opinions publiques (savoir)", "savoir"),
+    "www.investing.com": ("actualités Investing.com, flux RSS publics seulement (savoir)", "savoir"),
     "stocktwits.com": ("opinions publiques (savoir)", "savoir"),
     "api.stocktwits.com": ("opinions publiques (savoir)", "savoir"),
     "news.ycombinator.com": ("actualités techniques (savoir)", "savoir"),

@@ -13,6 +13,7 @@ pourquoi. Code : `trendguard/savoir.py`.
 | Famille | Sources | Ce que le bot en garde |
 | --- | --- | --- |
 | Presse spécialisée | CoinDesk, Cointelegraph, Decrypt | titre, lien, cryptos citées, ton |
+| Investing.com | ses flux RSS publics : cryptos, marchés boursiers, devises, matières premières, indicateurs économiques (jamais le reste du site, que ses conditions réservent) | titre, lien, cryptos citées, ton |
 | Moteurs de recherche | Google Actualités, Bing Actualités | titre, lien, cryptos citées, ton |
 | Forums | Reddit (r/CryptoCurrency, r/Bitcoin, r/ethereum, un par heure), Hacker News | titre, lien, cryptos citées, ton |
 | Réseau social | StockTwits | part des messages marqués « haussier » ou « baissier » par leurs auteurs, 6 cryptos par heure à tour de rôle |

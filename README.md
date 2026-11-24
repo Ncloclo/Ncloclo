@@ -215,12 +215,17 @@ panneau de contrôle ») :
   déjà détenue reste gérée jusqu'à sa vente ;
 - **Matières premières**, **Devises**, **Indices**, **Actions** et
   **Obligations** : une page par classe d'actifs, sur le modèle de la page
-  Cryptos (35 marchés suivis chaque jour, clôtures de Yahoo Finance). Chaque
+  Cryptos (61 marchés suivis chaque jour, clôtures de Yahoo Finance, dont 26
+  ajoutés le 24/11/2026 d'après la synthèse des marchés de TradingView). Chaque
   marché a sa carte (cours, variation, courbe sur 1 mois à 5 ans, tendance et
   signal de la règle, position fictive, jeton Binance s'il existe) et sa
   fenêtre de détail (graphique avec la moyenne de 150 séances et le niveau de
   cassure, variations, volatilité, stop initial d'un achat du jour). Argent
   fictif seulement : aucun ordre réel sur ces marchés ;
+- **Indicateurs de marché** (page Veille) : VIX, indice du dollar, taux US à 10
+  ans et courbe 10 ans − 3 mois, lus chaque jour après la clôture de New York.
+  Information seulement : aucun filtre tiré d'eux n'a passé l'étude
+  ([`docs/MACRO.md`](docs/MACRO.md)) ;
 - **Menu** : rangé en trois groupes (Mon bot, Marchés, Analyse), puis les
   Réglages ; au téléphone, quatre raccourcis en bas et « Menu » pour toutes les
   pages ;
@@ -442,11 +447,11 @@ mots-clés. Chaque IA facture ses appels, à raison d'un rapport par jour.
 ### Noyau de savoir (`trendguard/savoir.py`, [`docs/SAVOIR.md`](docs/SAVOIR.md))
 
 Toutes les heures, dans un processus à part, le bot lit la presse
-spécialisée, Google et Bing Actualités, les forums (Reddit, Hacker News), le
-réseau social StockTwits, les tendances de CoinGecko, l'indice Fear & Greed
-(avec tout son historique depuis 2018) et, si des clés sont enregistrées,
-l'avis des IA. Chaque texte devient une connaissance datée ; le noyau grandit à
-chaque lecture.
+spécialisée, Investing.com (ses flux RSS publics seulement), Google et Bing
+Actualités, les forums (Reddit, Hacker News), le réseau social StockTwits, les
+tendances de CoinGecko, l'indice Fear & Greed (avec tout son historique depuis
+2018) et, si des clés sont enregistrées, l'avis des IA. Chaque texte devient
+une connaissance datée ; le noyau grandit à chaque lecture.
 
 Chaque source est jugée sur les cours réels, 7 jours après chacun de ses avis :
 « fiable » ou « trompeuse » seulement après 20 semaines et avec 99 % de

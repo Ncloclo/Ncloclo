@@ -43,6 +43,7 @@ async function renderWatch() {
   renderLibrary(w.bibliotheque);
   renderMarkets(w.marches);
   renderLeverage(w.levier);
+  renderMacro(w.macro);
   const r = w.report || {}, ai = w.ai || { configured: [], possible: [] };
   const FNG = { "extreme fear": "Peur extrême", fear: "Peur", neutral: "Neutre", greed: "Avidité", "extreme greed": "Avidité extrême" };
   const fng = $("#w-fng");
@@ -118,6 +119,22 @@ function renderMarkets(m) {
   const sub = m.fetched_at ? `lus le ${fdate(m.fetched_at)}` : "pas encore lus";
   $("#w-mkt-sub").textContent = sub + (m.error ? ` · dernière lecture ratée : ${m.error}` : "")
     + (m.unread && m.unread.length ? ` · illisibles : ${m.unread.join(", ")}` : "");
+}
+// Indicateurs de marché (trendguard/multi_actifs.py, docs/MACRO.md), lus
+// chaque jour après la clôture de New York. Information seulement : aucun
+// achat n'en dépend (aucun filtre n'a passé l'étude).
+const pt = (v) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${nf(2).format(Math.abs(v))} point`;
+function renderMacro(m) {
+  const vix = m && m.vix, dxy = m && m.dxy, r10 = m && m.rates && m.rates.us10y;
+  $("#w-vix").textContent = vix ? nf(1).format(vix.value) : "—";
+  $("#w-vix").className = "num " + (!vix ? "" : vix.value >= 30 ? "down" : vix.value < 20 ? "up" : "");
+  $("#w-vix-sub").textContent = vix ? `${vix.level} · médiane d'un an ${nf(1).format(vix.median_1y)}` : "pas encore lu";
+  $("#w-dxy").textContent = dxy ? nf(2).format(dxy.value) : "—";
+  $("#w-dxy-sub").textContent = dxy ? `${dxy.strong ? "au-dessus de" : "sous"} sa moyenne 150 séances (${nf(2).format(dxy.sma)})` : "pas encore lu";
+  $("#w-rate").textContent = r10 ? `${nf(2).format(r10.value)} %` : "—";
+  $("#w-rate-sub").textContent = !r10 ? "pas encore lu"
+    : [r10.change_60 == null ? "" : `${pt(r10.change_60)} en 60 séances`,
+      m.curve == null ? "" : `courbe 10 ans − 3 mois ${pt(m.curve)}${m.curve < 0 ? " (inversée)" : ""}`].filter(Boolean).join(" · ");
 }
 // Levier (trendguard/levier.py) : étude refaite chaque semaine par le bot et
 // verdict de sa règle fixée d'avance. Information seulement : il trade au

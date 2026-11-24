@@ -144,13 +144,15 @@ def a_chercheur(v: View) -> AgentResult:
 
 def a_macro(v: View) -> AgentResult:
     """Annonces économiques américaines importantes des 48 prochaines heures
-    (calendrier, evenements.py). Il informe, il ne vote pas : leur effet sur
-    les cryptos du bot n'est pas prouvé (mesure en cours)."""
+    (calendrier, evenements.py) et indicateurs de marché du jour (VIX,
+    dollar, taux : multi_actifs.describe_macro). Il informe, il ne vote pas :
+    aucun de ces filtres n'a passé l'étude (docs/MACRO.md)."""
     ev = v.get("macro", {})
+    market = [ev["marches"]] if ev.get("marches") else []
     if not ev.get("upcoming"):
-        return _r("macro", "NEUTRE", 0, ["aucune grande annonce américaine dans les 48 heures"])
-    return _r("macro", "NEUTRE", 0, [ev.get("line") or f"{len(ev['upcoming'])} annonce(s) dans les 48 heures"],
-              uncertainties=("une annonce peut faire bouger les cours dans les deux sens",))
+        return _r("macro", "NEUTRE", 0, ["aucune grande annonce américaine dans les 48 heures"] + market)
+    return _r("macro", "NEUTRE", 0, [ev.get("line") or f"{len(ev['upcoming'])} annonce(s) dans les 48 heures"]
+              + market, uncertainties=("une annonce peut faire bouger les cours dans les deux sens",))
 
 
 def a_derives(v: View) -> AgentResult:
@@ -538,7 +540,8 @@ def main(argv: Optional[List[str]] = None) -> int:
               "garde_blocked": g_.get("blocked") or [] if g_.get("day") == day else []}
     ranking = {r["asset"]: r for r in ((st.get("selection") or {}).get("ranking") or [])}
     sv = st.get("savoir") or {}
-    contexte = {"macro": st.get("evenements") or {}, "flux": sv.get("flux") or {},
+    contexte = {"macro": dict(st.get("evenements") or {}, marches=sv.get("macro_marches") or ""),
+                "flux": sv.get("flux") or {},
                 "derives": derives.latest(getattr(g, "watch_db", ""))}
     data = board(asset, day, close, snap, p, held, float(st.get("last_equity") or 0) or 1.0,
                  float(st.get("risk_mult") or 1.0), policy, sv.get("opinion"), ranking,

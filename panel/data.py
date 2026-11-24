@@ -270,7 +270,14 @@ class BotData:
         return {"last": state.get("last_watch"), "vetoes": vetoes, "report_text": text,
                 "report": watch_summary(rep), "ai": ai_summary(), "savoir": self.savoir(),
                 "evenements": self.evenements(state), "modeles": self.modeles(),
-                "bibliotheque": self.bibliotheque(), "marches": self.marches(), "levier": self.levier()}
+                "bibliotheque": self.bibliotheque(), "marches": self.marches(), "levier": self.levier(),
+                "macro": self.macro()}
+
+    def macro(self) -> Optional[Dict[str, Any]]:
+        """Indicateurs de marché du jour (lecture seule) : VIX, dollar, taux
+        américains ; None tant qu'ils n'ont pas été lus."""
+        view = self._multi_book().get("macro")
+        return dict(view, line=multi_actifs.describe_macro(view)) if isinstance(view, dict) and view else None
 
     def _from_savoir(self, *keys: str) -> Optional[List[Any]]:
         """Valeurs gardées dans le noyau de savoir (lecture seule) ; None sans

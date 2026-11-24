@@ -319,6 +319,34 @@ def read_press(ctx: Context) -> List[Doc]:
     return _from_items(items, ctx, "Presse spécialisée", "presse")
 
 
+# Investing.com : ses flux RSS publics, faits pour les lecteurs de flux
+# (robots.txt les permet) ; titres et liens seulement, la source citée. Le
+# reste du site (cours, calendriers) n'est jamais lu : ses conditions
+# interdisent la collecte automatique. TradingView n'a pas de tels flux.
+INVESTING_FEEDS: Tuple[Tuple[str, str], ...] = (
+    ("Investing.com · cryptos", "https://www.investing.com/rss/news_301.rss"),
+    ("Investing.com · marchés boursiers", "https://www.investing.com/rss/news_25.rss"),
+    ("Investing.com · devises", "https://www.investing.com/rss/news_1.rss"),
+    ("Investing.com · matières premières", "https://www.investing.com/rss/news_11.rss"),
+    ("Investing.com · indicateurs économiques", "https://www.investing.com/rss/news_95.rss"))
+
+
+def read_investing(ctx: Context) -> List[Doc]:
+    """Actualités d'Investing.com, une source à part : le noyau la juge sur les
+    cours comme les autres, et elle ne pèse sur une décision que si elle fait
+    ses preuves. Un flux en panne n'empêche pas les autres."""
+    items: List[mw.Item] = []
+    failed: List[Exception] = []
+    for name, url in INVESTING_FEEDS:
+        try:
+            items += mw.parse_rss(ctx.fetch(url), name)
+        except Exception as e:           # un flux à la fois
+            failed.append(e)
+    if failed and not items:
+        raise failed[0]
+    return _from_items(items, ctx, "Investing.com", "presse")
+
+
 def read_google(ctx: Context) -> List[Doc]:
     return _from_items(mw.parse_rss(ctx.fetch(mw.google_news_url(GOOGLE_QUERY)), "Google Actualités"),
                        ctx, "Google Actualités", "recherche")
@@ -435,7 +463,7 @@ def fear_greed_history(fetch: Fetch) -> List[Tuple[str, str, str, float]]:
 
 
 READERS: Tuple[Tuple[str, Callable[[Context], List[Doc]]], ...] = (
-    ("Presse spécialisée", read_press), ("Google Actualités", read_google),
+    ("Presse spécialisée", read_press), ("Investing.com", read_investing), ("Google Actualités", read_google),
     ("Bing Actualités", read_bing), ("Reddit", read_reddit), ("Hacker News", read_hacker_news),
     ("StockTwits", read_stocktwits), ("Tendances CoinGecko", read_trending),
     ("Fear & Greed", read_fear_greed))

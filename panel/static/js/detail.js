@@ -299,7 +299,10 @@ async function loadDetail() {
             : "Sous sa moyenne de 150 séances : la règle n'achète pas."]];
       (r.positions || []).forEach((p) => rows.push(["Position fictive", fpct(p.pnl_pct), dir(p.pnl_pct)],
         [null, `${p.book} : achat à ${fpx(p.entry)}, stop à ${fpx(p.stop)}.`]));
-      rows.push(["Où le trader", r.binance ? "Binance (fictif)" : "courtier requis"],
+      rows.push(["Portefeuille fictif", (r.books || []).length ? "suivi" : "aucun"],
+        [null, (r.books || []).length ? `${r.books.join(" et ")} : la règle y joue ce marché en argent fictif.`
+          : "Suivi pour information seulement : il n'entre dans aucun portefeuille fictif (études docs/MULTI_ACTIFS.md et docs/MARCHES_AJOUTES.md)."],
+        ["Où le trader", r.binance ? "Binance (fictif)" : "courtier requis"],
         [null, r.binance ? `${r.binance} : suivi en argent fictif, aucun ordre réel.` : "Aucun ordre réel sur ce marché : il faudrait un courtier."],
         ["Source", `Yahoo Finance (${r.symbol})`]);
       stats(rows);

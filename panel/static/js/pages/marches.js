@@ -12,15 +12,15 @@ import { openDetail } from "../detail.js";
 
 // Une page par classe d'actifs, dans l'ordre du menu.
 export const CLASSES = [
-  { tab: "commodities", title: "Matières premières", what: "L'or, l'argent, le pétrole (WTI et Brent), le gaz naturel et le cuivre, par leurs contrats à terme",
+  { tab: "commodities", title: "Matières premières", what: "Métaux (or, argent, platine, palladium, cuivre, aluminium), énergie (pétrole WTI et Brent, essence, fioul, gaz naturel) et produits agricoles (blé, maïs, soja, café, sucre, coton), par leurs contrats à terme",
     note: "L'or se traite aussi sur Binance en jetons (PAXG, XAUT) : il est suivi dans la manche Binance fictive.", search: "Rechercher (or, pétrole…)" },
-  { tab: "forex", title: "Devises", what: "L'euro, la livre, le yen, le franc suisse et les dollars australien et canadien, face au dollar américain",
+  { tab: "forex", title: "Devises", what: "L'euro, la livre, le yen, le franc suisse et les dollars australien, canadien et néo-zélandais face au dollar américain, et l'indice du dollar (DXY)",
     note: "L'euro se traite aussi sur Binance (EUR/USDT). Le franc CFA (XOF) n'a pas de page : sa parité avec l'euro est fixe (655,957).", search: "Rechercher (EUR/USD, yen…)" },
-  { tab: "indices", title: "Indices boursiers", what: "Les grands indices des bourses américaines, européennes et japonaise",
+  { tab: "indices", title: "Indices boursiers", what: "Les grands indices boursiers : États-Unis (S&P 500, Nasdaq, Dow Jones, Russell 2000), Europe (CAC 40, DAX, FTSE 100, FTSE MIB, IBEX 35), Asie (Nikkei, Shanghai, Hang Seng, Nifty 50) et Brésil (Bovespa)",
     note: "Le fonds Nasdaq 100 existe aussi en jeton sur Binance (QQQB).", search: "Rechercher (S&P 500, CAC 40…)" },
-  { tab: "stocks", title: "Actions", what: "De grandes actions américaines et françaises, et celles que Binance propose en jetons (bStocks)",
-    note: "Choisies parmi les plus grandes d'aujourd'hui : leur passé est flatté (biais du survivant), elles ne comptent dans aucun verdict.", search: "Rechercher (Nvidia, Apple…)" },
-  { tab: "bonds", title: "Obligations", what: "Les obligations d'État américaines, par des fonds cotés (ETF)",
+  { tab: "stocks", title: "Actions", what: "De grandes actions américaines, françaises et asiatiques (TSMC), celles que Binance propose en jetons (bStocks), et les introductions récentes d'Anthropic et de SpaceX",
+    note: "Choisies parmi les plus grandes d'aujourd'hui : leur passé est flatté (biais du survivant), elles ne comptent dans aucun verdict. Anthropic et SpaceX sont trop récentes pour la règle (250 séances d'historique).", search: "Rechercher (Nvidia, Apple…)" },
+  { tab: "bonds", title: "Obligations", what: "Les obligations d'État américaines, courtes (1-3 ans), moyennes (7-10 ans) et longues (plus de 20 ans), par des fonds cotés (ETF)",
     note: "Un fonds d'obligations monte quand les taux baissent, et baisse quand ils montent.", search: "Rechercher (TLT, IEF…)" },
 ];
 const FILTERS = [["all", "Tous"], ["trend", "Tendance haussière"], ["signal", "Signal d'achat"], ["held", "En portefeuille fictif"], ["binance", "Sur Binance"]];
@@ -122,6 +122,7 @@ function arrange(page) {
 // Ce que la règle du bot dit du marché, en une phrase.
 function reading(r) {
   if (r.close == null) return "Historique illisible.";
+  if (r.sma == null) return "Coté depuis peu : la règle attend 150 séances pour sa moyenne et 250 pour acheter.";
   if (r.signal) return `Au-dessus de son plus haut de 30 séances, momentum positif : la règle achèterait aujourd'hui (stop initial ${fpx(r.stop)}).`;
   if (!r.trend) return r.gap_pct == null ? "Historique trop court pour la moyenne de 150 séances." : `Sous sa moyenne de 150 séances (${fpct(r.gap_pct)}) : la règle n'achète pas.`;
   return r.breakout ? `Tendance haussière ; achat si le cours dépasse ${fpx(r.breakout)} (${fpct((r.breakout / r.close - 1) * 100)}).` : "Tendance haussière.";
