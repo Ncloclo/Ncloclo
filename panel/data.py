@@ -12,7 +12,16 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import v29
-from trendguard import attribution, bibliotheque, evenements, libre, modeles, pistes, savoir
+from trendguard import (
+    attribution,
+    bibliotheque,
+    evenements,
+    libre,
+    modeles,
+    multi_actifs,
+    pistes,
+    savoir,
+)
 from trendguard import market_watch as mw
 from trendguard.journal import silent_logger
 
@@ -223,7 +232,28 @@ class BotData:
         return {"last": state.get("last_watch"), "vetoes": vetoes, "report_text": text,
                 "report": watch_summary(rep), "ai": ai_summary(), "savoir": self.savoir(),
                 "evenements": self.evenements(state), "modeles": self.modeles(),
-                "bibliotheque": self.bibliotheque()}
+                "bibliotheque": self.bibliotheque(), "marches": self.marches()}
+
+    def marches(self) -> Optional[Dict[str, Any]]:
+        """Tous les marchés hors cryptos (lecture seule) : état de chacun pour
+        la règle et portefeuille en argent fictif ; None sans noyau de savoir."""
+        path = getattr(self.g, "savoir_db", "") or savoir.DEFAULT_DB
+        if not getattr(self.g, "savoir", False) or not os.path.exists(path):
+            return None
+        try:
+            memory = savoir.Memory(path, readonly=True)
+        except sqlite3.Error:
+            return None
+        try:
+            book = memory.get(multi_actifs.KEY)
+        except (sqlite3.Error, ValueError):
+            return None
+        finally:
+            memory.close()
+        book = book if isinstance(book, dict) else {}
+        return {"rows": book.get("rows") or [], "portfolio": book.get("portfolio"),
+                "fetched_at": book.get("fetched_at"), "error": book.get("error") or "",
+                "unread": [multi_actifs.NAME.get(c, c) for c in book.get("unread") or []]}
 
     def bibliotheque(self) -> Optional[Dict[str, Any]]:
         """Bibliothèque de recherche (lecture seule) : pistes tirées des

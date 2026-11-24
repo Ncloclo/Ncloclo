@@ -41,6 +41,7 @@ async function renderWatch() {
   $("#w-list").replaceChildren(...items.map(([k, t]) => el("li", k, t)));
   renderCalendar(w.evenements);
   renderLibrary(w.bibliotheque);
+  renderMarkets(w.marches);
   const r = w.report || {}, ai = w.ai || { configured: [], possible: [] };
   const FNG = { "extreme fear": "Peur extrême", fear: "Peur", neutral: "Neutre", greed: "Avidité", "extreme greed": "Avidité extrême" };
   const fng = $("#w-fng");
@@ -91,6 +92,28 @@ function renderCalendar(c) {
   if (c.error) rows.push(["warn", `Dernière lecture ratée : ${c.error} (nouvel essai dans l'heure).`]);
   $("#w-cal").replaceChildren(...rows.map(([k, t]) => el("li", k, t)));
   $("#w-cal-sub").textContent = c.fetched_at ? `lu le ${ftime(Date.parse(c.fetched_at) / 1000)}` : "pas encore lu";
+}
+// Tous les marchés hors cryptos (trendguard/multi_actifs.py) : état pour la
+// règle et portefeuille en argent fictif. Information seulement.
+function renderMarkets(m) {
+  $("#w-mkt-card").hidden = !m;
+  if (!m) return;
+  const pf = m.portfolio;
+  $("#w-mkt-pf").textContent = pf
+    ? `Portefeuille fictif depuis le ${fdate(pf.start)} : ${nf(2).format(pf.capital)} → ${nf(2).format(pf.equity)} USDT (${fpct(pf.return_pct)}), `
+      + `${pf.positions.length} position${pf.positions.length > 1 ? "s" : ""}${pf.positions.length ? " : " + pf.positions.map((p) => p.name).join(", ") : ""} ; ${pf.trades} vente${pf.trades > 1 ? "s" : ""}.`
+    : "Portefeuille fictif : pas encore lancé (première lecture avec le noyau de savoir).";
+  const rows = (m.rows || []).map((r) => ({
+    cells: [r.name, r.category, nf(r.close < 10 ? 4 : 2).format(r.close),
+      r.trend ? "au-dessus de sa moyenne 150" : "sous sa moyenne 150",
+      r.signal ? "achat possible" : "—"],
+    cls: [null, null, null, r.trend ? "up" : "down", r.signal ? "up" : ""],
+  }));
+  table($("#w-mkt-table"), ["Marché", "Catégorie", "Cours", "Tendance", "Signal du jour"], rows, null,
+    "Pas encore lus : première lecture avec le noyau de savoir.", false);
+  const sub = m.fetched_at ? `lus le ${fdate(m.fetched_at)}` : "pas encore lus";
+  $("#w-mkt-sub").textContent = sub + (m.error ? ` · dernière lecture ratée : ${m.error}` : "")
+    + (m.unread && m.unread.length ? ` · illisibles : ${m.unread.join(", ")}` : "");
 }
 // Bibliothèque de recherche (trendguard/bibliotheque.py) : pistes, jamais des règles.
 function renderLibrary(b) {

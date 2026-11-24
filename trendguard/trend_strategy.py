@@ -484,6 +484,7 @@ class PortfolioResult:
     exposure: pd.Series
     params: TrendParams
     metrics: Dict[str, float] = field(default_factory=dict)
+    holdings: Dict[str, Holding] = field(default_factory=dict)     # positions ouvertes à la fin
 
 
 def precompute(close: pd.DataFrame, volume: pd.DataFrame, p: TrendParams,
@@ -621,6 +622,7 @@ def backtest(close: pd.DataFrame, volume: Optional[pd.DataFrame], p: TrendParams
     res = PortfolioResult(equity_s, trades, pd.Series(expo_hist, index=dates),
                           p)
     res.metrics = compute_metrics(equity_s, trades)
+    res.holdings = dict(holdings)
     return res
 
 
