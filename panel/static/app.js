@@ -26,6 +26,7 @@ import "./js/pages/actualites.js";
 import { flashBuy } from "./js/pages/graphiques.js";
 import "./js/pages/cryptos.js";
 import "./js/pages/marches.js";
+import "./js/pages/pays.js";
 import "./js/pages/positions.js";
 import "./js/pages/veille.js";
 import "./js/pages/journal.js";

@@ -65,7 +65,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set,
 
 import v29
 
-from . import bibliotheque, evenements, flux, multi_actifs
+from . import bibliotheque, evenements, flux, multi_actifs, pays
 from . import market_watch as mw
 from .texte import fr
 
@@ -768,6 +768,14 @@ def main(argv: Optional[List[str]] = None) -> int:
                              f"{fr(book['portfolio']['equity'], ',.2f')} USDT"))
             except Exception as e:
                 print(f"{now:%Y-%m-%d %H:%M:%S} UTC marchés hors cryptos illisibles : {e}")
+            try:            # pays du monde (Banque mondiale, API ouverte) : relus une fois par semaine
+                book = pays.refresh(memory, now, lambda url: http_get(url, 60))
+                if book.get("tried_at") == now.isoformat(timespec="seconds"):
+                    print(f"{now:%Y-%m-%d %H:%M:%S} UTC pays du monde : "
+                          + (f"lecture ratée ({book['error']})" if book.get("error") else
+                             f"{len(book.get('countries') or {})} pays lus à la Banque mondiale"))
+            except Exception as e:
+                print(f"{now:%Y-%m-%d %H:%M:%S} UTC pays du monde illisibles : {e}")
             got = sum(run["read"].values())
             print(f"{now:%Y-%m-%d %H:%M:%S} UTC lecture : {got} texte(s) ; "
                   + (f"en panne : {', '.join(run['errors'])}" if run["errors"] else "toutes les sources lues"))

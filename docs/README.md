@@ -34,9 +34,10 @@ du bot (installation, commandes, panneau) est dans le
 | [`LEVIER.md`](LEVIER.md) | le bot gagnerait-il à utiliser un levier (fixe ou adaptatif, emprunt compté) ? |
 | [`MARCHES_AJOUTES.md`](MARCHES_AJOUTES.md) | les marchés de la synthèse TradingView enrichissent-ils le portefeuille fictif ? Cours du bot vérifiés contre TradingView |
 | [`MACRO.md`](MACRO.md) | le VIX, le dollar ou les taux américains auraient-ils aidé TrendGuard ? |
+| [`PAYS.md`](PAYS.md) | les 87 pays classés par MSCI, et la règle du bot par groupe (développés, émergents, frontières, autonomes) |
 | [`SENTIMENT.md`](SENTIMENT.md) | le financement des contrats à terme ou la peur et l'avidité auraient-ils aidé ? |
 
-Les seize dernières indiquent en tête la commande qui les régénère ; le
+Les dix-sept dernières indiquent en tête la commande qui les régénère ; le
 rapport de recherche se régénère avec `python trendguard_bot.py strategy
 research --data data`. Ce sont des diagnostics : une règle du bot ne change
 qu'après l'une d'elles (dernière en date : `PETIT_CAPITAL.md`, minimum d'achat,

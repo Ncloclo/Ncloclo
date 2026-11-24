@@ -123,6 +123,56 @@ ADDED: Tuple[Tuple[str, str, str, str], ...] = (
     ("spcx", "SpaceX", "Actions", "SPCX"),
 )
 ADDED_IN_PORTFOLIO = False           # décision de l'étude docs/MARCHES_AJOUTES.md
+# Le principal indice boursier de chaque pays classé par MSCI (trendguard/pays.py,
+# docs/PAYS.md), quand Yahoo Finance en a l'historique ; sinon le fonds coté à
+# New York qui suit l'indice MSCI du pays (en dollars). Suivis pour information.
+WORLD: Tuple[Tuple[str, str, str, str], ...] = (
+    ("ca_tsx", "S&P/TSX (Canada)", "Indices", "^GSPTSE"),
+    ("at_atx", "ATX (Autriche)", "Indices", "^ATX"),
+    ("be_bel20", "BEL 20 (Belgique)", "Indices", "^BFX"),
+    ("dk_omxc25", "OMX Copenhague 25 (Danemark)", "Indices", "^OMXC25"),
+    ("fi_omxh25", "OMX Helsinki 25 (Finlande)", "Indices", "^OMXH25"),
+    ("ie_iseq", "ISEQ (Irlande)", "Indices", "^ISEQ"),
+    ("il_ta35", "TA-35 (Israël)", "Indices", "TA35.TA"),
+    ("nl_aex", "AEX (Pays-Bas)", "Indices", "^AEX"),
+    ("no_obx", "OBX (Norvège)", "Indices", "OBX.OL"),
+    ("pt_psi", "PSI (Portugal)", "Indices", "PSI20.LS"),
+    ("se_omxs30", "OMX Stockholm 30 (Suède)", "Indices", "^OMX"),
+    ("ch_smi", "SMI (Suisse)", "Indices", "^SSMI"),
+    ("au_asx200", "S&P/ASX 200 (Australie)", "Indices", "^AXJO"),
+    ("nz_nzx50", "S&P/NZX 50 (Nouvelle-Zélande)", "Indices", "^NZ50"),
+    ("sg_sti", "STI (Singapour)", "Indices", "^STI"),
+    ("cl_ech", "Fonds MSCI Chili (ECH, en $)", "Indices", "ECH"),
+    ("co_colcap", "Fonds COLCAP (Colombie)", "Indices", "ICOLCAP.CL"),
+    ("mx_ipc", "IPC (Mexique)", "Indices", "^MXX"),
+    ("pe_epu", "Fonds MSCI Pérou (EPU, en $)", "Indices", "EPU"),
+    ("gr_athex", "Indice général d'Athènes (Grèce)", "Indices", "GD.AT"),
+    ("kw_kwt", "Fonds MSCI Koweït (KWT, en $)", "Indices", "KWT"),
+    ("pl_epol", "Fonds MSCI Pologne (EPOL, en $)", "Indices", "EPOL"),
+    ("qa_qat", "Fonds MSCI Qatar (QAT, en $)", "Indices", "QAT"),
+    ("sa_ksa", "Fonds MSCI Arabie saoudite (KSA, en $)", "Indices", "KSA"),
+    ("za_jse", "FTSE/JSE All Share (Afrique du Sud)", "Indices", "^J203.JO"),
+    ("tr_bist100", "BIST 100 (Turquie)", "Indices", "XU100.IS"),
+    ("ae_uae", "Fonds MSCI Émirats arabes unis (UAE, en $)", "Indices", "UAE"),
+    ("id_jci", "Jakarta Composite (Indonésie)", "Indices", "^JKSE"),
+    ("kr_kospi", "KOSPI (Corée du Sud)", "Indices", "^KS11"),
+    ("my_klci", "FTSE Bursa Malaysia KLCI (Malaisie)", "Indices", "^KLSE"),
+    ("ph_ephe", "Fonds MSCI Philippines (EPHE, en $)", "Indices", "EPHE"),
+    ("tw_taiex", "TAIEX (Taïwan)", "Indices", "^TWII"),
+    ("th_thd", "Fonds MSCI Thaïlande (THD, en $)", "Indices", "THD"),
+    ("ee_omxt", "OMX Tallinn (Estonie)", "Indices", "^OMXTGI"),
+    ("lv_omxr", "OMX Riga (Lettonie)", "Indices", "^OMXRGI"),
+    ("lt_omxv", "OMX Vilnius (Lituanie)", "Indices", "^OMXVGI"),
+    ("vn_vn30", "Fonds VN30 (Viêt Nam)", "Indices", "E1VFVN30.VN"),
+    ("ar_argt", "Fonds MSCI Argentine (ARGT, en $)", "Indices", "ARGT"),
+)
+# Devises des pays (cours du dollar dans chaque devise, « XXX=X » chez Yahoo),
+# pour la page des pays ; l'euro, la livre, le yen… ont déjà leur paire.
+CURRENCIES: Tuple[str, ...] = tuple(
+    "DKK ILS NOK SEK HKD SGD BRL CLP COP MXN PEN CZK EGP HUF KWD PLN QAR SAR ZAR TRY AED CNY INR IDR KRW "
+    "MYR PHP TWD THB RON BHD ISK JOD KZT KES MUR MAD OMR RSD TND XOF BDT PKR LKR VND ARS JMD TTD LBP NGN "
+    "UAH".split())
+CURRENCY_CODES = [f"fx_{c.lower()}" for c in CURRENCIES]
 # Jetons Binance d'actions cotées depuis peu (affichage ; hors de la manche Binance).
 TOKENS = {"ant": "Anthropic (ANTB)", "spcx": "SpaceX (SPCXB)"}
 # Indicateurs de marché, pas des marchés à trader : volatilité attendue du
@@ -133,11 +183,13 @@ INDICATORS: Tuple[Tuple[str, str, str], ...] = (
     ("us5y", "Taux US à 5 ans", "^FVX"), ("us10y", "Taux US à 10 ans", "^TNX"),
     ("us30y", "Taux US à 30 ans", "^TYX"))
 BINANCE_NAME = {c: n for c, n, _k, _s in BINANCE}
-_MARKETS = BINANCE + UNIVERSE + ADDED          # un nom de l'univers l'emporte sur celui du jeton
-NAME = {**{c: n for c, n, _k, _s in _MARKETS}, **{c: n for c, n, _s in INDICATORS}}
+_MARKETS = BINANCE + UNIVERSE + ADDED + WORLD  # un nom de l'univers l'emporte sur celui du jeton
+NAME = {**{c: n for c, n, _k, _s in _MARKETS}, **{c: n for c, n, _s in INDICATORS},
+        **{f"fx_{c.lower()}": f"USD/{c}" for c in CURRENCIES}}
 CATEGORY = {c: k for c, _n, k, _s in _MARKETS}
-SYMBOL = {**{c: s for c, _n, _k, s in _MARKETS}, **{c: s for c, _n, s in INDICATORS}}
-ALL_CODES = list(dict.fromkeys(c for c, *_ in UNIVERSE + BINANCE + ADDED))
+SYMBOL = {**{c: s for c, _n, _k, s in _MARKETS}, **{c: s for c, _n, s in INDICATORS},
+          **{f"fx_{c.lower()}": f"{c}=X" for c in CURRENCIES}}
+ALL_CODES = list(dict.fromkeys(c for c, *_ in UNIVERSE + BINANCE + ADDED + WORLD))
 INDICATOR_CODES = [c for c, *_ in INDICATORS]
 # Marchés du portefeuille fictif hors cryptos (sans les actions, voir unbiased).
 PORTFOLIO_CODES = [c for c, *_ in UNIVERSE] + ([c for c, *_ in ADDED] if ADDED_IN_PORTFOLIO else [])
@@ -373,7 +425,8 @@ def refresh(memory: Any, now: datetime, fetch: Fetch, cache: str, capital: float
         return book
     book["tried_at"] = now.isoformat(timespec="seconds")
     try:
-        errors = download(cache, fetch, codes=ALL_CODES + INDICATOR_CODES, pause=pause, symbols=SYMBOL)
+        errors = download(cache, fetch, codes=ALL_CODES + INDICATOR_CODES + CURRENCY_CODES, pause=pause,
+                          symbols=SYMBOL)
         close = load(cache, ALL_CODES)
         if close.empty:
             raise ValueError("aucun historique lisible")
@@ -403,8 +456,8 @@ SPARK_POINTS = 120                                       # points d'une courbe d
 
 def codes_of(category: str) -> List[str]:
     """Marchés d'une catégorie : ceux de l'univers, ceux de la manche Binance
-    qui n'y sont pas, puis les marchés ajoutés."""
-    return list(dict.fromkeys([c for c, _n, k, _s in UNIVERSE + BINANCE + ADDED if k == category]))
+    qui n'y sont pas, les marchés ajoutés, puis les indices des pays."""
+    return list(dict.fromkeys([c for c, _n, k, _s in UNIVERSE + BINANCE + ADDED + WORLD if k == category]))
 
 
 def books_of(code: str) -> List[str]:

@@ -87,7 +87,8 @@ sont jamais envoyés sur GitHub. VS Code les masque dans l'explorateur
 | `bibliotheque.py` | bibliothèque de recherche : travaux d'arXiv reliés aux règles du bot, des pistes jamais appliquées seules |
 | `pistes.py` | le bot teste les pistes : variantes déclarées par thème, rejouées sur ses données, verdict par thème |
 | `flux.py` | offre de stablecoins (DefiLlama), pour l'agent flux du comité (information seulement) |
-| `multi_actifs.py` | tous les marchés hors cryptos (Yahoo) : règle sur les séances réelles de chaque marché, suivi quotidien après la clôture de New York, portefeuille en argent fictif, indicateurs de marché (VIX, dollar, taux), données des pages du panneau |
+| `multi_actifs.py` | tous les marchés hors cryptos (Yahoo) : règle sur les séances réelles de chaque marché, suivi quotidien après la clôture de New York, portefeuille en argent fictif, indicateurs de marché (VIX, dollar, taux), indices et devises des pays, données des pages du panneau |
+| `pays.py` | les 87 pays classés par MSCI (revue 2026), leur indice, leur devise, et la Banque mondiale (API ouverte, relue chaque semaine) |
 | `levier.py` | levier étudié chaque semaine : politiques fixes et adaptative, emprunt compté, règle fixée d'avance ; jamais appliqué (comptant) |
 | `uptime.py` | disponibilité : arrêts de plus d'une heure, leur cause, temps de marche |
 | `learning.py` | apprentissage libre : normale des carnets, ruse réglée sur elle, prévisions corrigées par l'expérience |
@@ -176,7 +177,7 @@ sont jamais envoyés sur GitHub. VS Code les masque dans l'explorateur
 | `static/js/navigation.js` | onglets, rafraîchissement de la page affichée |
 | `static/js/detail.js` | fenêtre de détail d'un graphique |
 | `static/js/connexion.js` | mot de passe du panneau |
-| `static/js/pages/*.js` | une page par onglet (tableau, actualités, graphiques, cryptos, positions, veille, journal, réglages) ; `marches.js` : une page par classe d'actifs hors cryptos (matières premières, devises, indices, actions, obligations) |
+| `static/js/pages/*.js` | une page par onglet (tableau, actualités, graphiques, cryptos, positions, veille, journal, réglages) ; `marches.js` : une page par classe d'actifs hors cryptos (matières premières, devises, indices, actions, obligations) ; `pays.js` : les pays du monde |
 | `static/js/assistant.js` | fenêtre de Rachelle, garde-fou des secrets côté navigateur |
 | `static/js/rapport.js` | rapport quotidien et centre de sécurité (onglet Réglages) |
 | `static/app.css` | une feuille, en 12 sections numérotées (sommaire en tête) |

@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-from trendguard import attribution, evenements, levier, multi_actifs, stress
+from trendguard import attribution, evenements, levier, multi_actifs, pays, stress
 from trendguard.texte import fr
 
 from .data import market_view, markets_view, merge_buys, reasoning_view
@@ -294,9 +294,10 @@ class DemoData:
         if self._multi is None:
             idx = pd.bdate_range(end=pd.Timestamp.now(tz="UTC").normalize(), periods=1400)
             cols = {}
-            for k, code in enumerate(multi_actifs.ALL_CODES):
+            for k, code in enumerate(multi_actifs.ALL_CODES + multi_actifs.CURRENCY_CODES):
                 rng = np.random.default_rng(100 + k)
-                base = {"Devises": 1.1, "Obligations": 95.0}.get(multi_actifs.CATEGORY[code], 80.0 + 40 * (k % 7))
+                base = {"Devises": 1.1, "Obligations": 95.0}.get(multi_actifs.CATEGORY.get(code, "Devises"),
+                                                                  80.0 + 40 * (k % 7))
                 cols[code] = base * np.exp(np.cumsum((0.0006 if k % 3 else -0.0004) + rng.normal(0, 0.009, len(idx))))
             DemoData._multi = pd.DataFrame(cols, index=idx)
         return DemoData._multi
@@ -311,6 +312,17 @@ class DemoData:
 
     def markets(self, key: str, window: str = "1y") -> Dict[str, Any]:
         return markets_view(key, self._multi_close(), self._multi_book(), window)
+
+    def countries(self, window: str = "1y") -> Dict[str, Any]:
+        """Pays du monde d'exemple : vrai classement, chiffres de la Banque
+        mondiale inventés (démonstration)."""
+        income = {"Développé": "revenu élevé", "Émergent": "revenu intermédiaire supérieur"}
+        book = {"fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "error": "", "countries": {
+            iso: {"income": income.get(msci, "revenu intermédiaire inférieur"), "capital": "",
+                  "indicators": {"growth": [1.0 + k % 5, "2025"], "inflation": [2.0 + k % 4, "2025"],
+                                 "unemployment": [4.0 + k % 6, "2025"], "gdp": [1e11 * (1 + k % 9), "2025"]}}
+            for k, (iso, _n, _r, msci, *_rest) in enumerate(pays.COUNTRIES)}}
+        return pays.countries_view(self._multi_close(), book, window)
 
     def market_info(self, code: str, days: int = 0) -> Dict[str, Any]:
         return market_view(code, self._multi_close(), self._multi_book(), days)

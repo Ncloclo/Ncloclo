@@ -385,6 +385,11 @@ tbody tr.click:hover { background: var(--surface-2); }
 .asset.unselected { opacity: .62; }
 .market-kpis { margin-top: 12px; }
 .market-empty { color: var(--muted); }
+.grid-head { grid-column: 1 / -1; margin: 14px 2px 0; font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.grid-head:first-child { margin-top: 0; }
+.country.no-index { cursor: default; }
+.tag.note { white-space: normal; line-height: 1.35; }
+.country.no-index:hover { transform: none; box-shadow: none; }
 .asset.unselected:hover { opacity: 1; }
 .pick { display: inline-flex; align-items: center; gap: 6px; width: fit-content; padding: 3px 9px 3px 6px; border-radius: 8px; background: var(--surface-2); font-size: 12px; font-weight: 650; color: var(--ink-2); cursor: pointer; }
 .pick input { width: 16px; height: 16px; margin: 0; accent-color: var(--up); cursor: pointer; }

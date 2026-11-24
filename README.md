@@ -222,6 +222,13 @@ panneau de contrôle ») :
   fenêtre de détail (graphique avec la moyenne de 150 séances et le niveau de
   cassure, variations, volatilité, stop initial d'un achat du jour). Argent
   fictif seulement : aucun ordre réel sur ces marchés ;
+- **Pays du monde** : les 87 pays classés par MSCI (revue de juin 2026 :
+  développé, émergent, frontière, autonome), rangés par région, chacun avec son
+  principal indice (49 pays ; sinon le fonds coté à New York qui suit son
+  indice MSCI), sa devise face au dollar et les chiffres de la Banque mondiale
+  (revenu, croissance, inflation, chômage, dette, solde courant ; API ouverte,
+  relue chaque semaine). Les indices des pays sont aussi dans la page Indices
+  ([`docs/PAYS.md`](docs/PAYS.md)) ;
 - **Indicateurs de marché** (page Veille) : VIX, indice du dollar, taux US à 10
   ans et courbe 10 ans − 3 mois, lus chaque jour après la clôture de New York.
   Information seulement : aucun filtre tiré d'eux n'a passé l'étude

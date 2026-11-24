@@ -1,6 +1,6 @@
 // Application installable (PWA) : l'interface s'ouvre même si le réseau
 // est lent ; les données (/api/) ne sont jamais mises en cache.
-const CACHE = "trendguard-panneau-v21";
+const CACHE = "trendguard-panneau-v22";
 const SHELL = [
   "/",
   "/app.css",
@@ -19,6 +19,7 @@ const SHELL = [
   "/js/pages/actualites.js",
   "/js/pages/cryptos.js",
   "/js/pages/marches.js",
+  "/js/pages/pays.js",
   "/js/pages/graphiques.js",
   "/js/pages/journal.js",
   "/js/pages/positions.js",
