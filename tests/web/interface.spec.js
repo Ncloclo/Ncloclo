@@ -65,3 +65,76 @@ test("contrôles harmonisés : même hauteur pour les boutons, groupes et listes
   });
   expect(new Set(Object.values(heights)).size, JSON.stringify(heights)).toBe(1);
 });
+
+// ---------- Zoom et période de toutes les courbes (panel/static/js/zoom.js) ----------
+
+test("zoom des cartes et période de la page, qui glisse avec le temps", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto(BASE + "/#charts");
+  const cards = page.locator("#chart-grid .chart-card");
+  await expect(cards).toHaveCount(11);
+  await expect(page.locator("#chart-grid .zoom-bar")).toHaveCount(11);
+  const first = cards.first(), range = first.locator(".zoom-range");
+  await expect(range).toContainText("→");
+  const before = await range.textContent();
+  await first.getByRole("button", { name: "Zoomer : voir moins de temps" }).click();
+  await expect(page.locator("#detail")).toBeHidden();             // la barre n'ouvre pas le détail
+  await expect(range).not.toHaveText(before);
+  await first.getByRole("button", { name: "Recadrer : revenir à la période choisie" }).click();
+  await expect(range).toHaveText(before);
+  await page.locator('#charts-windows [data-cwin="7d"]').click();
+  await expect(page.locator('#charts-windows [data-cwin="7d"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(cards.first().locator(".zoom-range")).toContainText("· 7 j");
+  await expect(cards.nth(2).locator("h2")).toContainText("· 1 h");   // unité de la période
+  expect(errors).toEqual([]);
+});
+
+test("détail d'une crypto : la période choisit l'unité de temps, le zoom à la main se recadre", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto(BASE + "/#charts");
+  await page.locator("#chart-grid .chart-card").nth(2).click();
+  await expect(page.locator("#detail-windows button")).toHaveText(["24 h", "7 j", "1 mois", "3 mois", "1 an", "Tout"]);
+  await expect(page.locator('#detail-windows [data-win="all"]')).toHaveAttribute("aria-pressed", "true");
+  // 24 h en bougies d'une heure : l'unité choisie convient, elle reste.
+  await page.locator('#detail-windows [data-win="1d"]').click();
+  await expect(page.locator('#detail-intervals [data-interval="1h"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#detail-range")).toContainText("· 24 h");
+  await page.locator("#detail-zoom-in").click();                  // zoom à la main : plus de période choisie
+  await expect(page.locator('#detail-windows [data-win="1d"]')).toHaveAttribute("aria-pressed", "false");
+  await page.locator("#detail-fit").click();                      // ↺ : la période revient
+  await expect(page.locator('#detail-windows [data-win="1d"]')).toHaveAttribute("aria-pressed", "true");
+  // 1 an : trop de bougies d'une heure, l'unité passe au jour ; puis 24 h :
+  // une seule bougie d'un jour, l'unité passe à 15 minutes.
+  await page.locator('#detail-windows [data-win="1y"]').click();
+  await expect(page.locator('#detail-intervals [data-interval="1d"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#detail-range")).toContainText("mois");
+  await page.locator('#detail-windows [data-win="1d"]').click();
+  await expect(page.locator('#detail-intervals [data-interval="15m"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#detail-range")).toContainText("· 24 h");
+  await page.locator("#detail-close").click();
+  expect(errors).toEqual([]);
+});
+
+test("tableau de bord : période et zoom de la courbe du capital", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto(BASE + "/#dash");
+  const bar = page.locator("#d-equity-side .zoom-bar");
+  await expect(bar.locator(".zoom-windows button")).toHaveText(["24 h", "7 j", "1 mois", "3 mois", "Tout"]);
+  await expect(bar.locator('[data-win="1m"]')).toHaveAttribute("aria-pressed", "true");
+  await bar.locator('[data-win="7d"]').click();
+  await expect(bar.locator('[data-win="7d"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(bar.locator(".zoom-range")).toContainText("· 7 j");
+  expect(errors).toEqual([]);
+});
+
+test("cryptos : durée des courbes au choix, courbes retracées", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto(BASE + "/#assets");
+  const spark = page.locator("#asset-grid .asset").first().locator(".spark");
+  await expect(spark).toHaveAttribute("data-win", "2d");
+  await page.locator('[data-spark="7d"]').click();
+  await expect(page.locator('[data-spark="7d"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(spark).toHaveAttribute("data-win", "7d");
+  await expect(spark.locator(".spark-dot")).toHaveCount(1);
+  expect(errors).toEqual([]);
+});

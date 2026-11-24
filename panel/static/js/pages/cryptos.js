@@ -1,31 +1,51 @@
-// Panneau TrendGuard, page « Cryptos » : les 21 paires, leur courbe de 48 h et
-// le choix des cryptos achetables.
+// Panneau TrendGuard, page « Cryptos » : les 21 paires, leur courbe (24 h,
+// 48 h, 7 jours ou un mois, au choix) et le choix des cryptos achetables.
 
-import { $, $$, api, CANDIDATE, el, fpct, fpx, fR, flashValue, fvol, STATUS, toast, up, withLoader } from "../core.js";
+import { $, $$, api, CANDIDATE, el, fpct, fpx, fR, flashValue, fvol, prefs, STATUS, toast, up, withLoader } from "../core.js";
 import { fillSpark } from "../charts.js";
 import { register } from "../navigation.js";
 import { openDetail } from "../detail.js";
 
 let assetFilter = "all";
-const sparkCache = new Map();
+// Durée des courbes des cartes : [unité des bougies, nombre].
+const SPARK = { "1d": ["15m", 96], "2d": ["1h", 48], "7d": ["4h", 42], "1m": ["1d", 30] };
+let sparkWin = SPARK[prefs.get("window:spark", "2d")] ? prefs.get("window:spark", "2d") : "2d";
+const sparkCache = new Map();               // crypto:durée → clôtures, achats et ventes
 const sparkObs = "IntersectionObserver" in window ? new IntersectionObserver((entries) => {
   entries.forEach((en) => { if (en.isIntersecting) { sparkObs.unobserve(en.target); drawSpark(en.target); } });
 }) : null;
 async function drawSpark(card) {
-  const a = card.dataset.asset, hit = sparkCache.get(a);
+  const a = card.dataset.asset, win = sparkWin, key = a + ":" + win, hit = sparkCache.get(key);
   let closes = hit && Date.now() - hit.t < 300000 ? hit.v : null;
   if (!closes) {
     try {
-      const d = await api(`/api/candles?asset=${a}&interval=1h&limit=48`);
+      const [iv, n] = SPARK[win];
+      const d = await api(`/api/candles?asset=${a}&interval=${iv}&limit=${n}`);
       closes = d.candles.map((r) => r[4]);
       const times = d.candles.map((r) => r[0]);
       const marks = d.markers.map((m) => ({ i: times.indexOf(m.t), type: m.type })).filter((m) => m.i >= 0);
-      sparkCache.set(a, { t: Date.now(), v: closes, m: marks });
+      sparkCache.set(key, { t: Date.now(), v: closes, m: marks });
     } catch { return; }
   }
   const svg = card.querySelector(".spark");
-  if (svg) fillSpark(svg, closes, (sparkCache.get(a) || {}).m || []);
+  if (!svg || win !== sparkWin) return;           // durée changée pendant la lecture
+  if (svg.dataset.win && svg.dataset.win !== win) {
+    delete svg.dataset.drawn;                     // nouvelle durée : la courbe se retrace
+    svg.classList.remove("reveal");
+    void svg.getBoundingClientRect();             // l'animation repart du début
+  }
+  svg.dataset.win = win;
+  fillSpark(svg, closes, (sparkCache.get(key) || {}).m || []);
 }
+$$("[data-spark]").forEach((b) => b.addEventListener("click", () => {
+  sparkWin = b.dataset.spark;
+  prefs.set("window:spark", sparkWin);
+  $$("[data-spark]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  // Courbes déjà tracées : retracées tout de suite ; les autres à leur apparition.
+  withLoader(`Courbes : ${b.textContent}…`, () => Promise.all([...$$("#asset-grid .asset")]
+    .filter((card) => card.querySelector(".spark[data-win]")).map(drawSpark)));
+}));
+$$("[data-spark]").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.spark === sparkWin)));
 $$("[data-filter]").forEach((b) => b.addEventListener("click", () => {
   assetFilter = b.dataset.filter;
   $$("[data-filter]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));

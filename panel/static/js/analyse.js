@@ -402,6 +402,12 @@ export class AssetChart {
   }
   setType(ctype) { if (ctype === this.ctype) return; this.ctype = ctype; this.makeMain(); this.draw(); }
   applyScale() { this.stack.scale(this.scale); }
+  // Pour le zoom (zoom.js) : temps des bougies et points vides d'avance
+  // (projection du nuage d'Ichimoku).
+  zoomData() {
+    const n = this.ctx ? this.ctx.rows.length : 0;
+    return [this.ctx ? this.ctx.rows.map((r) => r.time) : [], this.times ? Math.max(0, this.times.length - n) : 0];
+  }
   setScale(scale) { this.scale = scale; this.applyScale(); }
   // Un indicateur de plus ou de moins ; refusé (avec la raison) au-delà des
   // limites qui gardent le graphique lisible.
@@ -598,6 +604,7 @@ export class EquityChart {
     this.show(null);
     return dd;
   }
+  zoomData() { return [this.points.map((p) => p.time), 0]; }
   show(t) {
     if (!this.points.length || !this.value) return;
     const time = t == null ? this.points[this.points.length - 1].time : t;
@@ -645,6 +652,7 @@ export class RegimeChart {
     this.stack.follow();
     this.show(null);
   }
+  zoomData() { return [this.points.map((p) => p.t), 0]; }
   show(t) {
     if (!this.points.length || !this.byTime) return;
     const p = t == null ? this.points[this.points.length - 1] : this.byTime.get(t), c = COLORS();

@@ -13,7 +13,9 @@ export function chartOptions(extra = {}, logo = true) {
     layout: { background: { type: "solid", color: "transparent" }, textColor: cssVar("--ink-2"), fontFamily: getComputedStyle(document.body).fontFamily, attributionLogo: logo },
     grid: { vertLines: { color: cssVar("--border") }, horzLines: { color: cssVar("--border") } },
     rightPriceScale: { borderVisible: false },
-    timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false },
+    // Écart minimal entre deux points très petit : « Tout » et le dézoom
+    // montrent toute la courbe, même 1 500 points sur un téléphone.
+    timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false, minBarSpacing: 0.05 },
     crosshair: { mode: LWC ? LWC.CrosshairMode.Normal : 0 },
     localization: { locale: "fr-FR", priceFormatter: fpx },
   };

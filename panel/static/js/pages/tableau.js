@@ -1,15 +1,44 @@
-// Panneau TrendGuard, page « Tableau de bord » : capital, indicateurs clés,
-// raisonnement du bot, anticipation de la prochaine clôture, positions et
-// alertes.
+// Panneau TrendGuard, page « Tableau de bord » : capital (période et zoom
+// de sa courbe, zoom.js), indicateurs clés, raisonnement du bot,
+// anticipation de la prochaine clôture, positions et alertes.
 
-import { $, api, countUp, el, fage, fdate, fdur, fmax2, fpct, fpx, ftime, fusd, LWC, nf, up } from "../core.js";
+import { $, api, countUp, el, fage, fdate, fdur, fmax2, fpct, fpx, ftime, fusd, LWC, nf, prefs, up } from "../core.js";
 import { buyMarkersOn, COLORS, LIVE, makeChart, uniq } from "../charts.js";
 import { refreshStatus, S } from "../etat.js";
 import { register } from "../navigation.js";
 import { openDetail } from "../detail.js";
 import { loadNews, renderTicker } from "./actualites.js";
+import { daysFor, TimeZoom, zoomBar } from "../zoom.js";
 
-let dashChart = null, dashSeries = null;
+let dashChart = null, dashSeries = null, dashZoom = null;
+let dashWin = prefs.get("window:dash", "1m");
+
+// Courbe du capital : la période choisie (24 h… Tout) glisse avec le temps.
+const equityDays = () => daysFor(dashWin, 30);
+function mountDashChart() {
+  dashChart = makeChart($("#d-equity-chart"), { handleScroll: false, handleScale: false, rightPriceScale: { visible: false }, timeScale: { visible: true } }, false, false);
+  const c = COLORS();
+  dashSeries = dashChart.addAreaSeries({ lineColor: c.accent, topColor: c.accent + "55", bottomColor: c.accent + "05", lineWidth: 2, priceLineVisible: false, ...LIVE });
+  const bar = zoomBar(["1d", "7d", "1m", "3m", "all"]);
+  $("#d-equity-side").append(bar.root);
+  dashZoom = new TimeZoom(dashChart, bar.parts, {
+    keys: ["1d", "7d", "1m", "3m", "all"], extend: true, interactive: false, win: dashWin,
+    onWindow: (key) => {
+      dashWin = key;
+      prefs.set("window:dash", key);
+      api(`/api/equity?days=${equityDays()}`).then(drawDashEquity).catch(() => { /* réessai au prochain rafraîchissement */ });
+      return true;
+    },
+  });
+  dashChart.timeScale().subscribeSizeChange(() => { if (!dashZoom.free) dashZoom.apply(); });
+}
+function drawDashEquity(eq) {
+  if (!dashSeries) return;
+  const pts = uniq(eq.points.map((p) => ({ time: p.t, value: p.v })));
+  dashSeries.setData(pts);
+  dashSeries.setMarkers(buyMarkersOn(pts, eq.buys, COLORS(), false, eq.sells));
+  dashZoom.data(pts.map((p) => p.time));
+}
 
 // Capital dans votre monnaie (trendguard/devise.py) : FCFA ou euros, et ce
 // qu'un retrait complet donnerait, frais de change et impôt déduits.
@@ -28,7 +57,7 @@ async function renderDash() {
   if (!S) await refreshStatus();
   const newsP = loadNews().then((n) => { renderTicker(n); newsAlerts(n); }).catch(() => { /* bandeau : réessai au prochain rafraîchissement */ });
   api("/api/anticipation").then(renderAnticipation).catch(() => { /* réessai au prochain rafraîchissement */ });
-  const [pos, eq, mind] = await Promise.all([api("/api/positions"), api("/api/equity?days=30"), api("/api/reasoning")]);
+  const [pos, eq, mind] = await Promise.all([api("/api/positions"), api(`/api/equity?days=${equityDays()}`), api("/api/reasoning")]);
   renderMind(mind);
   countUp($("#d-equity"), S.equity, fusd);
   const sub = $("#d-equity-sub");
@@ -38,17 +67,8 @@ async function renderDash() {
     sub.className = "sub " + (ch >= 0 ? "up" : "down");
   } else sub.textContent = "Aucune décision encore prise";
   renderLocalMoney(S.devise);
-  if (!dashChart && LWC) {
-    dashChart = makeChart($("#d-equity-chart"), { handleScroll: false, handleScale: false, rightPriceScale: { visible: false }, timeScale: { visible: false } }, false);
-    const c = COLORS();
-    dashSeries = dashChart.addAreaSeries({ lineColor: c.accent, topColor: c.accent + "55", bottomColor: c.accent + "05", lineWidth: 2, priceLineVisible: false, ...LIVE });
-  }
-  if (dashSeries) {
-    const pts = uniq(eq.points.map((p) => ({ time: p.t, value: p.v })));
-    dashSeries.setData(pts);
-    dashSeries.setMarkers(buyMarkersOn(pts, eq.buys, COLORS(), false, eq.sells));
-    dashChart.timeScale().fitContent();
-  }
+  if (!dashChart && LWC) mountDashChart();
+  drawDashEquity(eq);
   countUp($("#d-pos"), S.positions, (v) => `${Math.round(v)} / ${S.max_positions}`);
   $("#d-pos-sub").textContent = `${fmax2.format(S.risk_now_pct ?? S.risk_pct)} % du capital risqué par achat`;
   const reg = $("#d-regime");
