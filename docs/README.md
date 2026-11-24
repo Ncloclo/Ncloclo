@@ -32,9 +32,11 @@ du bot (installation, commandes, panneau) est dans le
 | [`BINANCE_HORS_CRYPTOS.md`](BINANCE_HORS_CRYPTOS.md) | l'or tokenisé, l'euro et les actions tokenisées de Binance, avec les frais du bot |
 | [`UNIVERS_CRYPTO.md`](UNIVERS_CRYPTO.md) | plus de cryptos que les 21 du bot (Solana, NEAR, Sui, Avalanche…) ? |
 | [`LEVIER.md`](LEVIER.md) | le bot gagnerait-il à utiliser un levier (fixe ou adaptatif, emprunt compté) ? |
+| [`MARCHES_AJOUTES.md`](MARCHES_AJOUTES.md) | les marchés de la synthèse TradingView enrichissent-ils le portefeuille fictif ? Cours du bot vérifiés contre TradingView |
+| [`MACRO.md`](MACRO.md) | le VIX, le dollar ou les taux américains auraient-ils aidé TrendGuard ? |
 | [`SENTIMENT.md`](SENTIMENT.md) | le financement des contrats à terme ou la peur et l'avidité auraient-ils aidé ? |
 
-Les quatorze dernières indiquent en tête la commande qui les régénère ; le
+Les seize dernières indiquent en tête la commande qui les régénère ; le
 rapport de recherche se régénère avec `python trendguard_bot.py strategy
 research --data data`. Ce sont des diagnostics : une règle du bot ne change
 qu'après l'une d'elles (dernière en date : `PETIT_CAPITAL.md`, minimum d'achat,

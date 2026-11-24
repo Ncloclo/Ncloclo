@@ -106,7 +106,7 @@ def test_collect_reads_every_family_and_keeps_knowledge(memory, tmp_path):
     assert not any("limit=0" in u for u in calls)
     # Les textes déjà lus ne sont pas comptés deux fois ; les relevés horaires, si.
     c = memory.counts(day)
-    assert c["docs"] == 3 * 3 + 2 + 1 + 2 + 2 + 1 and c["sources"] == 8   # presse+moteurs, Reddit, HN, StockTwits, tendances, F&G
+    assert c["docs"] == 4 * 3 + 2 + 1 + 2 + 2 + 1 and c["sources"] == 9   # presse, Investing.com, moteurs, Reddit, HN, StockTwits, tendances, F&G
     # Reddit : un forum par lecture, à tour de rôle (Reddit limite les lectures sans compte).
     assert sum("reddit.com" in u for u in calls) == 1
     assert sum("stocktwits" in u for u in calls) == len(UNIVERSE)
@@ -303,3 +303,18 @@ def test_panel_and_report_read_the_knowledge_core(memory, tmp_path):
     off = tg.GuardConfig(run_mode="paper", db_file=str(tmp_path / "tg.db"), log_file=str(tmp_path / "tg.log"),
                          lock_file=str(tmp_path / "tg.lock"), savoir=False, savoir_db=memory.path)
     assert BotData(off, market=None).savoir() is None and report_health.knowledge_check(off) == []
+
+
+def test_investing_com_is_read_by_its_public_feeds_only(memory):
+    """Investing.com : ses flux RSS publics seulement, une source à part ; un
+    flux en panne n'empêche pas les autres, tous en panne : source en erreur."""
+    calls = []
+    run = savoir.collect(memory, UNIVERSE, [], NOW, fetch=fake_internet(calls, broken=("news_1.rss",)))
+    reads = [u for u in calls if "investing.com" in u]
+    assert reads == [u for _n, u in savoir.INVESTING_FEEDS] and all("/rss/" in u for u in reads)
+    assert "Investing.com" not in run["errors"] and run["read"]["Investing.com"] > 0
+    assert memory.views_of(NOW.date().isoformat())["Investing.com"]["btc"] == 1.0
+    down = savoir.collect(memory, UNIVERSE, [], NOW + timedelta(hours=2), fetch=fake_internet(broken=("investing.com",)))
+    assert "Investing.com" in down["errors"]
+    from trendguard import cyber
+    assert "www.investing.com" in cyber.ALLOWLIST and "www.tradingview.com" not in cyber.ALLOWLIST

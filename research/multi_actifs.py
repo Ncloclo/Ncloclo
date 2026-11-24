@@ -123,13 +123,21 @@ def render(results: List[Tuple[str, Dict[str, Any], Dict[str, Any]]], end: str, 
                   ("- **Proposition** : suivre ce portefeuille en argent fictif, à côté du bot ; aucun ordre "
                    "réel sans courtier." if profitable and better else
                    "- **Pas de proposition** : la règle fixée d'avance n'est pas satisfaite."), ""]
+    passed = profitable and better          # verdict au coût réel (dernier modèle)
     lines += ["## Lecture", "",
-              "- Avec les coûts réels, la règle fixée d'avance est satisfaite, mais de justesse : hors "
-              "cryptos, la règle ne gagne presque rien (espérance par trade proche de zéro). Le gain du "
-              "portefeuille moitié-moitié vient seulement de la diversification (corrélation proche de "
-              "zéro avec les cryptos) : le rendement est divisé par deux, la baisse maximale un peu plus.",
-              "- Conclusion : suivre ces marchés en argent fictif (page Veille du panneau), sans y "
-              "consacrer d'argent réel tant que les preuves en direct ne montrent pas d'avantage.", "",
+              "- La règle est calculée sur les séances réelles de chaque marché (correctif du 24/11/2026). "
+              "Avant, les jours où une place était fermée comptaient comme des jours sans variation : ils "
+              "diluaient la volatilité et rapprochaient les stops, et une fermeture de plus de 5 séances "
+              "(semaine d'or en Chine) passait pour un retrait de la cote.",
+              ("- Avec les coûts réels, la règle fixée d'avance est satisfaite : le portefeuille "
+               "moitié-moitié doit son avance à la diversification (corrélation proche de zéro avec les "
+               "cryptos)." if passed else
+               "- Avec les coûts réels, la règle fixée d'avance n'est pas satisfaite : hors cryptos, la "
+               "règle gagne peu, et le mélange moitié-moitié ne bat pas TrendGuard seule sur les deux "
+               "périodes."),
+              "- Conclusion : ces marchés restent suivis en argent fictif pour information (pages du "
+              "panneau, page Veille), sans argent réel tant que les preuves en direct ne montrent pas "
+              "d'avantage.", "",
               "## Limites", "",
               "- Un backtest n'est pas une garantie de gain.",
               "- Coûts réels supposés : typiques d'un compte de particulier, à confirmer chez un courtier.",

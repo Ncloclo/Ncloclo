@@ -87,7 +87,7 @@ sont jamais envoyés sur GitHub. VS Code les masque dans l'explorateur
 | `bibliotheque.py` | bibliothèque de recherche : travaux d'arXiv reliés aux règles du bot, des pistes jamais appliquées seules |
 | `pistes.py` | le bot teste les pistes : variantes déclarées par thème, rejouées sur ses données, verdict par thème |
 | `flux.py` | offre de stablecoins (DefiLlama), pour l'agent flux du comité (information seulement) |
-| `multi_actifs.py` | tous les marchés hors cryptos (Yahoo) : règle transposée, suivi quotidien, portefeuille en argent fictif, données des pages du panneau |
+| `multi_actifs.py` | tous les marchés hors cryptos (Yahoo) : règle sur les séances réelles de chaque marché, suivi quotidien après la clôture de New York, portefeuille en argent fictif, indicateurs de marché (VIX, dollar, taux), données des pages du panneau |
 | `levier.py` | levier étudié chaque semaine : politiques fixes et adaptative, emprunt compté, règle fixée d'avance ; jamais appliqué (comptant) |
 | `uptime.py` | disponibilité : arrêts de plus d'une heure, leur cause, temps de marche |
 | `learning.py` | apprentissage libre : normale des carnets, ruse réglée sur elle, prévisions corrigées par l'expérience |

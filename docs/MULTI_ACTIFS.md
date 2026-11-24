@@ -8,21 +8,21 @@ Pourquoi deux modèles de coûts : avec les frais de Binance, le coût d'un alle
 
 | Catégorie | Actifs | Règle 2018-2022 : CAGR | baisse | Calmar | 2023 → : CAGR | baisse | Calmar | Achat-conservation 2018-2022 : CAGR | baisse | Calmar | 2023 → : CAGR | baisse | Calmar |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Matières premières | 6 | +3,7 % | −17,8 % | 0,21 | −1,9 % | −22,3 % | −0,09 | +6,2 % | −41,5 % | 0,15 | +7,6 % | −36,0 % | 0,21 |
-| Devises | 6 | −1,5 % | −11,4 % | −0,13 | −3,0 % | −12,2 % | −0,25 | −0,5 % | −7,0 % | −0,07 | +1,2 % | −3,8 % | 0,30 |
-| Indices | 7 | −1,6 % | −15,0 % | −0,11 | +1,2 % | −12,3 % | 0,10 | +4,9 % | −33,1 % | 0,15 | +15,0 % | −16,9 % | 0,89 |
-| Obligations | 2 | +0,1 % | −7,5 % | 0,01 | −1,3 % | −5,7 % | −0,23 | −3,3 % | −36,1 % | −0,09 | −3,0 % | −20,4 % | −0,15 |
-| Actions (biais du survivant) | 9 | +16,7 % | −16,6 % | 1,00 | +7,9 % | −20,8 % | 0,38 | +20,3 % | −51,8 % | 0,39 | +34,6 % | −29,4 % | 1,18 |
+| Matières premières | 6 | +4,9 % | −15,3 % | 0,32 | +0,9 % | −18,4 % | 0,05 | +6,2 % | −41,5 % | 0,15 | +7,6 % | −36,0 % | 0,21 |
+| Devises | 6 | −0,9 % | −9,4 % | −0,09 | −2,6 % | −10,9 % | −0,24 | −0,5 % | −7,0 % | −0,07 | +1,2 % | −3,8 % | 0,30 |
+| Indices | 7 | −0,8 % | −13,8 % | −0,06 | +3,8 % | −12,5 % | 0,30 | +4,9 % | −33,1 % | 0,15 | +15,0 % | −16,9 % | 0,89 |
+| Obligations | 2 | +0,7 % | −6,4 % | 0,10 | −0,9 % | −4,3 % | −0,20 | −3,3 % | −36,1 % | −0,09 | −3,0 % | −20,4 % | −0,15 |
+| Actions (biais du survivant) | 9 | +15,9 % | −14,7 % | 1,08 | +10,7 % | −18,9 % | 0,57 | +20,3 % | −51,8 % | 0,39 | +34,6 % | −29,4 % | 1,18 |
 
-Corrélation des rendements journaliers entre TrendGuard sur les cryptos et la règle hors cryptos : **0,03** (0,87 à 0,93 entre stratégies de cryptos).
+Corrélation des rendements journaliers entre TrendGuard sur les cryptos et la règle hors cryptos : **0,05** (0,87 à 0,93 entre stratégies de cryptos).
 
 | Portefeuille | 2018-2022 : CAGR | baisse | Calmar | 2023 → : CAGR | baisse | Calmar | 24/05/2026 → : CAGR | baisse | Calmar |
 |---|---|---|---|---|---|---|---|---|---|
 | TrendGuard seule (cryptos) | +41,2 % | −25,4 % | 1,62 | +32,0 % | −33,6 % | 0,95 | +16,8 % | −10,5 % | 1,59 |
-| Hors cryptos (sans les actions) | −3,8 % | −27,6 % | −0,14 | −3,4 % | −26,5 % | −0,13 | −31,4 % | −19,3 % | −1,63 |
-| Moitié cryptos, moitié hors cryptos | +18,2 % | −14,7 % | 1,24 | +14,5 % | −19,1 % | 0,76 | −9,8 % | −8,3 % | −1,18 |
+| Hors cryptos (sans les actions) | −1,5 % | −15,8 % | −0,10 | −0,3 % | −22,1 % | −0,01 | −30,4 % | −18,8 % | −1,62 |
+| Moitié cryptos, moitié hors cryptos | +19,5 % | −19,4 % | 1,00 | +16,3 % | −19,6 % | 0,83 | −9,2 % | −9,7 % | −0,95 |
 
-Espérance par trade sur 2018-2022 : hors cryptos −0,16 R, TrendGuard sur les cryptos +1,50 R.
+Espérance par trade sur 2018-2022 : hors cryptos −0,07 R, TrendGuard sur les cryptos +1,50 R.
 
 - Hors cryptos rentable sur les deux périodes : **non**.
 - Moitié-moitié meilleure que TrendGuard seule au Calmar sur les deux périodes : **non**.
@@ -32,30 +32,31 @@ Espérance par trade sur 2018-2022 : hors cryptos −0,16 R, TrendGuard sur les 
 
 | Catégorie | Actifs | Règle 2018-2022 : CAGR | baisse | Calmar | 2023 → : CAGR | baisse | Calmar | Achat-conservation 2018-2022 : CAGR | baisse | Calmar | 2023 → : CAGR | baisse | Calmar |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Matières premières | 6 | +6,1 % | −16,5 % | 0,37 | −0,0 % | −22,3 % | −0,00 | +6,2 % | −41,5 % | 0,15 | +7,6 % | −36,0 % | 0,21 |
-| Devises | 6 | +0,5 % | −7,3 % | 0,07 | −0,6 % | −4,1 % | −0,15 | −0,5 % | −7,0 % | −0,07 | +1,2 % | −3,8 % | 0,30 |
-| Indices | 7 | +1,2 % | −10,1 % | 0,12 | +4,4 % | −10,3 % | 0,43 | +4,9 % | −33,1 % | 0,15 | +15,0 % | −16,9 % | 0,89 |
-| Obligations | 2 | +0,5 % | −6,4 % | 0,08 | −0,8 % | −4,1 % | −0,19 | −3,3 % | −36,1 % | −0,09 | −3,0 % | −20,4 % | −0,15 |
-| Actions (biais du survivant) | 9 | +16,4 % | −16,3 % | 1,01 | +12,6 % | −19,4 % | 0,65 | +20,3 % | −51,8 % | 0,39 | +34,6 % | −29,4 % | 1,18 |
+| Matières premières | 6 | +7,6 % | −15,4 % | 0,50 | +2,0 % | −18,4 % | 0,11 | +6,2 % | −41,5 % | 0,15 | +7,6 % | −36,0 % | 0,21 |
+| Devises | 6 | +0,8 % | −6,1 % | 0,12 | −0,6 % | −4,7 % | −0,12 | −0,5 % | −7,0 % | −0,07 | +1,2 % | −3,8 % | 0,30 |
+| Indices | 7 | +1,2 % | −10,2 % | 0,11 | +5,6 % | −10,6 % | 0,53 | +4,9 % | −33,1 % | 0,15 | +15,0 % | −16,9 % | 0,89 |
+| Obligations | 2 | +1,0 % | −5,5 % | 0,19 | −0,5 % | −3,4 % | −0,15 | −3,3 % | −36,1 % | −0,09 | −3,0 % | −20,4 % | −0,15 |
+| Actions (biais du survivant) | 9 | +19,8 % | −15,8 % | 1,26 | +12,3 % | −18,2 % | 0,67 | +20,3 % | −51,8 % | 0,39 | +34,6 % | −29,4 % | 1,18 |
 
-Corrélation des rendements journaliers entre TrendGuard sur les cryptos et la règle hors cryptos : **0,03** (0,87 à 0,93 entre stratégies de cryptos).
+Corrélation des rendements journaliers entre TrendGuard sur les cryptos et la règle hors cryptos : **0,05** (0,87 à 0,93 entre stratégies de cryptos).
 
 | Portefeuille | 2018-2022 : CAGR | baisse | Calmar | 2023 → : CAGR | baisse | Calmar | 24/05/2026 → : CAGR | baisse | Calmar |
 |---|---|---|---|---|---|---|---|---|---|
 | TrendGuard seule (cryptos) | +41,2 % | −25,4 % | 1,62 | +32,0 % | −33,6 % | 0,95 | +16,8 % | −10,5 % | 1,59 |
-| Hors cryptos (sans les actions) | +0,0 % | −21,2 % | 0,00 | +2,0 % | −20,5 % | 0,10 | −27,0 % | −16,9 % | −1,60 |
-| Moitié cryptos, moitié hors cryptos | +20,5 % | −11,9 % | 1,72 | +17,6 % | −16,8 % | 1,05 | −7,0 % | −8,0 % | −0,87 |
+| Hors cryptos (sans les actions) | +0,8 % | −15,6 % | 0,05 | +1,1 % | −19,4 % | 0,06 | −25,4 % | −16,0 % | −1,58 |
+| Moitié cryptos, moitié hors cryptos | +20,9 % | −19,2 % | 1,09 | +17,0 % | −17,8 % | 0,95 | −6,0 % | −9,4 % | −0,64 |
 
-Espérance par trade sur 2018-2022 : hors cryptos +0,01 R, TrendGuard sur les cryptos +1,50 R.
+Espérance par trade sur 2018-2022 : hors cryptos +0,18 R, TrendGuard sur les cryptos +1,50 R.
 
 - Hors cryptos rentable sur les deux périodes : **oui**.
-- Moitié-moitié meilleure que TrendGuard seule au Calmar sur les deux périodes : **oui**.
-- **Proposition** : suivre ce portefeuille en argent fictif, à côté du bot ; aucun ordre réel sans courtier.
+- Moitié-moitié meilleure que TrendGuard seule au Calmar sur les deux périodes : **non**.
+- **Pas de proposition** : la règle fixée d'avance n'est pas satisfaite.
 
 ## Lecture
 
-- Avec les coûts réels, la règle fixée d'avance est satisfaite, mais de justesse : hors cryptos, la règle ne gagne presque rien (espérance par trade proche de zéro). Le gain du portefeuille moitié-moitié vient seulement de la diversification (corrélation proche de zéro avec les cryptos) : le rendement est divisé par deux, la baisse maximale un peu plus.
-- Conclusion : suivre ces marchés en argent fictif (page Veille du panneau), sans y consacrer d'argent réel tant que les preuves en direct ne montrent pas d'avantage.
+- La règle est calculée sur les séances réelles de chaque marché (correctif du 24/11/2026). Avant, les jours où une place était fermée comptaient comme des jours sans variation : ils diluaient la volatilité et rapprochaient les stops, et une fermeture de plus de 5 séances (semaine d'or en Chine) passait pour un retrait de la cote.
+- Avec les coûts réels, la règle fixée d'avance n'est pas satisfaite : hors cryptos, la règle gagne peu, et le mélange moitié-moitié ne bat pas TrendGuard seule sur les deux périodes.
+- Conclusion : ces marchés restent suivis en argent fictif pour information (pages du panneau, page Veille), sans argent réel tant que les preuves en direct ne montrent pas d'avantage.
 
 ## Limites
 

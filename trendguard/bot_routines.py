@@ -35,6 +35,7 @@ from . import (
     moteur_portefeuille,
     moteur_risque,
     moteur_strategie,
+    multi_actifs,
     pistes,
     report,
     savoir,
@@ -250,6 +251,8 @@ class RoutinesMixin:
                      for p in bibliotheque.pistes(memory.get(bibliotheque.KEY), n=3,
                                                   verdicts=memory.get(pistes.KEY))]
             money = flux.view(memory.get(flux.KEY))     # offre de stablecoins, pour l'agent flux
+            markets = memory.get(multi_actifs.KEY)      # VIX, dollar, taux, pour l'agent macro
+            macro_line = multi_actifs.describe_macro(markets.get("macro") if isinstance(markets, dict) else None)
         except Exception as e:
             self.logger.warning(f"[SAVOIR] bilan impossible : {e}")
             return {}
@@ -260,7 +263,7 @@ class RoutinesMixin:
         self.state["savoir"] = {"day": day, "line": savoir.reasoning_line(res, counts),
                                 "proven": res["proven"], "holds": sorted(res["holds"]),
                                 "influence": res["influence"], "opinion": res.get("opinion") or {},
-                                "pistes": found, "flux": money}
+                                "pistes": found, "flux": money, "macro_marches": macro_line}
         for s in sorted(set(res["proven"]) - before):
             sc = next(x for x in res["scores"] if x["source"] == s)
             self.logger.info(f"[SAVOIR] compétence acquise : {s} est {sc['verdict']} "
@@ -319,7 +322,8 @@ class RoutinesMixin:
         views = {}
         try:
             ev = self.state.get("evenements") or {}
-            contexte = {"macro": ev if ev.get("day") == day else {},
+            contexte = {"macro": dict(ev if ev.get("day") == day else {},
+                                      marches=sv.get("macro_marches") if sv.get("day") == day else ""),
                         "derives": derives.latest(getattr(self.g, "watch_db", "") or mw.DEFAULT_DB) if cands else {},
                         "flux": sv.get("flux") if sv.get("day") == day else {}}
             for a in cands:

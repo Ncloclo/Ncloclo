@@ -137,24 +137,51 @@ survivant).
 
 - Frais de Binance : perdante partout ; ils mangent 23 à 45 % du risque d'un
   trade sur devises, indices, obligations (stop à 0,9-1,8 % du prix).
-- Coûts réels : espérance +0,01 R par trade (contre +1,50 R sur les cryptos),
-  rendement nul ; moitié-moitié avec les cryptos : Calmar 1,72 puis 1,05
-  (contre 1,62 puis 0,95) par la seule diversification (corrélation 0,03),
-  rendement divisé par deux.
-- Décision : suivi en argent fictif seulement (`trendguard/multi_actifs.py`,
-  page Veille) ; aucun ordre réel (il faudrait un courtier ; Binance n'a que
-  PAXG et EUR). Le XOF a une parité fixe avec l'euro.
+- Correctif du 24/11/2026 : la règle se calcule sur les séances réelles de
+  chaque marché (`multi_actifs.sessions`) ; une place fermée garde son cours 10
+  séances. Avant, les jours fermés (cours recopié) diluaient la volatilité, et
+  la semaine d'or de Shanghai passait pour un retrait de la cote (−36 R fictifs).
+- Coûts réels, après correctif : espérance +0,18 R par trade sur 2018-2022
+  (contre +1,50 R sur les cryptos) ; moitié-moitié avec les cryptos : Calmar
+  1,09 puis 0,95 (contre 1,62 puis 0,95), règle fixée d'avance non satisfaite
+  (elle l'était avant le correctif : 1,72 puis 1,05).
+- Décision : plus de proposition ; le portefeuille fictif reste suivi pour
+  information (choix de l'utilisateur : argent fictif partout) ; aucun ordre
+  réel (il faudrait un courtier). Le XOF a une parité fixe avec l'euro.
 - Panneau : une page par classe d'actifs (`panel/static/js/pages/marches.js`,
   `/api/markets`, `/api/market`), lue dans `data_multi/` et le noyau de
   savoir ; menu en trois groupes (Mon bot, Marchés, Analyse).
+
+### Synthèse des marchés de TradingView (24/11/2026)
+
+- Jamais de collecte automatique sur TradingView ni Investing.com : leurs
+  conditions l'interdisent. Mêmes marchés lus chez Yahoo ; Investing.com
+  seulement par ses flux RSS publics (source « Investing.com » du noyau de
+  savoir, jugée comme les autres).
+- 26 marchés ajoutés (`multi_actifs.ADDED` : platine, produits agricoles,
+  indices d'Asie, d'Europe et du Brésil, NZD/USD, DXY, SHY, TSMC, AMD, Anthropic,
+  SpaceX) et 5 indicateurs (VIX, taux US 3 mois à 30 ans). Étude
+  `python -m research.marches_ajoutes --cache data_multi`
+  (`docs/MARCHES_AJOUTES.md`) : l'univers élargi fait moins bien sur 2018-2022
+  (Calmar −0,07 contre 0,05) ; suivis pour information, hors du portefeuille
+  fictif (`ADDED_IN_PORTFOLIO = False`).
+- Cours du bot contre TradingView : 31 sur 39 à 0,5 % près ; les autres lus en
+  pleine séance. D'où la lecture quotidienne après la clôture de New York
+  (22:30 UTC, `multi_actifs.due`).
+- `python -m research.macro --cache data_binance --multi data_multi`
+  (`docs/MACRO.md`) : VIX > 30, dollar fort, choc de taux, courbe inversée ;
+  aucun filtre ne gagne sur les deux périodes. VIX > 30 aurait évité 7 achats
+  perdants en 2018-2022, mais aucune occasion depuis 2023 : à revoir après la
+  prochaine période de stress, pas avant. Information seulement (Veille, agent
+  macro du comité, poids nul).
 
 ### Sur Binance au-delà des 21 cryptos (24/11/2026)
 
 - Binance liste des actions tokenisées (« bStocks » : NVDAB, GOOGLB, QQQB…),
   l'or (PAXG, XAUT) et l'euro (EUR/USDT). `python -m research.binance_hors_cryptos
   --cache data_multi` : manche de 9 actifs (sous-jacents Yahoo, frais de
-  Binance) +6,5 %/an puis +24,3 %/an, espérance +0,19 R ; 75 % cryptos et 25 %
-  manche : Calmar 1,69 puis 1,33 (contre 1,62 puis 0,95), mais biais de
+  Binance) +6,6 %/an puis +29,3 %/an, espérance +0,28 R ; 75 % cryptos et 25 %
+  manche : Calmar 1,74 puis 1,36 (contre 1,62 puis 0,95), mais biais de
   popularité et période jamais vue moins bonne. Suivie en argent fictif
   (`multi_actifs.BINANCE`, page Veille). Écartés : fonds à levier, sociétés non
   cotées, cotations trop récentes.

@@ -18,8 +18,8 @@ function watchErrors(page) {
 }
 
 // [onglet, titre de la page, nombre de marchés de la démonstration]
-const PAGES = [["commodities", "Matières premières", 6], ["forex", "Devises", 6], ["indices", "Indices boursiers", 8],
-  ["stocks", "Actions", 13], ["bonds", "Obligations", 2]];
+const PAGES = [["commodities", "Matières premières", 17], ["forex", "Devises", 8], ["indices", "Indices boursiers", 16],
+  ["stocks", "Actions", 17], ["bonds", "Obligations", 3]];
 
 test("menu : une page par classe d'actifs, avec ses chiffres clés", async ({ page }) => {
   const errors = watchErrors(page);
@@ -80,7 +80,7 @@ test("téléphone : quatre raccourcis et le menu complet, sans défilement horiz
   await expect(page).toHaveURL(/#forex$/);
   await expect(page.locator("#tabs")).toBeHidden();                             // le menu se referme
   await expect(page.locator("#menu-btn")).toHaveClass(/current/);               // page rangée dans le menu
-  await expect(page.locator("#page-forex .market")).toHaveCount(6);
+  await expect(page.locator("#page-forex .market")).toHaveCount(8);
   await page.locator("#menu-btn").click();
   await page.keyboard.press("Escape");                                           // Échap referme le menu
   await expect(page.locator("#tabs")).toBeHidden();

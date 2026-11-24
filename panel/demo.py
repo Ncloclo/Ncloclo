@@ -272,7 +272,19 @@ class DemoData:
                 "ai": {"configured": ["Claude", "GPT", "Gemini", "Mistral"],
                        "possible": ["Claude", "GPT", "Gemini", "DeepSeek", "Mistral", "Kimi",
                                     "Perplexity", "Grok"]},
-                "savoir": self.savoir(), "evenements": self.evenements(), "levier": self.levier()}
+                "savoir": self.savoir(), "evenements": self.evenements(), "levier": self.levier(),
+                "macro": self.macro()}
+
+    def macro(self) -> Dict[str, Any]:
+        """Indicateurs de marché d'exemple, lus par la vraie fonction du bot."""
+        idx = self._multi_close().index
+        n = len(idx)
+        ind = pd.DataFrame({"vix": np.linspace(18.0, 26.3, n), "us3m": np.full(n, 4.17),
+                            "us5y": np.linspace(4.2, 4.71, n), "us10y": np.linspace(4.4, 4.9, n),
+                            "us30y": np.linspace(4.8, 5.29, n), "dxy": self._multi_close()["dxy"].to_numpy()},
+                           index=idx)
+        view = multi_actifs.macro_view(ind)
+        return dict(view, line=multi_actifs.describe_macro(view))
 
     _multi: Optional[pd.DataFrame] = None
 

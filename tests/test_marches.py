@@ -55,9 +55,9 @@ def test_market_detail_agrees_with_the_daily_rule_summary():
 def test_chart_points_and_card_curves():
     s = _series(n=600)
     pts = ma.market_points(s)
-    assert len(pts) == 600 - 149                                         # la moyenne existe dès la 150e séance
+    assert len(pts) == 600 and pts[148]["sma"] is None and pts[149]["sma"] is not None   # moyenne dès la 150e séance
     assert all(a["t"] < b["t"] for a, b in zip(pts, pts[1:]))
-    assert pts[-1]["close"] == pytest.approx(s.iloc[-1], rel=1e-6) and pts[0]["high"] is not None
+    assert pts[-1]["close"] == pytest.approx(s.iloc[-1], rel=1e-6) and pts[0]["high"] is None and pts[30]["high"]
     assert 0 < len(ma.market_points(s, days=30)) <= 23
     for win in ma.SPARK_SESSIONS:
         curve = ma.spark(s, win)
@@ -108,3 +108,15 @@ def test_demo_server_serves_every_page(demo_server):  # noqa: F811
     assert code == 200 and one["detail"]["positions"] and len(one["points"]) > 250
     assert _json(base + "/api/markets?class=derives")[0] == 400
     assert _json(base + "/api/market?code=inconnu")[0] == 400
+
+
+def test_a_newly_listed_market_is_shown_without_a_rule_signal():
+    """Anthropic, cotée depuis le 19/11/2026 : visible, jamais un signal tant
+    qu'elle n'a pas l'historique que la règle exige (250 séances)."""
+    s = pd.Series([83.0, 84.2, 82.6, 81.9], index=pd.bdate_range("2026-11-19", periods=4, tz="UTC"))
+    d = ma.market_detail("ant", s)
+    assert d["close"] == 81.9 and d["sma"] is None and not d["trend"] and not d["signal"]
+    assert d["changes"]["1m"] is None and d["binance"] == "Anthropic (ANTB)" and d["books"] == []
+    assert [p["sma"] for p in ma.market_points(s)] == [None] * 4 and len(ma.spark(s, "1y")) == 4
+    assert ma.books_of("or") == ["Portefeuille fictif hors cryptos", "Manche Binance fictive"]
+    assert ma.books_of("ble") == [] and ma.books_of("nvda") == ["Manche Binance fictive"]

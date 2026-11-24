@@ -334,6 +334,9 @@ test("positions, veille, journal, réglages et thème", async ({ page }) => {
   await expect(page.locator("#w-peg")).toHaveText("1,0002");
   await expect(page.locator("#w-cal-card")).toBeVisible();                      // calendrier économique
   await expect(page.locator("#w-cal li").first()).toContainText("compte rendu de la Fed");
+  await expect(page.locator("#w-vix")).not.toHaveText("—");                     // indicateurs de marché du jour
+  await expect(page.locator("#w-vix-sub")).toContainText("médiane d'un an");
+  await expect(page.locator("#w-rate-sub")).toContainText("courbe 10 ans − 3 mois");
   await expect(page.locator("#w-lev-card")).toBeVisible();                      // étude du levier
   await expect(page.locator("#w-lev-table tbody tr")).toHaveCount(4);           // une ligne par politique
   await expect(page.locator("#w-lev-table tbody tr").nth(1)).toContainText("refusé : pire baisse");
