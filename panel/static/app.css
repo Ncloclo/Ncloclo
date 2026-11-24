@@ -385,6 +385,7 @@ tbody tr.click:hover { background: var(--surface-2); }
 .asset.unselected { opacity: .62; }
 .market-kpis { margin-top: 12px; }
 .market-empty { color: var(--muted); }
+.table-wrap { max-width: 100%; overflow-x: auto; }              /* un tableau large défile dans son cadre */
 .grid-head { grid-column: 1 / -1; margin: 14px 2px 0; font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .grid-head:first-child { margin-top: 0; }
 .country.no-index { cursor: default; }

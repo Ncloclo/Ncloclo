@@ -65,7 +65,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set,
 
 import v29
 
-from . import bibliotheque, evenements, flux, multi_actifs, pays
+from . import bibliotheque, brvm, evenements, flux, multi_actifs, pays
 from . import market_watch as mw
 from .texte import fr
 
@@ -768,6 +768,15 @@ def main(argv: Optional[List[str]] = None) -> int:
                              f"{fr(book['portfolio']['equity'], ',.2f')} USDT"))
             except Exception as e:
                 print(f"{now:%Y-%m-%d %H:%M:%S} UTC marchés hors cryptos illisibles : {e}")
+            try:            # BRVM (Abidjan) : ses deux pages publiques, une lecture par séance, après la clôture
+                book = brvm.refresh(memory, now, lambda url: http_get(url, 60), os.path.join(v29.APP_DIR, "data_brvm"))
+                if book.get("tried_at") == now.isoformat(timespec="seconds"):
+                    print(f"{now:%Y-%m-%d %H:%M:%S} UTC BRVM : "
+                          + (f"lecture ratée ({book['error']})" if book.get("error") else
+                             f"séance du {book.get('session')}, {len(book.get('stocks') or [])} actions, "
+                             f"historique de {book.get('sessions', 0)} séance(s)"))
+            except Exception as e:
+                print(f"{now:%Y-%m-%d %H:%M:%S} UTC BRVM illisible : {e}")
             try:            # pays du monde (Banque mondiale, API ouverte) : relus une fois par semaine
                 book = pays.refresh(memory, now, lambda url: http_get(url, 60))
                 if book.get("tried_at") == now.isoformat(timespec="seconds"):

@@ -116,5 +116,6 @@ def test_demo_server_serves_the_countries_page(demo_server):  # noqa: F811
     base, _app = demo_server
     code, page = _json(base + "/api/countries?window=5y")
     assert code == 200 and len(page["rows"]) == 87
-    assert sum(1 for r in page["rows"] if r["index"]) == 49
+    assert sum(1 for r in page["rows"] if r["index"] and r["index"]["code"]) == 49
+    assert sum(1 for r in page["rows"] if r["index"]) == 49 + 8                     # et le BRVM Composite (UEMOA)
     assert all(r["wb"].get("income") for r in page["rows"])

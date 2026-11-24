@@ -93,6 +93,24 @@ test("pays du monde : classés par région, filtres, détail de l'indice", async
   expect(errors).toEqual([]);
 });
 
+test("BRVM : indices, activité, actions et filtres ; les pays de l'UEMOA", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto(BASE + "/#brvm");
+  const sec = page.locator("#page-brvm");
+  await expect(sec.locator('[data-bkpi="BRVM - COMPOSITE"] strong')).toHaveText("472,04");
+  await expect(sec.locator('[data-bkpi="stocks_cap"] strong')).toContainText("Md FCFA");
+  await expect(sec.locator("#brvm-indices tbody tr")).toHaveCount(6);
+  await expect(sec.locator("#brvm-stocks tbody tr")).toHaveCount(6);
+  await sec.locator('[data-bfilter="up"]').click();                             // actions en hausse
+  await expect(sec.locator("#brvm-stocks tbody tr")).toHaveCount(2);
+  await sec.locator('[data-bfilter="all"]').click();
+  await sec.locator(".brvm-search").fill("télécom");
+  await expect(sec.locator("#brvm-stocks tbody tr")).toHaveCount(1);
+  await page.goto(BASE + "/#countries");
+  await expect(page.locator('#page-countries .country[data-iso="SN"]')).toContainText("BRVM Composite");
+  expect(errors).toEqual([]);
+});
+
 test("téléphone : quatre raccourcis et le menu complet, sans défilement horizontal", async ({ page }) => {
   const errors = watchErrors(page);
   await page.setViewportSize({ width: 390, height: 844 });
@@ -121,5 +139,8 @@ test("téléphone : quatre raccourcis et le menu complet, sans défilement horiz
   await page.goto(`${BASE}/#countries`);
   await expect(page.locator("#page-countries .country").first()).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth), "countries").toBeLessThanOrEqual(0);
+  await page.goto(`${BASE}/#brvm`);
+  await expect(page.locator("#brvm-stocks tbody tr").first()).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth), "brvm").toBeLessThanOrEqual(0);
   expect(errors).toEqual([]);
 });

@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-from trendguard import attribution, evenements, levier, multi_actifs, pays, stress
+from trendguard import attribution, brvm, evenements, levier, multi_actifs, pays, stress
 from trendguard.texte import fr
 
 from .data import market_view, markets_view, merge_buys, reasoning_view
@@ -322,7 +322,25 @@ class DemoData:
                   "indicators": {"growth": [1.0 + k % 5, "2025"], "inflation": [2.0 + k % 4, "2025"],
                                  "unemployment": [4.0 + k % 6, "2025"], "gdp": [1e11 * (1 + k % 9), "2025"]}}
             for k, (iso, _n, _r, msci, *_rest) in enumerate(pays.COUNTRIES)}}
-        return pays.countries_view(self._multi_close(), book, window)
+        return pays.countries_view(self._multi_close(), book, window, regional=brvm.composite(self._brvm_book()))
+
+    def _brvm_book(self) -> Dict[str, Any]:
+        """Une séance d'exemple de la BRVM (démonstration : cours inventés)."""
+        names = (("BRVM-30", 228.62, -0.97, 1.97), ("BRVM - COMPOSITE", 472.04, -0.94, 1.70),
+                 ("BRVM - PRESTIGE", 180.92, -0.75, 1.47), ("BRVM - PRINCIPAL", 318.89, -1.20, 0.78),
+                 ("BRVM - TELECOMMUNICATIONS", 132.84, -0.81, 3.44), ("BRVM - SERVICES FINANCIERS", 210.83, -1.06, 0.56))
+        indices = [{"name": n, "prev": round(c / (1 + v / 100), 2), "close": c, "change": v, "ytd": y} for n, c, v, y in names]
+        stocks = [{"symbol": s, "name": n, "volume": vol, "prev": round(c / (1 + v / 100)), "open": c, "close": c, "change": v}
+                  for s, n, c, v, vol in (("SNTS", "Exemple Télécom", 3850, -0.26, 3210), ("SGBC", "Exemple Banque", 36995, -0.16, 120),
+                                          ("ORAC", "Exemple Mobile", 18900, -1.60, 850), ("UNXC", "Exemple Textile", 1750, 2.94, 5906),
+                                          ("BICC", "Exemple Crédit", 30975, 3.94, 410), ("SIVC", "Exemple Industrie", 1480, -7.50, 2200))]
+        day = datetime.now(timezone.utc).date().isoformat()
+        return {"session": day, "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "error": "",
+                "sessions": 1, "indices": indices, "stocks": stocks,
+                "activity": {"turnover": 2.24e9, "stocks_cap": 1.85e13, "bonds_cap": 1.34e13}}
+
+    def brvm(self) -> Dict[str, Any]:
+        return brvm.view(self._brvm_book(), "")
 
     def market_info(self, code: str, days: int = 0) -> Dict[str, Any]:
         return market_view(code, self._multi_close(), self._multi_book(), days)

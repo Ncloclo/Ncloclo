@@ -63,6 +63,7 @@ ALLOWLIST: Dict[str, Tuple[str, str]] = {
     "nfs.faireconomy.media": ("calendrier économique", "savoir"),
     "query1.finance.yahoo.com": ("marchés traditionnels (savoir)", "savoir"),
     "api.worldbank.org": ("pays du monde : région, revenu, indicateurs (Banque mondiale, savoir)", "savoir"),
+    "www.brvm.org": ("BRVM (Abidjan) : indices et cours, deux pages publiques par séance (savoir)", "savoir"),
     "news.google.com": ("actualités (savoir)", "savoir"), "www.bing.com": ("actualités (savoir)", "savoir"),
     "www.coindesk.com": ("actualités (savoir)", "savoir"), "cointelegraph.com": ("actualités (savoir)", "savoir"),
     "decrypt.co": ("actualités (savoir)", "savoir"), "www.cnbc.com": ("actualités (savoir)", "savoir"),

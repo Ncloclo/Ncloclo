@@ -40,7 +40,7 @@ COMMANDS: Dict[Tuple[str, str], Tuple[str, str]] = {
     ("GET", "/api/analyse"): ("ANALYZE", "analyse du portefeuille"), ("GET", "/api/assets"): ("READ", "cryptos"),
     ("GET", "/api/candles"): ("READ", "bougies"), ("GET", "/api/regime"): ("ANALYZE", "lecture du marché"),
     ("GET", "/api/markets"): ("READ", "marchés d'une classe d'actifs"), ("GET", "/api/market"): ("READ", "détail d'un marché"),
-    ("GET", "/api/countries"): ("READ", "pays du monde"),
+    ("GET", "/api/countries"): ("READ", "pays du monde"), ("GET", "/api/brvm"): ("READ", "BRVM (Abidjan)"),
     ("GET", "/api/watch"): ("READ", "veille"), ("GET", "/api/reasoning"): ("ANALYZE", "raisonnement du bot"),
     ("GET", "/api/news"): ("READ", "actualités"), ("GET", "/api/assistant"): ("READ", "accueil de Rachelle"),
     ("GET", "/api/anticipation"): ("SIMULATE", "prochaine clôture (probabilités, sans effet)"),

@@ -80,3 +80,4 @@ htmlcov/
 # le dépôt est public)
 *.docx
 .vscode/gemini-mcp/
+data_brvm/
