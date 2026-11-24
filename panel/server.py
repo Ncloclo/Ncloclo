@@ -663,6 +663,7 @@ class PanelApp(SecurityCenter):
             "/api/regime": self._regime_view,
             "/api/markets": lambda: self.data.markets(q("class", "commodities"), q("window", "1y")),
             "/api/market": lambda: self.data.market_info(q("code", "or"), int(q("days", "0") or 0)),
+            "/api/countries": lambda: self.data.countries(q("window", "1y")),
             "/api/watch": self.data.watch,
             "/api/reasoning": self.data.reasoning,
             "/api/news": self.news_view,

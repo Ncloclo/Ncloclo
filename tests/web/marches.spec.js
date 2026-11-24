@@ -18,7 +18,7 @@ function watchErrors(page) {
 }
 
 // [onglet, titre de la page, nombre de marchés de la démonstration]
-const PAGES = [["commodities", "Matières premières", 17], ["forex", "Devises", 8], ["indices", "Indices boursiers", 16],
+const PAGES = [["commodities", "Matières premières", 17], ["forex", "Devises", 8], ["indices", "Indices boursiers", 54],
   ["stocks", "Actions", 17], ["bonds", "Obligations", 3]];
 
 test("menu : une page par classe d'actifs, avec ses chiffres clés", async ({ page }) => {
@@ -67,6 +67,32 @@ test("matières premières : cartes, filtres, courbes et détail d'un marché", 
   expect(errors).toEqual([]);
 });
 
+test("pays du monde : classés par région, filtres, détail de l'indice", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto(BASE + "/#countries");
+  const sec = page.locator("#page-countries");
+  await expect(sec.locator(".country")).toHaveCount(87);
+  await expect(sec.locator(".grid-head")).toHaveCount(7);                       // sept régions
+  await expect(sec.locator('[data-ckpi="Développé"] strong')).toHaveText("23");
+  await sec.locator('[data-cfilter="Frontière"]').click();                     // frontières, dont « avancés »
+  await expect(sec.locator(".country:visible")).toHaveCount(28);
+  await sec.locator('[data-cfilter="all"]').click();
+  await sec.locator(".country-search").fill("ivoire");
+  const ci = sec.locator('.country[data-iso="CI"]');
+  await expect(sec.locator(".country:visible")).toHaveCount(1);
+  await expect(ci).toContainText("Frontière");
+  await expect(ci).toContainText("655,957");                                   // franc CFA arrimé à l'euro
+  await sec.locator(".country-search").fill("");
+  await sec.locator(".country-region").selectOption("Afrique");
+  await expect(sec.locator(".grid-head:visible")).toHaveCount(1);
+  await sec.locator(".country-region").selectOption("all");
+  await sec.locator('.country[data-iso="FR"]').click();
+  await expect(page.locator("#detail")).toBeVisible();
+  await expect(page.locator("#detail-title")).toHaveText("CAC 40");
+  await page.keyboard.press("Escape");
+  expect(errors).toEqual([]);
+});
+
 test("téléphone : quatre raccourcis et le menu complet, sans défilement horizontal", async ({ page }) => {
   const errors = watchErrors(page);
   await page.setViewportSize({ width: 390, height: 844 });
@@ -92,5 +118,8 @@ test("téléphone : quatre raccourcis et le menu complet, sans défilement horiz
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow, tab).toBeLessThanOrEqual(0);
   }
+  await page.goto(`${BASE}/#countries`);
+  await expect(page.locator("#page-countries .country").first()).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth), "countries").toBeLessThanOrEqual(0);
   expect(errors).toEqual([]);
 });

@@ -92,7 +92,7 @@ def test_daily_follow_up_and_fictitious_portfolio(tmp_path):
     memory = _Memory()
     book = ma.refresh(memory, NOW, fetch, str(tmp_path), 100.0, pause=0)
     markets = set(ma.ALL_CODES)                     # univers, manche Binance et marchés ajoutés le 24/11/2026
-    reads = len(markets) + len(ma.INDICATOR_CODES)  # et les indicateurs de marché (VIX, taux)
+    reads = len(markets) + len(ma.INDICATOR_CODES) + len(ma.CURRENCY_CODES)  # indicateurs (VIX, taux), devises
     assert book["error"] == "" and len(book["rows"]) == len(markets) and len(calls) == reads
     assert set(book["macro"]) == {"vix", "dxy", "rates", "curve"}
     assert book["start"] == "2026-11-24" and book["portfolio"]["capital"] == 100.0

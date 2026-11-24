@@ -152,6 +152,22 @@ survivant).
   `/api/markets`, `/api/market`), lue dans `data_multi/` et le noyau de
   savoir ; menu en trois groupes (Mon bot, Marchés, Analyse).
 
+### Pays du monde (24/11/2026)
+
+- `trendguard/pays.py` : 87 pays, classement MSCI de juin 2026 (revue
+  d'accessibilité, annexe II ; résultats du 23/06/2026) : 23 développés, 24
+  émergents, 5 frontières avancés, 23 frontières (dont les 8 pays de l'UEMOA,
+  bourse BRVM), 12 autonomes. Grèce développée et Bulgarie frontière en mai
+  2027 ; Indonésie et Turquie sous surveillance (revue de novembre 2026).
+- Indice de 49 pays chez Yahoo (`multi_actifs.WORLD` ; fonds MSCI cotés à New
+  York quand l'indice local n'a pas d'historique), 51 devises
+  (`multi_actifs.CURRENCIES`), Banque mondiale relue chaque semaine (clé
+  « pays » du noyau de savoir ; chiffres de plus de 5 ans écartés).
+- Ne pas confondre avec `trendguard/monde.py`, le modèle du monde (raisonnement).
+- `python -m research.pays --cache data_multi` (`docs/PAYS.md`) : la règle bat
+  l'achat-conservation seulement sur les frontières (4 indices : trop peu pour
+  conclure) ; information seulement.
+
 ### Synthèse des marchés de TradingView (24/11/2026)
 
 - Jamais de collecte automatique sur TradingView ni Investing.com : leurs

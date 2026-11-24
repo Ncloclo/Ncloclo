@@ -22,6 +22,7 @@ from trendguard import (
     libre,
     modeles,
     multi_actifs,
+    pays,
     pistes,
     savoir,
 )
@@ -311,15 +312,23 @@ class BotData:
     def _multi_close(self) -> pd.DataFrame:
         """Clôtures de tous les marchés hors cryptos, sur le calendrier commun du
         suivi quotidien ; relues seulement quand un fichier change."""
-        files = [os.path.join(self.multi_cache, f"{c}.csv") for c in multi_actifs.ALL_CODES]
+        codes = multi_actifs.ALL_CODES + multi_actifs.CURRENCY_CODES
+        files = [os.path.join(self.multi_cache, f"{c}.csv") for c in codes]
         sig = tuple(os.path.getmtime(f) if os.path.exists(f) else 0.0 for f in files)
         if self._multi is None or self._multi[0] != sig:
-            self._multi = (sig, multi_actifs.load(self.multi_cache, multi_actifs.ALL_CODES))
+            self._multi = (sig, multi_actifs.load(self.multi_cache, codes))
         return self._multi[1]
 
     def _multi_book(self) -> Dict[str, Any]:
         got = self._from_savoir(multi_actifs.KEY)
         return got[0] if got and isinstance(got[0], dict) else {}
+
+    def countries(self, window: str = "1y") -> Dict[str, Any]:
+        """Page des pays du monde (lecture seule) : classement MSCI, indice,
+        devise, indicateurs de la Banque mondiale."""
+        got = self._from_savoir(pays.KEY)
+        book = got[0] if got and isinstance(got[0], dict) else {}
+        return pays.countries_view(self._multi_close(), book, window)
 
     def markets(self, key: str, window: str = "1y") -> Dict[str, Any]:
         """Page d'une classe d'actifs (lecture seule)."""
