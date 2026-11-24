@@ -121,6 +121,11 @@ stop large. Étude : `python -m research.petit_capital --cache data_binance`
   Rapport principal : `trendguard_bot.py strategy research --data data`.
 - **Contrôles** : `.venv\Scripts\python -m pytest tests -q` et
   `.venv\Scripts\python -m ruff check .`.
+- **Tests navigateur** (panneau et page d'animation) : dans Chromium et Google
+  Chrome (`tests/web/playwright.config.js`, deux projets ; la CI lance les
+  deux). Sur le PC : `npm install`, puis `node
+  node_modules/@playwright/test/cli.js test -c tests/web/playwright.config.js
+  --project chrome`.
 
 ## Conventions
 
