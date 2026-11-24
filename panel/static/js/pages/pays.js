@@ -125,7 +125,7 @@ function makeCard(r, k) {
   const bottom = el("div", "row");
   bottom.append(el("span", "tags"), el("span", "sub vol"));
   card.append(top, el("span", "name"), pxRow, svg, el("p", "why idx"), el("p", "why cur"), el("p", "rank mac"), bottom);
-  if (r.index) {
+  if (r.index && r.index.code) {                       // le BRVM Composite n'a pas encore de graphique
     card.tabIndex = 0;
     card.setAttribute("role", "button");
     card.setAttribute("aria-label", `${r.name} : ouvrir le graphique de ${r.index.name}`);
@@ -166,9 +166,9 @@ async function render() {
       if (svg.dataset.win !== win) { delete svg.dataset.drawn; svg.classList.remove("reveal"); void svg.getBoundingClientRect(); svg.dataset.win = win; }
       fillSpark(svg, ix.spark || []);
     }
-    card.querySelector(".idx").textContent = ix
-      ? `${ix.name} : ${ix.trend ? "tendance haussière" : "tendance baissière"}${ix.signal ? ", signal d'achat de la règle" : ""}.`
-      : "Pas d'indice lisible chez Yahoo Finance pour ce marché.";
+    card.querySelector(".idx").textContent = !ix ? "Pas d'indice lisible chez Yahoo Finance pour ce marché."
+      : ix.trend == null ? `${ix.name} : ${fpct(ix.change)} sur la séance, ${fpct(ix.ytd)} depuis le 31 décembre ; historique en construction (page BRVM).`
+        : `${ix.name} : ${ix.trend ? "tendance haussière" : "tendance baissière"}${ix.signal ? ", signal d'achat de la règle" : ""}.`;
     card.querySelector(".cur").textContent = currency(r.currency);
     card.querySelector(".mac").textContent = macro(wb);
     card.querySelector(".tags").replaceChildren(...[r.note && el("span", "tag warn note", r.note)].filter(Boolean));

@@ -229,6 +229,10 @@ panneau de contrôle ») :
   (revenu, croissance, inflation, chômage, dette, solde courant ; API ouverte,
   relue chaque semaine). Les indices des pays sont aussi dans la page Indices
   ([`docs/PAYS.md`](docs/PAYS.md)) ;
+- **BRVM** (bourse régionale de l'UEMOA, à Abidjan) : indices, activité du
+  marché et toutes les actions cotées, lus après chaque séance sur les deux
+  pages publiques de brvm.org ; le bot construit l'historique séance après
+  séance ([`docs/BRVM.md`](docs/BRVM.md)) ;
 - **Indicateurs de marché** (page Veille) : VIX, indice du dollar, taux US à 10
   ans et courbe 10 ans − 3 mois, lus chaque jour après la clôture de New York.
   Information seulement : aucun filtre tiré d'eux n'a passé l'étude

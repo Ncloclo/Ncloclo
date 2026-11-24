@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import pandas as pd
 
@@ -258,9 +258,12 @@ def refresh(memory: Any, now: datetime, fetch: Fetch, force: bool = False) -> Di
 # PANNEAU : la page des pays (lecture seule)
 # ══════════════════════════════════════════════════════════════════════
 
-def countries_view(close: pd.DataFrame, book: Dict[str, Any], window: str = "1y") -> Dict[str, Any]:
+def countries_view(close: pd.DataFrame, book: Dict[str, Any], window: str = "1y",
+                   regional: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Chaque pays : classement, indice (cours, courbe, tendance de la règle),
-    devise face au dollar, indicateurs de la Banque mondiale."""
+    devise face au dollar, indicateurs de la Banque mondiale. `regional` : le
+    BRVM Composite de la dernière séance (brvm.composite), pour les pays de
+    l'UEMOA."""
     window = window if window in ma.SPARK_SESSIONS else "1y"
     wb = book.get("countries") or {}
     rows = []
@@ -273,6 +276,10 @@ def countries_view(close: pd.DataFrame, book: Dict[str, Any], window: str = "1y"
             index = {"code": code, "name": ma.NAME.get(code, code), "close": d["close"], "date": d["date"],
                      "trend": d["trend"], "signal": d["signal"], "spark": curve,
                      "change": (curve[-1] / curve[0] - 1) * 100 if len(curve) > 1 else None}
+        elif note == UEMOA and regional:
+            index = {"code": "", "name": "BRVM Composite (bourse régionale, Abidjan)", "close": regional.get("close"),
+                     "date": regional.get("session"), "trend": None, "signal": False, "spark": [],
+                     "change": regional.get("change"), "ytd": regional.get("ytd")}
         rows.append({"iso": iso, "name": name, "flag": flag(iso), "region": region, "msci": msci, "note": note,
                      "index": index, "currency": currency_view(cur, close), "wb": wb.get(iso) or {}})
     return {"rows": rows, "window": window, "regions": list(REGIONS), "classes": list(CLASSES),

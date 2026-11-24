@@ -50,3 +50,4 @@ qu'après l'une d'elles (dernière en date : `PETIT_CAPITAL.md`, minimum d'achat
 | [`AUDIT.md`](AUDIT.md) | audit et diagnostic expert du 28 au 30 septembre 2026 : état, constats, plan d'action |
 | [`DIAGNOSTIC_CODE.md`](DIAGNOSTIC_CODE.md) | analyse du code du 30 septembre 2026 : mesures, harmonisation, structure |
 | [`revues/`](revues/) | revues hebdomadaires écrites par la routine du lundi |
+| [`BRVM.md`](BRVM.md) | la BRVM (Abidjan) : ce que le bot lit, garde et en fait |

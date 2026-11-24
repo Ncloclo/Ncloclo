@@ -152,6 +152,16 @@ survivant).
   `/api/markets`, `/api/market`), lue dans `data_multi/` et le noyau de
   savoir ; menu en trois groupes (Mon bot, Marchés, Analyse).
 
+### BRVM (24/11/2026)
+
+- `trendguard/brvm.py` (`docs/BRVM.md`) : les deux pages publiques de brvm.org
+  (indices, actions) lues une fois par séance après 16:30 UTC, à 11 s d'écart
+  (robots.txt : Crawl-delay 10), dans la collecte du noyau de savoir. Pas
+  d'historique publié : le bot construit le sien (`data_brvm/`, première séance
+  le 24/11/2026) ; jour férié = page inchangée, rien n'est ajouté.
+- Page « BRVM » du panneau ; BRVM Composite sur les huit pays de l'UEMOA. Règle
+  applicable après 150/250 séances ; aucun ordre réel (il faudrait une SGI).
+
 ### Pays du monde (24/11/2026)
 
 - `trendguard/pays.py` : 87 pays, classement MSCI de juin 2026 (revue

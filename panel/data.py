@@ -17,6 +17,7 @@ import v29
 from trendguard import (
     attribution,
     bibliotheque,
+    brvm,
     evenements,
     levier,
     libre,
@@ -146,6 +147,7 @@ class BotData:
         self.g = gcfg
         self.market = market
         self.multi_cache = os.path.join(v29.APP_DIR, "data_multi")       # suivi quotidien (savoir.py)
+        self.brvm_cache = os.path.join(v29.APP_DIR, "data_brvm")         # séances de la BRVM gardées par le bot
         self._multi: Optional[Tuple[Tuple[float, ...], pd.DataFrame]] = None
 
     # ---------- État ----------
@@ -326,9 +328,15 @@ class BotData:
     def countries(self, window: str = "1y") -> Dict[str, Any]:
         """Page des pays du monde (lecture seule) : classement MSCI, indice,
         devise, indicateurs de la Banque mondiale."""
-        got = self._from_savoir(pays.KEY)
+        got = self._from_savoir(pays.KEY, brvm.KEY)
         book = got[0] if got and isinstance(got[0], dict) else {}
-        return pays.countries_view(self._multi_close(), book, window)
+        return pays.countries_view(self._multi_close(), book, window, regional=brvm.composite(got[1] if got else None))
+
+    def brvm(self) -> Dict[str, Any]:
+        """Page BRVM (lecture seule) : indices, activité, actions de la
+        dernière séance lue, et l'historique construit par le bot."""
+        got = self._from_savoir(brvm.KEY)
+        return brvm.view(got[0] if got else None, self.brvm_cache)
 
     def markets(self, key: str, window: str = "1y") -> Dict[str, Any]:
         """Page d'une classe d'actifs (lecture seule)."""
