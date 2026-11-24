@@ -600,6 +600,7 @@ class TrendGuardBot(RoutinesMixin, ExecutionMixin):
         self._launch_report(now)
         self._launch_expert(now)
         self._launch_pistes(now)
+        self._launch_levier(now)
         self._launch_savoir()
         # Horloge réelle (et non `now`, simulé en rejeu) : sert au contrôle
         # de santé du conteneur.

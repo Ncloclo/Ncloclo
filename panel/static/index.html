@@ -296,6 +296,11 @@
           <p class="sub" id="w-mkt-bn"></p>
           <div class="table-wrap"><table id="w-mkt-table"></table></div>
         </div>
+        <div class="card" id="w-lev-card" hidden><div class="card-head"><h2>Levier : l'étude du bot</h2><span class="sub" id="w-lev-sub"></span></div>
+          <p class="hint">Chaque semaine, le bot rejoue sa stratégie avec plusieurs politiques de levier, coût d'emprunt compris. Il n'en permet une que si sa règle fixée d'avance la justifie : un Calmar au moins aussi bon que sans levier sur 2018-2022 et depuis 2023, et une pire baisse au-dessus de −30 % (arrêt d'urgence à −40 %). Jamais appliqué : le bot trade au comptant, sans emprunt. Étude : docs/LEVIER.md.</p>
+          <p class="sub" id="w-lev-verdict"></p>
+          <div class="table-wrap"><table id="w-lev-table"></table></div>
+        </div>
         <div class="card" id="w-lib-card" hidden><div class="card-head"><h2>Bibliothèque de recherche</h2><span class="sub" id="w-lib-sub"></span></div>
           <p class="hint">Travaux récents de finance quantitative (arXiv) qui touchent aux règles du bot. Des pistes à vérifier par une étude hors échantillon : jamais appliquées telles quelles.</p>
           <ul id="w-lib" class="alert-list"></ul>
