@@ -245,6 +245,10 @@ class ExecutionMixin:
         if qty <= 0 or qty * f.price < s.ex.min_notional():
             return None, (f"montant sous le minimum de Binance ({fr(s.ex.min_notional(), '.0f')} "
                           f"{self.g.quote})")
+        if qty * stop < s.ex.min_notional():
+            # La vente au stop est soumise au même minimum : la position serait invendable.
+            return None, (f"position invendable à son stop ({fr(qty * stop, '.2f')} pour "
+                          f"{fr(s.ex.min_notional(), '.0f')} {self.g.quote} au moins chez Binance)")
         # Une quantité plus petite traverse moins de niveaux : son prix moyen
         # est au plus celui calculé, le risque reste sous celui prévu.
         f = realisme.fill(ob, "buy", qty) or f
@@ -602,7 +606,8 @@ class ExecutionMixin:
             market = (getattr(s.ex.exchange, "markets", None) or {}).get(s.symbol) or {}
             return porte.instrument_check(s.ex.rules, s.ex.round_amount(plan["qty"]),
                                           float(plan.get("exec_price") or plan["entry"]),
-                                          bool(market) and market.get("active") is not False)
+                                          bool(market) and market.get("active") is not False,
+                                          stop=None if plan.get("stop") is None else float(plan["stop"]))
         except Exception as e:
             return False, f"règles de Binance illisibles ({type(e).__name__})"
 

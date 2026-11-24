@@ -96,6 +96,11 @@ def test_exchange_rules_are_checked_in_live_only():
                                   (0.5, 100.0, False, "inactive")):
         ok, why = porte.instrument_check(rules, qty, px, listed)
         assert not ok and word in why, why
+    # Vente au stop soumise au même minimum : 6 USDT achetés, 5,40 au stop
+    # (vendable), 4,80 au stop (invendable).
+    assert porte.instrument_check(rules, 0.06, 100.0, True, stop=90.0)[0]
+    ok, why = porte.instrument_check(rules, 0.06, 100.0, True, stop=80.0)
+    assert not ok and "invendable à son stop" in why, why
     intent, pf, *_ = _checked()
     live = dataclasses.replace(pf, live=True, live_armed=True, instrument=(False, "paire absente ou inactive"))
     d = porte.check(intent, live, P, NOW)

@@ -186,11 +186,34 @@ def test_one_backtest_loop_for_the_bot_and_every_study():
 
 def test_one_position_size_for_bot_backtest_and_lab():
     """Une seule formule de taille : risque visé jusqu'au stop, plafond par
-    position, cash disponible, minimum de 10 USDT."""
+    position, cash disponible, minimum de Binance (5 USDT + 5 %)."""
     entry, stop, unit = ts.entry_levels(100.0, 5.0, P)
     assert entry == 100.0 * (1 + P.slippage) and stop == ts.initial_stop(100.0, 5.0, P)
     qty, cost = ts.size_position(entry, unit, 100.0, 10_000.0, 10_000.0, P)
     assert qty * unit == pytest.approx(100.0)                  # 1 % de 10 000 USDT
     qty2, cost2 = ts.size_position(entry, unit, 100.0, 10_000.0, 50.0, P)
     assert cost2 == pytest.approx(50.0) and qty2 < qty          # limité par le cash
-    assert ts.size_position(entry, unit, 100.0, 10_000.0, 5.0, P) is None   # < 10 USDT
+    assert ts.size_position(entry, unit, 100.0, 10_000.0, 5.0, P) is None   # < 5,25 USDT
+
+
+def test_a_small_capital_buys_like_a_large_one():
+    """Avec 100 USDT, 1 % de risque donne des achats de 7 à 20 USDT pour les
+    stops mesurés (P10 4,7 %, médiane 8,7 %, P90 14,1 %) : au-dessus du
+    minimum de Binance, ils ont la taille qu'ils auraient avec 10 000 USDT,
+    à l'échelle (l'ancien minimum de 10 USDT refusait le stop large)."""
+    for stop_pct in (0.047, 0.087, 0.141):
+        entry, _stop, unit = ts.entry_levels(100.0, 100.0 * stop_pct / P.init_stop_atr, P)
+        small = ts.size_position(entry, unit, 1.0, 100.0, 100.0, P)
+        large = ts.size_position(entry, unit, 100.0, 10_000.0, 10_000.0, P)
+        assert small is not None and large is not None
+        assert small[0] == pytest.approx(large[0] / 100)
+        assert small[0] * entry >= ts.MIN_NOTIONAL * (1 + ts.MIN_NOTIONAL_MARGIN)
+
+
+def test_a_position_unsellable_at_its_stop_is_not_bought():
+    """La vente au stop est soumise au même minimum de Binance : 1 USDT de
+    risque avec un stop à 20 % achète 5 USDT, qui ne vaudraient plus que
+    4 USDT au stop. Refusé avec 100 USDT, permis avec 10 000 USDT."""
+    entry, _stop, unit = ts.entry_levels(100.0, 100.0 * 0.20 / P.init_stop_atr, P)
+    assert ts.size_position(entry, unit, 1.0, 100.0, 100.0, P) is None
+    assert ts.size_position(entry, unit, 100.0, 10_000.0, 10_000.0, P) is not None

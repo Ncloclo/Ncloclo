@@ -191,6 +191,15 @@ def entry_signal(s: Dict[str, float], p: TrendParams) -> bool:
     return s["close"] > s["prior_high"] and s["mom"] > 0
 
 
+# Minimum d'un ordre Binance sur les paires USDT du bot (filtre NOTIONAL,
+# 5 USDT, 1 pour DOGE ; lu le 24/11/2026 dans exchangeInfo). Il vaut à
+# l'achat comme à la vente : une position doit pouvoir être revendue à son
+# stop. Marge de 5 %, comme la porte du réel (porte.instrument_check).
+# Étude : research/petit_capital.py, docs/PETIT_CAPITAL.md.
+MIN_NOTIONAL = 5.0
+MIN_NOTIONAL_MARGIN = 0.05
+
+
 def initial_stop(close: float, vol: float, p: TrendParams) -> float:
     return close - p.init_stop_atr * vol
 
@@ -206,14 +215,16 @@ def entry_levels(close: float, vol: float, p: TrendParams) -> Tuple[float, float
 def size_position(entry: float, unit_risk: float, risk_quote: float, equity: float,
                   cash: float, p: TrendParams) -> Optional[Tuple[float, float]]:
     """(quantité, coût) pour risquer `risk_quote` jusqu'au stop, sous le
-    plafond par position et le cash disponible ; None sous 10 USDT. Seul
-    calcul de taille du dépôt : bot, backtest, études et laboratoire."""
+    plafond par position et le cash disponible. None si la position, revendue
+    à son stop (frais et glissement déduits), vaudrait moins que le minimum
+    de Binance + 5 % : elle serait alors invendable. Seul calcul de taille du
+    dépôt : bot, backtest, études et laboratoire."""
     qty = min(risk_quote / unit_risk, p.max_position_pct * equity / entry)
     cost = qty * entry * (1 + p.fee)
     if cost > cash:
         qty = cash / (entry * (1 + p.fee))
         cost = qty * entry * (1 + p.fee)
-    if qty * entry < 10:
+    if qty * (entry * (1 + p.fee) - unit_risk) < MIN_NOTIONAL * (1 + MIN_NOTIONAL_MARGIN):
         return None
     return qty, cost
 

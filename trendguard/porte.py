@@ -45,6 +45,7 @@ from datetime import datetime, timedelta
 from typing import Any, FrozenSet, List, Optional, Tuple
 
 from . import autonomy
+from . import trend_strategy as ts
 from .contrats import (
     ContractError,
     ExecutionAuthorization,
@@ -57,7 +58,7 @@ from .texte import fr
 
 POLICY_VERSION = "porte.v3"              # v2 (étape 16) : règles de Binance, validation finale ; v3 (17) : paliers
 MARGIN = 0.10               # écart toléré entre le plan (clôture) et l'achat (prix, capital du moment)
-MIN_NOTIONAL = 10.0         # même minimum que la taille des positions (trend_strategy.size_position)
+MIN_NOTIONAL = ts.MIN_NOTIONAL  # minimum de Binance, le même que la taille des positions
 AUTH_SECONDS = 300          # une autorisation vaut 5 minutes
 QUALITY_MIN = 50.0          # note des données du jour (qualite.py) sous laquelle on n'achète pas
 RESTRICTIONS = ("achat au comptant (Spot), sans levier", "ordre unique pour cette crypto aujourd'hui")
@@ -174,11 +175,13 @@ def authorize(decision: RiskDecision, pf: Portfolio, now: datetime) -> Execution
         restrictions=RESTRICTIONS if ok else ())
 
 
-def instrument_check(rules: Any, qty: float, price: float, listed: bool) -> Tuple[bool, str]:
+def instrument_check(rules: Any, qty: float, price: float, listed: bool,
+                     stop: Optional[float] = None) -> Tuple[bool, str]:
     """Règles de Binance pour un achat réel (§11, §14-15), les mêmes que
     l'exécution (v29) : paire cotée et active, quantité arrondie au pas du
     lot non nulle et dans ses bornes, montant d'au moins le minimum de
-    Binance + 5 %. Une règle illisible refuse."""
+    Binance + 5 %, et position encore vendable à son stop (`stop` : la vente
+    au stop est aussi soumise au minimum). Une règle illisible refuse."""
     min_cost = float(getattr(rules, "min_cost", 0.0) or 10.0)
     min_qty = float(getattr(rules, "min_amount", 0.0) or 0.0)
     max_qty = getattr(rules, "max_amount", None)
@@ -192,6 +195,9 @@ def instrument_check(rules: Any, qty: float, price: float, listed: bool) -> Tupl
         return False, f"quantité {fr(qty, '.8g')} au-dessus du maximum de Binance {fr(float(max_qty), '.8g')}"
     if qty * price < min_cost * 1.05:
         return False, f"montant {fr(qty * price, '.2f')} sous le minimum de Binance {fr(min_cost, '.2f')} (+ 5 %)"
+    if stop is not None and qty * stop < min_cost:
+        return False, (f"position invendable à son stop : {fr(qty * stop, '.2f')} pour "
+                       f"{fr(min_cost, '.2f')} au moins chez Binance")
     return True, f"quantité {fr(qty, '.8g')} au pas du lot, montant {fr(qty * price, '.2f')} pour {fr(min_cost, '.2f')} au moins"
 
 
