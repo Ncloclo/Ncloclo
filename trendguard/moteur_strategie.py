@@ -152,7 +152,7 @@ PARAMETERS: Dict[str, Dict[str, Any]] = {
 TREND: Dict[str, Any] = {
     "id": "trendguard.cassure",
     "name": "Cassure du plus haut de 30 jours, momentum de 90 jours, régime de BTC",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "family": "TREND_FOLLOWING",
     "families": ["TREND_FOLLOWING", "BREAKOUT", "MOMENTUM"],
     "status": "PAPER",
@@ -182,7 +182,7 @@ TREND: Dict[str, Any] = {
               "moves": "ne descend jamais"},
     "sizing": {"method": "FIXED_FRACTIONAL", "risk_pct": "$risk_pct",
                "to": "stop initial, frais et glissement compris", "max_position_pct": "$max_position_pct",
-               "min_notional_usdt": 10, "drawdown_throttle": []},
+               "min_notional_usdt": 5, "sellable_at_stop": True, "drawdown_throttle": []},
     "constraints": {"max_positions": "$max_positions", "max_total_risk": "$max_total_risk",
                     "max_position_pct": "$max_position_pct", "leverage": 1.0, "short": False},
     "costs": {"model": "FIXED_PER_SIDE", "fee": "$fee", "slippage": "$slippage"},
@@ -191,7 +191,7 @@ TREND: Dict[str, Any] = {
     "dependencies": {"features": sorted(FEATURES), "data": ["MarketData.v1"],
                      "code": ["trendguard/trend_strategy.py"], "regime": "trend_strategy.btc_regime"},
     "evidence": ["docs/ROBUSTESSE.md", "docs/EXAMEN.md", "docs/STRATEGIES.md"],
-    "locks": {"features": "967db492c7a14287", "rules": "f0c07811207c5e64"},
+    "locks": {"features": "967db492c7a14287", "rules": "7aaa2b470185cf30"},
 }
 PRUDENT: Dict[str, Any] = dict(
     copy.deepcopy(TREND), id="trendguard.cassure.prudent", parent="trendguard.cassure",
@@ -695,7 +695,7 @@ def render_spec(spec: Dict[str, Any], p: ts.TrendParams) -> str:
                   f"{st['moves']}.",
               f"Taille : {fr(params['risk_pct'] * 100, 'g')} % du capital risqué jusqu'au {sz['to']}, "
               f"{fr(params['max_position_pct'] * 100, 'g')} % du capital au plus par position, "
-              f"{sz['min_notional_usdt']} USDT au moins"
+              f"{sz['min_notional_usdt']} USDT au moins à l'achat comme à la revente au stop"
               + (" ; profil prudent : " + ", ".join(f"risque × {fr_plain(m)} au-delà de −{fr_plain(t * 100)} %"
                                                     for t, m in sz["drawdown_throttle"]) if sz["drawdown_throttle"]
                  else "") + ".",

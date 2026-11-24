@@ -439,7 +439,7 @@ Taille de chaque achat (1 % de risque) sous les plafonds.
 | Consommateur | exécution |
 | Entrée | signaux, portefeuille, capital, argent disponible, réglages |
 | Sortie | quantité, prix, stop, risque, coût par crypto |
-| Erreurs | taille sous 10 USDT : pas d'achat |
+| Erreurs | position invendable à son stop (minimum de Binance, 5 USDT + 5 %) : pas d'achat |
 | Droits | règles fixes |
 | Délai | immédiat |
 | Nouveaux essais | aucun |

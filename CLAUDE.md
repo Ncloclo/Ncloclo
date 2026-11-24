@@ -88,6 +88,26 @@ research.garde --cache data_binance`, et il dégrade la stratégie.
 S'interdire d'acheter après une mauvaise journée fait manquer des reprises. Ne
 pas reproposer ce seuil sans nouvelle étude.
 
+### Petit capital : minimum de Binance compté au stop (24/11/2026)
+
+`ts.size_position` refuse un achat si la position, revendue à son stop, vaudrait
+moins de 5 USDT + 5 % (filtre NOTIONAL de Binance, qui vaut aussi pour la vente).
+L'ancien minimum fixe de 10 USDT à l'achat refusait, avec 100 USDT, les achats à
+stop large. Étude : `python -m research.petit_capital --cache data_binance`
+(`docs/PETIT_CAPITAL.md`), fiche de la stratégie passée en version 1.1.0.
+
+| Capital | 2018-2022 | 2023 → 22/11/2026 | 24/05 → 22/11/2026 |
+| --- | --- | --- | --- |
+| 10 000 USDT (inchangé) | +460 % | +194 % | +9,5 % |
+| 100 USDT, ancienne règle | +454 % | +219 % | +2,6 % |
+| 100 USDT, règle actuelle | +454 % | +195 % | +9,5 % |
+
+- Le minimum vient des règles de Binance, pas des résultats. Depuis 2023,
+  l'ancienne règle faisait mieux à 100 USDT par chance : les achats refusés ont
+  plutôt perdu.
+- Sous 50 USDT, de plus en plus d'achats sont refusés ; à 20 USDT, aucun ne
+  passe. Ne pas conseiller moins de 100 USDT.
+
 ## Commandes (Windows, depuis la racine)
 
 - **Installation** (Python 3.12, la version de la CI) : `py -3.12 -m venv

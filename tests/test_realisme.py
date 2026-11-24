@@ -200,3 +200,27 @@ def test_a_purchase_under_the_binance_minimum_is_cancelled(logger, caplog):
         bot.run_cycle(now=d.to_pydatetime() + DAY + timedelta(minutes=5))
     assert bot.state["paper"]["holdings"] == {}
     assert "annulée : montant sous le minimum de Binance" in caplog.text
+
+
+def test_a_purchase_unsellable_at_its_stop_is_cancelled(logger):
+    """Achat paper au carnet : une fois la quantité arrondie, la position
+    doit encore valoir le minimum de Binance à son stop, sinon elle serait
+    invendable. 12 USDT achetés pour un minimum de 10 : refus avec un stop
+    à −30 % (8,40 au stop), achat avec un stop à −10 % (10,80 au stop)."""
+    close, volume = synthetic_market()
+    bot, fb = make_bot("paper", close, logger, paper_reel=True)
+    assert bot.boot()
+    feed(fb, close, volume)
+    a = close.columns[0]
+    s = bot.slots[a.upper()]
+    px = float(close[a].iloc[SIM_FROM])
+    fb.set_price(f"{a.upper()}/USDT", px)
+    fb.fakes[s.symbol].min_notional_value = 10.0
+    s.ex.rules.min_cost = 10.0
+    qty = 12.0 / px
+    plan = {"asset": a, "qty": qty, "stop": px * 0.7, "risk_quote": qty * px,
+            "entry": px, "exec_price": px}
+    real, why = bot._paper_fill_entry(s, plan, 1e6)
+    assert real is None and "invendable à son stop" in why, why
+    real, why = bot._paper_fill_entry(s, dict(plan, stop=px * 0.9), 1e6)
+    assert real is not None and real["qty"] * px * 0.9 >= 10.0, why

@@ -120,7 +120,7 @@ def test_gate_approves_the_normal_purchase():
     ({"cost": 200.0}, {"cash": 1000.0}, "REJECTED", "taille de la position"),
     ({}, {"cash": 20.0}, "REJECTED", "argent disponible"),
     ({"stop": 100.0}, {}, "REJECTED", "stop sous le prix"),
-    ({"qty": 0.05, "cost": 5.0}, {}, "REJECTED", "montant minimum"),
+    ({"qty": 0.04, "cost": 4.0}, {}, "REJECTED", "montant minimum"),   # sous 5 USDT
     ({}, {"live": True}, "REJECTED", "réel NON armé"),
     ({}, {"data_quality": 40.0}, "REJECTED", "qualité des données"),
 ])

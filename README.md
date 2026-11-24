@@ -45,7 +45,11 @@ diagnostic du code dans [`docs/DIAGNOSTIC_CODE.md`](docs/DIAGNOSTIC_CODE.md).
 3. **Stop** : initial à 3 × volatilité, puis trailing « chandelier » à 5 ×
    volatilité sous le plus haut (2 × en régime baissier), évalué à la clôture.
 4. **Taille** : **1 % du capital risqué par trade** ; max 8 positions, 6 % de
-   risque cumulé, 25 % du capital par position.
+   risque cumulé, 25 % du capital par position. Pas d'achat si la position,
+   revendue à son stop, vaudrait moins que le minimum de Binance (5 USDT + 5 %).
+   Le bot fonctionne ainsi dès 100 USDT comme avec 10 000 ; sous 50 USDT, il
+   refuse de plus en plus d'achats
+   ([`docs/PETIT_CAPITAL.md`](docs/PETIT_CAPITAL.md)).
 
 ### Résultats
 
