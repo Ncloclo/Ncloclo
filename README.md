@@ -867,9 +867,12 @@ Sur un PC qui a le dossier `.venv`, lancez-les avec son Python
 avec les bibliothèques du bot.
 
 À chaque envoi sur GitHub, `.github/workflows/checks.yml` lance ces tests, puis
-vérifie la page d'animation et le panneau de contrôle dans Chromium : ESLint sur
-les scripts et tests Playwright (`tests/web/`) sur une page d'exemple et le
-panneau en démonstration, sans réseau.
+vérifie la page d'animation et le panneau de contrôle dans deux navigateurs,
+Chromium et Google Chrome : ESLint sur les scripts et tests Playwright
+(`tests/web/`) sur une page d'exemple et le panneau en démonstration, sans
+réseau. Sur le PC, avec le Chrome installé : `npm install`, puis `node
+node_modules/@playwright/test/cli.js test -c tests/web/playwright.config.js
+--project chrome`.
 
 ## Limites connues
 
