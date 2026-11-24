@@ -1,10 +1,10 @@
 // Panneau TrendGuard : fenêtre de détail d'un graphique. Une crypto :
-// graphique d'analyse (analyse.js) ; le capital et le régime : leur courbe
-// et un panneau. Période et zoom (zoom.js) : la période choisie glisse avec
+// graphique d'analyse (analyse.js) ; le capital, le régime et un marché hors
+// cryptos : leur courbe et un panneau. Période et zoom (zoom.js) : la période choisie glisse avec
 // le temps ; pour une crypto, l'unité de temps suit la période. Réglages
 // gardés d'une ouverture à l'autre.
 
-import { $, $$, api, el, fdate, fpct, fpx, fR, fusd, prefs, toast, up, withLoader } from "./core.js";
+import { $, $$, api, el, fdate, fpct, fpx, fR, fusd, nf, prefs, toast, up, withLoader } from "./core.js";
 import { buyMarkersOn, candleData, COLORS, legend, uniq } from "./charts.js";
 import { AssetChart, DEFAULT_IDS, EquityChart, MAX_COLORS, MAX_PANES, PRESETS, RegimeChart, renderIndicatorMenu, technicalReading } from "./analyse.js";
 import { S } from "./etat.js";
@@ -174,6 +174,11 @@ function mountView() {
   } else if (spec.kind === "equity") {
     D.view = new EquityChart(box, ro);
     legend($("#detail-legend"), [[c.up, "Au-dessus du départ"], [c.down, "En dessous du départ"], [c.up, "▲ Achats du bot"], [c.down, "▼ Ventes du bot"]]);
+  } else if (spec.kind === "market") {
+    D.view = new RegimeChart(box, ro, { label: spec.label || spec.title, unit: "séances", long: "séances",
+      words: ["tendance haussière", "tendance baissière"], breakout: true });
+    legend($("#detail-legend"), [[c.ink, "Clôture de chaque séance"], [c.sma, "Moyenne 150 séances : au-dessus, tendance haussière"],
+      [c.accent, "Cassure : plus haut des 30 séances précédentes", true], [c.accent, "Entrée fictive", true], [c.down, "Stop fictif"]]);
   } else {
     D.view = new RegimeChart(box, ro);
     legend($("#detail-legend"), [[c.ink, "BTC (clôture)"], [c.sma, "Moyenne 150 jours : au-dessus, achats autorisés"]]);
@@ -189,11 +194,11 @@ function mountZoom() {
   $("#detail-range").textContent = "";
   D.zoom = new TimeZoom(view.stack ? view.stack.main : null, { windows: $("#detail-windows"), label: $("#detail-range") }, {
     win: prefs.get("window:" + kind, "all"),
-    extend: kind !== "regime",
+    extend: kind !== "regime" && kind !== "market",
     before: () => { if (view.stack) view.stack.leader = null; },   // le graphique principal mène ses panneaux
     onWindow: (key) => {
       prefs.set("window:" + kind, key);
-      if (kind === "regime") return false;
+      if (kind === "regime" || kind === "market") return false;     // séances déjà toutes chargées
       if (kind === "asset") {
         D.interval = intervalFor(key, D.interval);
         prefs.set("interval", D.interval);
@@ -216,7 +221,7 @@ export function openDetail(spec) {
   detail.showModal();
   mountView();
   withLoader("Chargement du graphique…", loadDetail, "detail-loader");
-  D.timer = setInterval(loadDetail, 10000);
+  D.timer = setInterval(loadDetail, spec.kind === "market" ? 300000 : 10000);   // un marché : une clôture par jour
 }
 export function restyleDetail() {
   if (!D || !D.view) return;
@@ -225,8 +230,11 @@ export function restyleDetail() {
   loadDetail();
 }
 
+// Chiffres du détail : [libellé, valeur, classe] ; sans libellé (null), une
+// phrase sur toute la largeur, sous la ligne précédente.
 function stats(rows) {
-  $("#detail-stats").replaceChildren(...rows.flatMap(([k, v, cls]) => [el("dt", "", k), el("dd", cls || "", v)]));
+  $("#detail-stats").replaceChildren(...rows.flatMap(([k, v, cls]) => (k == null ? [el("dd", "wide", v)]
+    : [el("dt", "", k), el("dd", cls || "", v)])));
 }
 async function loadDetail() {
   if (!D || !D.view) return;
@@ -268,6 +276,33 @@ async function loadDetail() {
         ["Variation", fpct(last && start ? (last.value / start - 1) * 100 : null), last && last.value >= start ? "up" : "down"],
         ["Plus haut", fusd(hi)], ["Baisse depuis le plus haut", fpct(last && hi ? (last.value / hi - 1) * 100 : null)],
         ["Pire baisse de la courbe", fpct(worst), worst < 0 ? "down" : ""], ["Points", String(pts.length)]]);
+    } else if (spec.kind === "market") {
+      const m = await api(`/api/market?code=${encodeURIComponent(spec.code)}`);
+      if (!D || D.view !== view) return;
+      const r = m.detail, pos = (r.positions || [])[0], ch = r.changes || {};
+      view.update({ points: m.points, sma: m.sma, markers: [], position: pos ? { entry: pos.entry, stop: pos.stop } : null });
+      const dir = (v) => (v == null ? "" : v >= 0 ? "up" : "down");
+      // Valeurs courtes à droite ; une phrase longue passe sous son libellé (« wide »).
+      const rows = [["Cours", fpx(r.close)], ["Séance", fdate(r.date)],
+        ["Sur 1 mois", fpct(ch["1m"]), dir(ch["1m"])], ["Sur 3 mois", fpct(ch["3m"]), dir(ch["3m"])], ["Sur 1 an", fpct(ch["1y"]), dir(ch["1y"])],
+        ["Plus haut sur un an", fpx(r.high_1y)], ["Plus bas sur un an", fpx(r.low_1y)],
+        [`Moyenne ${m.sma} séances`, fpx(r.sma)], ["Écart à la moyenne", fpct(r.gap_pct), r.trend ? "up" : "down"],
+        ["Tendance", r.trend ? "haussière" : "baissière", r.trend ? "up" : "down"],
+        [`Cassure (${m.breakout_n} séances)`, r.breakout == null ? "–" : fpx(r.breakout)],
+        ["Cours face à la cassure", fpct(r.breakout_gap_pct), dir(r.breakout_gap_pct)],
+        ["Momentum 90 séances", r.mom == null ? "–" : `${nf(2).format(r.mom)} · ${r.mom > 0 ? "favorable" : "défavorable"}`, r.mom == null ? "" : r.mom > 0 ? "up" : "down"],
+        ["Volatilité", r.vol_pct == null ? "–" : `${nf(2).format(r.vol_pct)} % / séance`],
+        ["Stop d'un achat du jour", r.stop == null ? "–" : `${fpx(r.stop)} (${fpct((r.stop / r.close - 1) * 100)})`],
+        ["Signal de la règle", r.signal ? "achat possible" : "aucun", r.signal ? "up" : ""],
+        [null, r.signal ? "Au-dessus de son plus haut des 30 séances, momentum positif, tendance haussière : la règle achèterait aujourd'hui (argent fictif)."
+          : r.trend ? "Tendance haussière : la règle achètera si le cours dépasse son plus haut des 30 séances précédentes."
+            : "Sous sa moyenne de 150 séances : la règle n'achète pas."]];
+      (r.positions || []).forEach((p) => rows.push(["Position fictive", fpct(p.pnl_pct), dir(p.pnl_pct)],
+        [null, `${p.book} : achat à ${fpx(p.entry)}, stop à ${fpx(p.stop)}.`]));
+      rows.push(["Où le trader", r.binance ? "Binance (fictif)" : "courtier requis"],
+        [null, r.binance ? `${r.binance} : suivi en argent fictif, aucun ordre réel.` : "Aucun ordre réel sur ce marché : il faudrait un courtier."],
+        ["Source", `Yahoo Finance (${r.symbol})`]);
+      stats(rows);
     } else {
       const reg = await api("/api/regime");
       if (!D || D.view !== view) return;

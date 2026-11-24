@@ -8,12 +8,15 @@ import math
 import random
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-from trendguard import attribution, evenements, levier, stress
+import numpy as np
+import pandas as pd
+
+from trendguard import attribution, evenements, levier, multi_actifs, stress
 from trendguard.texte import fr
 
-from .data import merge_buys, reasoning_view
+from .data import market_view, markets_view, merge_buys, reasoning_view
 from .market import INTERVALS
 
 BASE_PRICES = {"btc": 84400.0, "eth": 2690.0, "bnb": 780.0, "xrp": 0.58, "ada": 0.254,
@@ -270,6 +273,35 @@ class DemoData:
                        "possible": ["Claude", "GPT", "Gemini", "DeepSeek", "Mistral", "Kimi",
                                     "Perplexity", "Grok"]},
                 "savoir": self.savoir(), "evenements": self.evenements(), "levier": self.levier()}
+
+    _multi: Optional[pd.DataFrame] = None
+
+    def _multi_close(self) -> pd.DataFrame:
+        """Clôtures d'exemple des marchés hors cryptos : une marche au hasard
+        fixe par marché, sur un peu plus de cinq ans de séances."""
+        if self._multi is None:
+            idx = pd.bdate_range(end=pd.Timestamp.now(tz="UTC").normalize(), periods=1400)
+            cols = {}
+            for k, code in enumerate(multi_actifs.ALL_CODES):
+                rng = np.random.default_rng(100 + k)
+                base = {"Devises": 1.1, "Obligations": 95.0}.get(multi_actifs.CATEGORY[code], 80.0 + 40 * (k % 7))
+                cols[code] = base * np.exp(np.cumsum((0.0006 if k % 3 else -0.0004) + rng.normal(0, 0.009, len(idx))))
+            DemoData._multi = pd.DataFrame(cols, index=idx)
+        return DemoData._multi
+
+    def _multi_book(self) -> Dict[str, Any]:
+        """L'or détenu dans les deux portefeuilles fictifs (exemple)."""
+        px = float(self._multi_close()["or"].iloc[-1])
+        pos = {"code": "or", "name": multi_actifs.NAME["or"], "category": "Matières premières",
+               "entry": round(px * 0.94, 2), "stop": round(px * 0.9, 2), "price": px, "pnl_pct": (1 / 0.94 - 1) * 100}
+        return {"fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "error": "",
+                "portfolio": {"positions": [pos]}, "binance": {"positions": [dict(pos)]}}
+
+    def markets(self, key: str, window: str = "1y") -> Dict[str, Any]:
+        return markets_view(key, self._multi_close(), self._multi_book(), window)
+
+    def market_info(self, code: str, days: int = 0) -> Dict[str, Any]:
+        return market_view(code, self._multi_close(), self._multi_book(), days)
 
     def levier(self) -> Dict[str, Any]:
         """Étude du levier d'exemple (même forme que BotData.levier), jugée par

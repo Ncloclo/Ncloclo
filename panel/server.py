@@ -661,6 +661,8 @@ class PanelApp(SecurityCenter):
             "/api/candles": lambda: self.candles(q("asset", "btc"), q("interval", "1h"),
                                                  int(q("limit", "300")), q("levels", "") == "1"),
             "/api/regime": self._regime_view,
+            "/api/markets": lambda: self.data.markets(q("class", "commodities"), q("window", "1y")),
+            "/api/market": lambda: self.data.market_info(q("code", "or"), int(q("days", "0") or 0)),
             "/api/watch": self.data.watch,
             "/api/reasoning": self.data.reasoning,
             "/api/news": self.news_view,

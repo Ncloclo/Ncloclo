@@ -11,19 +11,21 @@
 //   detail.js      fenêtre de détail d'un graphique
 //   connexion.js   mot de passe du panneau
 //   assistant.js   Rachelle ; rapport.js : rapport quotidien, sécurité
-//   pages/*.js     une page par onglet, qui s'enregistre elle-même
+//   pages/*.js     une page par onglet, qui s'enregistre elle-même ; marches.js :
+//                  une page par classe d'actifs hors cryptos
 
 import { $, $$, cssVar, onUnauthorized, prefs } from "./js/core.js";
 import { restyleCharts } from "./js/charts.js";
 import { closeChat } from "./js/assistant.js";
 import { refreshStatus } from "./js/etat.js";
-import { currentTab, refreshTab, route, tick } from "./js/navigation.js";
+import { currentTab, menuOpen, refreshTab, route, setMenu, tick } from "./js/navigation.js";
 import { handleDetailEscape, restyleDetail } from "./js/detail.js";
 import { showLogin } from "./js/connexion.js";
 import "./js/pages/tableau.js";
 import "./js/pages/actualites.js";
 import { flashBuy } from "./js/pages/graphiques.js";
 import "./js/pages/cryptos.js";
+import "./js/pages/marches.js";
 import "./js/pages/positions.js";
 import "./js/pages/veille.js";
 import "./js/pages/journal.js";
@@ -59,6 +61,7 @@ document.addEventListener("tg:achat", (e) => {
 // ---------- Clavier ----------
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
+  if (menuOpen()) { setMenu(false); $("#menu-btn").focus(); return; }
   if (!handleDetailEscape(e) && !$("#chat").hidden) closeChat();
 });
 

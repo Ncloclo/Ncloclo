@@ -213,6 +213,17 @@ panneau de contrôle ») :
   et des ventes) cochées au départ, à cocher ou décocher soi-même ; le bot
   n'achète que les cryptos cochées. Une crypto décochée
   déjà détenue reste gérée jusqu'à sa vente ;
+- **Matières premières**, **Devises**, **Indices**, **Actions** et
+  **Obligations** : une page par classe d'actifs, sur le modèle de la page
+  Cryptos (35 marchés suivis chaque jour, clôtures de Yahoo Finance). Chaque
+  marché a sa carte (cours, variation, courbe sur 1 mois à 5 ans, tendance et
+  signal de la règle, position fictive, jeton Binance s'il existe) et sa
+  fenêtre de détail (graphique avec la moyenne de 150 séances et le niveau de
+  cassure, variations, volatilité, stop initial d'un achat du jour). Argent
+  fictif seulement : aucun ordre réel sur ces marchés ;
+- **Menu** : rangé en trois groupes (Mon bot, Marchés, Analyse), puis les
+  Réglages ; au téléphone, quatre raccourcis en bas et « Menu » pour toutes les
+  pages ;
 - **Temps de réflexion** : chaque passage d'une rubrique ou d'une sélection à
   une autre (onglet, filtre, tri, graphique détaillé, intervalle) affiche une
   icône de chargement pendant au moins 3 s, avec une barre de progression,

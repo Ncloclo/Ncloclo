@@ -13,15 +13,31 @@ export function register(tab, render, period) {
 }
 export const currentTab = () => current;
 
+// Téléphone : la barre du bas garde quatre raccourcis ; « Menu » ouvre
+// toutes les pages, rangées comme sur grand écran.
+const side = $(".side"), menuBtn = $("#menu-btn"), sheet = $("#tabs");
+const BAR = new Set($$(".bar-tab[data-tab]").map((a) => a.dataset.tab));
+export const menuOpen = () => side.classList.contains("open");
+export function setMenu(open) {
+  side.classList.toggle("open", open);
+  document.body.classList.toggle("menu-open", open);            // Rachelle s'efface sous le menu
+  menuBtn.setAttribute("aria-expanded", String(open));
+  if (open) ($(".tab[aria-current]", sheet) || $(".tab", sheet)).focus();
+}
+menuBtn.addEventListener("click", (e) => { e.stopPropagation(); setMenu(!menuOpen()); });
+$$(".tab", sheet).forEach((a) => a.addEventListener("click", () => setMenu(false)));
+document.addEventListener("click", (e) => { if (menuOpen() && !sheet.contains(e.target)) setMenu(false); });
+
 export function route() {
   const hash = location.hash.slice(1), t = PAGES.has(hash) ? hash : "dash";
   if (t === current) return;
   current = t;
   $$(".page").forEach((p) => p.classList.toggle("active", p.id === "page-" + t));
-  $$(".tab").forEach((a) => {
+  $$(".tab, .bar-tab[data-tab]").forEach((a) => {
     if (a.dataset.tab === t) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
   });
+  menuBtn.classList.toggle("current", !BAR.has(t));             // page rangée dans le menu
   const title = $("#page-" + t).dataset.title;
   $("#page-title").textContent = title;
   window.scrollTo({ top: 0 });
