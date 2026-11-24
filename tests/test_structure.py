@@ -2,6 +2,7 @@
 envoi : sens des dépendances, modules et fonctions longues documentés."""
 import ast
 import pathlib
+import re
 
 from research import diagnostic_code as dc
 from trendguard import trend_strategy as ts
@@ -48,6 +49,16 @@ def test_every_module_says_what_it_is_for():
     missing = [path.relative_to(ROOT).as_posix() for _pkg, path, tree in _modules(*ALLOWED)
                if ast.get_docstring(tree) is None]
     assert not missing, missing
+
+
+def test_architecture_doc_lists_every_trendguard_module():
+    """docs/ARCHITECTURE.md (tableau « Le paquet `trendguard/` ») dit le rôle
+    de chaque module : un module oublié n'y est jamais expliqué à Clovis."""
+    modules = {path.stem for path in (ROOT / "trendguard").glob("*.py")
+               if path.stem != "__init__"}
+    doc = (ROOT / "docs" / "ARCHITECTURE.md").read_text(encoding="utf-8")
+    listed = set(re.findall(r"\| `([a-z_]+)\.py`", doc))
+    assert not modules - listed, sorted(modules - listed)
 
 
 def test_long_public_functions_are_documented():

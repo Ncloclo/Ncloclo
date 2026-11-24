@@ -78,6 +78,7 @@ sont jamais envoyés sur GitHub. VS Code les masque dans l'explorateur
 | `bot.py` | `TrendGuardBot` : démarrage, cycle, décision quotidienne, sélection, boucle |
 | `bot_routines.py` | routines du cycle : disponibilité, veille, horloge, évolution et rapport lancés, anticipation, apprentissage, heartbeat |
 | `bot_execution.py` | exécution : entretien des positions, ventes, stops remontés, achats rusés (carnet anormal, achat différé) |
+| `realisme.py` | exécution paper au plus près du réel (`TG_PAPER_REEL`) : achats et ventes passés au vrai carnet d'ordres Binance du moment, niveau par niveau, aux vrais frais, stops surveillés minute par minute ; le rejeu et les études gardent l'ancien modèle |
 | `bot_types.py` | types partagés du bot : `Slot`, `DecisionDeferred`, `last_closed_day` |
 | `selection.py` | cryptos achetables, choisies dans le panneau |
 | `explain.py` | raisonnement du jour, en phrases simples |
@@ -97,9 +98,11 @@ sont jamais envoyés sur GitHub. VS Code les masque dans l'explorateur
 | `journal.py` | journaux muets des simulations et des vérifications (`silent_logger`) |
 | `alerts.py` | alertes Telegram, e-mail et WhatsApp ; un canal dont le mot de passe est refusé trois fois n'essaie plus qu'une fois par jour |
 | `market_watch.py` | veille : annonces officielles de Binance, actualités, avis des IA |
+| `derives.py` | contrats à terme perpétuels de Binance (API publique, sans clé) : taux de financement, intérêt ouvert, ratio long/short ; montré dans la veille, information seulement, aucun achat |
 | `regimes.py` | régimes de marché : tendance de BTC, volatilité, appétit pour le risque, phase ; information et journal des trades, aucune décision |
 | `garde.py` | garde « NO TRADE » avant les achats du jour : données, mouvement de BTC, perte du jour, disque ; seuils sans effet sur 8 ans de résultats |
 | `postmortem.py` | analyse après chaque trade : régime à l'achat, meilleur et pire moment en R, glissement, leçon |
+| `devise.py` | capital dans votre monnaie (FCFA ou euros) : frais de change et impôt sur les gains, pour savoir ce qu'un retrait complet rapporterait ; information seulement, aucune décision |
 | `risque.py` | risque d'un jour du portefeuille (VaR et CVaR historiques) |
 | `stress.py` | tests de résistance des positions du moment : krachs sans stops, crise de liquidité, pic de volatilité, retrait de la cote, décrochage de l'USDT |
 | `qualite.py` | qualité des données : note sur 100 des clôtures avant chaque décision, bougies incohérentes comprises |
