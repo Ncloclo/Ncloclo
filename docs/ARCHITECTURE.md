@@ -163,6 +163,7 @@ sont jamais envoyés sur GitHub. VS Code les masque dans l'explorateur
 | `static/app.js` | point d'entrée : thème, achat en temps réel, clavier, démarrage |
 | `static/js/core.js` | outils communs : formats, DOM, tableaux, temps de chargement, API, notifications |
 | `static/js/charts.js` | graphiques communs : options, flèches d'achats et de ventes, stops, courbes animées |
+| `static/js/zoom.js` | zoom et période de toutes les courbes : − + ↺, périodes qui glissent avec le temps, période visible écrite |
 | `static/js/indicateurs.js` | calculs des indicateurs techniques, purs et testés |
 | `static/js/analyse.js` | graphique d'analyse : prix, indicateurs, panneaux synchronisés, lectures technique et rapide |
 | `static/js/etat.js` | état du bot, barre du haut, bouton AUTO, achat en temps réel |
@@ -179,7 +180,8 @@ connaît pas les autres pages ; ce qu'une page doit annoncer passe par un
 événement (« tg:achat ») ; tout texte venant des données passe par
 `textContent` ; un contrôle (bouton, groupe de boutons, liste, recherche) a la
 hauteur `--ctl-h` ; une couleur d'indicateur vient de la palette validée
-(`--s1` à `--s6`).
+(`--s1` à `--s6`) ; une courbe a sa barre de zoom (`zoom.js`), et un
+rafraîchissement ne défait jamais un zoom fait à la main.
 
 ## Le paquet `v29/`
 

@@ -264,12 +264,20 @@ tbody tr.click:hover { background: var(--surface-2); }
 .spark.reveal { animation: reveal 1.1s var(--ease) backwards; }   /* découpe retirée à la fin */
 .spark-mark { stroke: var(--surface); stroke-width: 1; }
 .spark-halo { animation: halo 1.8s ease-out infinite; }
+/* Zoom et période d'une courbe (zoom.js) : périodes, période visible, − + ↺. */
+.zoom-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; min-width: 0; cursor: default; }
+.zoom-bar .seg { min-height: var(--ctl-h-sm); padding: 2px; }
+.zoom-bar .seg button { min-height: calc(var(--ctl-h-sm) - 6px); padding: 2px 9px; font-size: 12px; }
+.zoom-steps { display: inline-flex; gap: 4px; margin-left: auto; }
+.zoom-range { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 0; overflow-wrap: anywhere; }
+.zoom-range:empty { display: none; }
 
 /* ===== 8. Pages ===== */
 /* Tableau de bord */
 .hero { display: grid; grid-template-columns: minmax(200px, 300px) minmax(0, 1fr); gap: 16px; align-items: stretch; }
 .hero-num { display: grid; align-content: center; gap: 4px; }
 .big { font-size: 40px; font-weight: 750; letter-spacing: -.02em; line-height: 1.05; font-variant-numeric: normal; }
+.hero-side { display: grid; gap: 8px; min-width: 0; }
 .hero-chart { height: 170px; min-width: 0; position: relative; }
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
 .kpi { display: grid; gap: 3px; align-content: start; transition: transform .25s var(--ease), border-color .25s; }

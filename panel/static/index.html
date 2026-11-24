@@ -35,6 +35,8 @@
   <symbol id="i-trash" viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4zm-3 6h12l-1 12H7zm4 2v8h1.6v-8zm3.4 0v8H15v-8z"/></symbol>
   <symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 4h6v2H6v4H4zm10 0h6v6h-2V6h-4zM4 14h2v4h4v2H4zm14 0h2v6h-6v-2h4z"/></symbol>
   <symbol id="i-fit" viewBox="0 0 24 24"><path d="M3 3h6v2H5v4H3zm12 0h6v6h-2V5h-4zM3 15h2v4h4v2H3zm16 0h2v6h-6v-2h4zM7 15l3-4 2.5 2.5L16 8l1.6 1.2-4.9 6.9-2.5-2.5-1.6 2.1z"/></symbol>
+  <symbol id="i-zoom-in" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M10 3a7 7 0 0 1 5.6 11.2l5.1 5.1-1.4 1.4-5.1-5.1A7 7 0 1 1 10 3zm0 2a5 5 0 1 0 0 10a5 5 0 0 0 0-10zM9 7h2v2h2v2h-2v2H9v-2H7V9h2z"/></symbol>
+  <symbol id="i-zoom-out" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M10 3a7 7 0 0 1 5.6 11.2l5.1 5.1-1.4 1.4-5.1-5.1A7 7 0 1 1 10 3zm0 2a5 5 0 1 0 0 10a5 5 0 0 0 0-10zM7 9h6v2H7z"/></symbol>
   <symbol id="i-ind" viewBox="0 0 24 24"><path d="M3 19h18v2H3zM4 15.5l4.6-5.7 3.6 2.9L17.8 5l1.6 1.2-6.9 9.4-3.6-2.9-3.4 4.1zM15 15h2v3h-2zm4-3h2v6h-2z"/></symbol>
 </svg>
 
@@ -95,7 +97,9 @@
             <span class="sub" id="d-equity-sub"></span>
             <span class="sub" id="d-equity-local" hidden></span>
           </div>
-          <div class="hero-chart" id="d-equity-chart" role="img" aria-label="Évolution du capital"></div>
+          <div class="hero-side" id="d-equity-side">
+            <div class="hero-chart" id="d-equity-chart" role="img" aria-label="Évolution du capital"></div>
+          </div>
         </div>
         <div class="kpis">
           <div class="kpi card"><span class="label">Positions</span><strong class="num" id="d-pos">—</strong><span class="sub" id="d-pos-sub"></span></div>
@@ -188,7 +192,20 @@
 
       <!-- Graphiques -->
       <section class="page" id="page-charts" data-title="Graphiques en temps réel">
-        <p class="hint">Mis à jour automatiquement. Cliquez sur un graphique pour l'ouvrir en détail : unités de temps, bougies ou Heikin Ashi, indicateurs (moyennes, Bollinger, Ichimoku, RSI, MACD, volume…), règle du bot, lecture technique, zoom.</p>
+        <p class="hint">Mis à jour automatiquement. La période choisie glisse avec le temps ; − et + zooment chaque graphique, ↺ le recadre. Cliquez sur un graphique pour l'ouvrir en détail : unités de temps, bougies ou Heikin Ashi, indicateurs (moyennes, Bollinger, Ichimoku, RSI, MACD, volume…), règle du bot, lecture technique, zoom à la molette.</p>
+        <div class="toolbar">
+          <div class="tool-group">
+            <span class="tool-label" id="tl-cwin">Période</span>
+            <div class="seg" id="charts-windows" role="group" aria-labelledby="tl-cwin">
+              <button type="button" data-cwin="auto" aria-pressed="true" title="Chaque graphique à sa durée : capital sur 90 jours, régime sur un an, position depuis son achat">Auto</button>
+              <button type="button" data-cwin="1d" aria-pressed="false" title="Les 24 dernières heures">24 h</button>
+              <button type="button" data-cwin="7d" aria-pressed="false" title="Les 7 derniers jours">7 j</button>
+              <button type="button" data-cwin="1m" aria-pressed="false" title="Le dernier mois">1 mois</button>
+              <button type="button" data-cwin="3m" aria-pressed="false" title="Les 3 derniers mois">3 mois</button>
+              <button type="button" data-cwin="1y" aria-pressed="false" title="La dernière année">1 an</button>
+            </div>
+          </div>
+        </div>
         <div class="chart-grid" id="chart-grid"></div>
       </section>
 
@@ -216,6 +233,15 @@
               <button type="button" data-filter="held" aria-pressed="false">Détenues</button>
               <button type="button" data-filter="watch" aria-pressed="false" title="Cryptos proches d'un signal d'achat">Surveillées</button>
               <button type="button" data-filter="vetoed" aria-pressed="false">Bloquées</button>
+            </div>
+          </div>
+          <div class="tool-group">
+            <span class="tool-label" id="tl-spark">Courbes</span>
+            <div class="seg" id="spark-windows" role="group" aria-labelledby="tl-spark">
+              <button type="button" data-spark="1d" aria-pressed="false" title="Courbes des 24 dernières heures (bougies de 15 min)">24 h</button>
+              <button type="button" data-spark="2d" aria-pressed="true" title="Courbes des 48 dernières heures (bougies d'une heure)">48 h</button>
+              <button type="button" data-spark="7d" aria-pressed="false" title="Courbes des 7 derniers jours (bougies de 4 h)">7 j</button>
+              <button type="button" data-spark="1m" aria-pressed="false" title="Courbes du dernier mois (bougies d'un jour)">1 mois</button>
             </div>
           </div>
           <div class="tool-group">
@@ -405,15 +431,22 @@
     <div class="detail-title">
       <h2 id="detail-title">Détail</h2>
       <div class="legend" id="detail-legend"></div>
+      <span class="zoom-range" id="detail-range"></span>
     </div>
     <div class="detail-actions">
-      <button class="icon-btn" id="detail-fit" type="button" title="Recadrer : tout afficher" aria-label="Recadrer le graphique"><svg><use href="#i-fit"/></svg></button>
+      <button class="icon-btn" id="detail-zoom-out" type="button" title="Dézoomer : voir plus de temps" aria-label="Dézoomer"><svg><use href="#i-zoom-out"/></svg></button>
+      <button class="icon-btn" id="detail-zoom-in" type="button" title="Zoomer : voir moins de temps" aria-label="Zoomer"><svg><use href="#i-zoom-in"/></svg></button>
+      <button class="icon-btn" id="detail-fit" type="button" title="Recadrer : revenir à la période choisie" aria-label="Recadrer le graphique"><svg><use href="#i-fit"/></svg></button>
       <button class="icon-btn" id="detail-full" type="button" title="Plein écran" aria-label="Plein écran" aria-pressed="false"><svg><use href="#i-expand"/></svg></button>
       <button class="icon-btn" id="detail-close" type="button" title="Fermer (Échap)" aria-label="Fermer"><svg><use href="#i-close"/></svg></button>
     </div>
   </div>
   <!-- Réglages du graphique : de gauche à droite, du plus courant au plus fin -->
   <div class="detail-tools" role="toolbar" aria-label="Réglages du graphique">
+    <div class="tool-group">
+      <span class="tool-label" id="tl-window">Période</span>
+      <div class="seg" id="detail-windows" role="group" aria-labelledby="tl-window"></div>
+    </div>
     <div class="tool-group asset-only">
       <span class="tool-label" id="tl-interval">Unité de temps</span>
       <div class="seg" id="detail-intervals" role="group" aria-labelledby="tl-interval">

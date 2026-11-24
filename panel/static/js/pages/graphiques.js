@@ -1,25 +1,41 @@
 // Panneau TrendGuard, page « Graphiques » : capital, régime BTC et chaque
 // position en temps réel. Cartes vivantes : bougies avec moyennes 20 et 50
 // et volume, point qui bat au dernier prix, lecture rapide (tendance, RSI,
-// MACD, volume) et valeur qui s'illumine quand elle change. Un clic ouvre
-// l'analyse complète (detail.js).
+// MACD, volume) et valeur qui s'illumine quand elle change. Période de la
+// page (Auto, 24 h… 1 an) qui glisse avec le temps, zoom de chaque carte
+// (zoom.js). Un clic ouvre l'analyse complète (detail.js).
 
-import { $, api, cssVar, el, fdate, flashValue, fpct, fpx, fR, fusd, up } from "../core.js";
+import { $, $$, api, cssVar, el, fdate, flashValue, fpct, fpx, fR, fusd, prefs, up, withLoader } from "../core.js";
 import { addPositionLines, buyMarkersOn, candleData, COLORS, dropChart, gridInterval, legend, LIVE, makeChart, tradeMarkers, uniq } from "../charts.js";
 import { candleRows, quickReading } from "../analyse.js";
 import { sma } from "../indicateurs.js";
-import { register } from "../navigation.js";
+import { refreshTab, register } from "../navigation.js";
 import { openDetail } from "../detail.js";
+import { daysFor, IV_NAME, IV_SEC, labelOf, preferredInterval, spanOf, TimeZoom, zoomBar } from "../zoom.js";
 
 const WARMUP = 60;                  // bougies de plus, pour les moyennes 20 et 50
-const gridCharts = new Map();       // id → carte : graphique, séries, cadrage
+const gridCharts = new Map();       // id → carte : graphique, séries, zoom
+let pageWin = prefs.get("window:charts", "auto");
 
-// Cadrage : les `lim` dernières bougies d'une crypto, toute la courbe sinon ;
-// refait quand la largeur change.
-function frame(g) {
-  if (!g.chart || !g.bars) return;
-  if (g.lim) g.chart.timeScale().setVisibleLogicalRange({ from: g.bars - g.lim, to: g.bars + 1 });
-  else g.chart.timeScale().fitContent();
+// Période de la page : « Auto » (capital sur 90 jours, régime sur un an,
+// position depuis son achat) ou une période qui glisse avec le temps.
+function pressWindows() {
+  $$("#charts-windows [data-cwin]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.cwin === pageWin)));
+}
+$$("#charts-windows [data-cwin]").forEach((b) => b.addEventListener("click", () => {
+  pageWin = b.dataset.cwin;
+  prefs.set("window:charts", pageWin);
+  pressWindows();
+  withLoader(`Période : ${pageWin === "auto" ? "auto" : labelOf(pageWin)}…`, () => refreshTab(true));
+}));
+pressWindows();
+
+// Bougies d'une carte de crypto : [unité, nombre, libellé]. Auto : depuis
+// l'achat ; sinon l'unité la plus parlante pour la période choisie.
+function cardInterval(entryDate) {
+  if (pageWin === "auto") return gridInterval({ entry_date: entryDate });
+  const iv = preferredInterval(pageWin);
+  return [iv, Math.max(30, Math.ceil(spanOf(pageWin) / IV_SEC[iv])), IV_NAME[iv]];
 }
 
 function newCard(s, k) {
@@ -38,17 +54,20 @@ function newCard(s, k) {
   head.append(title, el("span", "val", "…"));
   const lg = el("div", "legend");
   legend(lg, s.legend);
+  const bar = zoomBar();
   const box = el("div", "chart-box");
   const foot = el("div", "chart-foot");
   foot.append(el("div", "mini-reading"), el("span", "open-hint", "Cliquer pour l'analyse complète"));
-  card.append(head, lg, box, foot);
+  card.append(head, lg, bar.root, box, foot);
   const open = () => openDetail(s);
   card.addEventListener("click", open);
   card.addEventListener("keydown", (e) => { if (e.key === "Enter") open(); });
   const chart = makeChart(box, { handleScroll: false, handleScale: false }, false, false);
-  const g = { chart, card, lines: [], lim: 0, bars: 0 };
+  // La carte s'ouvre d'un clic : ni molette ni glisser sur le graphique,
+  // le zoom passe par la barre (− + ↺).
+  const g = { chart, card, lines: [], zoom: new TimeZoom(chart, bar.parts, { interactive: false, win: pageWin }) };
   if (!chart) return g;
-  chart.timeScale().subscribeSizeChange(() => frame(g));
+  chart.timeScale().subscribeSizeChange(() => { if (!g.zoom.free) g.zoom.apply(); });
   const thin = { lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false };
   if (s.kind === "equity") {
     g.main = chart.addBaselineSeries({ baseValue: { type: "price", price: 0 }, topLineColor: c.up, topFillColor1: c.up + "44", topFillColor2: c.up + "05",
@@ -93,9 +112,10 @@ function setLive(g, stale) {
 }
 
 // Bougies d'une crypto avec leurs moyennes 20 et 50, leur volume, les
-// achats et ventes du bot ; rend la réponse de l'API.
+// achats et ventes du bot ; rend la réponse de l'API. Les bougies de calcul
+// des moyennes restent à gauche, hors de la période montrée.
 async function drawAsset(g, asset, entryDate) {
-  const c = COLORS(), [iv, lim] = gridInterval({ entry_date: entryDate });
+  const c = COLORS(), [iv, lim] = cardInterval(entryDate);
   const d = await api(`/api/candles?asset=${asset}&interval=${iv}&limit=${lim + WARMUP}`);
   const rows = candleRows(d.candles), closes = rows.map((r) => r.close);
   const line = (vals) => rows.map((r, i) => (vals[i] == null ? { time: r.time } : { time: r.time, value: vals[i] }));
@@ -104,17 +124,15 @@ async function drawAsset(g, asset, entryDate) {
   g.ma20.setData(line(sma(closes, 20)));
   g.ma50.setData(line(sma(closes, 50)));
   g.main.setMarkers(tradeMarkers(d.markers, c));
-  const first = !g.bars;
-  g.lim = lim;
-  g.bars = rows.length;
-  if (first) frame(g);
+  g.zoom.fixed = lim * IV_SEC[iv];               // « Auto » : depuis l'achat
+  g.zoom.data(rows.map((r) => r.time));
   setLive(g, d.stale);
   setReading(g, quickReading(d.candles));
   return d;
 }
 
 async function renderCharts() {
-  const [eq, reg, pos, tr] = await Promise.all([api("/api/equity?days=90"), api("/api/regime"), api("/api/positions"), api("/api/trades")]);
+  const [eq, reg, pos, tr] = await Promise.all([api(`/api/equity?days=${daysFor(pageWin, 90)}`), api("/api/regime"), api("/api/positions"), api("/api/trades")]);
   const c = COLORS();
   const held = new Set(pos.positions.map((p) => p.asset));
   const month = Date.now() - 30 * 86400e3, soldSeen = new Set();
@@ -124,14 +142,16 @@ async function renderCharts() {
   const specs = [
     { id: "equity", kind: "equity", title: "Capital du bot", legend: [[c.accent, "Capital (USDT)"], [c.muted, "Capital de départ", true], [c.up, "▲ Achats du bot"], [c.down, "▼ Ventes du bot"]] },
     { id: "regime", kind: "regime", title: `Régime BTC · moyenne ${reg.sma} jours`, legend: [[c.ink, "BTC (clôture)"], [c.sma, `Moyenne ${reg.sma} j`]] },
-    ...pos.positions.map((p) => ({ id: "asset:" + p.asset, kind: "asset", asset: p.asset, title: `${up(p.asset)}/USDT · ${gridInterval(p)[2]}`, pos: p,
+    ...pos.positions.map((p) => ({ id: "asset:" + p.asset, kind: "asset", asset: p.asset, title: `${up(p.asset)}/USDT · ${cardInterval(p.entry_date)[2]}`, pos: p,
       legend: [...assetLegend, [c.up, "▲ Achats du bot"], [c.accent, "Entrée", true], [c.down, "Stop de clôture (vente)"], [c.down, "Stop catastrophe", true]] })),
     ...sold.map((t) => ({ id: "sold:" + t.asset, kind: "asset", asset: t.asset, sold: t,
-      title: `${up(t.asset)}/USDT · vendue · ${gridInterval({ entry_date: t.entry_date })[2]}`,
+      title: `${up(t.asset)}/USDT · vendue · ${cardInterval(t.entry_date)[2]}`,
       legend: [...assetLegend, [c.up, "▲ Achat du bot"], [c.down, "▼ Vente du bot"]] })),
   ];
   const grid = $("#chart-grid");
-  const ids = specs.map((s) => s.id).join("|");
+  // Cartes refaites quand la liste change ou la période de la page (unités
+  // de temps des cryptos) ; sinon mises à jour, leur zoom gardé.
+  const ids = pageWin + "|" + specs.map((s) => s.id).join("|");
   if (grid.dataset.ids !== ids) {
     gridCharts.forEach((g) => dropChart(g.chart));
     gridCharts.clear();
@@ -150,16 +170,18 @@ async function renderCharts() {
     ge.main.applyOptions({ baseValue: { type: "price", price: pts.length ? pts[0].value : 0 } });
     ge.main.setData(pts);
     ge.main.setMarkers(buyMarkersOn(pts, eq.buys, c, true, eq.sells));
-    ge.bars = pts.length;
-    frame(ge);
-    const last = pts[pts.length - 1], first = pts[0];
+    ge.zoom.data(pts.map((p) => p.time));
+    // Lecture sur la période de la page : variation, plus forte baisse, achats.
+    const last = pts[pts.length - 1], span = spanOf(pageWin);
+    const seen = last && span ? pts.filter((p) => p.time >= last.time - span) : pts, first = seen[0];
     let peak = -Infinity, worst = 0;
-    pts.forEach((p) => { peak = Math.max(peak, p.value); worst = Math.min(worst, p.value / peak - 1); });
+    seen.forEach((p) => { peak = Math.max(peak, p.value); worst = Math.min(worst, p.value / peak - 1); });
+    const buys = first ? eq.buys.filter((b) => b.t >= first.time).length : 0;
     setVal(ge, last ? fusd(last.value) : "—", "", last ? last.value : null);
     setReading(ge, last && first ? [
-      [`90 j ${fpct((last.value / first.value - 1) * 100, 1)}`, last.value >= first.value ? "up" : "down", "Variation du capital sur la courbe affichée"],
-      [`Baisse max ${fpct(worst * 100, 1)}`, worst < -0.1 ? "down" : "", "Plus forte baisse depuis un plus haut, sur la courbe"],
-      [`${eq.buys.length} achat${eq.buys.length > 1 ? "s" : ""}`, "", "Achats du bot sur la période"],
+      [`${pageWin === "auto" ? "90 j" : labelOf(pageWin)} ${fpct((last.value / first.value - 1) * 100, 1)}`, last.value >= first.value ? "up" : "down", "Variation du capital sur la période"],
+      [`Baisse max ${fpct(worst * 100, 1)}`, worst < -0.1 ? "down" : "", "Plus forte baisse depuis un plus haut, sur la période"],
+      [`${buys} achat${buys > 1 ? "s" : ""}`, "", "Achats du bot sur la période"],
     ] : []);
   }
 
@@ -169,8 +191,7 @@ async function renderCharts() {
     gr.main.setData(uniq(reg.points.map((p) => ({ time: p.t, value: p.close }))));
     gr.sma.setData(uniq(reg.points.map((p) => ({ time: p.t, value: p.sma }))));
     gr.main.setMarkers(tradeMarkers(reg.markers, c));
-    gr.bars = reg.points.length;
-    frame(gr);
+    gr.zoom.data(reg.points.map((p) => p.t));
     const l = reg.points[reg.points.length - 1];
     setVal(gr, reg.bull ? "Haussier" : "Baissier", reg.bull ? "up" : "down");
     setLive(gr, reg.stale);

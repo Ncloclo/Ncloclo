@@ -1,11 +1,14 @@
 // Panneau TrendGuard : fenêtre de détail d'un graphique. Une crypto :
 // graphique d'analyse (analyse.js) ; le capital et le régime : leur courbe
-// et un panneau. Réglages gardés d'une ouverture à l'autre.
+// et un panneau. Période et zoom (zoom.js) : la période choisie glisse avec
+// le temps ; pour une crypto, l'unité de temps suit la période. Réglages
+// gardés d'une ouverture à l'autre.
 
 import { $, $$, api, el, fdate, fpct, fpx, fR, fusd, prefs, toast, up, withLoader } from "./core.js";
 import { buyMarkersOn, candleData, COLORS, legend, uniq } from "./charts.js";
 import { AssetChart, DEFAULT_IDS, EquityChart, MAX_COLORS, MAX_PANES, PRESETS, RegimeChart, renderIndicatorMenu, technicalReading } from "./analyse.js";
 import { S } from "./etat.js";
+import { daysFor, intervalFor, IV_NAME, labelOf, limitFor, TimeZoom } from "./zoom.js";
 
 // Une crypto : graphique d'analyse (js/analyse.js : prix, indicateurs,
 // panneaux synchronisés, lecture technique). Le capital et le régime : leur
@@ -13,7 +16,6 @@ import { S } from "./etat.js";
 let D = null;
 const detail = $("#detail");
 const indMenu = $("#ind-menu"), indBtn = $("#ind-btn");
-const IV_LABEL = { "15m": "15 min", "1h": "1 h", "4h": "4 h", "1d": "1 jour" };
 const savedIds = () => {
   const v = prefs.get("indicators", null);
   return v == null ? DEFAULT_IDS : v.split(",").filter(Boolean);
@@ -49,11 +51,13 @@ $("#detail-full").addEventListener("click", (e) => {
   e.currentTarget.setAttribute("aria-pressed", String(on));
   e.currentTarget.title = on ? "Quitter le plein écran" : "Plein écran";
 });
-$("#detail-fit").addEventListener("click", () => { if (D && D.view) D.view.fit(); });
+$("#detail-fit").addEventListener("click", () => { if (D && D.zoom) D.zoom.reset(); });
+$("#detail-zoom-in").addEventListener("click", () => { if (D && D.zoom) D.zoom.zoomIn(); });
+$("#detail-zoom-out").addEventListener("click", () => { if (D && D.zoom) D.zoom.zoomOut(); });
 $$("#detail-intervals button").forEach((b) => b.addEventListener("click", () => {
   if (!D) return;
   D.interval = b.dataset.interval;
-  D.fitted = false;
+  if (D.zoom) D.zoom.resume();                     // la période choisie, avec la nouvelle unité
   prefs.set("interval", D.interval);
   withLoader(`Unité de temps : ${b.textContent}…`, loadDetail, "detail-loader");
 }));
@@ -139,7 +143,7 @@ function renderTech() {
   const plural = (n, word) => `${n} ${word}${n > 1 ? "s" : ""}`;
   const head = el("h3", "", "Lecture technique");
   head.id = "tech-title";
-  head.append(el("span", "sub", ` · bougies de ${IV_LABEL[D.interval] || D.interval}`));
+  head.append(el("span", "sub", ` · bougies de ${IV_NAME[D.interval] || D.interval}`));
   const tally = el("p", "tally");
   tally.append(el("b", "up", plural(r.vote.up, "haussier")), " · ", el("b", "down", plural(r.vote.down, "baissier")), " · ", el("b", "", plural(r.vote.flat, "neutre")));
   const bar = el("div", "tally-bar");
@@ -175,11 +179,34 @@ function mountView() {
     legend($("#detail-legend"), [[c.ink, "BTC (clôture)"], [c.sma, "Moyenne 150 jours : au-dessus, achats autorisés"]]);
   }
   D.view.setScale(scale);
+  mountZoom();
+}
+// Période et zoom du graphique : une crypto et le capital rechargent leurs
+// données pour la période (unité de temps, jours de capital) ; le régime
+// (un an de BTC au jour) la découpe sur place.
+function mountZoom() {
+  const kind = D.spec.kind, view = D.view;
+  $("#detail-range").textContent = "";
+  D.zoom = new TimeZoom(view.stack ? view.stack.main : null, { windows: $("#detail-windows"), label: $("#detail-range") }, {
+    win: prefs.get("window:" + kind, "all"),
+    extend: kind !== "regime",
+    before: () => { if (view.stack) view.stack.leader = null; },   // le graphique principal mène ses panneaux
+    onWindow: (key) => {
+      prefs.set("window:" + kind, key);
+      if (kind === "regime") return false;
+      if (kind === "asset") {
+        D.interval = intervalFor(key, D.interval);
+        prefs.set("interval", D.interval);
+      }
+      withLoader(`Période : ${labelOf(key)}…`, loadDetail, "detail-loader");
+      return true;
+    },
+  });
 }
 export function openDetail(spec) {
   closeDetail();
   const asset = spec.kind === "asset";
-  D = { spec, interval: prefs.get("interval", "1h"), fitted: false };
+  D = { spec, interval: prefs.get("interval", "1h") };
   $("#detail-title").textContent = asset ? `${up(spec.asset)}/USDT` : spec.title;
   $$("#detail .asset-only").forEach((n) => { n.hidden = !asset; });
   pressed("#detail-types", "ctype", prefs.get("ctype", "candles"));
@@ -195,7 +222,6 @@ export function restyleDetail() {
   if (!D || !D.view) return;
   D.view.destroy();
   mountView();
-  D.fitted = false;
   loadDetail();
 }
 
@@ -208,7 +234,8 @@ async function loadDetail() {
   pressed("#detail-intervals", "interval", D.interval);
   try {
     if (spec.kind === "asset") {
-      const d = await api(`/api/candles?asset=${spec.asset}&interval=${D.interval}&limit=500&levels=1`);
+      const limit = limitFor(D.zoom.win, D.interval, 250, 500);   // la période et de quoi calculer les indicateurs
+      const d = await api(`/api/candles?asset=${spec.asset}&interval=${D.interval}&limit=${limit}&levels=1`);
       if (!D || D.view !== view) return;
       view.update(d);
       const cd = candleData(d.candles);
@@ -229,7 +256,7 @@ async function loadDetail() {
       renderTech();
       if (!indMenu.hidden) renderMenu();
     } else if (spec.kind === "equity") {
-      const eq = await api("/api/equity?days=365");
+      const eq = await api(`/api/equity?days=${daysFor(D.zoom.win, 365)}`);
       if (!D || D.view !== view) return;
       const pts = uniq(eq.points.map((p) => ({ time: p.t, value: p.v })));
       const start = pts.length ? pts[0].value : 0;
@@ -248,7 +275,9 @@ async function loadDetail() {
       const l = reg.points[reg.points.length - 1];
       stats([["BTC", fpx(l && l.close)], [`Moyenne ${reg.sma} j`, fpx(l && l.sma)], ["Écart", fpct(l ? (l.close / l.sma - 1) * 100 : null), reg.bull ? "up" : "down"], ["Régime", reg.bull ? "Haussier : achats autorisés" : "Baissier : aucun achat", reg.bull ? "up" : "down"]]);
     }
-    if (!D.fitted) { view.fit(); D.fitted = true; }
+    // La période choisie glisse jusqu'à la dernière donnée ; un zoom fait à
+    // la main reste tel quel.
+    D.zoom.data(...view.zoomData());
   } catch (e) {
     toast(`Graphique : ${e.message}`, "err");
   }
