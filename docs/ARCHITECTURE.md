@@ -85,6 +85,8 @@ sont jamais envoyés sur GitHub. VS Code les masque dans l'explorateur
 | `autonomy.py` | superviseur, démarrage avec l'ordinateur, anti-veille, arrêt demandé |
 | `suivi.py` | journal du bot en direct dans un terminal (`journal`, `supervise` et `run` quand le bot tourne déjà) |
 | `bibliotheque.py` | bibliothèque de recherche : travaux d'arXiv reliés aux règles du bot, des pistes jamais appliquées seules |
+| `pistes.py` | le bot teste les pistes : variantes déclarées par thème, rejouées sur ses données, verdict par thème |
+| `flux.py` | offre de stablecoins (DefiLlama), pour l'agent flux du comité (information seulement) |
 | `uptime.py` | disponibilité : arrêts de plus d'une heure, leur cause, temps de marche |
 | `learning.py` | apprentissage libre : normale des carnets, ruse réglée sur elle, prévisions corrigées par l'expérience |
 | `evolution.py` | évolution encadrée : réglages ajustés par le bot sous épreuves, niveaux, essais de 30 jours |

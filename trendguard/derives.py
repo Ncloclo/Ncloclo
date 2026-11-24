@@ -86,6 +86,28 @@ def indicators(fetch: Fetch, bases: Iterable[str]) -> Tuple[Dict[str, Any], List
     return out, errors
 
 
+def latest(watch_db: str) -> Dict[str, Any]:
+    """Indicateurs des contrats à terme du dernier rapport de veille, avec
+    son jour (lecture seule) ; {} sans rapport."""
+    import json
+    import pathlib
+    import sqlite3
+    if not watch_db or not pathlib.Path(watch_db).exists():
+        return {}
+    try:
+        con = sqlite3.connect(pathlib.Path(watch_db).resolve().as_uri() + "?mode=ro", uri=True, timeout=5)
+    except sqlite3.Error:
+        return {}
+    try:
+        row = con.execute("SELECT day, report FROM reports ORDER BY day DESC LIMIT 1").fetchone()
+        d = (json.loads(row[1]).get("indicators") or {}).get("derives") if row else None
+    except (sqlite3.Error, ValueError, AttributeError):
+        return {}
+    finally:
+        con.close()
+    return dict(d, day=row[0]) if isinstance(d, dict) and d else {}
+
+
 def describe(d: Optional[Dict[str, Any]]) -> Optional[str]:
     """Une ligne lisible, ou None s'il n'y a rien."""
     if not d or not any(k in d for k in ("funding_btc", "oi_btc_30d", "long_share_btc")):

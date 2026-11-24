@@ -23,15 +23,18 @@ from . import (
     bibliotheque,
     comite,
     deploiement,
+    derives,
     evenements,
     evolution,
     finance,
+    flux,
     learning,
     libre,
     modeles,
     moteur_portefeuille,
     moteur_risque,
     moteur_strategie,
+    pistes,
     report,
     savoir,
     systeme,
@@ -159,6 +162,24 @@ class RoutinesMixin:
         else:
             self.logger.warning("[EXPERT] diagnostic expert du jour impossible à lancer")
 
+    PISTES_MINUTE = 75          # test des pistes : à partir de 01:15 UTC, une fois par semaine
+
+    def _launch_pistes(self, now: datetime) -> None:
+        """Le bot teste lui-même les pistes de sa bibliothèque de recherche
+        (pistes.py), une fois par semaine, dans un processus séparé : il
+        propose, il n'applique jamais seul."""
+        if not (self.g.savoir and self.track_uptime):
+            return
+        today = now.date().isoformat()
+        if now.hour * 60 + now.minute < self.PISTES_MINUTE or not pistes.due(
+                {"day": self.state.get("pistes_day")}, today):
+            return
+        self.state["pistes_day"] = today
+        if autonomy.launch_tool(self.g, ["bibliotheque", "tester"], ".bibliotheque.log"):
+            self.logger.info("[PISTES] le bot teste les pistes de sa bibliothèque de recherche")
+        else:
+            self.logger.warning("[PISTES] test des pistes impossible à lancer")
+
     def _launch_report(self, now: datetime) -> None:
         """Rapport quotidien (report.py) à partir de 00:30 UTC, une fois par
         jour, dans un processus séparé ; rattrapé au retour du PC s'il était
@@ -206,8 +227,10 @@ class RoutinesMixin:
             res = savoir.judge(memory, close, day)
             counts = memory.counts(day)
             # Pistes de la bibliothèque de recherche, pour l'agent chercheur du comité.
-            pistes = [{k: p[k] for k in ("title", "part", "question", "link")}
-                      for p in bibliotheque.pistes(memory.get(bibliotheque.KEY), n=3)]
+            found = [{k: p[k] for k in ("title", "part", "question", "link", "verdict")}
+                     for p in bibliotheque.pistes(memory.get(bibliotheque.KEY), n=3,
+                                                  verdicts=memory.get(pistes.KEY))]
+            money = flux.view(memory.get(flux.KEY))     # offre de stablecoins, pour l'agent flux
         except Exception as e:
             self.logger.warning(f"[SAVOIR] bilan impossible : {e}")
             return {}
@@ -218,7 +241,7 @@ class RoutinesMixin:
         self.state["savoir"] = {"day": day, "line": savoir.reasoning_line(res, counts),
                                 "proven": res["proven"], "holds": sorted(res["holds"]),
                                 "influence": res["influence"], "opinion": res.get("opinion") or {},
-                                "pistes": pistes}
+                                "pistes": found, "flux": money}
         for s in sorted(set(res["proven"]) - before):
             sc = next(x for x in res["scores"] if x["source"] == s)
             self.logger.info(f"[SAVOIR] compétence acquise : {s} est {sc['verdict']} "
@@ -276,13 +299,18 @@ class RoutinesMixin:
         policy = {"halted": bool(self.state.get("halted")), "safe_mode": safe, "garde_blocked": list(blocked)}
         views = {}
         try:
+            ev = self.state.get("evenements") or {}
+            contexte = {"macro": ev if ev.get("day") == day else {},
+                        "derives": derives.latest(getattr(self.g, "watch_db", "") or mw.DEFAULT_DB) if cands else {},
+                        "flux": sv.get("flux") if sv.get("day") == day else {}}
             for a in cands:
                 data = comite.board(a, day, close, snap[a], self.p, held, equity,
                                     float(self.state.get("risk_mult") or 1.0), policy,
                                     sv.get("opinion") if sv.get("day") == day else {}, ranking,
                                     regime=rg if rg.get("day") == day else None,
                                     quality=q if q.get("day") == day else None,
-                                    pistes=sv.get("pistes") if sv.get("day") == day else None)
+                                    pistes=sv.get("pistes") if sv.get("day") == day else None,
+                                    contexte=contexte)
                 view, _res = comite.evaluate(a, data, self.agents)
                 views[a] = comite.as_dict(view)
         except Exception as e:           # consultatif : jamais bloquant

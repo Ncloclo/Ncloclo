@@ -17,11 +17,13 @@ dans sa base (méta « bibliotheque ») ; le panneau la montre (page Veille).
 
     python trendguard_bot.py bibliotheque          # pistes les plus pertinentes
     python trendguard_bot.py bibliotheque lire     # nouvelle lecture d'arXiv
+    python trendguard_bot.py bibliotheque tester   # le bot teste les pistes (pistes.py)
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import urllib.parse
 import xml.etree.ElementTree as ET
@@ -165,9 +167,11 @@ def refresh(memory: Any, now: datetime, fetch: Callable[[str], bytes], force: bo
     return book
 
 
-def pistes(book: Any, n: int = SHOWN, days: int = 90) -> List[Dict[str, Any]]:
+def pistes(book: Any, n: int = SHOWN, days: int = 90, verdicts: Any = None) -> List[Dict[str, Any]]:
     """Les travaux les plus pertinents des `days` derniers jours, chacun avec
-    la partie du bot qu'il concerne et la question à vérifier."""
+    la partie du bot qu'il concerne, la question à vérifier et, si le bot l'a
+    testée (pistes.py, `verdicts`), son verdict sur les données du bot."""
+    tested = (verdicts or {}).get("verdicts") or {} if isinstance(verdicts, dict) else {}
     if not isinstance(book, dict):
         return []
     since = (datetime.now(timezone.utc) - timedelta(days=days)).date().isoformat()
@@ -177,9 +181,11 @@ def pistes(book: Any, n: int = SHOWN, days: int = 90) -> List[Dict[str, Any]]:
     for p in recent[:n]:
         main = p["themes"][0] if p.get("themes") else "methode"
         theme = next(t for t in THEMES if t[0] == main)
+        v = tested.get(main) or {}
         out.append({"id": p["id"], "title": p["title"], "published": p.get("published"), "link": p.get("link"),
                     "authors": p.get("authors") or [], "score": p.get("score", 0),
-                    "themes": [LABEL[t] for t in p.get("themes", [])], "part": theme[2], "question": theme[3]})
+                    "themes": [LABEL[t] for t in p.get("themes", [])], "part": theme[2], "question": theme[3],
+                    "verdict": v.get("text", ""), "status": v.get("status", "")})
     return out
 
 
@@ -208,15 +214,21 @@ def main(argv: Optional[List[str]] = None) -> int:
     from . import savoir
     from .config import load_guard_config_from_env
     ap = argparse.ArgumentParser(description="Bibliothèque de recherche de TrendGuard (arXiv q-fin)")
-    ap.add_argument("action", nargs="?", default="pistes", choices=["pistes", "lire"])
+    ap.add_argument("action", nargs="?", default="pistes", choices=["pistes", "lire", "tester"])
     args = ap.parse_args(argv)
     v29.ensure_utf8_stdio()
     gcfg = load_guard_config_from_env()
     memory = savoir.Memory(gcfg.savoir_db or savoir.DEFAULT_DB)
     try:
+        from . import pistes as tests
+        if args.action == "tester":
+            print(tests.render(tests.run(memory, os.path.join(v29.APP_DIR, "data_evolution"),
+                                         list(gcfg.universe))))
+            return 0
         book = (refresh(memory, datetime.now(timezone.utc), lambda url: savoir.http_get(url, TIMEOUT), force=True)
                 if args.action == "lire" else memory.get(KEY))
         print(render(book))
+        print(tests.render(memory.get(tests.KEY)))
         return 0
     finally:
         memory.close()

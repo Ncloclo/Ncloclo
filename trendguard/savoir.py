@@ -65,7 +65,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set,
 
 import v29
 
-from . import bibliotheque, evenements
+from . import bibliotheque, evenements, flux
 from . import market_watch as mw
 from .texte import fr
 
@@ -726,6 +726,10 @@ def main(argv: Optional[List[str]] = None) -> int:
                              f"{len(book.get('papers') or [])} gardés"))
             except Exception as e:
                 print(f"{now:%Y-%m-%d %H:%M:%S} UTC bibliothèque de recherche illisible : {e}")
+            try:            # offre de stablecoins (DefiLlama) : information, relue au plus une fois par jour
+                flux.refresh(memory, now, http_get)
+            except Exception as e:
+                print(f"{now:%Y-%m-%d %H:%M:%S} UTC flux de stablecoins illisibles : {e}")
             got = sum(run["read"].values())
             print(f"{now:%Y-%m-%d %H:%M:%S} UTC lecture : {got} texte(s) ; "
                   + (f"en panne : {', '.join(run['errors'])}" if run["errors"] else "toutes les sources lues"))

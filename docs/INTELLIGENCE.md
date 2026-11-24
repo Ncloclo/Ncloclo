@@ -8,7 +8,7 @@ d'un cerveau d'expert qui apprend seul. Mesuré sur le bot en marche (paper,
 ## Verdict
 
 - **Le cerveau existe et il est bien conçu.** Il comprend une stratégie
-  validée hors échantillon, douze agents, un noyau de savoir qui lit Internet,
+  validée hors échantillon, quinze agents, un noyau de savoir qui lit Internet,
   une évolution encadrée, un bot libre et un modèle du monde.
 - **Ses vrais manques étaient ailleurs.** Ils tenaient à des sources (aucune
   IA configurée, Reddit refusé, aucune recherche lue) et à l'autonomie (aucun
@@ -40,7 +40,7 @@ d'un cerveau d'expert qui apprend seul. Mesuré sur le bot en marche (paper,
 
 | Module | État le 24/11/2026 |
 | --- | --- |
-| Comité de 12 agents | prêt ; n'a pas siégé (aucun candidat à l'achat en marché baissier) |
+| Comité de 15 agents | prêt ; n'a pas siégé (aucun candidat à l'achat en marché baissier) |
 | Noyau de savoir | environ 590 textes par jour ; 7 sources sur 8 lues |
 | Sources prouvées | aucune pour l'instant : il faut 20 semaines vérifiées par source |
 | Conseil des IA | **inactif : aucune clé d'IA enregistrée** |
@@ -69,6 +69,16 @@ prédisent pas mieux que le hasard.
   chacun relié à la règle concernée et à la question à vérifier.
 - **Agent « chercheur »** (douzième agent du comité) : il cite ces travaux à
   chaque achat étudié, sans voter.
+- **Agents macro, dérivés et flux** : annonces économiques, levier des
+  contrats à terme, argent qui entre ou sort par les stablecoins. Ils
+  informent le comité ; ils ne gagneront un poids de vote qu'après une étude
+  qui prouve leur utilité.
+- **Pistes testées par le bot** : chaque semaine, la question de chaque thème
+  est posée à ses données (`docs/BIBLIOTHEQUE.md`). Premier verdict : la règle
+  actuelle tient partout.
+- **Étude des combinaisons** (`docs/COMBINAISONS.md`) : TrendGuard avec les
+  Tortues ou la cassure de Bollinger fait mieux depuis 2023, moins bien sur
+  2018-2022 ; la règle fixée d'avance n'en retient aucune.
 - **Erreurs des sources** : Reddit n'est plus présenté comme une erreur de
   modèle d'IA ; le refus des lectures sans compte est dit tel quel.
 - **Environnement** : aucune fenêtre de console vide, journal en direct,

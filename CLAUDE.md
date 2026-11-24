@@ -116,6 +116,18 @@ voter. Une piste ne change jamais une règle sans étude hors échantillon.
 Diagnostic complet : `docs/INTELLIGENCE.md`. Refusés et pourquoi : lire le dark
 web, réécrire seul son code, agir sur une information non prouvée.
 
+- Agents macro, dérivés, flux (stablecoins, `trendguard/flux.py`) : poids 0
+  tant qu'une étude n'a pas prouvé leur utilité.
+- `trendguard/pistes.py` : chaque semaine, variantes déclarées par thème,
+  rejouées sur les données du bot ; une variante n'est « à étudier » que si
+  elle bat la règle sur 2018-2022 ET depuis 2023. 24/11/2026 : la règle tient
+  partout.
+- Combinaisons (`python -m research.combinaisons --cache data_binance`) :
+  TrendGuard + Tortues / Bollinger / Tendance rapide font mieux depuis 2023
+  (Calmar 1,06 à 1,26 contre 0,95) mais moins bien sur 2018-2022 (1,05 à 1,54
+  contre 1,62) ; corrélations 0,87 à 0,93. Aucune retenue : ne pas reproposer
+  sans nouvelles données.
+
 ## Commandes (Windows, depuis la racine)
 
 - **Installation** (Python 3.12, la version de la CI, géré par uv) : `uv python
