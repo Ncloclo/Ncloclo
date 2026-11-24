@@ -13,6 +13,8 @@ export const LWC = window.LightweightCharts;
 export const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
 
 // ---------- Formats ----------
+// Pourcentages de risque : 1 → « 1 », 1,25 → « 1,25 ».
+export const fmax2 = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 });
 const nfCache = new Map();
 export const nf = (d) => {
   if (!nfCache.has(d)) nfCache.set(d, new Intl.NumberFormat("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d }));
@@ -131,6 +133,15 @@ export function ripple(ev, btn) {
   setTimeout(() => s.remove(), 650);
 }
 
+// Valeur qui change : bref éclair vert (hausse) ou rouge (baisse).
+export function flashValue(node, before, after) {
+  if (!isFinite(before) || after == null || !isFinite(after) || after === before || reduceMotion.matches) return;
+  node.classList.remove("flash-up", "flash-down");
+  void node.offsetWidth;
+  node.classList.add(after > before ? "flash-up" : "flash-down");
+  setTimeout(() => node.classList.remove("flash-up", "flash-down"), 60);
+}
+
 export function countUp(node, value, fmt) {
   const prev = Number(node.dataset.v);
   node.dataset.v = value;
@@ -148,3 +159,29 @@ export function countUp(node, value, fmt) {
 
 
 export const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+// ---------- Tableaux ----------
+// `tk` : première colonne écrite comme un symbole (BTC, ETH…) ; false pour un texte.
+export function table(node, head, rows, onRow, empty = "Rien à afficher.", tk = true) {
+  const thead = el("thead"), tr = el("tr");
+  head.forEach((h) => { const th = el("th", "", h); th.scope = "col"; tr.append(th); });
+  thead.append(tr);
+  const tb = el("tbody");
+  if (!rows.length) {
+    const r = el("tr"), td = el("td", "empty", empty);
+    td.colSpan = head.length;
+    r.append(td);
+    tb.append(r);
+  }
+  rows.forEach(({ cells, cls, key }) => {
+    const r = el("tr", onRow ? "click" : "");
+    cells.forEach((c, j) => r.append(el("td", (j === 0 && tk ? "tk " : "") + ((cls && cls[j]) || ""), c)));
+    if (onRow) {
+      r.tabIndex = 0;
+      r.addEventListener("click", () => onRow(key));
+      r.addEventListener("keydown", (e) => { if (e.key === "Enter") onRow(key); });
+    }
+    tb.append(r);
+  });
+  node.replaceChildren(thead, tb);
+}

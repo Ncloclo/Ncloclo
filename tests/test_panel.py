@@ -350,6 +350,68 @@ def test_control_start_stop_with_the_bot_lock(tmp_path):
         sup.release()
 
 
+def test_supervisor_leaves_the_job_of_whoever_launched_the_panel(tmp_path):
+    """Windows : un process détaché reste dans le « job » du programme qui a
+    lancé le panneau et meurt avec lui. Le superviseur en sort, sinon il est
+    créé par Windows (WMI), sinon il part détaché comme avant."""
+    from panel import control
+
+    class Proc:
+        def poll(self):
+            return None
+
+    def run(breakaway_ok, wmi_ok):
+        popen_calls, wmi_calls = [], []
+
+        def popen(cmd, **kw):
+            if kw["creationflags"] & control.BREAKAWAY and not breakaway_ok:
+                raise PermissionError(5, "Accès refusé")
+            popen_calls.append(kw["creationflags"])
+            return Proc()
+
+        def wmi(cmd, cwd, env):
+            if not wmi_ok:
+                raise OSError("WMI indisponible")
+            wmi_calls.append((cmd, cwd, env))
+            return 4242
+        ctl = BotControl(_cfg(tmp_path), popen=popen, windows=True, outside_job=wmi)
+        assert ctl.start()[0] is True and ctl.state() == "starting"
+        return popen_calls, wmi_calls
+
+    popen_calls, wmi_calls = run(breakaway_ok=True, wmi_ok=True)       # sortie du job permise
+    assert len(popen_calls) == 1 and popen_calls[0] & control.BREAKAWAY and wmi_calls == []
+    popen_calls, wmi_calls = run(breakaway_ok=False, wmi_ok=True)      # job fermé : WMI
+    assert popen_calls == []
+    cmd, _cwd, env = wmi_calls[0]
+    assert cmd[-1] == "supervise" and env == {"RUN_MODE": "paper", "PYTHONIOENCODING": "utf-8"}
+    popen_calls, wmi_calls = run(breakaway_ok=False, wmi_ok=False)     # dernier recours
+    assert len(popen_calls) == 1 and not popen_calls[0] & control.BREAKAWAY
+
+
+@pytest.mark.skipif(os.name != "nt", reason="création de process par WMI : Windows seulement")
+def test_wmi_start_runs_outside_the_job_with_its_variables(tmp_path):
+    """Vrai lancement par WMI : dossier avec une espace, variable posée avant."""
+    import sys
+
+    from panel import control
+    folder = tmp_path / "dossier avec espace"
+    folder.mkdir()
+    script, out = folder / "ecrit.py", folder / "sortie.txt"
+    script.write_text("import os, sys\nopen(sys.argv[1], 'w').write(os.environ.get('RUN_MODE', ''))\n",
+                      encoding="utf-8")
+    try:
+        pid = control.start_outside_job([sys.executable, str(script), str(out)], str(folder),
+                                        {"RUN_MODE": "paper"})
+    except OSError as e:
+        pytest.skip(f"WMI indisponible sur ce poste : {e}")
+    assert pid > 0
+    for _ in range(100):
+        if out.exists() and out.read_text():
+            break
+        time.sleep(0.2)
+    assert out.read_text() == "paper"
+
+
 def test_bot_stops_cleanly_on_request(tmp_path, logger):
     close, volume = synthetic_market()
     bot, fb = make_bot("paper", close, logger)

@@ -1,9 +1,32 @@
 // Application installable (PWA) : l'interface s'ouvre même si le réseau
 // est lent ; les données (/api/) ne sont jamais mises en cache.
-const CACHE = "trendguard-panneau-v12";
-const SHELL = ["/", "/app.css", "/app.js", "/js/core.js", "/js/charts.js", "/js/analyse.js",
-  "/js/indicateurs.js", "/js/assistant.js", "/js/rapport.js", "/icon.svg", "/manifest.webmanifest",
-  "/vendor/lightweight-charts.standalone.production.js"];
+const CACHE = "trendguard-panneau-v13";
+const SHELL = [
+  "/",
+  "/app.css",
+  "/app.js",
+  "/js/core.js",
+  "/js/charts.js",
+  "/js/indicateurs.js",
+  "/js/analyse.js",
+  "/js/etat.js",
+  "/js/navigation.js",
+  "/js/detail.js",
+  "/js/connexion.js",
+  "/js/assistant.js",
+  "/js/rapport.js",
+  "/js/pages/actualites.js",
+  "/js/pages/cryptos.js",
+  "/js/pages/graphiques.js",
+  "/js/pages/journal.js",
+  "/js/pages/positions.js",
+  "/js/pages/reglages.js",
+  "/js/pages/tableau.js",
+  "/js/pages/veille.js",
+  "/icon.svg",
+  "/manifest.webmanifest",
+  "/vendor/lightweight-charts.standalone.production.js",
+];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

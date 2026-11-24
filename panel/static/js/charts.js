@@ -46,6 +46,8 @@ export function makeChart(box, extra, logo = true, fit = true) {
 export function dropChart(c) {
   if (c) { charts.delete(c); c.remove(); }
 }
+// Point qui bat au dernier prix (courbes en ligne, en zone, de base).
+export const LIVE = { lastPriceAnimation: LWC ? LWC.LastPriceAnimationMode.Continuous : 0 };
 export const COLORS = () => ({ up: cssVar("--up"), down: cssVar("--down"), accent: cssVar("--accent"), ink: cssVar("--ink"), muted: cssVar("--muted"), warn: cssVar("--warn"), sma: "#eb6834" });
 export const uniq = (pts) => {                 // temps strictement croissants
   const out = [];
@@ -122,4 +124,44 @@ export function legend(box, items) {
     s.append(i, label);
     return s;
   }));
+}
+
+// Courbe d'une carte (SVG) : clôtures, achats ▲ et ventes ▼ du bot.
+export function fillSpark(svg, closes, marks = []) {
+  if (closes.length < 2) return;
+  const lo = Math.min(...closes), hi = Math.max(...closes), w = 200, h = 42;
+  const pts = closes.map((v, i) => [i * w / (closes.length - 1), h - 3 - (hi > lo ? (v - lo) / (hi - lo) : 0.5) * (h - 6)]);
+  const color = closes[closes.length - 1] >= closes[0] ? "var(--up)" : "var(--down)";
+  const ns = "http://www.w3.org/2000/svg";
+  const area = document.createElementNS(ns, "path");
+  area.setAttribute("d", `M0 ${h} L${pts.map((p) => p.join(" ")).join(" L")} L${w} ${h} Z`);
+  area.setAttribute("fill", color);
+  area.setAttribute("fill-opacity", "0.12");
+  const line = document.createElementNS(ns, "polyline");
+  line.setAttribute("points", pts.map((p) => p.join(",")).join(" "));
+  line.setAttribute("fill", "none");
+  line.setAttribute("stroke", color);
+  line.setAttribute("stroke-width", "2");
+  line.setAttribute("vector-effect", "non-scaling-stroke");
+  // Dernier point : un rond (trait de longueur nulle, bouts ronds : il reste
+  // rond même si la courbe est étirée) et son halo qui bat.
+  const [lx, ly] = pts[pts.length - 1];
+  const dot = (cls, width) => {
+    const d = document.createElementNS(ns, "line");
+    [["x1", lx], ["y1", ly], ["x2", lx], ["y2", ly], ["stroke", color], ["stroke-width", width],
+      ["stroke-linecap", "round"], ["vector-effect", "non-scaling-stroke"], ["class", cls]].forEach(([k, v]) => d.setAttribute(k, v));
+    return d;
+  };
+  svg.replaceChildren(area, line, dot("spark-halo", 6), dot("spark-dot", 6));
+  // Première fois : la courbe se trace de gauche à droite.
+  if (!svg.dataset.drawn) { svg.dataset.drawn = "1"; svg.classList.add("reveal"); }
+  // Achats (▲ vert) et ventes (▼ rouge) du bot sur la période affichée.
+  marks.forEach((m) => {
+    const [x, y] = pts[m.i];
+    const tri = document.createElementNS(ns, "path");
+    tri.setAttribute("d", m.type === "buy" ? `M${x} ${y + 3} l-5 8 h10 z` : `M${x} ${y - 3} l-5 -8 h10 z`);
+    tri.setAttribute("fill", m.type === "buy" ? "var(--up)" : "var(--down)");
+    tri.setAttribute("class", "spark-mark " + m.type);
+    svg.append(tri);
+  });
 }
