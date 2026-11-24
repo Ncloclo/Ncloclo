@@ -110,9 +110,20 @@ stop large. Étude : `python -m research.petit_capital --cache data_binance`
 
 ## Commandes (Windows, depuis la racine)
 
-- **Installation** (Python 3.12, la version de la CI) : `py -3.12 -m venv
-  .venv`, puis `.venv\Scripts\python -m pip install -r requirements-docker.txt
-  ruff pip-audit`.
+- **Installation** (Python 3.12, la version de la CI, géré par uv) : `uv python
+  install 3.12`, puis `& "$env:APPDATA\uv\python\cpython-3.12-windows-x86_64-none\python.exe"
+  -m venv .venv`, puis `just install`. Jamais un Python rangé dans le dossier
+  d'un autre logiciel : le `.venv` en dépendait jusqu'au 24/11/2026.
+- **`just`** : `check` (Ruff, tests Python, pages web dans Chrome), `lint`,
+  `test`, `web`, `dev` (panneau), `journal`, `statut`.
+- **Journal en direct** : `.venv\Scripts\python trendguard_bot.py journal`.
+  Le bot lancé par le panneau (AUTO) ou le superviseur tourne sans fenêtre et
+  écrit dans `trendguard_paper.log` ; lancés depuis un terminal, `supervise`
+  et `run` affichent ce journal quand le bot tourne déjà.
+- **Jamais de console pour un processus de fond sous Windows** : `pythonw.exe`
+  (`autonomy.gui_python`). Un programme console lancé « caché » ouvre une
+  fenêtre vide sous Windows 11 (Windows Terminal), et la fermer arrête le
+  programme.
 - **Bot paper** : `.venv\Scripts\python trendguard_bot.py run`. État : `status`.
   Panneau : `panel` (<http://127.0.0.1:8765>).
 - **Rejeu sur l'historique réel** : `trendguard_bot.py replay --data data

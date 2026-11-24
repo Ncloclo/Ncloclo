@@ -45,7 +45,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import v29
 
-from . import environnement
+from . import environnement, suivi
 
 ROOT = v29.APP_DIR
 BOT_SCRIPT = os.path.join(ROOT, "trendguard_bot.py")
@@ -263,7 +263,7 @@ class Supervisor:
     def __init__(self, gcfg: Any, logger: logging.Logger,
                  notify: Optional[Callable[..., Any]] = None,
                  popen: Callable[..., Any] = subprocess.Popen,
-                 python: str = sys.executable,
+                 python: Optional[str] = None,
                  clock: Callable[[], float] = time.time,
                  sleep: Callable[[float], None] = time.sleep,
                  bot_running: Optional[Callable[[], bool]] = None):
@@ -271,7 +271,7 @@ class Supervisor:
         self.log = logger
         self.notify = notify or (lambda *a, **k: None)
         self.popen = popen
-        self.python = python
+        self.python = python or console_python(sys.executable)
         self.clock = clock
         self.sleep = sleep
         self.bot_running = bot_running or (lambda: lock_held(gcfg.lock_file))
@@ -475,11 +475,14 @@ def run_supervisor(gcfg: Any, login: bool = False, logger: Optional[logging.Logg
     if not login:
         _rm(sidecar(gcfg.lock_file, ".off"))
     lock = v29.ProcessLock(sidecar(gcfg.lock_file, ".superviseur.lock"))
+    watch = suivi.interactive() and not login and gcfg.log_file not in ("", os.devnull)
     try:
         lock.acquire()
     except SystemExit:
         log.info("[SUPERVISEUR] déjà en marche : rien à faire")
-        return 0
+        # Depuis un terminal : le journal du bot en direct, au lieu d'un
+        # terminal muet (le bot écrit dans son fichier, sans fenêtre).
+        return suivi.show(gcfg.log_file) if watch else 0
     own_notify = notify is None
     if own_notify:
         from . import alerts
@@ -494,9 +497,12 @@ def run_supervisor(gcfg: Any, login: bool = False, logger: Optional[logging.Logg
             previous[sig] = signal.signal(sig, _term)
         except (ValueError, OSError):         # hors du thread principal
             pass
+    shown = suivi.in_background(gcfg.log_file) if watch else None
     try:
         return sup.run()
     finally:
+        if shown is not None:
+            shown.set()
         for sig, handler in previous.items():
             signal.signal(sig, handler)
         if own_notify and hasattr(notify, "close"):
@@ -534,6 +540,18 @@ def gui_python(python: str) -> str:
         w = os.path.join(folder, "pythonw.exe")
         if os.path.exists(w):
             return w
+    return python
+
+
+def console_python(python: str) -> str:
+    """Windows : python.exe à côté de pythonw.exe. Le superviseur, lancé
+    sans console, lance le bot avec lui (sans fenêtre, CREATE_NO_WINDOW) :
+    sa sortie, erreurs fatales comprises, va dans <journal>.console.txt."""
+    folder, name = os.path.split(python)
+    if name.lower() == "pythonw.exe":
+        c = os.path.join(folder, "python.exe")
+        if os.path.exists(c):
+            return c
     return python
 
 

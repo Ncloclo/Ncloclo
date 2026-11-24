@@ -634,13 +634,19 @@ gardent les leurs. Toute commande `python trendguard_bot.py …` passe d'elle-m�
 par ce dossier ; s'il n'existe pas, le bot tourne avec les bibliothèques du PC.
 
 Première installation, ou mise à jour quand les versions testées changent (bot
-et panneau arrêtés, dans le dossier du bot) :
+et panneau arrêtés, dans le dossier du bot). Sous Windows, le dossier `.venv`
+est créé avec le Python 3.12 géré par uv (la version de la CI), rangé dans
+votre profil : il ne dépend d'aucun autre logiciel.
 
-```bash
-python -m venv .venv                                                           # une seule fois
+```powershell
+uv python install 3.12                                                         # une seule fois
+& "$env:APPDATA\uv\python\cpython-3.12-windows-x86_64-none\python.exe" -m venv .venv
 .venv\Scripts\python -m pip install -r requirements-docker.txt ruff pip-audit  # Windows
 .venv/bin/python -m pip install -r requirements-docker.txt ruff pip-audit      # Linux, macOS
 ```
+
+Avec `just` : `just install`, puis `just check` (Ruff, tests Python, pages web
+dans Chrome), `just dev` (panneau) et `just journal` (journal en direct).
 
 Chaque nuit, le rapport quotidien vérifie que ces bibliothèques sont aux
 versions testées et sans faille connue, et dit quoi faire sinon. Il ne les
@@ -671,6 +677,7 @@ python trendguard_bot.py animation                              # animation du b
 python trendguard_bot.py panel                                  # panneau de contrôle (navigateur)
 python trendguard_bot.py set-panel-password                     # accès depuis un téléphone (saisie masquée)
 python trendguard_bot.py supervise                              # bot relancé seul en cas de plantage
+python trendguard_bot.py journal                                # journal du bot en direct (Ctrl+C : le bot continue)
 python trendguard_bot.py autostart on                           # démarrage avec l'ordinateur (off : retiré)
 python trendguard_bot.py stop                                   # arrêt propre, sans relance
 python trendguard_bot.py alerts configurer                      # alertes e-mail et WhatsApp
