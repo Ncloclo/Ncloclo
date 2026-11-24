@@ -20,6 +20,7 @@ import v29
 from . import (
     anticipation,
     autonomy,
+    bibliotheque,
     comite,
     deploiement,
     evenements,
@@ -204,6 +205,9 @@ class RoutinesMixin:
             memory = savoir.Memory(self.g.savoir_db)
             res = savoir.judge(memory, close, day)
             counts = memory.counts(day)
+            # Pistes de la bibliothèque de recherche, pour l'agent chercheur du comité.
+            pistes = [{k: p[k] for k in ("title", "part", "question", "link")}
+                      for p in bibliotheque.pistes(memory.get(bibliotheque.KEY), n=3)]
         except Exception as e:
             self.logger.warning(f"[SAVOIR] bilan impossible : {e}")
             return {}
@@ -213,7 +217,8 @@ class RoutinesMixin:
         before = set((self.state.get("savoir") or {}).get("proven") or [])
         self.state["savoir"] = {"day": day, "line": savoir.reasoning_line(res, counts),
                                 "proven": res["proven"], "holds": sorted(res["holds"]),
-                                "influence": res["influence"], "opinion": res.get("opinion") or {}}
+                                "influence": res["influence"], "opinion": res.get("opinion") or {},
+                                "pistes": pistes}
         for s in sorted(set(res["proven"]) - before):
             sc = next(x for x in res["scores"] if x["source"] == s)
             self.logger.info(f"[SAVOIR] compétence acquise : {s} est {sc['verdict']} "
@@ -276,7 +281,8 @@ class RoutinesMixin:
                                     float(self.state.get("risk_mult") or 1.0), policy,
                                     sv.get("opinion") if sv.get("day") == day else {}, ranking,
                                     regime=rg if rg.get("day") == day else None,
-                                    quality=q if q.get("day") == day else None)
+                                    quality=q if q.get("day") == day else None,
+                                    pistes=sv.get("pistes") if sv.get("day") == day else None)
                 view, _res = comite.evaluate(a, data, self.agents)
                 views[a] = comite.as_dict(view)
         except Exception as e:           # consultatif : jamais bloquant

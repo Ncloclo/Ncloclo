@@ -70,6 +70,8 @@ ALLOWLIST: Dict[str, Tuple[str, str]] = {
     "stocktwits.com": ("opinions publiques (savoir)", "savoir"),
     "api.stocktwits.com": ("opinions publiques (savoir)", "savoir"),
     "news.ycombinator.com": ("actualités techniques (savoir)", "savoir"),
+    "export.arxiv.org": ("travaux de recherche en finance (bibliothèque)", "savoir"),
+    "arxiv.org": ("liens des travaux de recherche, ouverts par vous (aucune connexion du bot)", "aucune"),
     "hn.algolia.com": ("actualités techniques (savoir)", "savoir"),
     "127.0.0.1": ("ce PC (panneau)", "local"), "localhost": ("ce PC (panneau)", "local"),
     "www.w3.org": ("espace de noms XML (aucune connexion)", "aucune"),

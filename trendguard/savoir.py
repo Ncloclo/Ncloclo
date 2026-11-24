@@ -65,7 +65,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set,
 
 import v29
 
-from . import evenements
+from . import bibliotheque, evenements
 from . import market_watch as mw
 from .texte import fr
 
@@ -461,6 +461,11 @@ def why_failed(e: BaseException) -> str:
     du site, pas d'une clé."""
     if isinstance(e, mw.HttpError) and e.status in (401, 403):
         return "accès refusé par le site (limite de lecture ou blocage), nouvel essai à la prochaine lecture"
+    if isinstance(e, mw.HttpError) and e.status == 404:
+        return ("adresse refusée ou introuvable (le site a changé son flux, ou refuse les lectures "
+                "sans compte), nouvel essai à la prochaine lecture")
+    if isinstance(e, mw.HttpError) and e.status == 429:
+        return "le site limite les lectures sans compte, nouvel essai à la prochaine lecture"
     return mw.friendly_error(e)
 
 
@@ -712,6 +717,15 @@ def main(argv: Optional[List[str]] = None) -> int:
                 evenements.refresh(memory, now, http_get)
             except Exception as e:
                 print(f"{now:%Y-%m-%d %H:%M:%S} UTC calendrier économique illisible : {e}")
+            try:            # recherche en finance (arXiv) : des pistes, relues au plus une fois par jour
+                book = bibliotheque.refresh(memory, now, lambda url: http_get(url, bibliotheque.TIMEOUT))
+                if book.get("tried_at") == now.isoformat(timespec="seconds"):
+                    print(f"{now:%Y-%m-%d %H:%M:%S} UTC bibliothèque de recherche : "
+                          + (f"lecture ratée ({book['error']})" if book.get("error") else
+                             f"{len(book.get('new') or [])} nouveau(x) travail(aux) pertinent(s), "
+                             f"{len(book.get('papers') or [])} gardés"))
+            except Exception as e:
+                print(f"{now:%Y-%m-%d %H:%M:%S} UTC bibliothèque de recherche illisible : {e}")
             got = sum(run["read"].values())
             print(f"{now:%Y-%m-%d %H:%M:%S} UTC lecture : {got} texte(s) ; "
                   + (f"en panne : {', '.join(run['errors'])}" if run["errors"] else "toutes les sources lues"))

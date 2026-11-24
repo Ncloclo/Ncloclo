@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import v29
-from trendguard import attribution, evenements, libre, modeles, savoir
+from trendguard import attribution, bibliotheque, evenements, libre, modeles, savoir
 from trendguard import market_watch as mw
 from trendguard.journal import silent_logger
 
@@ -222,7 +222,29 @@ class BotData:
         vetoes = [dict(v, asset=a) for a, v in sorted((state.get("vetoes") or {}).items())]
         return {"last": state.get("last_watch"), "vetoes": vetoes, "report_text": text,
                 "report": watch_summary(rep), "ai": ai_summary(), "savoir": self.savoir(),
-                "evenements": self.evenements(state), "modeles": self.modeles()}
+                "evenements": self.evenements(state), "modeles": self.modeles(),
+                "bibliotheque": self.bibliotheque()}
+
+    def bibliotheque(self) -> Optional[Dict[str, Any]]:
+        """Bibliothèque de recherche (lecture seule) : pistes tirées des
+        travaux récents d'arXiv, avec la question à vérifier ; None sans
+        noyau de savoir."""
+        path = getattr(self.g, "savoir_db", "") or savoir.DEFAULT_DB
+        if not getattr(self.g, "savoir", False) or not os.path.exists(path):
+            return None
+        try:
+            memory = savoir.Memory(path, readonly=True)
+        except sqlite3.Error:
+            return None
+        try:
+            book = memory.get(bibliotheque.KEY)
+        except (sqlite3.Error, ValueError):
+            return None
+        finally:
+            memory.close()
+        book = book if isinstance(book, dict) else {}
+        return {"pistes": bibliotheque.pistes(book), "kept": len(book.get("papers") or []),
+                "fetched_at": book.get("fetched_at"), "error": book.get("error") or ""}
 
     def modeles(self) -> Dict[str, Any]:
         """Modèles d'IA (lecture seule) : santé mesurée des modèles configurés,

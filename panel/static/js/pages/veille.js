@@ -40,6 +40,7 @@ async function renderWatch() {
   if (!items.length) items.push(["ok", "Aucune alerte."]);
   $("#w-list").replaceChildren(...items.map(([k, t]) => el("li", k, t)));
   renderCalendar(w.evenements);
+  renderLibrary(w.bibliotheque);
   const r = w.report || {}, ai = w.ai || { configured: [], possible: [] };
   const FNG = { "extreme fear": "Peur extrême", fear: "Peur", neutral: "Neutre", greed: "Avidité", "extreme greed": "Avidité extrême" };
   const fng = $("#w-fng");
@@ -90,6 +91,25 @@ function renderCalendar(c) {
   if (c.error) rows.push(["warn", `Dernière lecture ratée : ${c.error} (nouvel essai dans l'heure).`]);
   $("#w-cal").replaceChildren(...rows.map(([k, t]) => el("li", k, t)));
   $("#w-cal-sub").textContent = c.fetched_at ? `lu le ${ftime(Date.parse(c.fetched_at) / 1000)}` : "pas encore lu";
+}
+// Bibliothèque de recherche (trendguard/bibliotheque.py) : pistes, jamais des règles.
+function renderLibrary(b) {
+  $("#w-lib-card").hidden = !b;
+  if (!b) return;
+  const rows = (b.pistes || []).map((p) => {
+    const li = el("li", "ok");
+    const a = el("a", "", p.title);
+    if (/^https:\/\/arxiv\.org\/abs\//.test(p.link || "")) a.href = p.link;   // donnée lue : jamais une autre adresse
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    li.append(a, el("span", "sub", ` · ${fdate(p.published)} · ${p.themes.join(", ")}`),
+      el("div", "sub", `${p.part} : ${p.question}`));
+    return li;
+  });
+  if (!rows.length) rows.push(el("li", "ok", b.fetched_at ? "Aucun travail récent ne touche aux règles du bot." : "Pas encore lue : première lecture avec le noyau de savoir."));
+  if (b.error) rows.push(el("li", "warn", `Dernière lecture ratée : ${b.error} (nouvel essai dans 6 h).`));
+  $("#w-lib").replaceChildren(...rows);
+  $("#w-lib-sub").textContent = b.fetched_at ? `${b.kept} travaux gardés · lue le ${fdate(b.fetched_at)}` : "pas encore lue";
 }
 // Noyau de savoir : ce que le bot a lu, qui a raison, son avis.
 const VERDICT = { fiable: ["up", "Fiable"], trompeuse: ["down", "Trompeuse (à lire à l'envers)"], hasard: ["", "Pas mieux que le hasard"], observation: ["", "En observation"] };

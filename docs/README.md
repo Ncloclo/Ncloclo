@@ -10,6 +10,7 @@ du bot (installation, commandes, panneau) est dans le
 | --- | --- |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | comment le code est rangé, qui dépend de qui, règles communes |
 | [`APPRENTISSAGE.md`](APPRENTISSAGE.md) | ce que le bot apprend librement (carnets, ruse, prévisions) |
+| [`BIBLIOTHEQUE.md`](BIBLIOTHEQUE.md) | la recherche en finance (arXiv) que le bot lit chaque jour, et ce qu'il en fait |
 | [`EVOLUTION.md`](EVOLUTION.md) | les réglages que le bot peut changer seul, sous épreuves |
 | [`RAPPORT.md`](RAPPORT.md) | le rapport quotidien de 00:30 UTC : sécurité, diagnostic, envoi |
 
@@ -25,6 +26,7 @@ du bot (installation, commandes, panneau) est dans le
 | [`STRATEGIES.md`](STRATEGIES.md) | le bot peut-il « apprendre la meilleure stratégie » ? |
 | [`COUTS_REELS.md`](COUTS_REELS.md) | combien coûtent vraiment les ordres au carnet de Binance, et jusqu'à quel capital ? |
 | [`PETIT_CAPITAL.md`](PETIT_CAPITAL.md) | le bot fait-il avec 100 USDT ce qu'il fait avec 10 000 ? |
+| [`INTELLIGENCE.md`](INTELLIGENCE.md) | diagnostic expert du 24 novembre 2026 : intelligence, compétences, autonomie, performances |
 | [`SENTIMENT.md`](SENTIMENT.md) | le financement des contrats à terme ou la peur et l'avidité auraient-ils aidé ? |
 
 Les huit dernières indiquent en tête la commande qui les régénère ; le rapport
