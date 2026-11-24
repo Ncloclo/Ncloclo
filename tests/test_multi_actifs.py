@@ -90,11 +90,14 @@ def test_daily_follow_up_and_fictitious_portfolio(tmp_path):
         return _chart(_trend(900, 0.0005, len(calls)))
     memory = _Memory()
     book = ma.refresh(memory, NOW, fetch, str(tmp_path), 100.0, pause=0)
-    assert book["error"] == "" and len(book["rows"]) == len(ma.UNIVERSE) and len(calls) == len(ma.UNIVERSE)
+    markets = {c for c, *_ in ma.UNIVERSE} | set(ma.BINANCE_NAME)             # 30 marchés et la manche Binance
+    assert book["error"] == "" and len(book["rows"]) == len(markets) and len(calls) == len(markets)
     assert book["start"] == "2026-11-24" and book["portfolio"]["capital"] == 100.0
+    assert book["binance"]["capital"] == 100.0 and book["binance"]["start"] == "2026-11-24"
     assert {r["category"] for r in book["rows"]} == set(ma.CATEGORIES)
+    assert {r["code"] for r in book["rows"] if r["binance"]} == set(ma.BINANCE_NAME)
     ma.refresh(memory, NOW + timedelta(hours=3), fetch, str(tmp_path), 100.0, pause=0)
-    assert len(calls) == len(ma.UNIVERSE)                                     # une lecture par jour
+    assert len(calls) == len(markets)                                         # une lecture par jour
     later = ma.refresh(memory, NOW + timedelta(days=2), fetch, str(tmp_path), 100.0, pause=0)
     assert later["start"] == "2026-11-24"                                     # le premier jour reste
 

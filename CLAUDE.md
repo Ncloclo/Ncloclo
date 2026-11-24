@@ -145,6 +145,22 @@ survivant).
   page Veille) ; aucun ordre réel (il faudrait un courtier ; Binance n'a que
   PAXG et EUR). Le XOF a une parité fixe avec l'euro.
 
+### Sur Binance au-delà des 21 cryptos (24/11/2026)
+
+- Binance liste des actions tokenisées (« bStocks » : NVDAB, GOOGLB, QQQB…),
+  l'or (PAXG, XAUT) et l'euro (EUR/USDT). `python -m research.binance_hors_cryptos
+  --cache data_multi` : manche de 9 actifs (sous-jacents Yahoo, frais de
+  Binance) +6,5 %/an puis +24,3 %/an, espérance +0,19 R ; 75 % cryptos et 25 %
+  manche : Calmar 1,69 puis 1,33 (contre 1,62 puis 0,95), mais biais de
+  popularité et période jamais vue moins bonne. Suivie en argent fictif
+  (`multi_actifs.BINANCE`, page Veille). Écartés : fonds à levier, sociétés non
+  cotées, cotations trop récentes.
+- `python -m research.univers_crypto --cache data_univers` : 21 + 25 cryptos
+  liquides (liste gardée dans `data_univers/candidats.json`) ; Calmar 1,87 puis
+  1,16 (contre 1,62 puis 0,95), forte part de biais du survivant ; période
+  jamais vue moins bonne. Appliqué au bot paper seulement, par `TG_UNIVERSE`
+  dans `.env` (le code garde les 21 par défaut).
+
 ## Commandes (Windows, depuis la racine)
 
 - **Installation** (Python 3.12, la version de la CI, géré par uv) : `uv python

@@ -58,6 +58,7 @@ diagnostic.txt
 data_binance/
 data_evolution/
 data_multi/
+data_univers/
 # Animation générée (python trendguard_bot.py animation)
 /rejeu_trendguard.html
 # Environnements virtuels
