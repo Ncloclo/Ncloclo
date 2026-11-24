@@ -40,6 +40,20 @@
       "envFile": "${workspaceFolder}/.env"
     },
     {
+      // Journal du bot en direct : le bot tourne sans fenêtre (superviseur,
+      // bouton AUTO) et écrit dans son fichier. Ctrl+C ferme l'affichage ;
+      // le bot continue.
+      "name": "TrendGuard — journal en direct",
+      "type": "debugpy",
+      "request": "launch",
+      "noDebug": true,
+      "program": "${workspaceFolder}/trendguard_bot.py",
+      "args": ["journal"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "envFile": "${workspaceFolder}/.env"
+    },
+    {
       // Bot en continu : lancé SANS débogueur (noDebug), sinon une pause du
       // débogueur (exception, point d'arrêt) le fige sans prévenir.
       "name": "TrendGuard — paper (prix réels Binance)",

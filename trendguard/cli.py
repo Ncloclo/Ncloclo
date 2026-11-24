@@ -20,7 +20,7 @@ import ccxt
 
 import v29
 
-from . import alerts, autonomy, chantiers, devise, evolution, porte
+from . import alerts, autonomy, chantiers, devise, evolution, porte, suivi
 from . import bot as _bot
 from . import diagnostics as dg
 from . import trend_strategy as ts
@@ -747,7 +747,7 @@ def _parser() -> argparse.ArgumentParser:
                                     "health", "replay", "set-secret",
                                     "set-keys", "verify", "diagnose", "panel",
                                     "supervise", "stop", "autostart",
-                                    "set-panel-password", "mode-sur"])
+                                    "set-panel-password", "mode-sur", "journal"])
     ap.add_argument("action", nargs="?", default="status", choices=["on", "off", "status"],
                     help="(autostart, mode-sur) on = activer, off = désactiver, status = état")
     ap.add_argument("--out", default=None, help="(diagnose) fichier du rapport")
@@ -764,6 +764,8 @@ def _parser() -> argparse.ArgumentParser:
     ap.add_argument("--no-open", action="store_true", help="(panel) sans ouvrir le navigateur")
     ap.add_argument("--login", action="store_true",
                     help="(supervise, panel) lancé à l'ouverture de session")
+    ap.add_argument("--lignes", type=int, default=suivi.LINES,
+                    help="(journal) lignes déjà écrites affichées d'abord")
     return ap
 
 
@@ -854,8 +856,16 @@ def _status(gcfg: GuardConfig, resume: bool) -> int:
 
 
 def _run(gcfg: GuardConfig, once: bool) -> int:
-    """Le bot : un seul cycle (`once`) ou la boucle continue."""
-    locks = v29.acquire_instance_locks(gcfg.lock_file, gcfg.db_file)
+    """Le bot : un seul cycle (`once`) ou la boucle continue. Déjà en marche
+    (superviseur, bouton AUTO) et lancé depuis un terminal : son journal en
+    direct, au lieu d'un terminal muet."""
+    try:
+        locks = v29.acquire_instance_locks(gcfg.lock_file, gcfg.db_file)
+    except SystemExit as e:
+        if once or not suivi.interactive():
+            raise
+        print(f"{e}\n")
+        return suivi.show(gcfg.log_file)
     bot = _build(gcfg)
     awake: Optional[autonomy.KeepAwake] = None
     try:
@@ -931,6 +941,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "status": lambda: _status(gcfg, resume=False),
         "resume": lambda: _status(gcfg, resume=True),
         "mode-sur": lambda: porte.cmd_safe_mode(gcfg, args.action, v29._utcnow()),
+        "journal": lambda: suivi.show(gcfg.log_file, args.lignes),
     }
     if args.cmd in commands:
         return commands[args.cmd]()

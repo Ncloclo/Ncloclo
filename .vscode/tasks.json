@@ -34,6 +34,15 @@
       "problemMatcher": []
     },
     {
+      // Le bot tourne sans fenêtre : son journal s'affiche ici, en direct.
+      "label": "TrendGuard — journal en direct",
+      "type": "shell",
+      "command": "python trendguard_bot.py journal",
+      "isBackground": true,
+      "presentation": { "panel": "dedicated" },
+      "problemMatcher": []
+    },
+    {
       "label": "TrendGuard — statut",
       "type": "shell",
       "command": "python trendguard_bot.py status",

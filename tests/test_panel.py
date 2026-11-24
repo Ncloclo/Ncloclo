@@ -384,24 +384,32 @@ def test_supervisor_leaves_the_job_of_whoever_launched_the_panel(tmp_path):
     assert popen_calls == []
     cmd, _cwd, env = wmi_calls[0]
     assert cmd[-1] == "supervise" and env == {"RUN_MODE": "paper", "PYTHONIOENCODING": "utf-8"}
+    # Sans console : pythonw.exe s'il existe (sinon une fenêtre vide s'ouvre
+    # sous Windows 11, et la fermer arrêterait le bot).
+    from trendguard import autonomy
+    assert cmd[0] == autonomy.gui_python(BotControl(_cfg(tmp_path)).python)
     popen_calls, wmi_calls = run(breakaway_ok=False, wmi_ok=False)     # dernier recours
     assert len(popen_calls) == 1 and not popen_calls[0] & control.BREAKAWAY
 
 
 @pytest.mark.skipif(os.name != "nt", reason="création de process par WMI : Windows seulement")
 def test_wmi_start_runs_outside_the_job_with_its_variables(tmp_path):
-    """Vrai lancement par WMI : dossier avec une espace, variable posée avant."""
+    """Vrai lancement par WMI, avec pythonw (aucune fenêtre) : dossier avec
+    une espace, variable ajoutée, et tout l'environnement du panneau (WMI
+    remplace l'environnement par celui qu'on lui donne)."""
     import sys
 
     from panel import control
+    from trendguard import autonomy
     folder = tmp_path / "dossier avec espace"
     folder.mkdir()
     script, out = folder / "ecrit.py", folder / "sortie.txt"
-    script.write_text("import os, sys\nopen(sys.argv[1], 'w').write(os.environ.get('RUN_MODE', ''))\n",
+    script.write_text("import os, sys\nopen(sys.argv[1], 'w').write(os.environ.get('RUN_MODE', '') + "
+                      "('+path' if os.environ.get('PATH') and os.environ.get('SYSTEMROOT') else ''))\n",
                       encoding="utf-8")
     try:
-        pid = control.start_outside_job([sys.executable, str(script), str(out)], str(folder),
-                                        {"RUN_MODE": "paper"})
+        pid = control.start_outside_job([autonomy.gui_python(sys.executable), str(script), str(out)],
+                                        str(folder), {"RUN_MODE": "paper"})
     except OSError as e:
         pytest.skip(f"WMI indisponible sur ce poste : {e}")
     assert pid > 0
@@ -409,7 +417,7 @@ def test_wmi_start_runs_outside_the_job_with_its_variables(tmp_path):
         if out.exists() and out.read_text():
             break
         time.sleep(0.2)
-    assert out.read_text() == "paper"
+    assert out.read_text() == "paper+path"
 
 
 def test_bot_stops_cleanly_on_request(tmp_path, logger):

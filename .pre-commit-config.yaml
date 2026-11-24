@@ -1,0 +1,11 @@
+# Contrôle lancé à chaque commit (une fois : pre-commit install) : Ruff sur
+# les fichiers Python modifiés. Les tests (une vingtaine de minutes) passent
+# dans `just check` et la CI GitHub.
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: ruff check
+        language: system
+        types: [python]

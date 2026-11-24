@@ -10,6 +10,10 @@
   process détaché reste dans le « job » de qui a lancé le panneau (VS Code,
   un assistant, une tâche) et meurt avec lui : le superviseur sort donc du
   job, ou, si ce job l'interdit, est créé par Windows (WMI) hors de tout job.
+  Sous Windows, il tourne avec pythonw.exe : aucune console. Un programme
+  console lancé « caché » ouvre quand même une fenêtre vide sous Windows 11
+  (Windows Terminal, console par défaut), et la fermer arrêterait le bot.
+  Son journal en direct : `python trendguard_bot.py journal`.
 - Arrêter : fichiers « .off » et « .stop » à côté du verrou ; le bot les
   voit en moins d'une seconde entre deux cycles et s'arrête proprement
   (état enregistré, stops Binance laissés en place), le superviseur ne le
@@ -19,6 +23,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -33,11 +38,14 @@ BOT_SCRIPT = autonomy.BOT_SCRIPT
 START_GRACE_SEC = 20        # démarrage en cours : le verrou n'est pas sondé
 BREAKAWAY = 0x01000000      # CREATE_BREAKAWAY_FROM_JOB (Windows)
 NO_WINDOW = 0x08000000      # CREATE_NO_WINDOW (Windows)
-# Création par WMI : la ligne et le dossier passent par l'environnement, sans
-# guillemets à échapper ; fenêtre cachée ; rend le numéro du process.
+# Création par WMI : la ligne, le dossier et les variables passent par
+# l'environnement, sans guillemets à échapper ; rend le numéro du process.
+# Les variables données à WMI remplacent tout l'environnement : il reçoit
+# donc l'environnement complet (PATH, SYSTEMROOT…), pas seulement l'ajout.
 WMI_CREATE = (
+    "$vars = [string[]](ConvertFrom-Json $env:TG_VARIABLES); "
     "$si = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly "
-    "-Property @{ShowWindow=[uint16]0}; "
+    "-Property @{ShowWindow=[uint16]0; EnvironmentVariables=$vars}; "
     "$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments "
     "@{CommandLine=$env:TG_LIGNE; CurrentDirectory=$env:TG_DOSSIER; ProcessStartupInformation=$si}; "
     "if ($r.ReturnValue -ne 0) { exit [int]$r.ReturnValue }; $r.ProcessId")
@@ -45,12 +53,13 @@ WMI_CREATE = (
 
 def start_outside_job(cmd: List[str], cwd: str, env: Dict[str, str]) -> int:
     """Windows : lance `cmd` par WMI (Win32_Process.Create), hors du job du
-    panneau ; `env` : variables posées avant (cmd.exe). Rend le numéro du
+    panneau, avec l'environnement du panneau et `env` en plus. Lancé tel
+    quel, sans cmd.exe : avec pythonw.exe, aucune console. Rend le numéro du
     process ; OSError si Windows refuse."""
-    sets = "".join(f'set "{k}={v}"&& ' for k, v in env.items())
-    line = f'cmd.exe /d /s /c "{sets}{subprocess.list2cmdline(cmd)}"'
+    variables = [f"{k}={v}" for k, v in dict(os.environ, **env).items() if k and "=" not in k]
     out = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", WMI_CREATE],
-                         env=dict(os.environ, TG_LIGNE=line, TG_DOSSIER=cwd),
+                         env=dict(os.environ, TG_LIGNE=subprocess.list2cmdline(cmd), TG_DOSSIER=cwd,
+                                  TG_VARIABLES=json.dumps(variables)),
                          capture_output=True, text=True, timeout=60, creationflags=NO_WINDOW)
     if out.returncode != 0 or not out.stdout.strip():
         raise OSError(f"création par WMI refusée (code {out.returncode})")
@@ -95,6 +104,8 @@ class BotControl:
         return "stopped"
 
     def start(self) -> Tuple[bool, str]:
+        """Bouton AUTO : lance le superviseur, qui lance le bot. Sous
+        Windows avec pythonw.exe : aucune fenêtre de console."""
         st = self.state()
         if st in ("running", "starting"):
             return False, "Le bot est déjà en marche."
@@ -112,7 +123,8 @@ class BotControl:
                                        | getattr(subprocess, "DETACHED_PROCESS", 0x8))
         else:
             kwargs["start_new_session"] = True
-        cmd: List[str] = [self.python, BOT_SCRIPT, "supervise"]
+        python = autonomy.gui_python(self.python) if self.windows else self.python
+        cmd: List[str] = [python, BOT_SCRIPT, "supervise"]
         self._proc = self._launch(cmd, kwargs)
         self._starting_until = time.time() + START_GRACE_SEC
         mode = "RÉEL" if self.g.run_mode == "live" else "paper"
