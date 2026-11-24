@@ -128,6 +128,23 @@ web, réécrire seul son code, agir sur une information non prouvée.
   contre 1,62) ; corrélations 0,87 à 0,93. Aucune retenue : ne pas reproposer
   sans nouvelles données.
 
+### Au-delà des cryptos (24/11/2026)
+
+`python -m research.multi_actifs --cache data_multi` (`docs/MULTI_ACTIFS.md`) :
+la règle transposée (régime propre à chaque actif) sur 21 marchés hors cryptos
+(matières premières, devises, indices, obligations ; actions à part, biais du
+survivant).
+
+- Frais de Binance : perdante partout ; ils mangent 23 à 45 % du risque d'un
+  trade sur devises, indices, obligations (stop à 0,9-1,8 % du prix).
+- Coûts réels : espérance +0,01 R par trade (contre +1,50 R sur les cryptos),
+  rendement nul ; moitié-moitié avec les cryptos : Calmar 1,72 puis 1,05
+  (contre 1,62 puis 0,95) par la seule diversification (corrélation 0,03),
+  rendement divisé par deux.
+- Décision : suivi en argent fictif seulement (`trendguard/multi_actifs.py`,
+  page Veille) ; aucun ordre réel (il faudrait un courtier ; Binance n'a que
+  PAXG et EUR). Le XOF a une parité fixe avec l'euro.
+
 ## Commandes (Windows, depuis la racine)
 
 - **Installation** (Python 3.12, la version de la CI, géré par uv) : `uv python
