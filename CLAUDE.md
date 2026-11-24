@@ -108,6 +108,14 @@ stop large. Étude : `python -m research.petit_capital --cache data_binance`
 - Sous 50 USDT, de plus en plus d'achats sont refusés ; à 20 USDT, aucun ne
   passe. Ne pas conseiller moins de 100 USDT.
 
+### Bibliothèque de recherche et agent chercheur (24/11/2026)
+
+`trendguard/bibliotheque.py` lit chaque jour les travaux d'arXiv (q-fin) qui
+touchent aux règles du bot ; l'agent « chercheur » du comité les cite sans
+voter. Une piste ne change jamais une règle sans étude hors échantillon.
+Diagnostic complet : `docs/INTELLIGENCE.md`. Refusés et pourquoi : lire le dark
+web, réécrire seul son code, agir sur une information non prouvée.
+
 ## Commandes (Windows, depuis la racine)
 
 - **Installation** (Python 3.12, la version de la CI, géré par uv) : `uv python

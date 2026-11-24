@@ -28,6 +28,7 @@ penses-tu de AAVE ? » avec l'avis du jour.
 | quant (momentum, volatilité) | analyse | marché | 1 | | |
 | régime (BTC, volatilité, phase) | analyse | régime | 1 | | oui |
 | sentiment (sources prouvées du noyau de savoir) | analyse | marché, savoir | 0,5 | | |
+| chercheur (travaux récents de la bibliothèque de recherche, arXiv) | analyse | savoir | 0 | | |
 | risque (liquidité, positions, budget de risque, stop) | analyse | marché, portefeuille, politique | 1 | oui | oui |
 | portefeuille (corrélation avec les positions) | analyse | marché, portefeuille | 0,5 | | |
 | « pas de trade » (toutes les raisons de s'abstenir) | analyse | marché, régime, politique | 0 | oui | |

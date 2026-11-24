@@ -127,6 +127,20 @@ def a_sentiment(v: View) -> AgentResult:
               [f"avis {fr(val, '+.2f')} de sources prouvées : {', '.join(o.get('sources') or [])}"])
 
 
+def a_chercheur(v: View) -> AgentResult:
+    """Veille de la recherche : les travaux récents de la bibliothèque
+    (arXiv, bibliotheque.py) qui touchent aux règles de cet achat. Il
+    informe, il ne vote pas : une piste n'est pas une preuve sur les données
+    du bot."""
+    rows = (v.get("savoir") or {}).get("pistes") or []
+    if not rows:
+        return _r("chercheur", "NEUTRE", 0, ["aucun travail de recherche récent sur ces règles"])
+    return _r("chercheur", "NEUTRE", 0,
+              [f"recherche récente : « {p['title']} » ({p['part']}) — à vérifier : {p['question']}"
+               for p in rows[:2]],
+              uncertainties=("une piste de recherche n'est pas une preuve sur les données du bot",))
+
+
 def a_risque(v: View) -> AgentResult:
     s, pf, p = v["marche"]["snap"], v["portefeuille"], v["politique"]["params"]
     ev, veto = [], ""
@@ -245,6 +259,8 @@ AGENTS: Tuple[Agent, ...] = (
           a_regime),
     Agent(Manifest("sentiment", "1.0.0", "sentiment (noyau de savoir)", "analyse", ("sentiment",),
                    ("marche", "savoir"), weight=0.5), a_sentiment),
+    Agent(Manifest("chercheur", "1.0.0", "veille de la recherche (bibliothèque)", "analyse", ("chercheur",),
+                   ("savoir",), weight=0.0), a_chercheur),
     Agent(Manifest("risque", "1.0.0", "gestionnaire du risque", "analyse", ("risque",),
                    ("marche", "portefeuille", "politique"), weight=1.0, veto=True, critical=True), a_risque),
     Agent(Manifest("portefeuille", "1.0.0", "gérant du portefeuille", "analyse", ("portefeuille",),
@@ -315,7 +331,8 @@ def recommend(asset: str, res: MissionResult, held: bool, data_quality: Optional
 def board(asset: str, day: str, close: pd.DataFrame, snap: Dict[str, float], p: ts.TrendParams,
           held: Dict[str, float], equity: float, risk_mult: float, policy: Dict[str, Any],
           opinion: Optional[Dict[str, Any]] = None, ranking: Optional[Dict[str, Any]] = None,
-          regime: Optional[Dict[str, Any]] = None, quality: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+          regime: Optional[Dict[str, Any]] = None, quality: Optional[Dict[str, Any]] = None,
+          pistes: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """Le tableau noir d'une mission : les données de chaque rubrique, que
     chaque agent ne lit que si son manifeste le permet (`regime` : régime du
     jour déjà calculé par le bot, sinon recalculé ; `quality` : note des
@@ -340,7 +357,7 @@ def board(asset: str, day: str, close: pd.DataFrame, snap: Dict[str, float], p: 
                    "corr_held": corr, "closes": [float(x) for x in c.iloc[-200:]]},
         "qualite": quality or qualite.quality(close[[asset]].loc[:pd.Timestamp(day, tz="UTC")], day),
         "regime": {"bull": bull, "sma": p.regime_sma, **{k: rg.get(k) for k in ("texte", "volatilite", "phase")}},
-        "savoir": {"opinion": opinion or {}},
+        "savoir": {"opinion": opinion or {}, "pistes": list(pistes or [])},
         "portefeuille": {"held": dict(held), "equity": equity, "risk_mult": risk_mult},
         "politique": dict(policy, params={k: getattr(p, k) for k in (
             "min_volume_usd", "max_positions", "max_total_risk", "risk_pct", "init_stop_atr", "min_history")}),
