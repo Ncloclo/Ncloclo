@@ -233,6 +233,12 @@ panneau de contrôle ») :
   marché et toutes les actions cotées, lus après chaque séance sur les deux
   pages publiques de brvm.org ; le bot construit l'historique séance après
   séance ([`docs/BRVM.md`](docs/BRVM.md)) ;
+- **Courtiers** (menu Mon bot) : comptes de démonstration seulement
+  (MetaTrader 5 pour les devises, l'or et les indices ; compte papier Alpaca
+  pour les actions américaines ; testnets des plateformes crypto), un compte
+  réel étant refusé ; plan miroir à blanc (aucun ordre envoyé) ; cours des
+  cryptos du bot comparés à dix autres plateformes toutes les six heures ;
+  annuaire des courtiers ([`docs/COURTIERS.md`](docs/COURTIERS.md)) ;
 - **Indicateurs de marché** (page Veille) : VIX, indice du dollar, taux US à 10
   ans et courbe 10 ans − 3 mois, lus chaque jour après la clôture de New York.
   Information seulement : aucun filtre tiré d'eux n'a passé l'étude

@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-from trendguard import attribution, brvm, evenements, levier, multi_actifs, pays, stress
+from trendguard import attribution, brvm, courtiers, evenements, levier, multi_actifs, pays, stress
 from trendguard.texte import fr
 
 from .data import market_view, markets_view, merge_buys, reasoning_view
@@ -85,6 +85,38 @@ class DemoMarket:
         pts = [{"t": r[0], "close": r[4], "sma": sum(closes[i - sma + 1:i + 1]) / sma}
                for i, r in enumerate(rows) if i >= sma - 1][-show:]
         return {"points": pts, "bull": pts[-1]["close"] > pts[-1]["sma"], "sma": sma}, False
+
+
+class DemoPlatform:
+    """Une plateforme d'exemple pour la comparaison des cours (la vraie
+    courtiers.compare), sans réseau : les cours de démonstration, décalés de
+    quelques centièmes de pour cent ; Binance un peu sous les autres pour ZEC
+    (un écart notable d'exemple)."""
+
+    has = {"fetchTickers": True}
+
+    def __init__(self, pid: str, _config: Any = None):
+        ids = [p for p, _n in courtiers.COMPARE]
+        self.id, self.k = pid, (0 if pid == "binance" else 1 + ids.index(pid))
+        self.markets = {f"{a.upper()}/USDT": {"spot": True, "active": True}
+                        for j, a in enumerate(BASE_PRICES) if self.k == 0 or (j + self.k) % 4 != 3}
+
+    def fetch(self, *_a: Any) -> None:              # jamais appelée : aucune requête
+        return None
+
+    def load_markets(self) -> None:
+        return None
+
+    def fetch_tickers(self, symbols: Optional[List[str]] = None) -> Dict[str, Dict[str, float]]:
+        out = {}
+        for s in symbols or list(self.markets):
+            a = s.split("/")[0].lower()
+            j = list(BASE_PRICES).index(a)
+            gap = -0.015 if (self.k == 0 and a == "zec") else 0.0 if self.k == 0 else 0.0004 * math.sin(j * 1.7 + self.k * 2.3)
+            px = BASE_PRICES[a] * (1 + gap)
+            out[s] = {"bid": px * 0.9998, "ask": px * 1.0002, "last": px,
+                      "quoteVolume": 2e6 * (1 + (j * (self.k + 1)) % 9) * (3 if self.k == 0 else 1)}
+        return out
 
 
 # Classement d'exemple (bénéfice de la stratégie sur 2 ans, en R).
@@ -306,7 +338,8 @@ class DemoData:
         """L'or détenu dans les deux portefeuilles fictifs (exemple)."""
         px = float(self._multi_close()["or"].iloc[-1])
         pos = {"code": "or", "name": multi_actifs.NAME["or"], "category": "Matières premières",
-               "entry": round(px * 0.94, 2), "stop": round(px * 0.9, 2), "price": px, "pnl_pct": (1 / 0.94 - 1) * 100}
+               "entry": round(px * 0.94, 2), "stop": round(px * 0.9, 2), "price": px, "pnl_pct": (1 / 0.94 - 1) * 100,
+               "weight_pct": 12.0}
         return {"fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "error": "",
                 "portfolio": {"positions": [pos]}, "binance": {"positions": [dict(pos)]}}
 
@@ -341,6 +374,46 @@ class DemoData:
 
     def brvm(self) -> Dict[str, Any]:
         return brvm.view(self._brvm_book(), "")
+
+    def _brokers_book(self) -> Dict[str, Any]:
+        """Cours comparés (calculés par courtiers.compare sur des plateformes
+        d'exemple) et comptes de démonstration d'exemple : un compte démo
+        MetaTrader 5 et un testnet Bybit branchés, Alpaca non branché."""
+        now = datetime.now(timezone.utc)
+        iso = now.isoformat(timespec="seconds")
+        prices = dict(courtiers.compare(list(BASE_PRICES), factory=DemoPlatform, now=now, cache=""), tried_at=iso)
+        symbols = {"or": "XAUUSD", "argent": "XAGUSD", "wti": "USOIL", "brent": "UKOIL", "gaz": "XNGUSD",
+                   "cuivre": None, "eurusd": "EURUSD", "gbpusd": "GBPUSD", "usdjpy": "USDJPY", "usdchf": "USDCHF",
+                   "audusd": "AUDUSD", "usdcad": "USDCAD", "sp500": "US500", "nasdaq100": "USTEC", "dow": "US30",
+                   "cac40": "FRA40", "dax": "DE40", "nikkei": "JP225", "ftse": "UK100"}
+        specs = {"or": {"price": 2650.0, "lot_value": 265_000.0, "min": 0.01, "step": 0.01, "max": 100.0, "tradable": True},
+                 "sp500": {"price": 6000.0, "lot_value": 6000.0, "min": 0.1, "step": 0.1, "max": 500.0, "tradable": True},
+                 "eurusd": {"price": 1.05, "lot_value": 105_000.0, "min": 0.01, "step": 0.01, "max": 100.0, "tradable": True}}
+        mt5 = {"state": "demo", "checked_at": iso, "seen_at": iso, "message": "compte démo branché (lecture seule, exemple)",
+               "account": {"login": "•••123", "server": "MetaQuotes-Demo", "company": "MetaQuotes Ltd.", "currency": "USD",
+                           "balance": 10_000.0, "equity": 10_212.5, "leverage": 100, "trade_allowed": True},
+               "positions": [{"symbol": "XAUUSD", "side": "achat", "volume": 0.04, "price_open": 2600.0, "profit": 200.0}],
+               "symbols": symbols, "specs": specs}
+        alpaca = {"state": "absent", "checked_at": iso,
+                  "message": "aucun compte papier : python trendguard_bot.py courtiers set-key alpaca"}
+        bybit = {"id": "bybit", "name": "Bybit", "state": "demo", "checked_at": iso,
+                 "message": "testnet branché (lecture seule, exemple)", "balances": {"USDT": 50_000.0, "BTC": 1.0, "ETH": 1.0}}
+        return {"prices": prices, "accounts": {"tried_at": iso, "error": "", "mt5": mt5, "alpaca": alpaca, "testnets": [bybit]}}
+
+    def _brokers_multi(self) -> Dict[str, Any]:
+        """Portefeuille fictif hors cryptos d'exemple : quatre positions et leur poids."""
+        close = self._multi_close()
+        rows = []
+        for code, w in (("or", 12.0), ("sp500", 18.0), ("eurusd", 25.0), ("tlt", 9.0)):
+            px = float(close[code].iloc[-1])
+            rows.append({"code": code, "name": multi_actifs.NAME[code], "category": multi_actifs.CATEGORY[code],
+                         "entry": round(px * 0.95, 4), "stop": round(px * 0.9, 4), "price": px,
+                         "pnl_pct": (1 / 0.95 - 1) * 100, "weight_pct": w})
+        return {"fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "portfolio": {"start": "2026-11-24", "equity": 10_350.0, "positions": rows}}
+
+    def brokers(self) -> Dict[str, Any]:
+        return courtiers.view(self._brokers_book(), self._brokers_multi(), {})
 
     def market_info(self, code: str, days: int = 0) -> Dict[str, Any]:
         return market_view(code, self._multi_close(), self._multi_book(), days)

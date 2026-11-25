@@ -90,6 +90,7 @@ sont jamais envoyés sur GitHub. VS Code les masque dans l'explorateur
 | `multi_actifs.py` | tous les marchés hors cryptos (Yahoo) : règle sur les séances réelles de chaque marché, suivi quotidien après la clôture de New York, portefeuille en argent fictif, indicateurs de marché (VIX, dollar, taux), indices et devises des pays, données des pages du panneau |
 | `pays.py` | les 87 pays classés par MSCI (revue 2026), leur indice, leur devise, et la Banque mondiale (API ouverte, relue chaque semaine) |
 | `brvm.py` | la BRVM (Abidjan) : ses deux pages publiques lues après chaque séance, historique construit par le bot (data_brvm/) |
+| `courtiers.py` | courtiers et plateformes : annuaire, cours des cryptos comparés entre plateformes (6 h), comptes de démonstration (MetaTrader 5, Alpaca papier, testnets CCXT ; réel refusé), plan miroir à blanc, adresses vérifiées à chaque requête |
 | `levier.py` | levier étudié chaque semaine : politiques fixes et adaptative, emprunt compté, règle fixée d'avance ; jamais appliqué (comptant) |
 | `uptime.py` | disponibilité : arrêts de plus d'une heure, leur cause, temps de marche |
 | `learning.py` | apprentissage libre : normale des carnets, ruse réglée sur elle, prévisions corrigées par l'expérience |

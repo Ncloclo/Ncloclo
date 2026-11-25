@@ -65,7 +65,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set,
 
 import v29
 
-from . import bibliotheque, brvm, evenements, flux, multi_actifs, pays
+from . import bibliotheque, brvm, courtiers, evenements, flux, multi_actifs, pays
 from . import market_watch as mw
 from .texte import fr
 
@@ -777,6 +777,17 @@ def main(argv: Optional[List[str]] = None) -> int:
                              f"historique de {book.get('sessions', 0)} séance(s)"))
             except Exception as e:
                 print(f"{now:%Y-%m-%d %H:%M:%S} UTC BRVM illisible : {e}")
+            try:            # courtiers : cours des cryptos sur dix autres plateformes (6 h), comptes démo (1 h)
+                book = courtiers.refresh(memory, now, [a.lower() for a in gcfg.universe])
+                pr = book.get("prices") or {}
+                if pr.get("tried_at") == now.isoformat(timespec="seconds"):
+                    print(f"{now:%Y-%m-%d %H:%M:%S} UTC cours comparés : "
+                          + (f"lecture ratée ({pr['error']})" if pr.get("error") else
+                             f"{sum(1 for p in pr.get('platforms') or [] if p['ok'])} plateformes lues, écart médian "
+                             f"de Binance {fr(pr.get('median_gap_pct') or 0.0, '.2f')} %, écarts notables : "
+                             f"{', '.join(a.upper() for a in pr.get('notable') or []) or 'aucun'}"))
+            except Exception as e:
+                print(f"{now:%Y-%m-%d %H:%M:%S} UTC courtiers illisibles : {e}")
             try:            # pays du monde (Banque mondiale, API ouverte) : relus une fois par semaine
                 book = pays.refresh(memory, now, lambda url: http_get(url, 60))
                 if book.get("tried_at") == now.isoformat(timespec="seconds"):

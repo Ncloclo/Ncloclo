@@ -18,6 +18,7 @@ from trendguard import (
     attribution,
     bibliotheque,
     brvm,
+    courtiers,
     evenements,
     levier,
     libre,
@@ -337,6 +338,13 @@ class BotData:
         dernière séance lue, et l'historique construit par le bot."""
         got = self._from_savoir(brvm.KEY)
         return brvm.view(got[0] if got else None, self.brvm_cache)
+
+    def brokers(self) -> Dict[str, Any]:
+        """Page « Courtiers » (lecture seule) : comptes de démonstration, plan
+        miroir à blanc, cours comparés et annuaire. Du fichier .env, seule la
+        présence des identifiants est regardée, jamais leur valeur."""
+        got = self._from_savoir(courtiers.KEY, multi_actifs.KEY)
+        return courtiers.view(got[0] if got else None, got[1] if got else None, dict(os.environ))
 
     def markets(self, key: str, window: str = "1y") -> Dict[str, Any]:
         """Page d'une classe d'actifs (lecture seule)."""
