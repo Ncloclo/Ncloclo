@@ -1,7 +1,7 @@
 // Panneau TrendGuard, page « Veille » : sentiment, contrats à terme,
 // calendrier, IA et noyau de savoir.
 
-import { $, api, countUp, el, fdate, fpct, ftime, nf, table, up } from "../core.js";
+import { $, api, countUp, el, fdate, fpct, ftime, locale, nf, table, up } from "../core.js";
 import { register } from "../navigation.js";
 
 // Contrats à terme de Binance (trendguard/derives.py) : financement payé
@@ -79,7 +79,7 @@ async function renderWatch() {
   renderKnowledge(w.savoir);
 }
 // Calendrier économique (trendguard/evenements.py) : information seulement.
-const dCal = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
+const dCal = new Intl.DateTimeFormat(locale(), { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
 function renderCalendar(c) {
   $("#w-cal-card").hidden = !c;
   if (!c) return;

@@ -31,6 +31,7 @@ CLASS_FR = {"READ": "lire", "ANALYZE": "analyser", "SIMULATE": "simuler (sans ef
             "MODIFY": "modifier (contrôlé)", "EXECUTE": "exécuter (action réelle)"}
 FRESH = ("LIVE", "FRESH", "STALE", "UNKNOWN", "OFFLINE")
 FRESH_FR = {"LIVE": "en direct", "FRESH": "à jour", "STALE": "ancienne", "UNKNOWN": "inconnue", "OFFLINE": "bot arrêté"}
+FRESH_EN = {"LIVE": "live", "FRESH": "up to date", "STALE": "old", "UNKNOWN": "unknown", "OFFLINE": "bot stopped"}
 LIVE_S, FRESH_S = 120, 600
 # Chaque commande du panneau : (méthode, adresse) → (classe, ce qu'elle fait).
 COMMANDS: Dict[Tuple[str, str], Tuple[str, str]] = {
@@ -43,6 +44,9 @@ COMMANDS: Dict[Tuple[str, str], Tuple[str, str]] = {
     ("GET", "/api/countries"): ("READ", "pays du monde"), ("GET", "/api/brvm"): ("READ", "BRVM (Abidjan)"),
     ("GET", "/api/brokers"): ("READ", "courtiers et plateformes (démonstration seulement)"),
     ("GET", "/api/exchanges"): ("READ", "bourses du monde"),
+    ("GET", "/api/geo"): ("READ", "pays, fuseaux et langues officielles (l'appareil choisit sa langue)"),
+    ("GET", "/api/geo/locate"): ("READ", "ville la plus proche d'une position (rien n'est gardé)"),
+    ("GET", "/api/payments"): ("READ", "moyens de paiement d'un pays (information seulement)"),
     ("GET", "/api/watch"): ("READ", "veille"), ("GET", "/api/reasoning"): ("ANALYZE", "raisonnement du bot"),
     ("GET", "/api/news"): ("READ", "actualités"), ("GET", "/api/assistant"): ("READ", "accueil de Rachelle"),
     ("GET", "/api/anticipation"): ("SIMULATE", "prochaine clôture (probabilités, sans effet)"),
@@ -111,11 +115,19 @@ def freshness_view(st: Dict[str, Any], now: datetime, delay_sec: int = 120) -> D
             "data": {"state": dat, "label": FRESH_FR[dat], "day": q.get("day")}}
 
 
-def why(reply: Dict[str, Any], st: Dict[str, Any], now: Optional[datetime] = None) -> List[str]:
+def why(reply: Dict[str, Any], st: Dict[str, Any], now: Optional[datetime] = None,
+        lang: str = "fr") -> List[str]:
     """« Pourquoi ? » d'une réponse de Rachelle (§23-24) : qui a répondu, à
-    partir de quelles données et de quelle fraîcheur, quel module."""
+    partir de quelles données et de quelle fraîcheur, quel module ; en
+    anglais hors du français."""
     now = now or datetime.now(timezone.utc)
     src = str(reply.get("source") or "local")
+    if not str(lang or "fr").lower().startswith("fr"):
+        from . import rachelle_en
+        f = freshness_view(st, now)
+        age = f["cycle"]["age_s"]
+        label = FRESH_EN[f["cycle"]["state"]] + (f" (last cycle {age / 60:.0f} min ago)" if age is not None else "")
+        return rachelle_en.why(src, label, [TOPIC_SOURCES[t] for t in reply.get("topics") or [] if t in TOPIC_SOURCES])
     out = ["répondu par " + ("une IA, vérifiée (montants inventés refusés)" if src not in ("local", "")
                              else "Rachelle sur ce PC, sans IA (règles écrites)")]
     f = freshness_view(st, now)

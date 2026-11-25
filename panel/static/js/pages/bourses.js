@@ -5,7 +5,7 @@
 // choisi (celui du profil du bot par défaut, TG_PAYS), ce que le bot en lit,
 // et la règle mesurée sur l'indice principal. Information seulement.
 
-import { $, $$, api, el, fpct, nf } from "../core.js";
+import { $, $$, api, el, fpct, locale, nf } from "../core.js";
 import { fillSpark } from "../charts.js";
 import { register } from "../navigation.js";
 
@@ -14,7 +14,7 @@ const REGIONS = [["all", "Toutes"], ["Afrique", "Afrique"], ["Amériques", "Amé
 let region = "all", openOnly = false, DATA = null, country = null, ZONE = {};
 const PAYS_KEY = "tg:pays";                               // pays choisi sur cet appareil
 const remembered = () => { try { return localStorage.getItem(PAYS_KEY); } catch { return null; } };
-const mine = (iso) => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+const mine = (iso) => new Date(iso).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
 const flag = (iso) => iso.toUpperCase().replace(/./g, (c) => String.fromCodePoint(127397 + c.charCodeAt(0)));
 const value = (v) => (v == null ? "–" : nf(v >= 10 ? 2 : 4).format(v));
 const day = (iso) => (iso ? String(iso).slice(0, 10).split("-").reverse().join("/") : "–");   // 2026-11-25 → 25/11/2026

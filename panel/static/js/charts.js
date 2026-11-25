@@ -1,7 +1,7 @@
 // Panneau TrendGuard : graphiques (TradingView Lightweight Charts), marqueurs
 // d'achats et de ventes, niveaux d'entrée et de stop.
 
-import { cssVar, el, fpx, fR, LWC, up } from "./core.js";
+import { cssVar, el, fpx, fR, locale, LWC, up } from "./core.js";
 
 // ---------- Graphiques (TradingView Lightweight Charts) ----------
 export const charts = new Set();
@@ -17,7 +17,7 @@ export function chartOptions(extra = {}, logo = true) {
     // montrent toute la courbe, même 1 500 points sur un téléphone.
     timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false, minBarSpacing: 0.05 },
     crosshair: { mode: LWC ? LWC.CrosshairMode.Normal : 0 },
-    localization: { locale: "fr-FR", priceFormatter: fpx },
+    localization: { locale: locale(), priceFormatter: fpx },
   };
   Object.entries(extra || {}).forEach(([k, v]) => {
     const group = v && typeof v === "object" && !Array.isArray(v) && base[k] && typeof base[k] === "object";

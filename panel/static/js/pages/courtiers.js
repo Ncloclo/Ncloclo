@@ -4,7 +4,7 @@
 // plateformes et l'annuaire des courtiers. Démonstration seulement : un
 // compte réel est refusé, aucun ordre n'est envoyé.
 
-import { $, $$, api, el, fpct, fpx, nf, table } from "../core.js";
+import { $, $$, api, el, fpct, fpx, locale, nf, table } from "../core.js";
 import { register } from "../navigation.js";
 
 // État d'un compte : [libellé, couleur de l'étiquette]
@@ -31,7 +31,7 @@ sec.dataset.title = "Courtiers";
 const money = (v, cur) => (v == null ? "–" : `${nf(2).format(v)} ${cur || ""}`.trim());
 const when = (iso) => {
   const d = iso ? new Date(iso) : null;
-  return d && !isNaN(d) ? d.toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "–";
+  return d && !isNaN(d) ? d.toLocaleString(locale(), { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "–";
 };
 
 function seg(items, attr, current, label) {

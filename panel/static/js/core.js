@@ -1,6 +1,9 @@
 // Panneau TrendGuard : outils communs (formats, DOM, préférences, temps de
 // chargement, API du serveur local, notifications).
 
+import { lang, locale } from "./i18n.js";
+
+export { lang, locale, t } from "./i18n.js";
 export const $ = (s, r = document) => r.querySelector(s);
 export const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 export const el = (tag, cls, text) => {
@@ -13,13 +16,16 @@ export const LWC = window.LightweightCharts;
 export const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
 
 // ---------- Formats ----------
-// Pourcentages de risque : 1 → « 1 », 1,25 → « 1,25 ».
-export const fmax2 = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 });
+// Dans la langue du panneau (i18n.js) : « 1 234,56 » en français,
+// « 1,234.56 » en anglais…
 const nfCache = new Map();
 export const nf = (d) => {
-  if (!nfCache.has(d)) nfCache.set(d, new Intl.NumberFormat("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d }));
-  return nfCache.get(d);
+  const key = locale() + "|" + d;
+  if (!nfCache.has(key)) nfCache.set(key, new Intl.NumberFormat(locale(), { minimumFractionDigits: d, maximumFractionDigits: d }));
+  return nfCache.get(key);
 };
+// Pourcentages de risque : 1 → « 1 », 1,25 → « 1,25 ».
+export const fmax2 = { format: (v) => new Intl.NumberFormat(locale(), { maximumFractionDigits: 2 }).format(v) };
 export const fpx = (v) => {
   if (v == null || !isFinite(v)) return "–";
   const a = Math.abs(v);
@@ -29,16 +35,16 @@ export const sign = (v) => (v > 0 ? "+" : v < 0 ? "−" : "");
 export const fusd = (v) => (v == null || !isFinite(v) ? "–" : nf(2).format(v) + " USDT");
 export const fpct = (v, d = 2) => (v == null || !isFinite(v) ? "–" : sign(v) + nf(d).format(Math.abs(v)) + " %");
 export const fR = (v) => (v == null || !isFinite(v) ? "–" : sign(v) + nf(2).format(Math.abs(v)) + " R");
-export const fvol = (v) => (v == null ? "–" : v >= 1e9 ? nf(2).format(v / 1e9) + " Md$" : nf(1).format(v / 1e6) + " M$");
+export const fvol = (v) => (v == null ? "–" : v >= 1e9 ? nf(2).format(v / 1e9) + (lang() === "fr" ? " Md$" : " B$") : nf(1).format(v / 1e6) + " M$");
 export const up = (s) => (s || "").toUpperCase();
-const dShort = new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+// Date et heure dans la langue du panneau.
+export const dfmt = (opts) => new Intl.DateTimeFormat(locale(), opts);
 export const fdate = (iso) => {
   const d = iso ? new Date(iso) : null;
-  return d && !isNaN(d) ? dShort.format(d) : "–";
+  return d && !isNaN(d) ? dfmt({ day: "2-digit", month: "2-digit", year: "2-digit" }).format(d) : "–";
 };
-const dTime = new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 // Instant en secondes depuis 1970 (horodatage Python) → « 29/09 07:17 ».
-export const ftime = (sec) => (sec == null || !isFinite(sec) ? "–" : dTime.format(new Date(sec * 1000)));
+export const ftime = (sec) => (sec == null || !isFinite(sec) ? "–" : dfmt({ day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(sec * 1000)));
 export const fdur = (s) => {
   if (s == null) return "–";
   s = Math.max(0, Math.round(s));

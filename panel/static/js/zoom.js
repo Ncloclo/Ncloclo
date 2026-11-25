@@ -6,7 +6,7 @@
 // clair et suit aussi le zoom à la molette, au doigt ou à la souris. Un
 // rafraîchissement ne défait jamais un zoom.
 
-import { el } from "./core.js";
+import { el, locale } from "./core.js";
 
 const DAY = 86400;
 // [clé, libellé, durée en secondes] ; « Tout » : toute la courbe chargée.
@@ -42,9 +42,9 @@ export function intervalFor(key, current) {
 export const limitFor = (key, interval, warm, min) =>
   Math.max(min, Math.min(1000, Math.ceil(spanOf(key) / (IV_SEC[interval] || 3600)) + warm));
 
-const hours = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-const days = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" });
-const years = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", year: "numeric" });
+const hours = new Intl.DateTimeFormat(locale(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const days = new Intl.DateTimeFormat(locale(), { day: "numeric", month: "short" });
+const years = new Intl.DateTimeFormat(locale(), { day: "numeric", month: "short", year: "numeric" });
 // Période visible : « 12 nov. → 24 nov. · 12 j », avec les heures sous deux jours.
 export function rangeText(from, to) {
   const s = Math.max(0, to - from);

@@ -25,6 +25,7 @@ from trendguard import (
     libre,
     modeles,
     multi_actifs,
+    paiements,
     pays,
     pistes,
     profil,
@@ -143,6 +144,18 @@ def market_view(code: str, close: pd.DataFrame, book: Dict[str, Any], days: int 
     detail = dict(multi_actifs.market_detail(code, s), positions=multi_actifs.held_positions(book).get(code, []))
     return {"detail": detail, "points": multi_actifs.market_points(s, max(0, min(int(days), 4000))),
             "sma": multi_actifs.REGIME_N, "breakout_n": 30}
+
+
+def geo_locate(lat: Any, lon: Any) -> Dict[str, Any]:
+    """Position (latitude, longitude) → ville la plus proche et son pays."""
+    try:
+        la, lo = float(lat), float(lon)
+    except (TypeError, ValueError):
+        raise ValueError("position illisible")
+    found = profil.nearest_city(la, lo)
+    if found is None:
+        raise ValueError("table des villes indisponible")
+    return found
 
 
 class BotData:
@@ -360,6 +373,22 @@ class BotData:
         got = self._from_savoir(courtiers.KEY, multi_actifs.KEY)
         env = dict(os.environ, TG_PAYS=getattr(self.g, "pays", "") or "", TG_FUSEAU=getattr(self.g, "fuseau", "") or "")
         return courtiers.view(got[0] if got else None, got[1] if got else None, env)
+
+    def geo(self) -> Dict[str, Any]:
+        """Pays, fuseaux et langues officielles, pour que l'appareil reconnaisse
+        lui-même son pays et sa langue (rien de l'appareil ne revient au bot)."""
+        return profil.geo_data(profil.of_config(self.g))
+
+    @staticmethod
+    def locate(lat: Any, lon: Any) -> Dict[str, Any]:
+        """La ville la plus proche d'une position, calculée sur ce PC (la
+        position n'est ni gardée ni envoyée ailleurs)."""
+        return geo_locate(lat, lon)
+
+    def payments(self, country: str = "") -> Dict[str, Any]:
+        """Page « Paiement » : les moyens de payer du pays demandé (celui du
+        profil du bot sinon). Information seulement."""
+        return paiements.view(country, self.g)
 
     def markets(self, key: str, window: str = "1y") -> Dict[str, Any]:
         """Page d'une classe d'actifs (lecture seule)."""
