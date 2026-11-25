@@ -6,6 +6,8 @@ import { refreshStatus, S } from "../etat.js";
 import { register } from "../navigation.js";
 import { showLogin } from "../connexion.js";
 import { renderReport, renderSecurity } from "../rapport.js";
+import { detect, geoData } from "../geo.js";
+import { languageControl } from "../langue.js";
 
 let installEvt = null;
 window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvt = e; $("#install-btn").hidden = false; });
@@ -46,8 +48,17 @@ function dlRows(rows) {
     return [el("dt", wide ? "wide" : "", k), dd];
   });
 }
+// Le choix de la langue du panneau (Affichage), avec les langues officielles
+// du pays de l'appareil.
+async function renderLanguage() {
+  if ($("#s-lang").firstChild) return;
+  const g = await geoData();
+  $("#s-lang").replaceChildren(languageControl(g.official[detect(g).country] || []));
+}
+
 async function renderSettings() {
   if (!S) await refreshStatus();
+  renderLanguage().catch(() => { /* réessai au prochain rafraîchissement */ });
   renderSecurity().catch(() => { /* réessai au prochain rafraîchissement */ });
   renderReport(S.alerts).catch(() => { /* réessai au prochain rafraîchissement */ });
   const au = S.autonomy || {}, sup = au.supervisor || {}, le = sup.last_exit;

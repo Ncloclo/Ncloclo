@@ -21,12 +21,14 @@ from trendguard import (
     evenements,
     levier,
     multi_actifs,
+    paiements,
     pays,
+    profil,
     stress,
 )
 from trendguard.texte import fr
 
-from .data import market_view, markets_view, merge_buys, reasoning_view
+from .data import geo_locate, market_view, markets_view, merge_buys, reasoning_view
 from .market import INTERVALS
 
 BASE_PRICES = {"btc": 84400.0, "eth": 2690.0, "bnb": 780.0, "xrp": 0.58, "ada": 0.254,
@@ -424,6 +426,16 @@ class DemoData:
 
     def brokers(self) -> Dict[str, Any]:
         return courtiers.view(self._brokers_book(), self._brokers_multi(), {})
+
+    def geo(self) -> Dict[str, Any]:
+        return profil.geo_data(profil.profile({}))
+
+    @staticmethod
+    def locate(lat: Any, lon: Any) -> Dict[str, Any]:
+        return geo_locate(lat, lon)
+
+    def payments(self, country: str = "") -> Dict[str, Any]:
+        return paiements.view(country, None)
 
     _exchange_rows: Optional[List[Dict[str, Any]]] = None
 

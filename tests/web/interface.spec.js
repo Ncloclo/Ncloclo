@@ -21,10 +21,12 @@ test("onglets rangés par usage, nombre de positions sur l'onglet", async ({ pag
   const errors = watchErrors(page);
   await page.goto(BASE + "/#dash");
   await expect(page.locator(".tab-group")).toHaveText(["Mon bot", "Marchés", "Analyse"]);
-  // Le bot d'abord, puis les marchés (une page par classe d'actifs), l'analyse, Réglages à part en bas.
+  // Le bot d'abord, puis les marchés (une page par classe d'actifs), l'analyse, Réglages à part en bas,
+  // et Paiement juste en dessous.
   await expect(page.locator(".tab")).toHaveText(["Tableau de bord", /^Positions/, "Journal", "Courtiers", "Cryptos",
     "Matières premières",
-    "Devises", "Indices", "Actions", "Obligations", "Pays du monde", "Bourses du monde", "BRVM", "Graphiques", "Actualités", "Veille", "Réglages"]);
+    "Devises", "Indices", "Actions", "Obligations", "Pays du monde", "Bourses du monde", "BRVM", "Graphiques", "Actualités", "Veille", "Réglages",
+    "Paiement"]);
   await expect(page.locator("#tab-pos")).toHaveText("6");
   await page.locator('.tab[data-tab="positions"]').click();
   await expect(page.locator('.tab[data-tab="positions"]')).toHaveAttribute("aria-current", "page");

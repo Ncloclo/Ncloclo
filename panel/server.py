@@ -500,9 +500,12 @@ class PanelApp(SecurityCenter):
             if len(self._chat_times) >= CHAT_PER_MINUTE:
                 return 429, {"error": "Trop de questions d'un coup : réessayez dans une minute."}
             self._chat_times.append(now)
-        r = self.assistant.reply(body.get("message"), body.get("history"), self.assistant_context)
+        lang = str(body.get("lang") or "fr")[:12]
+        r = self.assistant.reply(body.get("message"), body.get("history"), self.assistant_context,
+                                 lang=lang, country=str(body.get("country") or "")[:2],
+                                 message_en=body.get("message_en"))
         if isinstance(r, dict) and r.get("answer") and not r.get("refused"):
-            r["why"] = interface.why(r, self.data.state())     # « Pourquoi ? » : d'où vient la réponse
+            r["why"] = interface.why(r, self.data.state(), lang=lang)   # « Pourquoi ? » : d'où vient la réponse
         return 200, r
 
     def candles(self, asset: str, interval: str, limit: int, levels: bool = False) -> Dict[str, Any]:
@@ -669,10 +672,13 @@ class PanelApp(SecurityCenter):
             "/api/brvm": self.data.brvm,
             "/api/brokers": self.data.brokers,
             "/api/exchanges": self.data.exchanges,
+            "/api/geo": self.data.geo,
+            "/api/geo/locate": lambda: self.data.locate(q("lat"), q("lon")),
+            "/api/payments": lambda: self.data.payments(q("country", "")),
             "/api/watch": self.data.watch,
             "/api/reasoning": self.data.reasoning,
             "/api/news": self.news_view,
-            "/api/assistant": self.assistant.info,
+            "/api/assistant": lambda: self.assistant.info(q("lang", "fr")),
             "/api/anticipation": self.anticipation_view,
             "/api/security": self.security_view,
             "/api/report": self.report_view,
@@ -739,11 +745,13 @@ class PanelHandler(BaseHTTPRequestHandler):
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("Referrer-Policy", "no-referrer")
         # Aucune fenêtre d'un autre site ne peut piloter ou lire le panneau,
-        # et aucune fonction sensible du navigateur ne lui est ouverte.
+        # et aucune fonction sensible du navigateur ne lui est ouverte, sauf
+        # la position, au panneau lui-même et sur demande (« Me localiser » :
+        # ville la plus proche, rien n'est gardé).
         self.send_header("Cross-Origin-Opener-Policy", "same-origin")
         self.send_header("Cross-Origin-Resource-Policy", "same-origin")
         self.send_header("Permissions-Policy",
-                         "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
+                         "camera=(), microphone=(), geolocation=(self), payment=(), usb=()")
         for k, v in (extra or {}).items():
             self.send_header(k, v)
         self.end_headers()

@@ -712,6 +712,23 @@ dialog[open] { animation: pop .35s var(--ease); }
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kpi strong { font-size: 18px; }
 }
+/* Paiement */
+.pay-kinds { display: grid; gap: 16px; }
+.pay-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 10px; }
+.pay-method { display: grid; gap: 6px; align-content: start; min-width: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--ctl-r); background: var(--surface-2); }
+.pay-method p { margin: 0; font-size: 13.5px; color: var(--ink-2); overflow-wrap: anywhere; }
+.pay-mhead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; }
+.pay-mhead strong { overflow-wrap: anywhere; }
+.pay-care { color: var(--warn, var(--ink-2)); }
+.pay-where { margin: 10px 0 0; }
+.pay-country { max-width: 260px; }
+.pay-safety { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13.5px; }
+/* Langue du panneau */
+.lang-ctl { display: grid; gap: 6px; justify-items: start; margin-top: 12px; }
+.lang-pick { max-width: min(100%, 380px); }
+.pay-icon { margin-inline-end: 6px; }
+.lang-state { margin: 0; }
+[dir="rtl"] .pay-safety, [dir="rtl"] .ex-guide { padding-left: 0; padding-right: 18px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
   .ticker-view { overflow-x: auto; }                 /* bandeau immobile, défilement à la main */

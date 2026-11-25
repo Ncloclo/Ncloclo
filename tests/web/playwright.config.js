@@ -15,7 +15,11 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   workers: 1,
   reporter: process.env.CI ? [["github"], ["list"]] : "list",
-  use: { viewport: { width: 1280, height: 900 } },
+  // Un appareil en Côte d'Ivoire, comme celui de l'utilisateur : le panneau
+  // reconnaît le pays et la langue de l'appareil (geo.js), et la machine de
+  // GitHub est réglée en anglais, fuseau UTC. Les tests de langue changent
+  // de pays eux-mêmes (langues.spec.js).
+  use: { viewport: { width: 1280, height: 900 }, locale: "fr-CI", timezoneId: "Africa/Abidjan" },
   projects: [
     { name: "chromium", use: { browserName: "chromium" } },
     { name: "chrome", use: { browserName: "chromium", channel: "chrome" } },

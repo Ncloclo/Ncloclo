@@ -29,6 +29,14 @@ fichier `.env` de ce PC (rien n'est envoyé à l'extérieur). Module :
   l'euro), les autres d'après leur cours face au dollar, lu chaque jour par
   le suivi des marchés.
 
+## L'appareil qui regarde le panneau
+
+Le panneau reconnaît aussi le pays de l'appareil qui le regarde (fuseau
+horaire, langue, position si vous l'autorisez) : il en prend la langue
+officielle ([`LANGUES.md`](LANGUES.md)) et montre les moyens de paiement du
+pays ([`PAIEMENTS.md`](PAIEMENTS.md)). Le profil du bot (`TG_PAYS`) sert
+quand l'appareil ne dit rien.
+
 ## Ce qui ne change pas
 
 La règle du bot, ses risques et ses verrous sont les mêmes partout : il

@@ -246,6 +246,18 @@ panneau de contrôle ») :
   bourses dans votre heure, accès aux bourses et aux courtiers depuis votre
   pays, capital dans votre monnaie (une soixantaine)
   ([`docs/PROFIL.md`](docs/PROFIL.md)) ;
+- **Paiement** (menu, sous Réglages) : les moyens de payer, d'être payé et
+  d'envoyer de l'argent dans le pays de l'appareil et sa zone (paiement
+  mobile, cartes de débit et prépayées, passerelles en ligne, banque, envoi
+  d'argent, passage aux USDT du bot) ; pays reconnu sur l'appareil (fuseau,
+  langue), ou ville trouvée par « Me localiser » si vous l'autorisez, sans
+  service extérieur. Le bot n'encaisse rien
+  ([`docs/PAIEMENTS.md`](docs/PAIEMENTS.md)) ;
+- **Langue** : le panneau et Rachelle prennent la langue officielle du pays de
+  l'appareil (anglais complet ; allemand, espagnol, portugais, russe, chinois
+  et arabe pour l'essentiel ; les autres langues par la traduction de
+  l'appareil dans Chrome) ; autre choix dans Réglages ▸ Affichage
+  ([`docs/LANGUES.md`](docs/LANGUES.md)) ;
 - **Courtiers** (menu Mon bot) : comptes de démonstration seulement
   (MetaTrader 5 pour les devises, l'or et les indices ; compte papier Alpaca
   pour les actions américaines ; testnets des plateformes crypto), un compte
@@ -257,8 +269,8 @@ panneau de contrôle ») :
   Information seulement : aucun filtre tiré d'eux n'a passé l'étude
   ([`docs/MACRO.md`](docs/MACRO.md)) ;
 - **Menu** : rangé en trois groupes (Mon bot, Marchés, Analyse), puis les
-  Réglages ; au téléphone, quatre raccourcis en bas et « Menu » pour toutes les
-  pages ;
+  Réglages et Paiement ; au téléphone, quatre raccourcis en bas et « Menu »
+  pour toutes les pages ;
 - **Temps de réflexion** : chaque passage d'une rubrique ou d'une sélection à
   une autre (onglet, filtre, tri, graphique détaillé, intervalle) affiche une
   icône de chargement pendant au moins 3 s, avec une barre de progression,

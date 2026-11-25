@@ -1,7 +1,7 @@
 // Onglet Réglages : rapport de sécurité (en direct, et analyse de la nuit)
 // et rapport quotidien (sécurité et diagnostic, 00:30 UTC et après chaque
 // compétence acquise), avec sa fenêtre détaillée et son envoi.
-import { $, api, el, toast } from "./core.js";
+import { $, api, el, locale, toast } from "./core.js";
 
 let REPORT = null;
 let ALERTS = [];                       // canaux d'alerte (état du bot), pour l'envoi
@@ -24,7 +24,7 @@ export async function renderSecurity() {
   if (REPORT) renderNightSecurity(REPORT);
 }
 
-const repWhen = (r) => new Date(r.generated_at).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+const repWhen = (r) => new Date(r.generated_at).toLocaleString(locale(), { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 function deliveryText(r) {
   const names = { email: "e-mail", whatsapp: "WhatsApp", telegram: "Telegram" };
   const d = Object.entries(r.delivery || {});
