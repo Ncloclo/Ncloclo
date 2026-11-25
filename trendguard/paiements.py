@@ -18,7 +18,7 @@ disponibilité changent : à vérifier auprès de chacun.
 from __future__ import annotations
 
 import sys
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Optional, Sequence, Tuple
 
 from . import profil
 
@@ -313,7 +313,3 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 2
     print(render(view(country)))
     return 0
-
-
-def countries_covered() -> List[str]:
-    return sorted(COUNTRIES)

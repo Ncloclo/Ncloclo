@@ -153,6 +153,7 @@ def a_objectives(ctx: Dict[str, Any]) -> str:
 
 
 def a_anticipation(ctx: Dict[str, Any]) -> str:
+    """Likely sales and purchases at the next close, with current prices."""
     f = ctx.get("anticipation") or {}
     if not f.get("ready"):
         return ("The anticipation will be available after the bot's first decision (daily close at 00:00 UTC): I "
@@ -200,6 +201,7 @@ def a_status(ctx: Dict[str, Any]) -> str:
 
 
 def a_crypto_market(ctx: Dict[str, Any]) -> str:
+    """The crypto market right now (bitcoin, market cap, dominance, Fear & Greed)."""
     news = ctx.get("news") or {}
     m = news.get("markets") or {}
     c, f = m.get("crypto"), m.get("fear_greed")

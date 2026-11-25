@@ -1,7 +1,9 @@
 // Panneau TrendGuard : Rachelle, la fenêtre de dialogue. Garde-fou côté
 // navigateur : un secret collé ne quitte jamais la page.
 
-import { $, api, el, reduceMotion, sleep, waitBase } from "./core.js";
+import { $, api, el, lang, reduceMotion, sleep, t, waitBase } from "./core.js";
+import { currentCountry } from "./geo.js";
+import { toEnglish } from "./i18n.js";
 
 // ---------- Assistant (fenêtre de dialogue) ----------
 // Garde-fou côté navigateur : une clé, un mot de passe ou un code collés ne
@@ -54,8 +56,13 @@ function chatScroll() {
   const log = $("#chat-log");
   log.scrollTo({ top: log.scrollHeight, behavior: reduceMotion.matches ? "auto" : "smooth" });
 }
-// Voix (étape 21) : la réponse lue à voix haute par le navigateur, sur ce PC ;
-// un second clic arrête la lecture.
+// Voix (étape 21) : la réponse lue à voix haute par le navigateur, sur ce PC,
+// dans la langue du panneau (une voix de l'appareil de préférence) ; un
+// second clic arrête la lecture.
+function voiceFor(code) {
+  const voices = window.speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().split(/[-_]/)[0] === code);
+  return voices.find((v) => v.localService) || voices[0] || null;
+}
 function speak(text, btn) {
   if (!("speechSynthesis" in window)) return;
   if (window.speechSynthesis.speaking) {
@@ -64,7 +71,9 @@ function speak(text, btn) {
     return;
   }
   const u = new SpeechSynthesisUtterance(text.replace(/[*_`#›]/g, ""));
-  u.lang = "fr-FR";
+  const voice = voiceFor(lang());
+  if (voice) u.voice = voice;
+  u.lang = voice ? voice.lang : lang() === "fr" ? "fr-FR" : lang();
   u.onend = () => btn.setAttribute("aria-pressed", "false");
   btn.setAttribute("aria-pressed", "true");
   window.speechSynthesis.speak(u);
@@ -72,6 +81,8 @@ function speak(text, btn) {
 function chatMessage(role, text, extra = {}) {
   const li = el("li", `msg ${role}${extra.refused ? " refused" : ""}`);
   const bubble = el("div", "bubble");
+  if (role === "user") bubble.setAttribute("translate", "no");        // vos mots restent les vôtres
+  else if (extra.lang) bubble.dataset.lang = extra.lang;             // langue de la réponse
   richText(bubble, text);
   li.append(bubble);
   if (extra.actions && extra.actions.length) {
@@ -101,7 +112,7 @@ function chatMessage(role, text, extra = {}) {
     b.type = "button";
     b.setAttribute("aria-label", "Lire la réponse à voix haute");
     b.setAttribute("aria-pressed", "false");
-    b.addEventListener("click", () => speak(text, b));
+    b.addEventListener("click", () => speak(bubble.textContent || text, b));
     li.append(b);
   }
   $("#chat-log").append(li);
@@ -123,9 +134,9 @@ async function openChat() {
   if (!CHAT.loaded) {
     CHAT.loaded = true;
     try {
-      const info = await api("/api/assistant");
+      const info = await api("/api/assistant?lang=" + encodeURIComponent(lang()));
       CHAT.info = info;
-      chatMessage("bot", `${greeting()} ! ${info.welcome}`);
+      chatMessage("bot", `${t(greeting())} ! ${info.welcome}`, { lang: info.lang });
       chatSuggestions(info.suggestions);
     } catch (e) {
       CHAT.loaded = false;
@@ -167,14 +178,17 @@ async function sendChat(text) {
     return;
   }
   try {
-    const r = await api("/api/assistant", { body: { message: text, history: CHAT.history.slice(-6) } });
+    const body = { message: text, history: CHAT.history.slice(-6), lang: lang(), country: currentCountry() };
+    const en = await toEnglish(text);                // l'appareil traduit la question, s'il sait le faire
+    if (en) body.message_en = en;
+    const r = await api("/api/assistant", { body });
     await think(r.answer);
     typing.remove();
     if (r.masked) {
       userLi.classList.add("refused");
       userLi.querySelector(".bubble").replaceChildren(el("p", "", "🔒 •••••• (message masqué)"));
     }
-    chatMessage("bot", r.answer, { refused: r.refused, actions: r.actions, source: r.source, why: r.why });
+    chatMessage("bot", r.answer, { refused: r.refused, actions: r.actions, source: r.source, why: r.why, lang: r.lang });
     if (!r.refused) {
       CHAT.history.push({ role: "user", text }, { role: "assistant", text: r.answer });
       CHAT.history = CHAT.history.slice(-12);
@@ -196,7 +210,7 @@ $("#chat-clear").addEventListener("click", () => {
   CHAT.history = [];
   $("#chat-log").replaceChildren();
   if (CHAT.info) {
-    chatMessage("bot", `${greeting()} ! ${CHAT.info.welcome}`);
+    chatMessage("bot", `${t(greeting())} ! ${CHAT.info.welcome}`, { lang: CHAT.info.lang });
     chatSuggestions(CHAT.info.suggestions);
   }
 });

@@ -109,7 +109,11 @@ ALLOWLIST: Dict[str, Tuple[str, str]] = {
     "www.w3.org": ("espace de noms XML (aucune connexion)", "aucune"),
     "purl.org": ("espace de noms XML des flux d'actualités (aucune connexion)", "aucune"),
     "adresse-du-pc": ("exemple d'adresse dans un texte de Rachelle (aucune connexion)", "aucune"),
+    "pc-address": ("le même exemple d'adresse, dans les réponses anglaises de Rachelle (aucune connexion)", "aucune"),
     "www.example.com": ("lien d'exemple de la démonstration (aucune connexion)", "aucune"),
+    "download.geonames.org": ("villes du monde (GeoNames, CC BY 4.0) pour « Me localiser », lues à la main "
+                              "par research/villes.py ; le bot ne s'y connecte jamais", "aucune"),
+    "www.geonames.org": ("source citée de la table des villes (aucune connexion)", "aucune"),
     # Sites de l'annuaire des courtiers (courtiers.py) : liens ouverts par vous.
     **{h: ("site d'un courtier de l'annuaire, ouvert par vous (aucune connexion du bot)", "aucune") for h in (
         "www.metatrader5.com", "www.exness.com", "www.xm.com", "www.hfm.com", "fbs.com", "deriv.com",

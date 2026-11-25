@@ -11,6 +11,8 @@
 //   detail.js      fenêtre de détail d'un graphique
 //   connexion.js   mot de passe du panneau
 //   assistant.js   Rachelle ; rapport.js : rapport quotidien, sécurité
+//   i18n.js        langue du panneau (dictionnaires i18n/*.js, traduction de
+//                  l'appareil) ; geo.js : pays de l'appareil ; langue.js : choix
 //   pages/*.js     une page par onglet, qui s'enregistre elle-même ; marches.js :
 //                  une page par classe d'actifs hors cryptos
 
@@ -34,6 +36,8 @@ import "./js/pages/positions.js";
 import "./js/pages/veille.js";
 import "./js/pages/journal.js";
 import "./js/pages/reglages.js";
+import "./js/pages/paiements.js";
+import { startGeo } from "./js/geo.js";
 
 onUnauthorized(() => showLogin());      // session expirée
 
@@ -74,4 +78,7 @@ applyTheme(prefs.get("theme", "auto"));
 if ("serviceWorker" in navigator && window.isSecureContext) {
   navigator.serviceWorker.register("sw.js").catch(() => { /* application installable : facultatif */ });
 }
-refreshStatus().then(() => { route(); setInterval(tick, 1000); });
+// Pays et langue de l'appareil, puis la première page.
+refreshStatus()
+  .then(() => startGeo().catch(() => { /* données géographiques indisponibles : langue gardée */ }))
+  .then(() => { route(); setInterval(tick, 1000); });

@@ -169,6 +169,27 @@ survivant).
   par zone ; choix du pays sur la page. Courtiers : accueil selon le pays
   (Côte d'Ivoire : sources secondaires ; États-Unis : CFD interdits).
 
+### Langues et paiements (25/11/2026)
+
+- Demande de l'utilisateur : reconnaître la position de l'utilisateur, lui
+  montrer les moyens de paiement de son pays, et parler la langue officielle
+  de son pays (« pour toutes les langues »), avec un bouton Paiement sous
+  Réglages.
+- `trendguard/paiements.py` (`docs/PAIEMENTS.md`) : une soixantaine de pays,
+  leur zone et les moyens de partout ; information seulement, aucun lien,
+  aucune donnée de carte demandée.
+- Pays de l'appareil (`panel/static/js/geo.js`) : fuseau horaire (groupes
+  d'alias départagés par la langue), langue, ou position (« Me localiser »,
+  ville la plus proche cherchée sur le PC dans `trendguard/villes.tsv.gz`,
+  GeoNames CC BY 4.0) ; `Permissions-Policy: geolocation=(self)`.
+- Langue (`docs/LANGUES.md`) : langues officielles CLDR figées dans
+  `profil.py` ; dictionnaires `panel/static/js/i18n/` (anglais complet,
+  allemand, espagnol, portugais, russe, chinois, arabe pour l'essentiel) ;
+  traduction de l'appareil (Chrome) pour le reste ; Rachelle en anglais
+  (`panel/rachelle_en.py`) hors du français, l'IA dans toute langue. Tout
+  nouveau texte du panneau doit entrer dans `i18n/en.js`
+  (`tests/test_dictionnaires.py`).
+
 ### Bourses du monde (25/11/2026)
 
 - `trendguard/bourses.py` (`docs/BOURSES.md`) : 28 places (région, zone,

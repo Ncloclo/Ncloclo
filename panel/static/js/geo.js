@@ -11,7 +11,8 @@ import { autoLanguage, decide } from "./i18n.js";
 const PAYS_KEY = "tg:pays";                    // pays choisi ou trouvé, gardé sur cet appareil
 const HOW_KEY = "tg:pays-comment";             // comment il a été trouvé
 const CITY_KEY = "tg:ville";                   // ville trouvée par la position
-let GEO = null;
+let GEO = null, WHERE = null;
+export const currentCountry = () => (WHERE ? WHERE.country : "");
 
 const store = {
   get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
@@ -33,6 +34,10 @@ export const deviceLanguages = () => (navigator.languages && navigator.languages
 // départage les fuseaux alias, comme Lagos et Douala), sinon la région de sa
 // langue (fr-CI…), sinon celui du profil du bot (TG_PAYS).
 export function detect(g) {
+  WHERE = findCountry(g);
+  return WHERE;
+}
+function findCountry(g) {
   const known = new Set(g.countries.map((c) => c.iso));
   const saved = store.get(PAYS_KEY);
   if (saved && known.has(saved)) return { country: saved, how: store.get(HOW_KEY) || "choix", city: store.get(CITY_KEY) || "" };

@@ -53,5 +53,7 @@ qu'après l'une d'elles (dernière en date : `PETIT_CAPITAL.md`, minimum d'achat
 | [`revues/`](revues/) | revues hebdomadaires écrites par la routine du lundi |
 | [`BRVM.md`](BRVM.md) | la BRVM (Abidjan) : ce que le bot lit, garde et en fait |
 | [`PROFIL.md`](PROFIL.md) | votre profil : pays, fuseau horaire et monnaie ; un bot universel |
+| [`PAIEMENTS.md`](PAIEMENTS.md) | la page Paiement : moyens de payer du pays de l'appareil, position et vie privée |
+| [`LANGUES.md`](LANGUES.md) | la langue officielle du pays de l'appareil, pour le panneau et Rachelle |
 | [`BOURSES.md`](BOURSES.md) | bourses du monde : séances, indices, régulateurs, pages officielles lues, règle mesurée sur chaque place |
 | [`COURTIERS.md`](COURTIERS.md) | courtiers et plateformes : annuaire, cours comparés, comptes de démonstration, plan miroir à blanc |

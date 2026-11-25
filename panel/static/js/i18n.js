@@ -56,9 +56,10 @@ function compile(dict) {
       const m = /^\{(\d+)\}$/.exec(part);
       if (!m) return esc(part);
       order.push(Number(m[1]));
-      return "(.+?)";
+      return "(.*?)";
     }).join("");
-    const p = { rx: new RegExp("^" + src + "$", "s"), order, out };
+    const literal = fr.replace(/\{\d+\}/g, "").length;
+    const p = { rx: new RegExp("^" + src + "$", "s"), order, out, literal };
     const head = fr.split(/\{\d+\}/)[0];
     if (head.length >= 2) {
       const k = head.slice(0, 2);
@@ -68,17 +69,23 @@ function compile(dict) {
   }
   return { exact, buckets, loose };
 }
+// Un modèle ({0}…) ne vaut que pour un texte où sa partie fixe pèse : jamais
+// pour une phrase venue des données où il ne remplacerait qu'un mot (« aucun
+// achat tant que… »), ni quand une partie variable est une phrase française
+// que le dictionnaire ne connaît pas.
 function lookup(c, text) {
   const hit = c.exact.get(text);
   if (hit !== undefined) return hit;
   for (const p of [...(c.buckets.get(text.slice(0, 2)) || []), ...c.loose]) {
     const m = p.rx.exec(text);
-    if (m) {
-      return p.out.replace(/\{(\d+)\}/g, (_, n) => {
-        const v = m[p.order.indexOf(Number(n)) + 1] ?? "";
-        return c.exact.get(v.trim()) ?? v;
-      });
-    }
+    if (!m) continue;
+    const parts = m.slice(1), share = p.literal / text.length;
+    const raw = parts.some((v) => !c.exact.has(v.trim()) && FRENCH.test(v));
+    if (share < 0.2 || (raw && share < 0.5)) continue;
+    return p.out.replace(/\{(\d+)\}/g, (_, n) => {
+      const v = parts[p.order.indexOf(Number(n))] ?? "";
+      return c.exact.get(v.trim()) ?? v;
+    });
   }
   return null;
 }
@@ -158,6 +165,22 @@ function enTranslator() {
   return EN_TR;
 }
 
+// La question écrite dans une autre langue, traduite en anglais par
+// l'appareil (Rachelle y reconnaît mieux le sujet) ; null sinon.
+let TO_EN = null;
+export async function toEnglish(text) {
+  if (target === "fr" || target === "en" || !hasMachine()) return null;
+  if (!TO_EN) {
+    TO_EN = (async () => {
+      const opts = { sourceLanguage: target, targetLanguage: "en" };
+      return (await self.Translator.availability(opts)) === "available" ? self.Translator.create(opts) : null;
+    })().catch(() => null);
+  }
+  const tr = await TO_EN;
+  if (!tr) return null;
+  try { return await tr.translate(text); } catch { return null; }
+}
+
 // Télécharger la langue sur l'appareil : à appeler d'un clic (le navigateur
 // le demande). `progress` reçoit l'avancement, de 0 à 1.
 export async function downloadLanguage(progress) {
@@ -185,11 +208,16 @@ export async function downloadLanguage(progress) {
 // ---------- Textes affichés ----------
 // Le texte à montrer pour un texte écrit en français : son dictionnaire, puis
 // les traductions de l'appareil déjà faites ; sinon l'anglais (ou le texte),
-// en attendant la traduction de l'appareil (`from`).
+// en attendant la traduction de l'appareil (`from`). `hint` : la langue d'un
+// texte venu des données (attribut data-lang, « en » pour un texte anglais).
 const keep = (src, key, out) => src.replace(key, () => out);
-function immediate(src) {
+function immediate(src, hint = "") {
   const key = src.trim();
-  if (!key) return null;
+  if (!key || hint === target) return null;
+  if (hint === "en") {
+    const done = cacheGet("en", key);
+    return done != null ? { text: keep(src, key, done) } : { text: src, from: "en", base: key };
+  }
   const own = DICT && lookup(DICT, key);
   if (own != null) return { text: keep(src, key, own) };
   const en = target === "en" ? null : PIVOT && lookup(PIVOT, key);
@@ -212,6 +240,7 @@ function mine(text) {
 const SRC = new WeakMap();                 // nœud texte → { src, shown }
 const ASRC = new WeakMap();                // élément → Map(attribut → { src, shown })
 const skipped = (el) => !el || !!el.closest(SKIP);
+const hintOf = (el) => (el && el.closest("[data-lang]")?.dataset.lang) || "";
 
 function show(src, r, write, still) {
   write(r.text);
@@ -225,7 +254,7 @@ function onText(node) {
   const rec = SRC.get(node);
   if (rec && rec.shown === v) return;
   if (!v || !/\p{L}/u.test(v) || MINE.has(v.trim()) || skipped(node.parentElement)) return;
-  const r = immediate(v);
+  const r = immediate(v, hintOf(node.parentElement));
   if (!r) { SRC.set(node, { src: v, shown: v }); return; }
   const write = (text) => { SRC.set(node, { src: v, shown: text }); mine(text); if (node.nodeValue !== text) node.nodeValue = text; };
   show(v, r, write, (shown) => SRC.get(node)?.shown === shown);
@@ -237,7 +266,7 @@ function onAttr(el, name) {
   const recs = ASRC.get(el), rec = recs.get(name);
   if (rec && rec.shown === v) return;
   if (!/\p{L}/u.test(v) || MINE.has(v.trim())) return;
-  const r = immediate(v);
+  const r = immediate(v, hintOf(el));
   if (!r) { recs.set(name, { src: v, shown: v }); return; }
   const write = (text) => { recs.set(name, { src: v, shown: text }); mine(text); if (el.getAttribute(name) !== text) el.setAttribute(name, text); };
   show(v, r, write, (shown) => recs.get(name)?.shown === shown);
