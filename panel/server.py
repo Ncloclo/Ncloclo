@@ -665,6 +665,7 @@ class PanelApp(SecurityCenter):
             "/api/market": lambda: self.data.market_info(q("code", "or"), int(q("days", "0") or 0)),
             "/api/countries": lambda: self.data.countries(q("window", "1y")),
             "/api/brvm": self.data.brvm,
+            "/api/brokers": self.data.brokers,
             "/api/watch": self.data.watch,
             "/api/reasoning": self.data.reasoning,
             "/api/news": self.news_view,

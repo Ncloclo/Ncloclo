@@ -152,6 +152,27 @@ survivant).
   `/api/markets`, `/api/market`), lue dans `data_multi/` et le noyau de
   savoir ; menu en trois groupes (Mon bot, Marchés, Analyse).
 
+### Courtiers (25/11/2026)
+
+- `trendguard/courtiers.py` (`docs/COURTIERS.md`) : annuaire (15 courtiers
+  MetaTrader 5, Alpaca, 104 plateformes CCXT dont 48 à testnet, SGI de la
+  BRVM ; disponibilité en Côte d'Ivoire jamais affirmée sans source).
+- Cours des cryptos du bot sur dix plateformes face à Binance, toutes les 6 h
+  (clé « courtiers » du noyau de savoir ; listes des marchés gardées une
+  semaine dans `data_courtiers/`). Information seulement. Première lecture :
+  Binance à 0,02 % de la médiane des autres.
+- Comptes de démonstration seulement, lus chaque heure : MetaTrader 5
+  (`trade_mode` démo exigé, sinon refus ; le terminal n'est jamais ouvert par
+  la lecture de l'heure), Alpaca (adresse du compte papier seule),
+  testnets CCXT (mode test obligatoire, adresses du testnet seules ; OKX :
+  en-tête de démonstration exigé). Identifiants dans `.env` par
+  `courtiers set-key`, vérifiés avant d'être écrits.
+- Chaque requête CCXT passe par `courtiers.guard` : adresse hors de
+  `cyber.ALLOWLIST` (ou du testnet) refusée avant de partir.
+- Aucun ordre envoyé : plan miroir à blanc (portefeuille fictif hors cryptos
+  recopié au même poids). Ordres de démonstration seulement après un premier
+  essai réussi sur un vrai compte démo de l'utilisateur.
+
 ### BRVM (24/11/2026)
 
 - `trendguard/brvm.py` (`docs/BRVM.md`) : les deux pages publiques de brvm.org

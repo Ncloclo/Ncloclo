@@ -45,6 +45,28 @@ ALLOWLIST: Dict[str, Tuple[str, str]] = {
     "www.binance.com": ("annonces officielles de Binance (veille)", "courtier"),
     "data-api.binance.vision": ("bougies publiques de Binance (historique)", "courtier"),
     "testnet.binance.vision": ("testnet de Binance (réel simulé)", "courtier"),
+    # Courtiers (courtiers.py) : cours publics comparés à Binance, sans clé ;
+    # comptes de démonstration (testnets, compte papier) que vous branchez.
+    "www.okx.com": ("OKX : cours publics comparés à Binance ; compte de démonstration si vous le branchez "
+                    "(en-tête de démonstration exigé)", "courtier"),
+    "api.bybit.com": ("Bybit : cours publics comparés à Binance (lecture seule)", "courtier"),
+    "api.kucoin.com": ("KuCoin : cours publics comparés à Binance (lecture seule)", "courtier"),
+    "api.bitget.com": ("Bitget : cours publics comparés à Binance (lecture seule)", "courtier"),
+    "api.gateio.ws": ("Gate : cours publics comparés à Binance (lecture seule)", "courtier"),
+    "api.mexc.com": ("MEXC : cours publics comparés à Binance (lecture seule)", "courtier"),
+    "api.huobi.pro": ("HTX : cours publics comparés à Binance (lecture seule)", "courtier"),
+    "api.kraken.com": ("Kraken : cours publics comparés à Binance (lecture seule)", "courtier"),
+    "api.exchange.coinbase.com": ("Coinbase : cours publics comparés à Binance (lecture seule)", "courtier"),
+    "api.crypto.com": ("Crypto.com : cours publics comparés à Binance (lecture seule)", "courtier"),
+    "api-testnet.bybit.com": ("testnet de Bybit, si vous le branchez (argent fictif)", "courtier"),
+    "api-testnet.gateapi.io": ("testnet de Gate, si vous le branchez (argent fictif)", "courtier"),
+    "api-public.sandbox.exchange.coinbase.com": ("testnet de Coinbase Exchange, si vous le branchez (argent fictif)",
+                                                 "courtier"),
+    "api.sandbox.gemini.com": ("testnet de Gemini, si vous le branchez (argent fictif)", "courtier"),
+    "uat-api.3ona.co": ("testnet de Crypto.com, si vous le branchez (argent fictif)", "courtier"),
+    "paper-api.alpaca.markets": ("compte papier d'Alpaca, si vous le branchez (argent fictif, lecture seule)",
+                                 "courtier"),
+    "data.alpaca.markets": ("cours IEX d'Alpaca pour le plan miroir (compte papier)", "courtier"),
     "fapi.binance.com": ("contrats à terme de Binance : financement, intérêt ouvert (lecture, veille)", "savoir"),
     "api.github.com": ("contrôles et mises à jour du code (lecture)", "code"),
     "github.com": ("dépôt du code", "code"), "raw.githubusercontent.com": ("fichiers publics du dépôt", "code"),
@@ -82,6 +104,11 @@ ALLOWLIST: Dict[str, Tuple[str, str]] = {
     "purl.org": ("espace de noms XML des flux d'actualités (aucune connexion)", "aucune"),
     "adresse-du-pc": ("exemple d'adresse dans un texte de Rachelle (aucune connexion)", "aucune"),
     "www.example.com": ("lien d'exemple de la démonstration (aucune connexion)", "aucune"),
+    # Sites de l'annuaire des courtiers (courtiers.py) : liens ouverts par vous.
+    **{h: ("site d'un courtier de l'annuaire, ouvert par vous (aucune connexion du bot)", "aucune") for h in (
+        "www.metatrader5.com", "www.exness.com", "www.xm.com", "www.hfm.com", "fbs.com", "deriv.com",
+        "www.icmarkets.com", "pepperstone.com", "admirals.com", "roboforex.com", "www.fxpro.com",
+        "www.tickmill.com", "www.avatrade.com", "www.fpmarkets.com", "www.vantagemarkets.com", "alpaca.markets")},
 }
 SECRETS = ("BINANCE_API_KEY", "BINANCE_API_SECRET")
 # Réponse prévue à chaque risque (§33) : ce qui se fait seul (réduire) et ce

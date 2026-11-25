@@ -405,7 +405,8 @@ def portfolio(close: pd.DataFrame, start: str, capital: float, binance: bool = F
     eq = float(r.equity.iloc[-1]) if len(r.equity) else capital
     last = {a: float(sub[a].dropna().iloc[-1]) for a in r.holdings}
     positions = [{"code": a, "name": NAME.get(a, a), "category": CATEGORY.get(a, ""), "entry": h.entry,
-                  "stop": h.stop, "price": last[a], "pnl_pct": (last[a] / h.entry - 1) * 100}
+                  "stop": h.stop, "price": last[a], "pnl_pct": (last[a] / h.entry - 1) * 100,
+                  "weight_pct": h.qty * last[a] / eq * 100 if eq > 0 else None}
                  for a, h in sorted(r.holdings.items())]
     curve = [[str(d.date()), round(float(v), 2)] for d, v in r.equity.iloc[-CURVE_POINTS:].items()]
     return {"start": start, "capital": capital, "equity": eq, "return_pct": (eq / capital - 1) * 100,
