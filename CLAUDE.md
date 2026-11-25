@@ -56,6 +56,9 @@ stop.
 - **Conclusion** : une seule paire ne suffit pas. L'avantage de TrendGuard vient
   du portefeuille multi-actifs journalier, avec un filtre de régime BTC. Le bot
   V29.6 intraday (`v29/intraday/`) n'a aucun avantage démontré.
+- **Un seul projet** : l'ancien dossier `python/bot-trading` est réuni ici
+  depuis le 25/11/2026 (`docs/BOT_TRADING_4H.md`, historique Git dans
+  `docs/archives/bot-trading.bundle`). Ne pas recréer un second bot à part.
 
 ### TrendGuard (prix Binance, 21 paires du bot)
 

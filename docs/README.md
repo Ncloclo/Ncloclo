@@ -13,6 +13,7 @@ du bot (installation, commandes, panneau) est dans le
 | [`BIBLIOTHEQUE.md`](BIBLIOTHEQUE.md) | la recherche en finance (arXiv) que le bot lit chaque jour, et ce qu'il en fait |
 | [`EVOLUTION.md`](EVOLUTION.md) | les réglages que le bot peut changer seul, sous épreuves |
 | [`RAPPORT.md`](RAPPORT.md) | le rapport quotidien de 00:30 UTC : sécurité, diagnostic, envoi |
+| [`BOT_TRADING_4H.md`](BOT_TRADING_4H.md) | l'ancien bot en 4 h (bot-trading), réuni dans TrendGuard : ses résultats, ses leçons, son historique |
 
 ## Les preuves : études reproductibles
 
