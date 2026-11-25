@@ -27,6 +27,7 @@ from trendguard import (
     multi_actifs,
     pays,
     pistes,
+    profil,
     savoir,
 )
 from trendguard import market_watch as mw
@@ -343,21 +344,22 @@ class BotData:
     def exchanges(self) -> Dict[str, Any]:
         """Page « Bourses du monde » (lecture seule) : chaque place, sa séance,
         ses indices (Yahoo, pages officielles), son régulateur, son accès
-        depuis la Côte d'Ivoire et l'étude de la règle."""
+        depuis votre pays (TG_PAYS) et l'étude de la règle."""
         got = self._from_savoir(bourses.KEY, multi_actifs.KEY, brvm.KEY)
         close = self._multi_close()
         vix = multi_actifs.load(self.multi_cache, ["vix"])
         if not vix.empty:
             close = close.join(vix, how="outer") if not close.empty else vix
         return bourses.view(got[0] if got else None, close, got[1] if got else None, datetime.now(timezone.utc),
-                            got[2] if got else None, brvm_cache=self.brvm_cache)
+                            got[2] if got else None, brvm_cache=self.brvm_cache, profile=profil.of_config(self.g))
 
     def brokers(self) -> Dict[str, Any]:
         """Page « Courtiers » (lecture seule) : comptes de démonstration, plan
         miroir à blanc, cours comparés et annuaire. Du fichier .env, seule la
         présence des identifiants est regardée, jamais leur valeur."""
         got = self._from_savoir(courtiers.KEY, multi_actifs.KEY)
-        return courtiers.view(got[0] if got else None, got[1] if got else None, dict(os.environ))
+        env = dict(os.environ, TG_PAYS=getattr(self.g, "pays", "") or "", TG_FUSEAU=getattr(self.g, "fuseau", "") or "")
+        return courtiers.view(got[0] if got else None, got[1] if got else None, env)
 
     def markets(self, key: str, window: str = "1y") -> Dict[str, Any]:
         """Page d'une classe d'actifs (lecture seule)."""

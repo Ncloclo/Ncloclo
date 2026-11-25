@@ -96,7 +96,7 @@ function wrapped(id) {
   search.setAttribute("aria-label", "Rechercher un courtier ou une plateforme");
   dtools.append(seg(KINDS, "brkind", kind, "Type"), demo, search);
   const dir = card("Annuaire des courtiers", "br-count", dtools, wrapped("br-directory"),
-    el("p", "hint", "Disponibilité en Côte d'Ivoire : rien n'est affirmé sans source. Vérifiez-la sur le site de chaque courtier avant d'ouvrir un compte. Frais des plateformes crypto : barème de base indiqué par la bibliothèque CCXT."));
+    el("p", "hint", "Disponibilité depuis votre pays (réglage TG_PAYS du bot) : rien n'est affirmé sans source. Vérifiez-la sur le site de chaque courtier avant d'ouvrir un compte. Frais des plateformes crypto : barème de base indiqué par la bibliothèque CCXT."));
   sec.append(head, accounts, mirror, prices, dir);
   $("#pages").append(sec);
   $$("[data-brgap]", sec).forEach((b) => b.addEventListener("click", () => {
@@ -237,7 +237,7 @@ function drawDirectory() {
   const hidden = overview ? rows.filter((r) => !useful(r)).length : 0;
   if (overview) rows = rows.filter(useful);
   const t = $("#br-directory"), thead = el("thead"), hr = el("tr"), tb = el("tbody");
-  ["Courtier", "Compte démo", "Branchement du bot", "Côte d'Ivoire", "Frais"].forEach((h) => {
+  ["Courtier", "Compte démo", "Branchement du bot", `Depuis ${DATA.profile ? DATA.profile.name : "votre pays"}`, "Frais"].forEach((h) => {
     const th = el("th", "", h);
     th.scope = "col";
     hr.append(th);

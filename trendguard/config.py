@@ -8,6 +8,7 @@ import dataclasses
 import hashlib
 import logging
 import os
+import re
 import time
 from dataclasses import dataclass
 from logging.handlers import RotatingFileHandler
@@ -74,7 +75,11 @@ TG_ENV_DOC: Dict[str, str] = {
                      "quantités arrondies aux règles de la paire, stops surveillés sur les plus bas de chaque minute",
     "TG_PAPER_FRAIS": "Paper : frais Binance d'un ordre au marché (0.001 = 0,1 %, niveau de base)",
     "TG_PAPER_FRAIS_BNB": "true : en paper, frais payés en BNB (25 % de moins, comme chez Binance)",
-    "TG_DEVISE": "Monnaie d'affichage du capital et d'un retrait complet : FCFA (défaut), EUR ou USDT",
+    "TG_PAYS": "Votre pays, code ISO à deux lettres (CI par défaut) : heures, accès aux bourses et aux courtiers, "
+               "monnaie par défaut",
+    "TG_FUSEAU": "Votre fuseau horaire (ex. Europe/Paris) ; vide = celui de votre pays",
+    "TG_DEVISE": "Monnaie d'affichage du capital et d'un retrait complet : celle de votre pays par défaut "
+                 "(FCFA, EUR, NGN, USD… une soixantaine), ou USDT",
     "TG_FRAIS_CHANGE": "Frais d'une conversion entre votre monnaie et l'USDT (P2P, mobile money, banque) : "
                        "0.02 = 2 % par conversion (estimation à remplacer par vos vrais taux)",
     "TG_IMPOT_PLUS_VALUES": "Impôt sur le gain d'un retrait complet, selon votre pays (0.0 par défaut ; 0.15 = 15 %)",
@@ -172,8 +177,11 @@ class GuardConfig:
     paper_reel: bool = False
     paper_fee: float = 0.001
     paper_fee_bnb: bool = False
+    # Votre profil (profil.py) : pays et fuseau horaire.
+    pays: str = "CI"
+    fuseau: str = ""
     # Capital dans votre monnaie (devise.py) : USDT dans le code (aucune
-    # conversion), FCFA par défaut dans l'environnement (TG_DEVISE).
+    # conversion) ; dans l'environnement (TG_DEVISE), celle de votre pays.
     devise: str = "USDT"
     frais_change: float = 0.02
     impot_plus_values: float = 0.0
@@ -224,8 +232,14 @@ class GuardConfig:
             raise ValueError("TG_SAVOIR_MINUTES doit être >= 15 (sources publiques ménagées).")
         if not (0 <= self.paper_fee < 0.01):
             raise ValueError("TG_PAPER_FRAIS doit être dans [0, 0.01[ (0.001 = 0,1 %).")
-        if self.devise not in ("USDT", "EUR", "FCFA"):
-            raise ValueError("TG_DEVISE doit être FCFA, EUR ou USDT.")
+        from . import devise, profil
+        if self.devise not in devise.codes():
+            raise ValueError(f"TG_DEVISE : monnaie inconnue ({self.devise}) ; possibles : "
+                             + ", ".join(devise.codes()) + ".")
+        if not re.fullmatch(r"[A-Z]{2}", self.pays):
+            raise ValueError("TG_PAYS : votre pays en deux lettres (ex. CI, FR, NG, US).")
+        if self.fuseau and not profil.valid_tz(self.fuseau):
+            raise ValueError("TG_FUSEAU : fuseau horaire inconnu (ex. Africa/Abidjan, Europe/Paris).")
         if not (0 <= self.frais_change < 0.2):
             raise ValueError("TG_FRAIS_CHANGE doit être dans [0, 0.2[ (0.02 = 2 %).")
         if not (0 <= self.impot_plus_values < 1):
@@ -264,6 +278,12 @@ def parse_dd_throttle(raw: str) -> Tuple[Tuple[float, float], ...]:
             raise ValueError(f"TG_DD_THROTTLE invalide : {part!r} "
                              f"(format baisse:multiplicateur, ex. 0.10:0.5)")
     return tuple(sorted(out))
+
+
+def _default_currency() -> str:
+    """La monnaie de votre pays (TG_PAYS), quand TG_DEVISE n'est pas réglée."""
+    from . import profil
+    return profil.display_currency(v29._env_s("TG_PAYS", "CI").upper())
 
 
 def load_guard_config_from_env() -> GuardConfig:
@@ -313,7 +333,9 @@ def load_guard_config_from_env() -> GuardConfig:
         paper_reel=v29._env_b("TG_PAPER_REEL", True),
         paper_fee=v29._env_f("TG_PAPER_FRAIS", 0.001),
         paper_fee_bnb=v29._env_b("TG_PAPER_FRAIS_BNB", False),
-        devise=v29._env_s("TG_DEVISE", "FCFA").upper(),
+        pays=v29._env_s("TG_PAYS", "CI").upper(),
+        fuseau=v29._env_s("TG_FUSEAU", ""),
+        devise=v29._env_s("TG_DEVISE", _default_currency()).upper(),
         frais_change=v29._env_f("TG_FRAIS_CHANGE", 0.02),
         impot_plus_values=v29._env_f("TG_IMPOT_PLUS_VALUES", 0.0),
         enable_live_trading=v29._env_b("ENABLE_LIVE_TRADING", False),

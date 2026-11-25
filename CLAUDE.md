@@ -152,6 +152,20 @@ survivant).
   `/api/markets`, `/api/market`), lue dans `data_multi/` et le noyau de
   savoir ; menu en trois groupes (Mon bot, Marchés, Analyse).
 
+### Profil universel (25/11/2026)
+
+- Demande de l'utilisateur : ne pas se limiter à la Côte d'Ivoire.
+  `trendguard/profil.py` (`docs/PROFIL.md`) : pays (`TG_PAYS`, CI par
+  défaut), fuseau (`TG_FUSEAU`, sinon celui du pays), monnaie (`TG_DEVISE`,
+  sinon celle du pays) ; 249 pays (noms et fuseaux tirés de tzdata, français
+  pour les pays suivis et l'Afrique).
+- `devise.py` : une soixantaine de monnaies (euro par Binance, franc CFA par
+  sa parité, les autres par les cours Yahoo du suivi quotidien).
+- Bourses : accès local ou étranger selon le pays, heures dans votre heure
+  (le panneau les écrit dans l'heure de l'appareil), guide général et notes
+  par zone ; choix du pays sur la page. Courtiers : accueil selon le pays
+  (Côte d'Ivoire : sources secondaires ; États-Unis : CFD interdits).
+
 ### Bourses du monde (25/11/2026)
 
 - `trendguard/bourses.py` (`docs/BOURSES.md`) : 28 places (région, zone,

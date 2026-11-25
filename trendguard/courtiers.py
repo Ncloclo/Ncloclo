@@ -86,33 +86,36 @@ def _mask(value: Any) -> str:
 MT5_KIND, STOCKS_KIND, CRYPTO_KIND, BRVM_KIND = (
     "Forex et CFD (MetaTrader 5)", "Actions américaines", "Cryptos", "BRVM (Abidjan)")
 KINDS = (MT5_KIND, STOCKS_KIND, CRYPTO_KIND, BRVM_KIND)
-SECONDARY = ("accepte en général les résidents, d'après des sources secondaires : à vérifier sur son "
-             "site avant d'ouvrir un compte")
+SECONDARY = ("accepte en général les résidents de Côte d'Ivoire, d'après des sources secondaires : à "
+             "vérifier sur son site avant d'ouvrir un compte")
 VERIFY = "à vérifier sur son site avant d'ouvrir un compte"
+US_CFD = "les CFD sont interdits aux particuliers aux États-Unis : en général pas d'accès depuis ce pays"
 MT5_MARKETS = "devises, or et argent, pétrole et gaz, indices boursiers, actions (CFD)"
 MT5_FEES = "écart achat-vente et commission selon le type de compte (site du courtier)"
 MT5_LINK = "MetaTrader 5 : le terminal Windows de ce PC, compte démo seulement"
 # Courtiers forex et CFD qui proposent MetaTrader 5 et un compte démo gratuit :
-# (nom, site, Côte d'Ivoire, remarque). Leur accueil et leurs frais changent :
-# rien n'est affirmé sans source.
-MT5_BROKERS: Tuple[Tuple[str, str, str, str], ...] = (
+# (nom, site, ce qu'on sait de leur accueil par pays, remarque). « * » : tous
+# les pays. Leur accueil et leurs frais changent : rien n'est affirmé sans
+# source, le reste est « à vérifier ».
+_CI: Dict[str, str] = {"CI": SECONDARY}
+MT5_BROKERS: Tuple[Tuple[str, str, Dict[str, str], str], ...] = (
     ("MetaQuotes (serveur MetaQuotes-Demo)", "https://www.metatrader5.com",
-     "compte démo ouvert depuis le terminal lui-même",
+     {"*": "compte démo ouvert depuis le terminal lui-même"},
      "l'éditeur de MetaTrader 5 : son serveur de démonstration suffit pour un premier essai, sans courtier"),
-    ("Exness", "https://www.exness.com", SECONDARY, ""),
-    ("XM", "https://www.xm.com", SECONDARY, ""),
-    ("HFM", "https://www.hfm.com", SECONDARY, "anciennement HotForex"),
-    ("FBS", "https://fbs.com", SECONDARY, ""),
-    ("Deriv", "https://deriv.com", VERIFY, ""),
-    ("IC Markets", "https://www.icmarkets.com", VERIFY, ""),
-    ("Pepperstone", "https://pepperstone.com", VERIFY, ""),
-    ("Admirals", "https://admirals.com", VERIFY, "anciennement Admiral Markets"),
-    ("RoboForex", "https://roboforex.com", VERIFY, ""),
-    ("FxPro", "https://www.fxpro.com", VERIFY, ""),
-    ("Tickmill", "https://www.tickmill.com", VERIFY, ""),
-    ("AvaTrade", "https://www.avatrade.com", VERIFY, ""),
-    ("FP Markets", "https://www.fpmarkets.com", VERIFY, ""),
-    ("Vantage", "https://www.vantagemarkets.com", VERIFY, ""),
+    ("Exness", "https://www.exness.com", _CI, ""),
+    ("XM", "https://www.xm.com", _CI, ""),
+    ("HFM", "https://www.hfm.com", _CI, "anciennement HotForex"),
+    ("FBS", "https://fbs.com", _CI, ""),
+    ("Deriv", "https://deriv.com", {}, ""),
+    ("IC Markets", "https://www.icmarkets.com", {}, ""),
+    ("Pepperstone", "https://pepperstone.com", {}, ""),
+    ("Admirals", "https://admirals.com", {}, "anciennement Admiral Markets"),
+    ("RoboForex", "https://roboforex.com", {}, ""),
+    ("FxPro", "https://www.fxpro.com", {}, ""),
+    ("Tickmill", "https://www.tickmill.com", {}, ""),
+    ("AvaTrade", "https://www.avatrade.com", {}, ""),
+    ("FP Markets", "https://www.fpmarkets.com", {}, ""),
+    ("Vantage", "https://www.vantagemarkets.com", {}, ""),
 )
 ALPACA_ENTRY: Dict[str, Any] = {
     "name": "Alpaca", "kind": STOCKS_KIND, "markets": "actions et fonds cotés américains (et cryptos)",
@@ -124,7 +127,7 @@ ALPACA_ENTRY: Dict[str, Any] = {
 BRVM_ENTRY: Dict[str, Any] = {
     "name": "SGI agréées de l'UEMOA", "kind": BRVM_KIND, "markets": "actions et obligations de la BRVM",
     "demo": "non", "connection": "aucune API publique pour un programme : ordres passés auprès de la SGI",
-    "availability": "oui : les SGI sont établies dans les huit pays de l'UEMOA",
+    "availability": "SGI de l'UEMOA : conditions pour les non-résidents à vérifier auprès de chacune",
     "fees": "commission de la SGI et frais de la bourse (barème de chaque SGI)",
     "note": "liste et agréments : annuaire des membres de la BRVM et AMF-UMOA (ancien CREPMF)",
     "site": "https://www.brvm.org"}
@@ -154,15 +157,23 @@ def crypto_platforms() -> Tuple[Dict[str, Any], ...]:
     return tuple(rows)
 
 
-def directory(prices: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+def mt5_availability(known: Dict[str, str], country: str) -> str:
+    """Ce qu'on sait de l'accueil d'un courtier MetaTrader 5 pour un pays."""
+    return known.get(country) or known.get("*") or (US_CFD if country == "US" else VERIFY)
+
+
+def directory(prices: Optional[Dict[str, Any]] = None, country: str = "CI") -> List[Dict[str, Any]]:
     """L'annuaire complet : courtiers MetaTrader 5, Alpaca, plateformes crypto
-    (CCXT), SGI de la BRVM. `prices` : la dernière comparaison des cours, qui
-    dit quelles plateformes ont répondu depuis ce PC."""
+    (CCXT), SGI de la BRVM, avec leur accueil depuis `country` (votre pays).
+    `prices` : la dernière comparaison des cours, qui dit quelles plateformes
+    ont répondu depuis ce PC."""
+    from . import profil
     reached = {p.get("id") for p in ((prices or {}).get("platforms") or []) if p.get("ok")}
     rows: List[Dict[str, Any]] = [
         {"name": n, "kind": MT5_KIND, "markets": MT5_MARKETS, "demo": "oui, gratuit", "connection": MT5_LINK,
-         "availability": ci, "fees": MT5_FEES, "note": note, "site": site, "branchable": True}
-        for n, site, ci, note in MT5_BROKERS]
+         "availability": mt5_availability(known, country), "fees": MT5_FEES, "note": note, "site": site,
+         "branchable": True}
+        for n, site, known, note in MT5_BROKERS]
     rows.append(dict(ALPACA_ENTRY, branchable=True))
     for p in crypto_platforms():
         pid = p["id"]
@@ -180,11 +191,14 @@ def directory(prices: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
                 if p["taker"] is not None else "selon la plateforme")
         rows.append({"name": p["name"], "kind": CRYPTO_KIND, "id": pid,
                      "markets": "cryptos au comptant" if p["spot"] else "cryptos (dérivés seulement)",
-                     "demo": "testnet" if p["testnet"] else "non", "connection": link, "availability": VERIFY,
+                     "demo": "testnet" if p["testnet"] else "non", "connection": link,
+                     "availability": "Binance.com n'accepte pas les résidents américains (Binance.US à part)"
+                     if pid == "binance" and country == "US" else VERIFY,
                      "fees": fees, "note": " ; ".join(notes), "site": p["site"], "testnet": p["testnet"],
                      "branchable": pid in TESTNETS or pid == "binance", "compared": pid in COMPARE_IDS,
                      "reached": pid in reached})
-    rows.append(dict(BRVM_ENTRY, branchable=False))
+    rows.append(dict(BRVM_ENTRY, branchable=False, **(
+        {"availability": "oui : SGI agréées dans votre zone (UEMOA)"} if country in profil.UEMOA else {})))
     return rows
 
 
@@ -799,10 +813,14 @@ def _accounts_view(accounts: Any, env: Dict[str, str]) -> Dict[str, Any]:
 def view(book: Any, multi_book: Any = None, env: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     """Page « Courtiers » du panneau (lecture seule) : comptes de
     démonstration, plan miroir à blanc, cours comparés, annuaire."""
+    from . import profil
     book = book if isinstance(book, dict) else {}
     prices = book["prices"] if isinstance(book.get("prices"), dict) else {}
-    accounts = _accounts_view(book.get("accounts"), dict(os.environ) if env is None else env)
-    return {"directory": directory(prices), "kinds": list(KINDS), "prices": prices or None, "accounts": accounts,
+    env = dict(os.environ) if env is None else env
+    prof = profil.profile(env)
+    accounts = _accounts_view(book.get("accounts"), env)
+    return {"directory": directory(prices, prof["country"]), "kinds": list(KINDS), "prices": prices or None,
+            "accounts": accounts, "profile": prof,
             "mirror": mirror(multi_book, accounts), "compare": [{"id": p, "name": n} for p, n in COMPARE],
             "testnets": [{"id": pid, "name": n, "password": needs_password(pid)} for pid, (n, _h) in TESTNETS.items()],
             "notable_pct": NOTABLE_PCT, "every_hours": PRICES_EVERY_HOURS}

@@ -90,7 +90,8 @@ sont jamais envoyés sur GitHub. VS Code les masque dans l'explorateur
 | `multi_actifs.py` | tous les marchés hors cryptos (Yahoo) : règle sur les séances réelles de chaque marché, suivi quotidien après la clôture de New York, portefeuille en argent fictif, indicateurs de marché (VIX, dollar, taux), indices et devises des pays, données des pages du panneau |
 | `pays.py` | les 87 pays classés par MSCI (revue 2026), leur indice, leur devise, et la Banque mondiale (API ouverte, relue chaque semaine) |
 | `brvm.py` | la BRVM (Abidjan) : ses deux pages publiques lues après chaque séance, historique construit par le bot (data_brvm/) |
-| `bourses.py` | bourses du monde : 28 places (séances, indices, régulateurs, accès depuis la Côte d'Ivoire), pages officielles du Nigeria, du Kenya, du Maroc et de la BVMAC lues après chaque séance (data_bourses/), règle mesurée sur chaque place |
+| `profil.py` | votre profil : pays, fuseau horaire et monnaie (TG_PAYS, TG_FUSEAU, TG_DEVISE), noms et fuseaux des 249 pays (base des fuseaux, sans réseau) |
+| `bourses.py` | bourses du monde : 28 places (séances, indices, régulateurs, accès depuis votre pays), pages officielles du Nigeria, du Kenya, du Maroc et de la BVMAC lues après chaque séance (data_bourses/), règle mesurée sur chaque place |
 | `courtiers.py` | courtiers et plateformes : annuaire, cours des cryptos comparés entre plateformes (6 h), comptes de démonstration (MetaTrader 5, Alpaca papier, testnets CCXT ; réel refusé), plan miroir à blanc, adresses vérifiées à chaque requête |
 | `levier.py` | levier étudié chaque semaine : politiques fixes et adaptative, emprunt compté, règle fixée d'avance ; jamais appliqué (comptant) |
 | `uptime.py` | disponibilité : arrêts de plus d'une heure, leur cause, temps de marche |

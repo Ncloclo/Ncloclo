@@ -41,7 +41,7 @@ import pandas as pd
 
 import v29
 
-from . import brvm
+from . import brvm, profil
 from . import multi_actifs as ma
 from . import trend_strategy as ts
 from .texte import fr
@@ -60,20 +60,26 @@ AFRIQUE, AMERIQUES, EUROPE, ASIE, OCEANIE = "Afrique", "Amériques", "Europe", "
 REGIONS = (AFRIQUE, AMERIQUES, EUROPE, ASIE, OCEANIE)
 WEEK = (0, 1, 2, 3, 4)                  # du lundi au vendredi
 GULF = (6, 0, 1, 2, 3)                  # du dimanche au jeudi
-FOREIGN = ("par un courtier international régulé qui donne accès à cette bourse et accepte les résidents "
-           "ivoiriens : à vérifier avant d'ouvrir un compte")
-US = ("par un courtier international régulé (SEC et FINRA aux États-Unis, FCA, CySEC…) qui accepte les "
-      "résidents ivoiriens ; formulaire W-8BEN à l'inscription. Les SGI de la BRVM n'y donnent pas accès")
+FOREIGN = ("par un courtier international régulé qui donne accès à cette bourse et accepte les résidents de "
+           "votre pays : à vérifier avant d'ouvrir un compte")
+US = ("par un courtier international régulé qui donne accès aux bourses américaines et accepte les résidents de "
+      "votre pays ; formulaire W-8BEN à l'inscription (vous n'êtes pas résident fiscal des États-Unis)")
+US_LOCAL = ("c'est une bourse de votre pays : par un courtier enregistré auprès de la SEC et membre de la FINRA "
+            "(formulaire W-9)")
+LOCAL = "c'est une bourse de votre pays : par un intermédiaire agréé localement ({regulator})"
 INDICATIVE = "horaires indicatifs : les sources ne concordent pas, vérifiez sur le site de la bourse"
 
 
 def _x(bid: str, name: str, region: str, countries: Tuple[str, ...], city: str, currency: str, tz: str,
        sessions: Tuple[Tuple[str, str], ...], regulator: str, site: str,
        indices: Tuple[Tuple[str, str], ...], days: Tuple[int, ...] = WEEK, official: str = "",
-       hours_note: str = "", access: str = FOREIGN, note: str = "") -> Dict[str, Any]:
+       hours_note: str = "", access: str = FOREIGN, local: str = "", note: str = "") -> Dict[str, Any]:
+    """Une place : `access` pour les résidents d'autres pays, `local` pour
+    ceux des pays de la place (par défaut : un intermédiaire agréé)."""
     return {"id": bid, "name": name, "region": region, "countries": countries, "city": city, "currency": currency,
             "tz": tz, "sessions": sessions, "days": days, "regulator": regulator, "site": site, "indices": indices,
-            "official": official, "hours_note": hours_note, "access": access, "note": note}
+            "official": official, "hours_note": hours_note, "foreign": access,
+            "local": local or LOCAL.format(regulator=regulator), "note": note}
 
 
 # Les grandes places de cotation : (nom de l'indice, code multi_actifs s'il
@@ -87,13 +93,17 @@ EXCHANGES: Tuple[Dict[str, Any], ...] = (
        "AMF-UMOA (ancien CREPMF)", "https://www.brvm.org", (("BRVM Composite", ""), ("BRVM 30", "")),
        official="brvm", hours_note="préouverture 9 h, cotation continue 9 h 45 - 14 h, fixing de clôture 14 h 30, "
                                    "fin de séance 15 h (site de la BRVM)",
-       access="par une SGI agréée par l'AMF-UMOA : compte-titres en FCFA, sans change",
+       access="par une SGI agréée par l'AMF-UMOA (conditions pour les non-résidents à vérifier) ou un courtier "
+              "international qui y donne accès",
+       local="c'est la bourse de votre zone : par une SGI agréée par l'AMF-UMOA, compte-titres en FCFA, sans change",
        note="bourse commune des huit pays de l'UEMOA"),
     _x("bvmac", "BVMAC (Bourse des valeurs mobilières de l'Afrique centrale)", AFRIQUE,
        ("CM", "CF", "CG", "GA", "GQ", "TD"), "Douala", "XAF", "Africa/Douala", (),
        "COSUMAF", "https://www.bvm-ac.org", (("BVMAC All Share", ""),), official="bvmac",
        hours_note="cotation chaque jour ouvré (bulletin officiel de la cote) ; heures non lues",
-       access="par un intermédiaire agréé par la COSUMAF", note="bourse commune des six pays de la CEMAC"),
+       access="par un intermédiaire agréé par la COSUMAF (conditions pour les non-résidents à vérifier)",
+       local="c'est la bourse de votre zone : par un intermédiaire agréé par la COSUMAF, en FCFA",
+       note="bourse commune des six pays de la CEMAC"),
     _x("jse", "JSE (Johannesburg Stock Exchange)", AFRIQUE, ("ZA",), "Johannesburg", "ZAR", "Africa/Johannesburg",
        (("09:00", "17:00"),), "FSCA", "https://www.jse.co.za",
        (("FTSE/JSE Top 40", "za_top40"), ("FTSE/JSE All Share", "za_jse")),
@@ -116,13 +126,14 @@ EXCHANGES: Tuple[Dict[str, Any], ...] = (
     # ---------- Amériques ----------
     _x("nyse", "NYSE (New York Stock Exchange)", AMERIQUES, ("US",), "New York", "USD", "America/New_York",
        (("09:30", "16:00"),), "SEC", "https://www.nyse.com",
-       (("NYSE Composite", "us_nya"), ("Dow Jones", "dow"), ("S&P 500", "sp500")), access=US,
+       (("NYSE Composite", "us_nya"), ("Dow Jones", "dow"), ("S&P 500", "sp500")), access=US, local=US_LOCAL,
        note="la bourse historique de Wall Street : grandes entreprises établies"),
     _x("nasdaq", "Nasdaq", AMERIQUES, ("US",), "New York", "USD", "America/New_York", (("09:30", "16:00"),),
        "SEC", "https://www.nasdaq.com", (("Nasdaq Composite", "nasdaqcomp"), ("Nasdaq 100", "nasdaq100")),
-       access=US, note="premier marché entièrement électronique (1971) : technologie et croissance"),
+       access=US, local=US_LOCAL, note="premier marché entièrement électronique (1971) : technologie et croissance"),
     _x("cboe", "Cboe (Chicago Board Options Exchange)", AMERIQUES, ("US",), "Chicago", "USD", "America/New_York",
        (("09:30", "16:15"),), "SEC", "https://www.cboe.com", (("VIX (volatilité du S&P 500)", "vix"),), access=US,
+       local=US_LOCAL,
        hours_note="options sur actions ; horaires indicatifs", note="options et indice de volatilité VIX"),
     _x("tsx", "TSX (Toronto Stock Exchange)", AMERIQUES, ("CA",), "Toronto", "CAD", "America/Toronto",
        (("09:30", "16:00"),), "ACVM (Autorités canadiennes en valeurs mobilières)", "https://www.tsx.com",
@@ -191,33 +202,51 @@ for _ex in EXCHANGES:
 BY_ID = {x["id"]: x for x in EXCHANGES}
 DAYS_FR = ("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche")
 
-# Investir depuis la Côte d'Ivoire : (sujet, texte, source). D'après le texte
-# fourni par l'utilisateur le 25/11/2026, corrigé et sourcé là où c'était
-# possible ; le reste est marqué « à vérifier ».
-GUIDE: Tuple[Tuple[str, str, str], ...] = (
-    ("BRVM (UEMOA)", "Par une SGI agréée par l'AMF-UMOA : compte-titres en FCFA, sans change.", "BRVM"),
-    ("Autres bourses", "Par un courtier international régulé (SEC et FINRA aux États-Unis, FCA au Royaume-Uni, "
-     "CySEC dans l'Union européenne…) qui accepte les résidents ivoiriens ; les SGI de la BRVM n'y donnent pas "
-     "accès. Méfiance envers les courtiers non régulés et les offres limitées aux CFD (produits à effet de "
-     "levier).", "texte fourni"),
-    ("Courtiers cités", "Interactive Brokers, XTB, TradeStation Global, Charles Schwab : leur accueil des "
-     "résidents ivoiriens, leurs frais et leur dépôt minimum sont à vérifier sur leur site.", "à vérifier"),
-    ("Ouverture du compte", "En ligne, souvent en 24 à 72 heures : passeport (une carte d'identité est parfois "
-     "refusée par les contrôles automatiques), justificatif de domicile de moins de 3 mois, et pour les actions "
-     "américaines le formulaire W-8BEN, qui atteste que vous n'êtes pas résident fiscal des États-Unis.",
-     "texte fourni"),
-    ("Envoi des fonds", "Virement international (SWIFT) en dollars ou en euros depuis une banque locale : la "
-     "réglementation des changes de la BCEAO demande l'origine des fonds et le motif du transfert ; chaque "
-     "virement coûte des frais fixes, d'où l'intérêt de virements peu fréquents. Certains courtiers acceptent "
-     "une carte bancaire internationale (frais de change de la banque).",
-     "texte fourni ; frais à vérifier auprès de votre banque"),
-    ("Impôts", "Les États-Unis ne taxent pas en général les plus-values d'actions des non-résidents ; leurs "
-     "dividendes subissent une retenue à la source de 30 % par défaut, faute de convention fiscale entre la "
-     "Côte d'Ivoire et les États-Unis. Les gains se déclarent en Côte d'Ivoire.",
-     "texte fourni ; à vérifier avec un conseiller fiscal"),
+# Investir depuis votre pays : (sujet, texte, source, portée). Portée vide :
+# tous les pays ; sinon une zone (profil.zone_of) ou un pays (code ISO). Tiré
+# du texte fourni par l'utilisateur le 25/11/2026, généralisé et sourcé là où
+# c'était possible ; le reste est marqué « à vérifier ».
+GUIDE: Tuple[Tuple[str, str, str, str], ...] = (
+    ("Bourse de votre pays", "Par un intermédiaire agréé localement (SGI dans l'UEMOA, société de bourse ou "
+     "courtier agréé ailleurs) : compte-titres dans votre monnaie, sans change.", "", ""),
+    ("Bourses étrangères", "Par un courtier international régulé (SEC et FINRA aux États-Unis, FCA au "
+     "Royaume-Uni, CySEC ou un autre régulateur de l'Union européenne…) qui accepte les résidents de votre pays. "
+     "Méfiance envers les courtiers non régulés et les offres limitées aux CFD (produits à effet de levier).",
+     "texte fourni, généralisé", ""),
+    ("Courtiers cités", "Interactive Brokers, XTB, TradeStation Global, Charles Schwab : pays acceptés, frais et "
+     "dépôt minimum à vérifier sur leur site.", "à vérifier", ""),
+    ("Ouverture du compte", "En ligne, souvent en 24 à 72 heures : pièce d'identité (le passeport passe souvent "
+     "mieux), justificatif de domicile récent ; pour les actions américaines, formulaire W-8BEN si vous n'êtes pas "
+     "résident fiscal des États-Unis.", "texte fourni, généralisé", ""),
+    ("Envoi des fonds", "Virement international ou carte bancaire, selon le courtier ; frais de change et de "
+     "virement. Là où les changes sont contrôlés, la banque demande l'origine des fonds et le motif du transfert.",
+     "texte fourni, généralisé", ""),
+    ("Impôts", "Dividendes américains : retenue de 30 % à la source, réduite si votre pays a une convention "
+     "fiscale avec les États-Unis. Plus-values et déclaration : selon les règles de votre pays.",
+     "à vérifier avec un conseiller fiscal", ""),
+    ("UEMOA", "La BRVM par une SGI agréée par l'AMF-UMOA ; un virement vers l'étranger suit la réglementation "
+     "des changes de la BCEAO.", "BRVM", "UEMOA"),
+    ("CEMAC", "La BVMAC par un intermédiaire agréé par la COSUMAF ; un virement vers l'étranger suit la "
+     "réglementation des changes de la BEAC.", "BVMAC", "CEMAC"),
+    ("Côte d'Ivoire", "Pas de convention fiscale avec les États-Unis : dividendes américains retenus à 30 %.",
+     "texte fourni, à vérifier", "CI"),
+    ("États-Unis", "Résident américain : courtier américain (SEC, FINRA) et formulaire W-9 ; les CFD sont "
+     "interdits aux particuliers.", "SEC", "États-Unis"),
     ("Le bot", "Il n'ouvre aucun compte et ne passe aucun ordre sur ces bourses : il en lit les indices et les "
-     "cours pour son savoir. Ses comptes de démonstration sont dans la page Courtiers.", "TrendGuard"),
+     "cours pour son savoir. Ses comptes de démonstration sont dans la page Courtiers.", "TrendGuard", ""),
 )
+
+
+def guide_for(profile: Dict[str, Any]) -> List[Dict[str, str]]:
+    """Le guide d'un pays : les points communs, puis ceux de sa zone et les
+    siens."""
+    return [{"topic": t, "text": x, "source": s, "scope": scope} for t, x, s, scope in GUIDE
+            if not scope or scope in (profile.get("zone"), profile.get("country"))]
+
+
+def access_for(ex: Dict[str, Any], country: str) -> str:
+    """Comment un résident de `country` accède à cette place."""
+    return ex["local"] if country in ex["countries"] else ex["foreign"]
 
 
 def _num(v: Any) -> Optional[float]:
@@ -248,25 +277,30 @@ def hm(text: str) -> str:
     return f"{int(h)} h" + (f" {m}" if m != "00" else "")
 
 
-def _abidjan(t: datetime) -> str:
-    return hm(t.astimezone(timezone.utc).strftime("%H:%M"))
-
-
-def status(ex: Dict[str, Any], now: datetime) -> Dict[str, Any]:
+def status(ex: Dict[str, Any], now: datetime, home_tz: str = "UTC") -> Dict[str, Any]:
     """La place est-elle en séance ? Heure locale, prochaine ouverture ou
-    clôture, en heure locale et en heure d'Abidjan (UTC). Les jours fériés ne
-    sont pas connus du bot."""
-    tz = ZoneInfo(ex["tz"])
+    clôture (instant UTC `at`, pour que le panneau l'écrive dans l'heure de
+    chacun), et le même texte dans votre heure (`home_tz`, votre fuseau). Les
+    jours fériés ne sont pas connus du bot."""
+    tz, home = ZoneInfo(ex["tz"]), ZoneInfo(home_tz)
     local = now.astimezone(tz)
-    out: Dict[str, Any] = {"local": local.strftime("%H:%M"), "open": None, "next": ""}
+    out: Dict[str, Any] = {"local": local.strftime("%H:%M"), "open": None, "next": "", "event": "", "at": None,
+                           "at_local": "", "when": ""}
     if not ex["sessions"]:
         out["next"] = "heures de séance non lues"
         return out
+
+    def mine(t: datetime) -> str:
+        return hm(t.astimezone(home).strftime("%H:%M"))
+
+    def utc(t: datetime) -> str:
+        return t.astimezone(timezone.utc).isoformat(timespec="seconds")
     if local.weekday() in ex["days"]:
         for a, b in ex["sessions"]:
             start, end = _at(local.date(), a, tz), _at(local.date(), b, tz)
             if start <= local < end:
-                out.update(open=True, next=f"ferme à {hm(b)} ({_abidjan(end)} à Abidjan)")
+                out.update(open=True, event="ferme", at=utc(end), at_local=hm(b), when="aujourd'hui",
+                           next=f"ferme à {hm(b)} ({mine(end)}, votre heure)")
                 return out
     for k in range(8):
         day = local.date() + timedelta(days=k)
@@ -276,7 +310,8 @@ def status(ex: Dict[str, Any], now: datetime) -> Dict[str, Any]:
             start = _at(day, a, tz)
             if start > local:
                 when = "aujourd'hui" if k == 0 else "demain" if k == 1 else DAYS_FR[day.weekday()]
-                out.update(open=False, next=f"ouvre {when} à {hm(a)} ({_abidjan(start)} à Abidjan)")
+                out.update(open=False, event="ouvre", at=utc(start), at_local=hm(a), when=when,
+                           next=f"ouvre {when} à {hm(a)} ({mine(start)}, votre heure)")
                 return out
     out["open"] = False
     return out
@@ -609,10 +644,14 @@ def _index_rows(ex: Dict[str, Any], close: pd.DataFrame, summary: Dict[str, Dict
 
 
 def view(book: Any, close: pd.DataFrame, multi_book: Any, now: datetime, brvm_book: Any = None,
-         cache: str = CACHE, brvm_cache: str = BRVM_CACHE) -> Dict[str, Any]:
-    """Page « Bourses du monde » : chaque place, son état (en séance ou non),
-    ses indices et leur tendance pour la règle, son régulateur, son accès
-    depuis la Côte d'Ivoire, ce que le bot en lit et l'étude de la règle."""
+         cache: str = CACHE, brvm_cache: str = BRVM_CACHE, profile: Optional[Dict[str, Any]] = None
+         ) -> Dict[str, Any]:
+    """Page « Bourses du monde » : chaque place, son état (en séance ou non,
+    dans votre heure), ses indices et leur tendance pour la règle, son
+    régulateur, son accès depuis votre pays (`profile` : profil.py), ce que le
+    bot en lit et l'étude de la règle. Tous les pays sont joints, pour voir
+    l'accès depuis un autre."""
+    profile = profile or profil.profile({})
     book = book if isinstance(book, dict) else {}
     official = dict(book.get("official") or {})
     if isinstance(brvm_book, dict):
@@ -626,7 +665,8 @@ def view(book: Any, close: pd.DataFrame, multi_book: Any, now: datetime, brvm_bo
         rows.append({k: v for k, v in ex.items() if k not in ("sessions", "days", "tz")} | {
             "hours": " et ".join(f"{hm(a)} - {hm(b)}" for a, b in ex["sessions"]),
             "days_text": "du dimanche au jeudi" if ex["days"] == GULF else "du lundi au vendredi",
-            "status": status(ex, now), "indices": _index_rows(ex, close, summary, off, cache, brvm_cache),
+            "access": access_for(ex, profile["country"]), "home": profile["country"] in ex["countries"],
+            "status": status(ex, now, profile["tz"]), "indices": _index_rows(ex, close, summary, off, cache, brvm_cache),
             "reads": "page officielle, après chaque séance" if ex["official"] else
                      "indices chez Yahoo Finance, chaque jour" if any(c for _n, c in ex["indices"]) else "rien",
             "official_state": {"session": off.get("session"), "error": off.get("error") or "",
@@ -634,13 +674,17 @@ def view(book: Any, close: pd.DataFrame, multi_book: Any, now: datetime, brvm_bo
                                "movers": sorted((s for s in off.get("stocks") or [] if s.get("change") is not None),
                                                 key=lambda s: -abs(s["change"]))[:3]} if ex["official"] else None,
             "study": studies.get(ex["id"])})
-    return {"regions": list(REGIONS), "rows": rows, "guide": [{"topic": t, "text": x, "source": s} for t, x, s in GUIDE],
-            "now": now.isoformat(timespec="seconds"), "study_for": (book.get("study") or {}).get("for")}
+    return {"regions": list(REGIONS), "rows": rows, "profile": profile, "guide": guide_for(profile),
+            "guide_all": [{"topic": t, "text": x, "source": s, "scope": scope} for t, x, s, scope in GUIDE],
+            "countries": profil.countries(), "now": now.isoformat(timespec="seconds"),
+            "study_for": (book.get("study") or {}).get("for")}
 
 
 def render(v: Dict[str, Any]) -> str:
     """État en texte : chaque place, sa séance, ses indices, ses lectures."""
-    lines = ["Bourses du monde : structure de cotation de chaque place (information seulement)"]
+    prof = v.get("profile") or {}
+    lines = [f"Bourses du monde : structure de cotation de chaque place, vue depuis {prof.get('name', 'votre pays')} "
+             "(information seulement)"]
     for region in v["regions"]:
         lines += ["", region]
         for r in (x for x in v["rows"] if x["region"] == region):
@@ -677,7 +721,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         book = refresh(memory, now, lambda url: savoir.http_get(url, 120), CACHE, multi_cache,
                        force=args.action == "lire") if args.action == "lire" else memory.get(KEY)
         codes = list(dict.fromkeys(c for x in EXCHANGES for _n, c in x["indices"] if c))
-        print(render(view(book, ma.load(multi_cache, codes), memory.get(ma.KEY), now, memory.get(brvm.KEY))))
+        print(render(view(book, ma.load(multi_cache, codes), memory.get(ma.KEY), now, memory.get(brvm.KEY),
+                          profile=profil.of_config(gcfg))))
     finally:
         memory.close()
     return 0

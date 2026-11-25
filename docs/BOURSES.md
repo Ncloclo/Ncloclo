@@ -2,7 +2,7 @@
 
 La structure de cotation de chaque grande place, comme la BRVM pour
 l'UEMOA : ses heures de séance, ses indices phares, son régulateur, l'accès
-depuis la Côte d'Ivoire et ce que le bot en lit. Module :
+depuis votre pays et ce que le bot en lit. Module :
 `trendguard/bourses.py` ; page « Bourses du monde » du panneau (menu
 Marchés) ; commande `python trendguard_bot.py bourses`.
 
@@ -22,12 +22,12 @@ Marchés) ; commande `python trendguard_bot.py bourses`.
   (Bombay), KRX (Corée du Sud), Saudi Exchange (Tadawul).
 - Océanie : ASX (Sydney).
 
-Pour chacune : ville, monnaie, heures de séance (heure locale et heure
-d'Abidjan, en séance ou non en ce moment), indices phares, régulateur, accès
-depuis la Côte d'Ivoire, site officiel. Les jours fériés ne sont pas connus
-du bot. Les heures dont les sources ne concordent pas sont marquées
-« indicatives » (B3, NSE de Nairobi) ; celles de la BVMAC et du Ghana ne sont
-pas données.
+Pour chacune : zone, ville, monnaie, heures de séance (heure locale de la
+place et votre heure, en séance ou non en ce moment), indices phares,
+régulateur, accès depuis votre pays, site officiel. Les jours fériés ne sont
+pas connus du bot. Les heures dont les sources ne concordent pas sont
+marquées « indicatives » (B3, NSE de Nairobi) ; celles de la BVMAC et du
+Ghana ne sont pas données.
 
 ## Ce que le bot lit
 
@@ -99,28 +99,44 @@ bot, pas à ses décisions.
 
 Information seulement : aucune décision du bot n'en dépend.
 
-## Investir depuis la Côte d'Ivoire
+## Depuis votre pays
 
-D'après le texte fourni par l'utilisateur le 25/11/2026, corrigé là où
-c'était possible ; à vérifier avant d'agir :
+Le bot sert n'importe quel pays (votre profil, `docs/PROFIL.md`) :
 
-- BRVM : par une SGI agréée par l'AMF-UMOA, en FCFA.
-- Autres bourses : par un courtier international régulé (SEC et FINRA aux
-  États-Unis, FCA, CySEC…) qui accepte les résidents ivoiriens ; les SGI n'y
-  donnent pas accès. Méfiance envers les courtiers non régulés et les offres
-  limitées aux CFD.
+- Accès : pour une bourse de votre pays (ou de votre zone : la BRVM pour
+  l'UEMOA, la BVMAC pour la CEMAC), un intermédiaire agréé localement ; pour
+  une bourse étrangère, un courtier international régulé qui accepte les
+  résidents de votre pays. La page « Bourses du monde » permet de choisir un
+  autre pays (choix gardé sur l'appareil).
+- Heures : le panneau écrit chaque ouverture et chaque clôture dans l'heure de
+  l'appareil qui le regarde ; la ligne de commande, dans votre fuseau
+  (`TG_FUSEAU`, sinon celui de votre pays).
+
+## Investir depuis votre pays
+
+D'après le texte fourni par l'utilisateur le 25/11/2026, généralisé à tous
+les pays et corrigé là où c'était possible ; à vérifier avant d'agir :
+
+- Bourse de votre pays : par un intermédiaire agréé localement (SGI dans
+  l'UEMOA, société de bourse ou courtier agréé ailleurs), dans votre monnaie.
+- Bourses étrangères : par un courtier international régulé (SEC et FINRA aux
+  États-Unis, FCA, CySEC…) qui accepte les résidents de votre pays. Méfiance
+  envers les courtiers non régulés et les offres limitées aux CFD.
 - Courtiers cités (Interactive Brokers, XTB, TradeStation Global, Charles
-  Schwab) : accueil des résidents ivoiriens, frais et dépôt minimum à
-  vérifier.
-- Ouverture du compte : passeport, justificatif de domicile de moins de
-  3 mois, formulaire W-8BEN pour les actions américaines (non-résident fiscal
-  des États-Unis).
-- Envoi des fonds : virement international en dollars ou en euros ;
-  réglementation des changes de la BCEAO (origine des fonds, motif) ; frais
-  fixes par virement.
-- Impôts : pas d'impôt américain en général sur les plus-values d'actions
-  des non-résidents ; dividendes retenus à 30 % à la source, faute de
-  convention fiscale entre les deux pays ; gains à déclarer en Côte d'Ivoire.
+  Schwab) : pays acceptés, frais et dépôt minimum à vérifier.
+- Ouverture du compte : pièce d'identité, justificatif de domicile récent ;
+  pour les actions américaines, formulaire W-8BEN si vous n'êtes pas
+  résident fiscal des États-Unis (W-9 sinon).
+- Envoi des fonds : virement international ou carte ; là où les changes sont
+  contrôlés, la banque demande l'origine des fonds et le motif.
+- Impôts : dividendes américains retenus à 30 % à la source, moins si votre
+  pays a une convention fiscale avec les États-Unis ; le reste selon les
+  règles de votre pays.
+- Selon la zone : UEMOA (SGI agréées par l'AMF-UMOA, changes de la BCEAO),
+  CEMAC (intermédiaires agréés par la COSUMAF, changes de la BEAC), Côte
+  d'Ivoire (pas de convention fiscale avec les États-Unis : 30 %, à
+  vérifier), États-Unis (courtier américain, formulaire W-9, CFD interdits
+  aux particuliers).
 
 Le bot n'ouvre aucun compte et ne passe aucun ordre sur ces bourses.
 

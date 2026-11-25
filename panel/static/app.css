@@ -401,6 +401,8 @@ tbody tr.click:hover { background: var(--surface-2); }
 .ex-lines dt { color: var(--muted); margin-top: 4px; }
 .ex-lines dd { margin: 0; color: var(--ink-2); overflow-wrap: anywhere; }
 .ex-open[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.exchange.home { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+.ex-country { max-width: 220px; }
 .ex-guide { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13.5px; }
 .ex-guide .tag { margin-left: 4px; white-space: normal; }
 /* Courtiers : comptes de démonstration */

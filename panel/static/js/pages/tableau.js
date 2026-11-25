@@ -40,13 +40,14 @@ function drawDashEquity(eq) {
   dashZoom.data(pts.map((p) => p.time));
 }
 
-// Capital dans votre monnaie (trendguard/devise.py) : FCFA ou euros, et ce
-// qu'un retrait complet donnerait, frais de change et impôt déduits.
+// Capital dans votre monnaie (trendguard/devise.py), quelle qu'elle soit, et
+// ce qu'un retrait complet donnerait, frais de change et impôt déduits.
 function renderLocalMoney(d) {
   const node = $("#d-equity-local");
   if (!node) return;
   if (!d || !d.code || d.code === "USDT" || d.equity == null) { node.hidden = true; return; }
-  const money = (v) => nf(d.code === "FCFA" ? 0 : 2).format(v) + " " + d.code;
+  const digits = d.decimals != null ? d.decimals : d.code === "FCFA" ? 0 : 2;
+  const money = (v) => nf(digits).format(v) + " " + (d.label || d.code);
   node.textContent = `≈ ${money(d.equity)} · retrait complet : ${money(d.withdraw_net)} nets `
     + `(${fpct(d.gain_net_pct, 1)}, frais de change ${nf(1).format(d.change_cost * 100)} %, `
     + `impôt ${nf(0).format(d.tax_rate * 100)} %)`;
