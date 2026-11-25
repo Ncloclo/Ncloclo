@@ -51,4 +51,5 @@ qu'après l'une d'elles (dernière en date : `PETIT_CAPITAL.md`, minimum d'achat
 | [`DIAGNOSTIC_CODE.md`](DIAGNOSTIC_CODE.md) | analyse du code du 30 septembre 2026 : mesures, harmonisation, structure |
 | [`revues/`](revues/) | revues hebdomadaires écrites par la routine du lundi |
 | [`BRVM.md`](BRVM.md) | la BRVM (Abidjan) : ce que le bot lit, garde et en fait |
+| [`BOURSES.md`](BOURSES.md) | bourses du monde : séances, indices, régulateurs, pages officielles lues, règle mesurée sur chaque place |
 | [`COURTIERS.md`](COURTIERS.md) | courtiers et plateformes : annuaire, cours comparés, comptes de démonstration, plan miroir à blanc |

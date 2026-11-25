@@ -233,6 +233,13 @@ panneau de contrôle ») :
   marché et toutes les actions cotées, lus après chaque séance sur les deux
   pages publiques de brvm.org ; le bot construit l'historique séance après
   séance ([`docs/BRVM.md`](docs/BRVM.md)) ;
+- **Bourses du monde** (menu Marchés) : les 28 grandes places de cotation
+  (NYSE, Nasdaq, Euronext, Londres, Tokyo, Shanghai, Johannesburg, Lagos,
+  Casablanca, BVMAC…), chacune avec sa séance (heure locale et heure
+  d'Abidjan), ses indices et leur tendance, son régulateur et l'accès depuis
+  la Côte d'Ivoire ; le Nigeria, le Kenya, le Maroc et la BVMAC lus sur leurs
+  pages officielles après chaque séance, comme la BRVM ; la règle du bot
+  mesurée sur chaque place ([`docs/BOURSES.md`](docs/BOURSES.md)) ;
 - **Courtiers** (menu Mon bot) : comptes de démonstration seulement
   (MetaTrader 5 pour les devises, l'or et les indices ; compte papier Alpaca
   pour les actions américaines ; testnets des plateformes crypto), un compte

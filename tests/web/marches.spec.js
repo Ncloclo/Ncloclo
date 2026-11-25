@@ -18,7 +18,7 @@ function watchErrors(page) {
 }
 
 // [onglet, titre de la page, nombre de marchés de la démonstration]
-const PAGES = [["commodities", "Matières premières", 17], ["forex", "Devises", 8], ["indices", "Indices boursiers", 54],
+const PAGES = [["commodities", "Matières premières", 17], ["forex", "Devises", 8], ["indices", "Indices boursiers", 58],
   ["stocks", "Actions", 17], ["bonds", "Obligations", 3]];
 
 test("menu : une page par classe d'actifs, avec ses chiffres clés", async ({ page }) => {

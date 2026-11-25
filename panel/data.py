@@ -17,6 +17,7 @@ import v29
 from trendguard import (
     attribution,
     bibliotheque,
+    bourses,
     brvm,
     courtiers,
     evenements,
@@ -338,6 +339,18 @@ class BotData:
         dernière séance lue, et l'historique construit par le bot."""
         got = self._from_savoir(brvm.KEY)
         return brvm.view(got[0] if got else None, self.brvm_cache)
+
+    def exchanges(self) -> Dict[str, Any]:
+        """Page « Bourses du monde » (lecture seule) : chaque place, sa séance,
+        ses indices (Yahoo, pages officielles), son régulateur, son accès
+        depuis la Côte d'Ivoire et l'étude de la règle."""
+        got = self._from_savoir(bourses.KEY, multi_actifs.KEY, brvm.KEY)
+        close = self._multi_close()
+        vix = multi_actifs.load(self.multi_cache, ["vix"])
+        if not vix.empty:
+            close = close.join(vix, how="outer") if not close.empty else vix
+        return bourses.view(got[0] if got else None, close, got[1] if got else None, datetime.now(timezone.utc),
+                            got[2] if got else None, brvm_cache=self.brvm_cache)
 
     def brokers(self) -> Dict[str, Any]:
         """Page « Courtiers » (lecture seule) : comptes de démonstration, plan

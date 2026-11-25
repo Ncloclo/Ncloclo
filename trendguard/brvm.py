@@ -44,7 +44,7 @@ def number(text: str) -> Optional[float]:
         return None
 
 
-def _rows(page: str) -> List[List[str]]:
+def table_rows(page: str) -> List[List[str]]:
     """Les lignes des tableaux d'une page, cellule par cellule, en texte."""
     out = []
     for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", page, re.S | re.I):
@@ -59,7 +59,7 @@ def parse_indices(page: str) -> Tuple[List[Dict[str, Any]], Dict[str, Optional[f
     """Indices (nom, clôture de la veille, clôture, variation du jour et
     depuis le 31 décembre) et activité du marché (en FCFA)."""
     indices, activity = [], {}
-    for cells in _rows(page):
+    for cells in table_rows(page):
         if len(cells) >= 5 and cells[0].upper().startswith("BRVM") and number(cells[2]) is not None:
             indices.append({"name": cells[0].replace("–", "-"), "prev": number(cells[1]), "close": number(cells[2]),
                             "change": number(cells[3]), "ytd": number(cells[4])})
@@ -74,7 +74,7 @@ def parse_stocks(page: str) -> List[Dict[str, Any]]:
     """Chaque action cotée : symbole, nom, volume, cours de la veille,
     d'ouverture et de clôture (FCFA), variation du jour (%)."""
     out = []
-    for cells in _rows(page):
+    for cells in table_rows(page):
         if len(cells) == 7 and re.fullmatch(r"[A-Z]{3,6}", cells[0]) and number(cells[5]) is not None:
             out.append({"symbol": cells[0], "name": cells[1].title(), "volume": number(cells[2]),
                         "prev": number(cells[3]), "open": number(cells[4]), "close": number(cells[5]),
@@ -115,7 +115,7 @@ def slug(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
 
 
-def _append(cache: str, code: str, day: str, close: Optional[float], volume: Optional[float] = None) -> None:
+def append_session(cache: str, code: str, day: str, close: Optional[float], volume: Optional[float] = None) -> None:
     """Ajoute la séance au fichier du titre (une ligne par jour, sans doublon)."""
     if close is None:
         return
@@ -156,9 +156,9 @@ def refresh(memory: Any, now: datetime, fetch: Fetch, cache: str, force: bool = 
         if fresh:
             os.makedirs(cache, exist_ok=True)
             for r in indices:
-                _append(cache, "idx_" + slug(r["name"]), day, r["close"])
+                append_session(cache, "idx_" + slug(r["name"]), day, r["close"])
             for s in stocks:
-                _append(cache, s["symbol"].lower(), day, s["close"], s["volume"])
+                append_session(cache, s["symbol"].lower(), day, s["close"], s["volume"])
             book["sessions"] = int(book.get("sessions") or 0) + 1
         book.update(fetched_at=book["tried_at"], error="", read_for=day, fingerprint=print_,
                     session=day if fresh else book.get("session", day), indices=indices, activity=activity,

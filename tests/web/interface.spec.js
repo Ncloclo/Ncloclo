@@ -24,7 +24,7 @@ test("onglets rangés par usage, nombre de positions sur l'onglet", async ({ pag
   // Le bot d'abord, puis les marchés (une page par classe d'actifs), l'analyse, Réglages à part en bas.
   await expect(page.locator(".tab")).toHaveText(["Tableau de bord", /^Positions/, "Journal", "Courtiers", "Cryptos",
     "Matières premières",
-    "Devises", "Indices", "Actions", "Obligations", "Pays du monde", "BRVM", "Graphiques", "Actualités", "Veille", "Réglages"]);
+    "Devises", "Indices", "Actions", "Obligations", "Pays du monde", "Bourses du monde", "BRVM", "Graphiques", "Actualités", "Veille", "Réglages"]);
   await expect(page.locator("#tab-pos")).toHaveText("6");
   await page.locator('.tab[data-tab="positions"]').click();
   await expect(page.locator('.tab[data-tab="positions"]')).toHaveAttribute("aria-current", "page");

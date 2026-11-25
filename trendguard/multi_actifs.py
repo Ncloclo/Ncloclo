@@ -165,6 +165,12 @@ WORLD: Tuple[Tuple[str, str, str, str], ...] = (
     ("lt_omxv", "OMX Vilnius (Lituanie)", "Indices", "^OMXVGI"),
     ("vn_vn30", "Fonds VN30 (Viêt Nam)", "Indices", "E1VFVN30.VN"),
     ("ar_argt", "Fonds MSCI Argentine (ARGT, en $)", "Indices", "ARGT"),
+    # Bourses du monde (bourses.py, 25/11/2026) : indices des places qui
+    # n'avaient pas le leur (le TASI saoudien n'a pas d'historique journalier).
+    ("us_nya", "NYSE Composite (États-Unis)", "Indices", "^NYA"),
+    ("cn_szse", "SZSE Component (Chine, Shenzhen)", "Indices", "399001.SZ"),
+    ("in_sensex", "Sensex (Inde)", "Indices", "^BSESN"),
+    ("za_top40", "FTSE/JSE Top 40 (Afrique du Sud)", "Indices", "^J200.JO"),
 )
 # Devises des pays (cours du dollar dans chaque devise, « XXX=X » chez Yahoo),
 # pour la page des pays ; l'euro, la livre, le yen… ont déjà leur paire.

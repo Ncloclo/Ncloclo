@@ -348,7 +348,9 @@ class PanelApp(SecurityCenter):
     def assistant_context(self) -> Dict[str, Any]:
         """Données PUBLIQUES transmises à l'assistant : aucune clé, aucun
         mot de passe, rien du fichier .env."""
-        return {"status": self.status(), "news": self.news_view(),
+        brokers = self.data.brokers()
+        return {"status": self.status(), "news": self.news_view(), "bourses": self.data.exchanges(),
+                "courtiers": {"accounts": brokers.get("accounts"), "prices": brokers.get("prices")},
                 "reasoning": self.data.reasoning(), "positions": self.data.positions(),
                 "anticipation": self.anticipation_view(), "security": self.security_view(),
                 "report": self.report_view(),
@@ -666,6 +668,7 @@ class PanelApp(SecurityCenter):
             "/api/countries": lambda: self.data.countries(q("window", "1y")),
             "/api/brvm": self.data.brvm,
             "/api/brokers": self.data.brokers,
+            "/api/exchanges": self.data.exchanges,
             "/api/watch": self.data.watch,
             "/api/reasoning": self.data.reasoning,
             "/api/news": self.news_view,

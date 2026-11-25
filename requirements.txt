@@ -8,6 +8,8 @@ python-dotenv>=1.0
 anthropic>=1.8
 # Optionnel : compte démo MetaTrader 5 (courtiers forex et CFD), Windows seulement
 MetaTrader5>=5.0.45; sys_platform == "win32"
+# Bulletin officiel de la cote de la BVMAC (PDF), lu par bourses.py
+pypdf>=5.0
 # Optionnel : wallet EVM (BLOCKCHAIN_ENABLED=true)
 web3>=6.0
 # Tests

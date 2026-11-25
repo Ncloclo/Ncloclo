@@ -65,7 +65,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set,
 
 import v29
 
-from . import bibliotheque, brvm, courtiers, evenements, flux, multi_actifs, pays
+from . import bibliotheque, bourses, brvm, courtiers, evenements, flux, multi_actifs, pays
 from . import market_watch as mw
 from .texte import fr
 
@@ -777,6 +777,16 @@ def main(argv: Optional[List[str]] = None) -> int:
                              f"historique de {book.get('sessions', 0)} séance(s)"))
             except Exception as e:
                 print(f"{now:%Y-%m-%d %H:%M:%S} UTC BRVM illisible : {e}")
+            try:            # bourses du monde : pages officielles (Nigeria, Kenya, Maroc, BVMAC) après chaque séance
+                book = bourses.refresh(memory, now, lambda url: http_get(url, 120), os.path.join(v29.APP_DIR, "data_bourses"),
+                                       os.path.join(v29.APP_DIR, "data_multi"))
+                for src, part in (book.get("official") or {}).items():
+                    if part.get("tried_at") == now.isoformat(timespec="seconds"):
+                        print(f"{now:%Y-%m-%d %H:%M:%S} UTC {bourses.BY_ID[src]['name']} : "
+                              + (f"lecture ratée ({part['error']})" if part.get("error") else
+                                 f"séance du {part.get('session')}, {len(part.get('stocks') or [])} titres"))
+            except Exception as e:
+                print(f"{now:%Y-%m-%d %H:%M:%S} UTC bourses du monde illisibles : {e}")
             try:            # courtiers : cours des cryptos sur dix autres plateformes (6 h), comptes démo (1 h)
                 book = courtiers.refresh(memory, now, [a.lower() for a in gcfg.universe])
                 pr = book.get("prices") or {}

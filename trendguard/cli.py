@@ -690,6 +690,7 @@ TOOLS = {"alerts": ("alerts", "alertes : configurer | tester"),
          "savoir": ("savoir", "noyau de savoir : [bilan] | collecter"),
          "bibliotheque": ("bibliotheque", "bibliothèque de recherche (arXiv q-fin) : [pistes] | lire"),
          "levier": ("levier", "levier étudié par le bot (jamais appliqué) : [statut] | etude"),
+         "bourses": ("bourses", "bourses du monde (information) : [etat] | lire"),
          "courtiers": ("courtiers", "courtiers et plateformes, démonstration seulement : [etat] | annuaire | cours "
                                     "| verifier | set-key <mt5|alpaca|testnet>"),
          "registre": ("registre", "registre des expériences : [liste] | voir <n°> | rejouer <n°> | controle | carte"),
