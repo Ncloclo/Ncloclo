@@ -69,7 +69,7 @@ NGX_EQ = [{"Symbol": "GTCO", "PrevClosingPrice": 112.0, "ClosePrice": 111.0, "Pe
            "Sector": "FINANCIAL SERVICES", "TradeDate": "2026-11-24T00:00:00"},
           {"Symbol": "MTNN ", "PrevClosingPrice": 837.0, "ClosePrice": 837.0, "PercChange": None, "Volume": 1702602.0,
            "Sector": "ICT", "TradeDate": "2026-11-24T00:00:00"},
-          {"Symbol": "VIDE", "ClosePrice": None}]
+          {"Symbol": "", "ClosePrice": None}]
 NGX_SNAP = {"ASI": 245685.87, "DEALS": 31670.0, "VOLUME": 489504087.0, "VALUE": 28214436170.11, "CAP": 1.595e14}
 NSE_PAGE = """<table><tr><th>Name</th><th>Value</th><th>Change</th></tr>
 <tr><td>NSE ALL SHARE INDEX</td><td>235.94</td><td>-0.64</td></tr>
@@ -102,6 +102,7 @@ def test_the_official_pages_are_parsed():
     assert ngx["session"] == "2026-11-24" and ngx["indices"] == [{"name": "NGX All-Share (ASI)", "close": 245685.87,
                                                                   "change": None}]
     assert [(s["symbol"], s["change"]) for s in ngx["stocks"]] == [("GTCO", -0.89), ("MTNN", 0.0)]
+    assert ngx["pending"] is False and bourses.parse_ngx([dict(NGX_EQ[0], ClosePrice=None)], None)["pending"]
     ke = bourses.parse_nse_ke(NSE_PAGE)
     assert [i["name"] for i in ke["indices"]] == ["NSE All Share (NASI)", "NSE 20"]
     assert ke["indices"][1]["close"] == 4122.09 and ke["indices"][1]["change"] == pytest.approx(-6.35 / 4128.44 * 100)
@@ -147,12 +148,19 @@ def test_one_reading_per_session_and_the_history_the_bot_builds(tmp_path, monkey
     assert nxt["nse_ke"]["sessions"] == 1 and nxt["nse_ke"]["session"] == "2026-11-24"   # page inchangée : rien d'ajouté
     assert nxt["bvmac"]["session"] == "2026-11-24" and nxt["bvmac"]["error"] == ""      # pas de nouveau bulletin
     assert bourses.BVMAC_PDF.format(folder="2026/12", day="20261125") in calls          # mis en ligne le mois d'après ?
-    # En pleine séance, la NGX publie la liste du jour sans cours de clôture : rien de perdu, nouvel essai.
-    open_day = [dict(e, TradeDate="2026-11-26T00:00:00", ClosePrice=None, PercChange=None) for e in NGX_EQ]
+    # En pleine séance, la NGX publie la liste du jour avec les seuls titres déjà échangés (cours provisoires) :
+    # rien n'entre dans l'historique, rien de perdu, nouvel essai.
+    open_day = [dict(e, TradeDate="2026-11-26T00:00:00", ClosePrice=None if e["Symbol"] == "GTCO" else 840.0)
+                for e in NGX_EQ[:2]]
     pages.update({bourses.NGX_EQUITIES: open_day, bourses.NGX_SNAPSHOT: None})
     during = bourses.refresh(memory, evening + timedelta(days=2), _site(pages, calls), str(tmp_path), pause=0,
                              sources=("ngx",))["official"]["ngx"]
     assert "séance en cours" in during["error"] and during["session"] == "2026-11-25" and during["stocks"]
+    assert len(bourses.brvm.history(str(tmp_path), "ngx_mtnn")) == 2                    # 24 et 25/11 seulement
+    lagos_open = datetime(2026, 11, 26, 10, 0, tzinfo=timezone.utc)                     # 11 h à Lagos : en séance
+    calls.clear()
+    assert "séance en cours" in bourses.read_official({}, "ngx", _site(pages, calls), lagos_open, str(tmp_path),
+                                                      pause=0)["error"] and calls == []    # rien n'est lu
 
     def down(url):
         raise TimeoutError("timed out")

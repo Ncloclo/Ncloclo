@@ -308,8 +308,10 @@ BOC_STOCK = re.compile(r"^\s*(?P<name>\S.*?)\s+(?P<isin>[A-Z]{2}000001\d{4})\s+(
 def parse_ngx(equities: Any, snapshot: Any) -> Dict[str, Any]:
     """NGX : la liste des cours de son site (JSON) et son instantané du marché
     (indice All-Share, échanges, capitalisation). La séance est celle des
-    cours eux-mêmes (TradeDate). Pendant la séance, la liste du jour n'a pas
-    encore de cours de clôture : « pending »."""
+    cours eux-mêmes (TradeDate). Pendant la séance, la liste du jour n'a de
+    cours que pour les titres déjà échangés, et ce ne sont pas des clôtures :
+    s'il manque un seul cours, la liste est « en cours » (pending). Une fois
+    la séance close, chaque ligne a sa clôture."""
     stocks, days = [], set()
     rows = equities if isinstance(equities, list) else []
     for e in rows:
@@ -325,7 +327,8 @@ def parse_ngx(equities: Any, snapshot: Any) -> Dict[str, Any]:
             days.add(str(e["TradeDate"])[:10])
     snap = snapshot if isinstance(snapshot, dict) else {}
     asi = _num(snap.get("ASI"))
-    return {"session": max(days) if days else None, "stocks": stocks, "pending": bool(rows) and not stocks,
+    missing = sum(1 for e in rows if str(e.get("Symbol") or "").strip() and _num(e.get("ClosePrice")) is None)
+    return {"session": max(days) if days else None, "stocks": stocks, "pending": bool(rows) and missing > 0,
             "indices": [{"name": "NGX All-Share (ASI)", "close": asi, "change": None}] if asi else [],
             "activity": {"deals": _num(snap.get("DEALS")), "volume": _num(snap.get("VOLUME")),
                          "value": _num(snap.get("VALUE")), "cap": _num(snap.get("CAP"))}}
@@ -473,6 +476,8 @@ def read_official(memory_book: Dict[str, Any], source: str, fetch: Fetch, now: d
         return book
     book["tried_at"] = now.isoformat(timespec="seconds")
     try:
+        if source == "ngx" and status(BY_ID["ngx"], now).get("open"):     # cours provisoires : rien à lire
+            raise ValueError("séance en cours : cours de clôture pas encore publiés")
         got = read(source, fetch, book, now, pause)
         if got.get("pending"):                                     # NGX en pleine séance
             raise ValueError("séance en cours : cours de clôture pas encore publiés")
