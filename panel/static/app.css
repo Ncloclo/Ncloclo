@@ -386,6 +386,23 @@ tbody tr.click:hover { background: var(--surface-2); }
 .market-kpis { margin-top: 12px; }
 .market-empty { color: var(--muted); }
 .table-wrap { max-width: 100%; overflow-x: auto; }              /* un tableau large défile dans son cadre */
+/* Bourses du monde */
+.exchange-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 12px; margin-top: 12px; }
+.exchange { display: grid; gap: 8px; align-content: start; min-width: 0; padding: 14px; border: 1px solid var(--border); border-radius: var(--ctl-r); background: var(--surface-2); }
+.exchange p { margin: 0; }
+.ex-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.ex-head h3 { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
+.ex-indices { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.ex-indices li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 2px 10px; font-size: 13px; }
+.ex-indices li > .tag, .ex-indices li > .spark { grid-column: 1 / -1; justify-self: start; }
+.ex-indices .spark { height: 26px; }
+.ex-iname { overflow-wrap: anywhere; }
+.ex-lines { display: grid; gap: 2px; margin: 0; font-size: 12.5px; }
+.ex-lines dt { color: var(--muted); margin-top: 4px; }
+.ex-lines dd { margin: 0; color: var(--ink-2); overflow-wrap: anywhere; }
+.ex-open[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.ex-guide { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13.5px; }
+.ex-guide .tag { margin-left: 4px; white-space: normal; }
 /* Courtiers : comptes de démonstration */
 .broker-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
 .broker-acc { display: grid; gap: 8px; align-content: start; min-width: 0; padding: 14px; border: 1px solid var(--border); border-radius: var(--ctl-r); background: var(--surface-2); }

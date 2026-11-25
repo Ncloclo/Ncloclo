@@ -13,7 +13,17 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-from trendguard import attribution, brvm, courtiers, evenements, levier, multi_actifs, pays, stress
+from trendguard import (
+    attribution,
+    bourses,
+    brvm,
+    courtiers,
+    evenements,
+    levier,
+    multi_actifs,
+    pays,
+    stress,
+)
 from trendguard.texte import fr
 
 from .data import market_view, markets_view, merge_buys, reasoning_view
@@ -414,6 +424,42 @@ class DemoData:
 
     def brokers(self) -> Dict[str, Any]:
         return courtiers.view(self._brokers_book(), self._brokers_multi(), {})
+
+    _exchange_rows: Optional[List[Dict[str, Any]]] = None
+
+    def exchanges(self) -> Dict[str, Any]:
+        """Bourses du monde d'exemple : la vraie structure de chaque place,
+        des indices de démonstration et des pages officielles d'exemple (cours
+        inventés, sauf la forme)."""
+        now = datetime.now(timezone.utc)
+        day = bourses.session_day(now)
+        close = self._multi_close()
+        if DemoData._exchange_rows is None:
+            codes = [c for x in bourses.EXCHANGES for c in bourses.index_codes(x) if c in close.columns]
+            DemoData._exchange_rows = multi_actifs.summary(close[list(dict.fromkeys(codes))])
+        official = {
+            "ngx": {"session": day, "sessions": 3, "error": "", "indices": [{"name": "NGX All-Share (ASI)", "close": 245685.87,
+                                                                           "change": 0.42}],
+                    "stocks": [{"symbol": "EXEMPLE1", "name": "Exemple Banque", "close": 111.0, "change": -0.89},
+                               {"symbol": "EXEMPLE2", "name": "Exemple Ciment", "close": 1323.0, "change": 2.4}]},
+            "nse_ke": {"session": day, "sessions": 3, "error": "", "stocks": [],
+                       "indices": [{"name": "NSE All Share (NASI)", "close": 235.94, "change": -0.27},
+                                   {"name": "NSE 20", "close": 4122.09, "change": -0.15}]},
+            "casablanca": {"session": day, "sessions": 3, "error": "",
+                           "indices": [{"name": "MASI", "close": 16764.82, "change": -0.7},
+                                       {"name": "MASI 20", "close": 1249.36, "change": -0.51}],
+                           "stocks": [{"name": "Exemple Assurance", "close": 5222.0, "change": 3.0}]},
+            "bvmac": {"session": day, "sessions": 3, "error": "",
+                      "indices": [{"name": "BVMAC All Share", "close": 1124.02, "change": 0.0}],
+                      "stocks": [{"symbol": "EXM", "name": "Exemple Palmeraie", "close": 49000.0, "change": None}]}}
+        demo_study = {"design": {"rule_cagr": 1.2, "rule_dd": -3.5, "rule_calmar": 0.34, "trades": 21, "hold_cagr": 4.1,
+                                 "hold_dd": -38.6, "hold_calmar": 0.11},
+                      "verify": {"rule_cagr": -0.5, "rule_dd": -4.7, "rule_calmar": -0.11, "trades": 12,
+                                 "hold_cagr": 5.2, "hold_dd": -16.7, "hold_calmar": 0.31}, "holds": False,
+                      "end": day, "code": "cac40"}
+        book = {"official": official, "study": {"for": now.isoformat(timespec="seconds"), "rows": {"euronext": demo_study}}}
+        return bourses.view(book, close, {"rows": DemoData._exchange_rows}, now, self._brvm_book(), cache="",
+                            brvm_cache="")
 
     def market_info(self, code: str, days: int = 0) -> Dict[str, Any]:
         return market_view(code, self._multi_close(), self._multi_book(), days)

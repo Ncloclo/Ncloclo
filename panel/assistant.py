@@ -32,6 +32,7 @@ from trendguard import (
     acceptation,
     autorisation,
     chantiers,
+    courtiers,
     expert,
     modeles,
     moteur_portefeuille,
@@ -1149,6 +1150,92 @@ def a_bye(ctx: Dict[str, Any]) -> str:
     return "Au revoir, et merci pour votre visite ! Belle journée à vous, à bientôt."
 
 
+INVEST_WORDS = ("investir", "acheter des actions", "w 8ben", "ouvrir un compte", "virement", "impot", "impots",
+                "fiscal", "fiscalite", "dividende", "dividendes")
+NOT_EXCHANGES = {"cote d ivoire", "six"}            # le pays de l'utilisateur, et le nombre « six »
+
+
+def _exchanges_named(message: str, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Les bourses nommées dans la question : sigle, nom, ville ou pays."""
+    text = f" {norm(message)} "
+    found = []
+    for r in rows:
+        words = {norm(r["id"].split("_")[0]),
+                 *(norm(w) for w in re.split(r"[(),]", r["name"]) if len(w.strip()) > 2),
+                 *(norm(w) for w in re.split(r"[,:]| et ", r["city"] + "," + r.get("zone", "")) if len(w.strip()) > 3)}
+        if any(w and w not in NOT_EXCHANGES and f" {w} " in text for w in words):
+            found.append(r)
+    return found
+
+
+def _exchange_card(r: Dict[str, Any]) -> str:
+    st = r.get("status") or {}
+    state = "en séance" if st.get("open") else "fermée" if st.get("open") is False else "heures non lues"
+    idx = [i for i in r.get("indices") or [] if i.get("close") is not None]
+    lines = [f"**{r['name']}** ({r.get('zone', '')} ; {r['city']} ; {r['currency']}) :",
+             f"- Séance : {r.get('hours') or 'heures non lues'} (heure locale, {r.get('days_text', '')}) ; "
+             f"{state}" + (f", {st['next']}" if st.get("next") else "") + ".",
+             "- Indices : " + (", ".join(f"{i['name']} {_num(i['close'], 2)}"
+                                         + (f" ({_pc(i['change'], 2)})" if i.get("change") is not None else "")
+                                         for i in idx) if idx else "pas encore lus") + ".",
+             f"- Régulateur : {r['regulator']}.", f"- Depuis la Côte d'Ivoire : {r['access']}.",
+             f"- Le bot lit : {r.get('reads', 'rien')}."]
+    s = r.get("study")
+    if s:
+        lines.append(f"- La règle du bot sur son indice principal {'tient' if s.get('holds') else 'ne tient pas'} "
+                     "face à l'achat-conservation (2018-2022 puis depuis 2023).")
+    return "\n".join(lines)
+
+
+def a_bourses(ctx: Dict[str, Any]) -> str:
+    b = ctx.get("bourses") or {}
+    rows = b.get("rows") or []
+    if not rows:
+        return "Les bourses du monde sont décrites dans la page « Bourses du monde » du panneau."
+    message = ctx.get("message", "")
+    named = _exchanges_named(message, rows)
+    if any(f" {w} " in f" {norm(message)} " for w in INVEST_WORDS):
+        lines = ["**Investir depuis la Côte d'Ivoire** (à vérifier avant d'agir) :"]
+        lines += [f"- {g['topic']} : {g['text']}" for g in b.get("guide") or []]
+        lines += [f"- {r['name']} : {r['access']}." for r in named[:2]]
+        return "\n".join(lines)
+    if named:
+        return "\n\n".join(_exchange_card(r) for r in named[:2])
+    opened = [r["name"].split(" (")[0] for r in rows if (r.get("status") or {}).get("open")]
+    lines = [f"**Bourses du monde** : {len(rows)} places suivies, {len(opened)} en séance en ce moment"
+             + (f" ({', '.join(opened[:5])})" if opened else "") + "."]
+    for region in b.get("regions") or []:
+        names = [r["name"].split(" (")[0] for r in rows if r["region"] == region]
+        lines.append(f"- {region} : {', '.join(names)}.")
+    lines.append("Pour investir depuis la Côte d'Ivoire : une SGI pour la BRVM ; ailleurs, un courtier "
+                 "international régulé qui accepte les résidents ivoiriens (à vérifier).")
+    lines.append("Le bot lit ces bourses pour son savoir ; il n'y passe aucun ordre.")
+    return "\n".join(lines)
+
+
+def a_courtiers(ctx: Dict[str, Any]) -> str:
+    c = ctx.get("courtiers") or {}
+    acc = c.get("accounts") or {}
+    lines = ["**Courtiers et comptes de démonstration** (jamais de compte réel, aucun ordre envoyé) :"]
+    for key, label in (("mt5", "MetaTrader 5 (devises, or, indices)"),
+                       ("alpaca", "Alpaca (actions américaines, compte papier)")):
+        s = acc.get(key) or {}
+        lines.append(f"- {label} : {courtiers.STATES.get(s.get('state'), 'non branché')}"
+                     + (f" ({s['message']})" if s.get("message") else "") + ".")
+    tn = [t for t in acc.get("testnets") or [] if isinstance(t, dict)]
+    lines.append("- Testnets crypto : " + (", ".join(f"{t.get('name')} ({courtiers.STATES.get(t.get('state'), '')})"
+                                                     for t in tn) if tn else "aucun branché") + ".")
+    p = c.get("prices") or {}
+    if p.get("rows"):
+        ok = sum(1 for x in p.get("platforms") or [] if x.get("ok") and x.get("id") != "binance")
+        lines.append(f"- Cours des cryptos du bot sur {ok} autres plateformes : Binance à "
+                     f"{_pc(p.get('median_gap_pct'), 2)} de leur médiane ; écarts notables : "
+                     f"{', '.join(a.upper() for a in p.get('notable') or []) or 'aucun'}.")
+    lines.append("Brancher un compte de démonstration : python trendguard_bot.py courtiers set-key mt5 "
+                 "(ou alpaca, bybit…), saisie masquée, compte vérifié avant d'être gardé.")
+    return "\n".join(lines)
+
+
 # (identifiant, mots-clés, réponse, actions)
 Action = Dict[str, str]
 TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[Action]], ...] = (
@@ -1180,6 +1267,17 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
     ("finance", ("bourse", "action", "actions", "s p 500", "sp500", "cac", "nasdaq", "dow",
                  "l or", "gold", "petrole", "~dollar", "~euro", "taux", "fed", "bce", "inflation",
                  "finance", "wall street"), a_finance, [{"label": "Marchés financiers", "href": "#news"}]),
+    ("bourses", ("bourses", "bourses du monde", "place boursiere", "places boursieres", "bourse du", "bourse de",
+                 "bourse d", "bourse des", "regulateur", "gendarme de la bourse", "w 8ben", "investir aux etats unis",
+                 "investir en bourse", "acheter des actions", "actions americaines", "investir depuis la cote d ivoire",
+                 "nyse", "euronext", "london stock exchange", "xetra", "tokyo", "shanghai", "shenzhen", "hong kong",
+                 "hkex", "sensex", "kospi", "tadawul", "jse", "johannesburg", "ngx", "nigeria", "lagos", "casablanca",
+                 "masi", "nairobi", "kenya", "ghana", "accra", "bvmac", "douala", "cemac", "egx", "le caire",
+                 "toronto", "tsx", "bovespa", "mexique", "asx", "sydney", "brvm", "uemoa", "sgi"), a_bourses,
+     [{"label": "Bourses du monde", "href": "#exchanges"}]),
+    ("courtiers", ("courtier", "courtiers", "broker", "brokers", "metatrader", "mt5", "alpaca", "compte demo",
+                   "comptes demo", "compte de demonstration", "plan miroir", "cours compares", "exness",
+                   "plateformes crypto", "testnets"), a_courtiers, [{"label": "Courtiers", "href": "#brokers"}]),
     ("news", ("actualite", "actualites", "news", "nouvelles", "infos", "information du jour"),
      a_news, [{"label": "Toutes les actualités", "href": "#news"}]),
     ("phone", ("telephone", "smartphone", "mobile", "portable", "a distance", "distance", "wifi",

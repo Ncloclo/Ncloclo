@@ -152,6 +152,26 @@ survivant).
   `/api/markets`, `/api/market`), lue dans `data_multi/` et le noyau de
   savoir ; menu en trois groupes (Mon bot, Marchés, Analyse).
 
+### Bourses du monde (25/11/2026)
+
+- `trendguard/bourses.py` (`docs/BOURSES.md`) : 28 places (région, zone,
+  ville, monnaie, fuseau, séances, régulateur, indices, accès depuis la Côte
+  d'Ivoire). Heures incertaines marquées « indicatives » (B3, NSE de
+  Nairobi) ; BVMAC et GSE sans heures. NGX : 9 h - 16 h depuis le 27/04/2026.
+- Pages officielles lues comme la BRVM, une fois par séance après 17:00 UTC
+  (clé « bourses » du noyau de savoir, historique dans `data_bourses/`) :
+  NGX (JSON publics de son site), NSE de Nairobi, Bourse de Casablanca,
+  BVMAC (bulletin PDF, pypdf). Pas lues : EGX (injoignable), GSE (pas de page
+  à jour).
+- Quatre indices ajoutés à `multi_actifs.WORLD` : NYSE Composite, SZSE
+  Component, Sensex, FTSE/JSE Top 40 (le TASI n'a pas d'historique
+  journalier chez Yahoo : la place saoudienne garde le fonds KSA).
+- Étude de la règle sur l'indice principal de chaque place (protocole de
+  `research/pays.py`) : elle ne tient que sur 2 places sur 20 (Hong Kong,
+  Corée du Sud), de justesse. Information seulement.
+- Assistante : sujets « bourses » (fiche d'une place nommée, guide pour
+  investir depuis la Côte d'Ivoire) et « courtiers ».
+
 ### Courtiers (25/11/2026)
 
 - `trendguard/courtiers.py` (`docs/COURTIERS.md`) : annuaire (15 courtiers

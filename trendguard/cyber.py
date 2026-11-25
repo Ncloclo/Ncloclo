@@ -86,6 +86,12 @@ ALLOWLIST: Dict[str, Tuple[str, str]] = {
     "query1.finance.yahoo.com": ("marchés traditionnels (savoir)", "savoir"),
     "api.worldbank.org": ("pays du monde : région, revenu, indicateurs (Banque mondiale, savoir)", "savoir"),
     "www.brvm.org": ("BRVM (Abidjan) : indices et cours, deux pages publiques par séance (savoir)", "savoir"),
+    "doclib.ngxgroup.com": ("NGX (Lagos) : cours des actions et instantané du marché, JSON publics de son site, "
+                            "une lecture par séance (savoir)", "savoir"),
+    "www.nse.co.ke": ("NSE (Nairobi) : indices et activité, page publique, une lecture par séance (savoir)", "savoir"),
+    "www.casablanca-bourse.com": ("Bourse de Casablanca : MASI, MASI 20, plus forts mouvements, page d'accueil, "
+                                  "une lecture par séance (savoir)", "savoir"),
+    "www.bvm-ac.org": ("BVMAC (Douala) : bulletin officiel de la cote, un PDF par séance (savoir)", "savoir"),
     "news.google.com": ("actualités (savoir)", "savoir"), "www.bing.com": ("actualités (savoir)", "savoir"),
     "www.coindesk.com": ("actualités (savoir)", "savoir"), "cointelegraph.com": ("actualités (savoir)", "savoir"),
     "decrypt.co": ("actualités (savoir)", "savoir"), "www.cnbc.com": ("actualités (savoir)", "savoir"),
@@ -109,6 +115,13 @@ ALLOWLIST: Dict[str, Tuple[str, str]] = {
         "www.metatrader5.com", "www.exness.com", "www.xm.com", "www.hfm.com", "fbs.com", "deriv.com",
         "www.icmarkets.com", "pepperstone.com", "admirals.com", "roboforex.com", "www.fxpro.com",
         "www.tickmill.com", "www.avatrade.com", "www.fpmarkets.com", "www.vantagemarkets.com", "alpaca.markets")},
+    # Sites des bourses du monde (bourses.py) : liens ouverts par vous.
+    **{h: ("site d'une bourse du monde, ouvert par vous (aucune connexion du bot)", "aucune") for h in (
+        "www.nyse.com", "www.nasdaq.com", "www.cboe.com", "www.tsx.com", "www.b3.com.br", "www.bmv.com.mx",
+        "www.euronext.com", "www.londonstockexchange.com", "www.deutsche-boerse.com", "www.six-group.com",
+        "www.bolsasymercados.es", "www.jpx.co.jp", "www.sse.com.cn", "www.szse.cn", "www.hkex.com.hk",
+        "www.nseindia.com", "www.bseindia.com", "global.krx.co.kr", "www.saudiexchange.sa", "www.jse.co.za",
+        "ngxgroup.com", "www.egx.com.eg", "gse.com.gh", "www.asx.com.au")},
 }
 SECRETS = ("BINANCE_API_KEY", "BINANCE_API_SECRET")
 # Réponse prévue à chaque risque (§33) : ce qui se fait seul (réduire) et ce
