@@ -16,7 +16,7 @@ from test_panel import _cfg, _json, demo_server  # noqa: F401  (fixture du serve
 
 from panel import assistant
 from panel.data import BotData
-from trendguard import bourses, cyber
+from trendguard import bourses, cyber, profil
 from trendguard import market_watch as mw
 from trendguard import multi_actifs as ma
 
@@ -42,20 +42,23 @@ def test_every_exchange_is_described_coherently():
     known = set(ma.ALL_CODES) | set(ma.INDICATOR_CODES)
     for x in bourses.EXCHANGES:
         ZoneInfo(x["tz"])                                                     # fuseau connu
-        assert all(a < b for a, b in x["sessions"]) and x["regulator"] and x["zone"] and x["access"]
+        assert all(a < b for a, b in x["sessions"]) and x["regulator"] and x["zone"] and x["local"] and x["foreign"]
         assert all(c in known for _n, c in x["indices"] if c), x["id"]       # chaque indice lu est suivi
         assert x["official"] in ("", "brvm", *bourses.OFFICIAL)
         assert urllib.parse.urlsplit(x["site"]).hostname in cyber.ALLOWLIST and x["site"].startswith("https://")
     assert bourses.BY_ID["tadawul"]["days"] == bourses.GULF and bourses.BY_ID["egx"]["days"] == bourses.GULF
-    assert "SGI" in bourses.BY_ID["brvm"]["access"] and "W-8BEN" in bourses.BY_ID["nyse"]["access"]
+    assert "SGI" in bourses.BY_ID["brvm"]["local"] and "W-8BEN" in bourses.BY_ID["nyse"]["foreign"]
     assert [x["id"] for x in bourses.EXCHANGES if x["official"]] == ["brvm", "bvmac", "ngx", "casablanca", "nse_ke"]
 
 
-def test_the_session_state_in_local_and_abidjan_time():
-    nyse = bourses.status(bourses.BY_ID["nyse"], WED)
-    assert nyse["open"] and nyse["local"] == "10:00" and nyse["next"] == "ferme à 16 h (21 h à Abidjan)"
-    tokyo = bourses.status(bourses.BY_ID["jpx"], datetime(2026, 11, 25, 3, 0, tzinfo=timezone.utc))   # 12:00 à Tokyo
-    assert tokyo["open"] is False and tokyo["next"] == "ouvre aujourd'hui à 12 h 30 (3 h 30 à Abidjan)"
+def test_the_session_state_in_the_exchange_time_and_yours():
+    nyse = bourses.status(bourses.BY_ID["nyse"], WED, "Africa/Abidjan")
+    assert nyse["open"] and nyse["local"] == "10:00" and nyse["next"] == "ferme à 16 h (21 h, votre heure)"
+    assert nyse["event"] == "ferme" and nyse["at"] == "2026-11-25T21:00:00+00:00" and nyse["at_local"] == "16 h"
+    assert bourses.status(bourses.BY_ID["nyse"], WED, "Europe/Paris")["next"] == "ferme à 16 h (22 h, votre heure)"
+    assert bourses.status(bourses.BY_ID["nyse"], WED, "Asia/Tokyo")["next"] == "ferme à 16 h (6 h, votre heure)"
+    tokyo = bourses.status(bourses.BY_ID["jpx"], datetime(2026, 11, 25, 3, 0, tzinfo=timezone.utc), "Africa/Abidjan")
+    assert tokyo["open"] is False and tokyo["next"] == "ouvre aujourd'hui à 12 h 30 (3 h 30, votre heure)"
     friday = datetime(2026, 11, 27, 9, 0, tzinfo=timezone.utc)
     assert bourses.status(bourses.BY_ID["tadawul"], friday)["next"].startswith("ouvre dimanche à 10 h")
     assert bourses.status(bourses.BY_ID["brvm"], friday)["open"] is True                # Abidjan : 9 h - 15 h
@@ -205,12 +208,27 @@ def test_the_panel_page_and_what_the_assistant_knows(tmp_path):
     assert cac["code"] == "cac40" and cac["trend"] is True and cac["source"] == "Yahoo Finance" and cac["spark"]
     assert rows["ngx"]["indices"][0]["close"] == 245685.87 and rows["ngx"]["official_state"]["stocks"] == 2
     assert rows["gse"]["indices"][0]["source"] == "non lu" and rows["gse"]["reads"] == "rien"
-    assert [g["topic"] for g in v["guide"]][0] == "BRVM (UEMOA)"
+    # Vue depuis la Côte d'Ivoire (profil par défaut) : la BRVM est la bourse de sa zone, la NYSE est étrangère.
+    assert v["profile"]["country"] == "CI" and rows["brvm"]["home"] and "SGI" in rows["brvm"]["access"]
+    assert "W-8BEN" in rows["nyse"]["access"] and not rows["nyse"]["home"] and len(v["countries"]) == 249
+    topics = [g["topic"] for g in v["guide"]]
+    assert topics[0] == "Bourse de votre pays" and "UEMOA" in topics and "Côte d'Ivoire" in topics
+    assert "CEMAC" not in topics and "États-Unis" not in topics and len(v["guide_all"]) == len(bourses.GUIDE)
+    # Vue depuis la France, puis depuis les États-Unis : chacun sa bourse et son guide.
+    fr_ = bourses.view(book, close, None, WED, profile=profil.profile({"TG_PAYS": "FR"}))
+    fr_rows = {r["id"]: r for r in fr_["rows"]}
+    assert fr_rows["euronext"]["home"] and fr_rows["euronext"]["access"].startswith("c'est une bourse de votre pays")
+    assert not fr_rows["brvm"]["home"] and "non-résidents" in fr_rows["brvm"]["access"]
+    assert "UEMOA" not in [g["topic"] for g in fr_["guide"]] and "(22 h, votre heure)" in fr_rows["nyse"]["status"]["next"]
+    us = {r["id"]: r for r in bourses.view(book, close, None, WED, profile=profil.profile({"TG_PAYS": "US"}))["rows"]}
+    assert "SEC" in us["nyse"]["access"] and "W-8BEN" not in us["nyse"]["access"]
     ctx = {"bourses": v, "courtiers": {}}
     lagos = assistant.local_answer("Quelle est la bourse du Nigeria ?", ctx)["answer"]
     assert "NGX" in lagos and "SEC Nigeria" in lagos and "245" in lagos
     usa = assistant.local_answer("Comment investir aux États-Unis depuis la Côte d'Ivoire ?", ctx)["answer"]
     assert "W-8BEN" in usa and "SGI" in usa
+    paris = assistant.local_answer("Comment investir en bourse depuis la France ?", {"bourses": fr_})["answer"]
+    assert "Investir depuis votre pays (France)" in paris and "BCEAO" not in paris
     demo = assistant.local_answer("Comment brancher un compte démo MetaTrader 5 ?", ctx)["answer"]
     assert "set-key mt5" in demo
     data = BotData(_cfg(tmp_path, savoir=False), market=None)

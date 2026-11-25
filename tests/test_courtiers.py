@@ -51,6 +51,18 @@ def test_the_directory_covers_every_kind_and_affirms_nothing_without_a_source():
     assert {r["id"] for r in reached if r.get("reached")} == {"kraken"}
 
 
+def test_availability_is_judged_from_your_country():
+    def avail(country, name):
+        return next(r["availability"] for r in courtiers.directory(None, country) if r["name"] == name)
+    assert "Côte d'Ivoire" in avail("CI", "Exness") and avail("NG", "Exness") == courtiers.VERIFY
+    assert avail("US", "Exness") == courtiers.US_CFD and "terminal" in avail("US", "MetaQuotes (serveur MetaQuotes-Demo)")
+    assert "Binance.US" in avail("US", "Binance") and avail("FR", "Binance") == courtiers.VERIFY
+    assert "votre zone" in avail("SN", "SGI agréées de l'UEMOA") and "non-résidents" in avail("FR", "SGI agréées de l'UEMOA")
+    assert "ouvert à tous" in avail("JP", "Alpaca")
+    page = courtiers.view({}, None, {"TG_PAYS": "NG"})
+    assert page["profile"]["name"] == "Nigeria" and page["profile"]["currency"] == "NGN"
+
+
 # ---------- Adresses : la liste blanche, vérifiée à chaque requête ----------
 
 class _Stop(Exception):

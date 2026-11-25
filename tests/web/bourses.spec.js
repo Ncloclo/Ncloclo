@@ -40,8 +40,26 @@ test("bourses du monde : places, séances, indices, filtres et guide", async ({ 
   await sec.locator(".ex-search").fill("");
   await sec.locator(".ex-open").click();                                         // en séance maintenant
   await expect(sec.locator(".ex-open")).toHaveAttribute("aria-pressed", "true");
-  await expect(sec.locator(".ex-guide li")).toHaveCount(7);
+  await expect(sec.locator(".ex-guide li")).toHaveCount(9);                     // commun, UEMOA, Côte d'Ivoire
   await expect(sec.locator(".ex-guide")).toContainText("W-8BEN");
+  expect(errors).toEqual([]);
+});
+
+test("bourses du monde : le pays choisi change l'accès et le guide", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto(BASE + "/#exchanges");
+  const sec = page.locator("#page-exchanges");
+  await expect(sec.locator(".ex-country")).toHaveValue("CI");                     // le profil du bot
+  await expect(sec.locator('.exchange[data-ex="brvm"]')).toHaveClass(/home/);
+  await expect(sec.locator('.exchange[data-ex="nyse"]')).toContainText("chez vous");   // heure de l'appareil
+  await sec.locator(".ex-country").selectOption("FR");
+  await expect(sec.locator('.exchange[data-ex="euronext"]')).toHaveClass(/home/);
+  await expect(sec.locator('.exchange[data-ex="euronext"]')).toContainText("c'est une bourse de votre pays");
+  await expect(sec.locator('.exchange[data-ex="brvm"]')).toContainText("non-résidents");
+  await expect(sec.locator(".ex-guide li")).toHaveCount(7);                     // sans l'UEMOA ni la Côte d'Ivoire
+  await expect(sec.locator(".ex-guide-sub")).toContainText("France");
+  await page.reload();                                                           // choix gardé sur l'appareil
+  await expect(sec.locator(".ex-country")).toHaveValue("FR");
   expect(errors).toEqual([]);
 });
 

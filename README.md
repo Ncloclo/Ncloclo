@@ -236,10 +236,16 @@ panneau de contrôle ») :
 - **Bourses du monde** (menu Marchés) : les 28 grandes places de cotation
   (NYSE, Nasdaq, Euronext, Londres, Tokyo, Shanghai, Johannesburg, Lagos,
   Casablanca, BVMAC…), chacune avec sa séance (heure locale et heure
-  d'Abidjan), ses indices et leur tendance, son régulateur et l'accès depuis
-  la Côte d'Ivoire ; le Nigeria, le Kenya, le Maroc et la BVMAC lus sur leurs
+  de chacun), ses indices et leur tendance, son régulateur et l'accès depuis
+  votre pays ; le Nigeria, le Kenya, le Maroc et la BVMAC lus sur leurs
   pages officielles après chaque séance, comme la BRVM ; la règle du bot
   mesurée sur chaque place ([`docs/BOURSES.md`](docs/BOURSES.md)) ;
+- **Votre profil** : votre pays, votre fuseau horaire et votre monnaie
+  (`TG_PAYS`, `TG_FUSEAU`, `TG_DEVISE` ; Côte d'Ivoire, Abidjan et FCFA par
+  défaut). Le bot parle de votre situation, où que vous soyez : heures des
+  bourses dans votre heure, accès aux bourses et aux courtiers depuis votre
+  pays, capital dans votre monnaie (une soixantaine)
+  ([`docs/PROFIL.md`](docs/PROFIL.md)) ;
 - **Courtiers** (menu Mon bot) : comptes de démonstration seulement
   (MetaTrader 5 pour les devises, l'or et les indices ; compte papier Alpaca
   pour les actions américaines ; testnets des plateformes crypto), un compte

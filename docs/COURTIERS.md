@@ -34,9 +34,12 @@ démonstration seulement. Module : `trendguard/courtiers.py` ; page
   (adresse de test déclarée par CCXT). Frais : barème de base indiqué par
   CCXT.
 - Les SGI de l'UEMOA pour la BRVM : aucune API pour un programme.
-- Disponibilité en Côte d'Ivoire : rien n'est affirmé sans source. Exness,
-  XM, HFM et FBS acceptent en général les résidents, d'après des sources
-  secondaires. Pour tous, vérifiez sur leur site avant d'ouvrir un compte.
+- Disponibilité depuis votre pays (`TG_PAYS`, `docs/PROFIL.md`) : rien n'est
+  affirmé sans source. Exness, XM, HFM et FBS acceptent en général les
+  résidents de Côte d'Ivoire, d'après des sources secondaires ; aux
+  États-Unis, les CFD sont interdits aux particuliers ; Binance.com n'y
+  accepte pas les résidents. Pour tous, vérifiez sur le site du courtier
+  avant d'ouvrir un compte.
 
 ## Cours comparés à Binance
 

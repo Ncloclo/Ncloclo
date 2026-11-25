@@ -1152,18 +1152,20 @@ def a_bye(ctx: Dict[str, Any]) -> str:
 
 INVEST_WORDS = ("investir", "acheter des actions", "w 8ben", "ouvrir un compte", "virement", "impot", "impots",
                 "fiscal", "fiscalite", "dividende", "dividendes")
-NOT_EXCHANGES = {"cote d ivoire", "six"}            # le pays de l'utilisateur, et le nombre « six »
+NOT_EXCHANGES = {"six"}                            # le nombre « six », pas la bourse suisse
 
 
-def _exchanges_named(message: str, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Les bourses nommées dans la question : sigle, nom, ville ou pays."""
+def _exchanges_named(message: str, rows: List[Dict[str, Any]], home: str = "") -> List[Dict[str, Any]]:
+    """Les bourses nommées dans la question : sigle, nom, ville ou pays (pas
+    le pays de l'utilisateur, `home`, cité pour dire d'où il investit)."""
     text = f" {norm(message)} "
+    skip = NOT_EXCHANGES | {norm(home)}
     found = []
     for r in rows:
         words = {norm(r["id"].split("_")[0]),
                  *(norm(w) for w in re.split(r"[(),]", r["name"]) if len(w.strip()) > 2),
                  *(norm(w) for w in re.split(r"[,:]| et ", r["city"] + "," + r.get("zone", "")) if len(w.strip()) > 3)}
-        if any(w and w not in NOT_EXCHANGES and f" {w} " in text for w in words):
+        if any(w and w not in skip and f" {w} " in text for w in words):
             found.append(r)
     return found
 
@@ -1178,7 +1180,7 @@ def _exchange_card(r: Dict[str, Any]) -> str:
              "- Indices : " + (", ".join(f"{i['name']} {_num(i['close'], 2)}"
                                          + (f" ({_pc(i['change'], 2)})" if i.get("change") is not None else "")
                                          for i in idx) if idx else "pas encore lus") + ".",
-             f"- Régulateur : {r['regulator']}.", f"- Depuis la Côte d'Ivoire : {r['access']}.",
+             f"- Régulateur : {r['regulator']}.", f"- Depuis votre pays : {r['access']}.",
              f"- Le bot lit : {r.get('reads', 'rien')}."]
     s = r.get("study")
     if s:
@@ -1192,10 +1194,10 @@ def a_bourses(ctx: Dict[str, Any]) -> str:
     rows = b.get("rows") or []
     if not rows:
         return "Les bourses du monde sont décrites dans la page « Bourses du monde » du panneau."
-    message = ctx.get("message", "")
-    named = _exchanges_named(message, rows)
+    message, prof = ctx.get("message", ""), b.get("profile") or {}
+    named = _exchanges_named(message, rows, prof.get("name", ""))
     if any(f" {w} " in f" {norm(message)} " for w in INVEST_WORDS):
-        lines = ["**Investir depuis la Côte d'Ivoire** (à vérifier avant d'agir) :"]
+        lines = [f"**Investir depuis votre pays ({prof.get('name', '?')})** (à vérifier avant d'agir) :"]
         lines += [f"- {g['topic']} : {g['text']}" for g in b.get("guide") or []]
         lines += [f"- {r['name']} : {r['access']}." for r in named[:2]]
         return "\n".join(lines)
@@ -1207,8 +1209,8 @@ def a_bourses(ctx: Dict[str, Any]) -> str:
     for region in b.get("regions") or []:
         names = [r["name"].split(" (")[0] for r in rows if r["region"] == region]
         lines.append(f"- {region} : {', '.join(names)}.")
-    lines.append("Pour investir depuis la Côte d'Ivoire : une SGI pour la BRVM ; ailleurs, un courtier "
-                 "international régulé qui accepte les résidents ivoiriens (à vérifier).")
+    lines.append("Pour investir depuis votre pays : un intermédiaire agréé pour la bourse de votre pays ; "
+                 "ailleurs, un courtier international régulé qui accepte les résidents de votre pays (à vérifier).")
     lines.append("Le bot lit ces bourses pour son savoir ; il n'y passe aucun ordre.")
     return "\n".join(lines)
 
@@ -1269,7 +1271,7 @@ TOPICS: Tuple[Tuple[str, Tuple[str, ...], Callable[[Dict[str, Any]], str], List[
                  "finance", "wall street"), a_finance, [{"label": "Marchés financiers", "href": "#news"}]),
     ("bourses", ("bourses", "bourses du monde", "place boursiere", "places boursieres", "bourse du", "bourse de",
                  "bourse d", "bourse des", "regulateur", "gendarme de la bourse", "w 8ben", "investir aux etats unis",
-                 "investir en bourse", "acheter des actions", "actions americaines", "investir depuis la cote d ivoire",
+                 "investir en bourse", "acheter des actions", "actions americaines", "investir depuis",
                  "nyse", "euronext", "london stock exchange", "xetra", "tokyo", "shanghai", "shenzhen", "hong kong",
                  "hkex", "sensex", "kospi", "tadawul", "jse", "johannesburg", "ngx", "nigeria", "lagos", "casablanca",
                  "masi", "nairobi", "kenya", "ghana", "accra", "bvmac", "douala", "cemac", "egx", "le caire",

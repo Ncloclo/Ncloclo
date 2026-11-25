@@ -1,9 +1,9 @@
 // Panneau TrendGuard, page « Bourses du monde » (trendguard/bourses.py) : la
 // structure de cotation de chaque grande place, comme la BRVM pour l'UEMOA.
-// En séance ou non (heure locale et heure d'Abidjan), indices et tendance
-// pour la règle du bot, régulateur, accès depuis la Côte d'Ivoire, ce que le
-// bot en lit, et la règle mesurée sur l'indice principal. Information
-// seulement : aucun ordre.
+// En séance ou non (heure locale de la place et heure de celui qui regarde),
+// indices et tendance pour la règle du bot, régulateur, accès depuis le pays
+// choisi (celui du profil du bot par défaut, TG_PAYS), ce que le bot en lit,
+// et la règle mesurée sur l'indice principal. Information seulement.
 
 import { $, $$, api, el, fpct, nf } from "../core.js";
 import { fillSpark } from "../charts.js";
@@ -11,7 +11,10 @@ import { register } from "../navigation.js";
 
 const REGIONS = [["all", "Toutes"], ["Afrique", "Afrique"], ["Amériques", "Amériques"], ["Europe", "Europe"],
   ["Asie et Moyen-Orient", "Asie et Moyen-Orient"], ["Océanie", "Océanie"]];
-let region = "all", openOnly = false, DATA = null;
+let region = "all", openOnly = false, DATA = null, country = null, ZONE = {};
+const PAYS_KEY = "tg:pays";                               // pays choisi sur cet appareil
+const remembered = () => { try { return localStorage.getItem(PAYS_KEY); } catch { return null; } };
+const mine = (iso) => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 const flag = (iso) => iso.toUpperCase().replace(/./g, (c) => String.fromCodePoint(127397 + c.charCodeAt(0)));
 const value = (v) => (v == null ? "–" : nf(v >= 10 ? 2 : 4).format(v));
 const day = (iso) => (iso ? String(iso).slice(0, 10).split("-").reverse().join("/") : "–");   // 2026-11-25 → 25/11/2026
@@ -30,7 +33,7 @@ sec.dataset.title = "Bourses du monde";
     box.append(el("span", "label", label), el("strong", "num", "—"), el("span", "sub", ""));
     kpis.append(box);
   });
-  head.append(top, el("p", "hint", "La structure de cotation de chaque grande place, comme la BRVM pour l'UEMOA : ses heures de séance (heure locale et heure d'Abidjan), ses indices phares et leur tendance pour la règle du bot, son régulateur, l'accès depuis la Côte d'Ivoire. Les indices sont lus chaque jour chez Yahoo Finance ; le Nigeria, le Kenya, le Maroc et l'Afrique centrale le sont sur leurs pages officielles, après chaque séance, comme la BRVM. Information seulement : aucun ordre."), kpis);
+  head.append(top, el("p", "hint", "La structure de cotation de chaque grande place, comme la BRVM pour l'UEMOA : ses heures de séance (heure locale de la place et votre heure), ses indices phares et leur tendance pour la règle du bot, son régulateur, l'accès depuis votre pays (choisissez-le ci-dessous). Les indices sont lus chaque jour chez Yahoo Finance ; le Nigeria, le Kenya, le Maroc et l'Afrique centrale le sont sur leurs pages officielles, après chaque séance, comme la BRVM. Information seulement : aucun ordre."), kpis);
   const tools = el("div", "toolbar"), group = el("div", "tool-group"), lab = el("span", "tool-label", "Région"), seg = el("div", "seg");
   lab.id = "xr-label";
   seg.setAttribute("role", "group");
@@ -46,16 +49,26 @@ sec.dataset.title = "Bourses du monde";
   const live = el("button", "chip ex-open", "En séance maintenant");
   live.type = "button";
   live.setAttribute("aria-pressed", "false");
+  const where = el("div", "tool-group"), wlab = el("label", "tool-label", "Votre pays"), pick = el("select", "ex-country");
+  pick.id = "ex-country";
+  wlab.htmlFor = pick.id;
+  where.append(wlab, pick);
+  pick.addEventListener("change", () => {
+    country = pick.value;
+    try { localStorage.setItem(PAYS_KEY, country); } catch { /* stockage bloqué : choix pour cette visite */ }
+    draw();
+    drawGuide();
+  });
   const search = el("input", "ex-search");
   search.type = "search";
   search.placeholder = "Rechercher (Nigeria, Tokyo, SEC…)";
   search.setAttribute("aria-label", "Rechercher une bourse, un pays ou un régulateur");
-  tools.append(group, live, search);
+  tools.append(where, group, live, search);
   const list = el("div", "card"), listHead = el("div", "card-head");
   listHead.append(el("h2", "", "Les places de cotation"), el("span", "sub ex-count"));
   list.append(listHead, tools, el("div", "exchange-grid"));
   const guide = el("div", "card"), gHead = el("div", "card-head");
-  gHead.append(el("h2", "", "Investir depuis la Côte d'Ivoire"), el("span", "sub", "à vérifier avant d'agir"));
+  gHead.append(el("h2", "", "Investir depuis votre pays"), el("span", "sub ex-guide-sub", "à vérifier avant d'agir"));
   guide.append(gHead, el("ul", "ex-guide"));
   sec.append(head, list, guide);
   $("#pages").append(sec);
@@ -83,14 +96,23 @@ function studyText(s) {
   return `${s.holds ? "elle tient" : "elle ne tient pas"} face à l'achat-conservation · 2018-2022 : ${p(s.design)} · depuis 2023 : ${p(s.verify)}`;
 }
 
+// Prochaine ouverture ou clôture : heure locale de la place, et la vôtre
+// (fuseau de cet appareil).
+function nextText(st) {
+  if (!st.event || !st.at) return st.next || "";
+  return `${st.event} ${st.event === "ouvre" ? st.when + " " : ""}à ${st.at_local} (heure locale), ${mine(st.at)} chez vous`;
+}
+
 function card(r) {
   const box = el("article", "exchange");
   box.dataset.ex = r.id;
+  const home = r.countries.includes(country);
+  if (home) box.classList.add("home");
   const top = el("div", "ex-head"), st = r.status || {};
   const state = st.open ? ["en séance", "up"] : st.open === false ? ["fermée", "muted"] : ["heures non lues", "warn"];
   const title = el("h3", "", `${r.countries.slice(0, 4).map(flag).join(" ")} ${r.name}`);
   top.append(title, el("span", `tag ${state[1]} ex-state`, state[0]));
-  box.append(top, el("p", "sub", [r.city, r.currency, r.hours ? `${r.hours} (heure locale, ${r.days_text})` : "", st.next].filter(Boolean).join(" · ")));
+  box.append(top, el("p", "sub", [r.zone, r.city, r.currency, r.hours ? `${r.hours} (heure locale, ${r.days_text})` : "", nextText(st)].filter(Boolean).join(" · ")));
   const idx = el("ul", "ex-indices");
   r.indices.forEach((i) => {
     const li = el("li");
@@ -112,9 +134,9 @@ function card(r) {
   box.append(idx);
   const dl = el("dl", "ex-lines");
   line(dl, "Régulateur", r.regulator);
-  line(dl, "Depuis la Côte d'Ivoire", r.access);
+  line(dl, home ? "Depuis votre pays (c'est le sien)" : "Depuis votre pays", home ? r.local : r.foreign);
   const o = r.official_state;
-  line(dl, "Le bot lit", r.reads + (o ? ` (séance du ${day(o.session)},${o.stocks} titres, historique de ${o.sessions} séance${o.sessions > 1 ? "s" : ""}${o.error ? ` ; lecture ratée : ${o.error}` : ""})` : ""));
+  line(dl, "Le bot lit", r.reads + (o ? ` (séance du ${day(o.session)}, ${o.stocks} titres, historique de ${o.sessions} séance${o.sessions > 1 ? "s" : ""}${o.error ? ` ; lecture ratée : ${o.error}` : ""})` : ""));
   if (o && o.movers && o.movers.length) line(dl, "Plus forts mouvements", o.movers.map((m) => `${m.name} ${fpct(m.change)}`).join(" · "));
   line(dl, "Règle du bot", studyText(r.study));
   line(dl, "Horaires", r.hours_note);
@@ -134,16 +156,38 @@ function draw() {
   if (!DATA) return;
   const q = $(".ex-search", sec).value.trim().toLowerCase();
   const rows = DATA.rows.filter((r) => (region === "all" || r.region === region) && (!openOnly || r.status.open)
-    && (!q || [r.name, r.city, r.regulator, r.countries.join(" "), r.indices.map((i) => i.name).join(" ")].join(" ").toLowerCase().includes(q)));
+    && (!q || [r.name, r.city, r.zone, r.regulator, r.countries.join(" "), r.indices.map((i) => i.name).join(" ")].join(" ").toLowerCase().includes(q)));
   const grid = $(".exchange-grid", sec);
   grid.replaceChildren(...rows.map(card));
   if (!rows.length) grid.append(el("p", "empty", "Aucune bourse ne correspond."));
   $(".ex-count", sec).textContent = `${rows.length} sur ${DATA.rows.length}`;
 }
 
+// Le guide : les points communs, puis ceux de la zone et du pays choisis.
+function drawGuide() {
+  if (!DATA) return;
+  const zone = ZONE[country] || "";
+  const items = DATA.guide_all.filter((g) => !g.scope || g.scope === zone || g.scope === country);
+  $(".ex-guide", sec).replaceChildren(...items.map((g) => {
+    const li = el("li");
+    li.append(el("strong", "", g.topic + " : "), document.createTextNode(g.text + " "));
+    if (g.source) li.append(el("span", "tag muted", g.source));
+    return li;
+  }));
+  const name = (DATA.countries.find((c) => c.iso === country) || {}).name || country;
+  $(".ex-guide-sub", sec).textContent = `${name} · à vérifier avant d'agir`;
+}
+
 async function render() {
   const d = await api("/api/exchanges");
   DATA = d;
+  ZONE = Object.fromEntries(d.countries.map((c) => [c.iso, c.zone]));
+  const pick = $(".ex-country", sec);
+  if (!pick.options.length) {
+    d.countries.forEach((c) => { const o = el("option", "", c.name); o.value = c.iso; pick.append(o); });
+  }
+  if (!country) country = d.countries.some((c) => c.iso === remembered()) ? remembered() : d.profile.country;
+  pick.value = country;
   const open = d.rows.filter((r) => r.status.open);
   const studied = d.rows.filter((r) => r.study);
   const kpi = (key, v, sub) => {
@@ -156,14 +200,9 @@ async function render() {
   const off = d.rows.filter((r) => r.official_state);
   kpi("official", String(off.length), off.filter((r) => r.official_state.session).length + " lues au moins une fois");
   kpi("study", studied.length ? `${studied.filter((r) => r.study.holds).length} sur ${studied.length}` : "—", "indices principaux, depuis 2018");
-  $(".ex-sub", sec).textContent = `heure d'Abidjan : ${new Date(d.now).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" })}`;
-  const ul = $(".ex-guide", sec);
-  ul.replaceChildren(...d.guide.map((g) => {
-    const li = el("li");
-    li.append(el("strong", "", g.topic + " : "), document.createTextNode(g.text + " "), el("span", "tag muted", g.source));
-    return li;
-  }));
+  $(".ex-sub", sec).textContent = `votre heure : ${mine(d.now)}`;
   draw();
+  drawGuide();
 }
 
 register("exchanges", render, 60);
